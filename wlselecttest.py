@@ -47,7 +47,5 @@ class WlSelectTest(unittest.TestCase):
 		yield wlselect.WRITE, 4
 		yield wlselect.READ, 5
 
-	def testPassResultsBetweenThreads(self):
-		self.fail('TODO')
 
 if __name__ == '__main__': unittest.main()

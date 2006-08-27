@@ -101,8 +101,5 @@ class WlStreamTest(unittest.TestCase):
 		self.assertEquals('aap:1\nnoot:2\nmies:3\n', response)
 		self.assertEquals(('noot',), s.match())
 
-	def testWrite(self):
-		self.fail('TODO')
-
 if __name__ == '__main__':
 	unittest.main()

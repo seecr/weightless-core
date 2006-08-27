@@ -29,20 +29,19 @@ from types import GeneratorType
 
 def WlThread(generator):
 	"""
-	A Weightless Thread is a list of generators.  It begins with just one generator.  If it 'yield's another generator, this generator is added to the list.  This may go on recursively.  If one of the generators 'yield's something else, execution stops and the value is used as return value for run(). Calling run() repeatedly will cause the thread to run from yield to yield.  NOTE: yield should be read as "yielding a CPU".   Values passed with yield are ment to support communication between the scheduler and the thread. This type of thread is meant for highly efficient networking based on select().  To reach >1000 requests/second, every instruction counts.
+	A Weightless Thread is a chain of generators.  It begins with just one generator.  If it 'yield's another generator, this generator is executed.  This may go on recursively.  If one of the generators 'yield's something else, execution stops and the value is yielded.
 	"""
-	runlist = [generator]												# Init stack of threads with just one
-	response = generator.next()									# Initialize (run until first yield)
-	while runlist:															# As long as there are generators
-		try:
-			if type(response) == GeneratorType:			# If yield yielded another generator
-				runlist.append(response)							# Add it to the runlist
-				response = response.next()						# and initialize it.
-			else:																		# Else yield yielded a value
-				response = yield response							# propagate up (allow interception)
-				response = runlist[-1].send(response)	#	pass it as return value from yield
-		except StopIteration:
-			runlist.pop()														# When generator finische pop it
-	raise StopIteration('Nothing left to run')	# All done
-
-
+	msg = None
+	while True:
+		msg = generator.send(msg)
+		if type(msg) == GeneratorType:
+			nested = WlThread(msg)
+			msg = None
+			try:
+				while True:
+					msg = nested.send(msg)
+					msg = yield msg
+			except StopIteration:
+				pass
+		else:
+			msg = yield msg
