@@ -1,5 +1,7 @@
 import socket, select
 
+BUFFSIZE = 1024 * 8
+
 def create(host = 'localhost', port = 80, name = 'wlservice'):
 	return WlService(host, port, name)
 
@@ -8,7 +10,7 @@ class WlService:
 		self._host = host
 		self._port = port
 		self._name = name
-		self._handlers = [None for x in range(100)]
+		self._handlers = {}
 
 	def __str__(self):
 		return self._name + ':' + self._host + ':' + str(self._port)
@@ -18,29 +20,27 @@ class WlService:
 			sok, host = self._sokket.accept()
 			handler = acceptor(sok, host)
 			handler.next()
-			fd = sok.fileno()
-			self._readers.add(fd)
-			self._handlers[fd] = self._handler(sok, handler)
+			self._readers.add(sok)
+			self._handlers[sok] = self._handler(sok, handler)
 			yield -1
 
 	def _handler(self, sokket, handler):
 		while True:
-			buff = sokket.recv(4096)
-			handler.send(buff)
+			handler.send(sokket.recv(BUFFSIZE))
 			yield -1
 
 	def listen(self, acceptor):
 		self._sokket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self._sokket.bind((self._host, self._port))
 		self._sokket.listen(5)
-		self._readers = set([self._sokket.fileno()])
-		self._handlers[self._sokket.fileno()] = self._acceptor(acceptor)
+		self._readers = set([self._sokket])
+		self._handlers[self._sokket] = self._acceptor(acceptor)
 
 	def select(self):
 		r, w, e = select.select(self._readers, [], [])
-		for fd in r:
+		for sok in r:
 			try:
-				self._handlers[fd].next()
+				self._handlers[sok].next()
 			except StopIteration:
 				pass # remove from reades/writers
 
