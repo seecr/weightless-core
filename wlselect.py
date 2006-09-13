@@ -1,41 +1,83 @@
 import platform
 assert platform.python_version() >= "2.5", "Python 2.5 required"
 
-from wlschedule import WlSchedule
-
 import select
+import threading
+import time
+import socket
+import sys
 
-READ, WRITE = range(2)
+PORT = 9876
 
-class WlSelect:
-	"""
-	This class maintains a `WlSchedule` based on an `select` event loop. It expects the `WlThread`s to `yield` when it needs to read or write a socket. Any thread can read or write any socket by yielding a tuple `READ|WRITE, <fd>`, e.g. `yield READ, 4`. The thread gets rescheduled when the socket is in read c.q. write condition. None is send as return value for yield (python 2.5).
+class Signaller:
 
-	TODO: other return values must be passed back into the generator
-	"""
-	def __init__(self, _select = select.select):
-		self._threads = {}
-		self._fds = [set(), set()]
-		self._select = _select
-		self._schedule = WlSchedule(self.responseCallBack)
+	def __init__(self, callback):
+		listener = socket.socket()
+		listener.bind(('127.0.0.1', PORT))
+		listener.listen(0)
+		self._sender = socket.socket()
+		self._sender.connect(('127.0.0.1', PORT))
+		self._receiver = listener.accept()[0]
+		self.fileno = self._receiver.fileno
+		self._callback = callback
+		self._exception = None
 
-	def scheduleWlThread(self, fd, action, wlThread):
-		self._threads[fd] = wlThread
-		self._fds[action].add(fd)
+	def read(self):
+		try:
+			if self._value:
+				self._callback(self._value)
+			self._value = None
+		except Exception, e:
+			self._exception = e
+		self._receiver.recv(4096)
 
-	def runWlThread(self, wlThread):
-		self._schedule.addWlThread(wlThread)
+	def signal(self, value = None):
+		self._exception = None
+		self._value = value
+		self._sender.send('**')
+		time.sleep(0.001)
+		if self._exception:
+			raise self._exception
 
-	def schedule(self):
-		self._schedule.schedule()
-		r, w, e = self._select(self._fds[READ], self._fds[WRITE], [])
-		self._fds[READ].difference_update(r)
-		self._fds[WRITE].difference_update(w)
-		for fd in r + w:
-			self.runWlThread(self._threads[fd])
+class Loop:
+	def __init__(self):
+		self._go = threading.Event(1)
+		self._thread = None
+		self._signaller = Signaller(self._addSocket)
+		self._readers = set([self._signaller])
 
-	def responseCallBack(self, wlThread, response):
-		print response
-		action, fd = response
-		self._schedule.removeWlThread(wlThread)
-		self.scheduleWlThread(fd, action, wlThread)
+	def loop(self):
+		while self._go.isSet():
+			r, w, e = select.select(self._readers, [], [])
+			for readable in r:
+				readable.read()
+
+	def _addSocket(self, sok):
+		self._readers.add(sok)
+
+	def addSocket(self, sok):
+		self._signaller.signal(sok)
+
+	def start(self):
+		self._go.set()
+		if not self._thread:
+			self._thread = threading.Thread(None, self.loop)
+			self._thread.setDaemon(True)
+			self._thread.start()
+		time.sleep(0.001)
+
+	def isRunning(self):
+		return self._thread and self._thread.isAlive()
+
+	def stop(self):
+		self._go.clear()
+		if self._thread:
+			self._signaller.signal()
+			self._thread.join()
+			self._thread = None
+
+_loop = Loop()
+start = _loop.start
+stop = _loop.stop
+addSocket = _loop.addSocket
+isRunning = _loop.isRunning
