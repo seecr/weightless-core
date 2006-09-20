@@ -27,10 +27,16 @@ assert platform.python_version() >= "2.5", "Python 2.5 required"
 
 from types import GeneratorType
 
+class Scope: pass
+global_vars = Scope()
+globals()['__builtins__']['g'] = global_vars
+
 def WlThread(generator):
 	"""
 	A Weightless Thread is a chain of generators.  It begins with just one generator.  If it 'yield's another generator, this generator is executed.  This may go on recursively.  If one of the generators 'yield's something else, execution stops and the value is yielded.
 	"""
+	thread_vars = globals()['__builtins__'].get('t', Scope())
+	globals()['__builtins__']['t'] = thread_vars
 	msg = None
 	while True:
 		msg = generator.send(msg)
@@ -40,8 +46,13 @@ def WlThread(generator):
 			try:
 				while True:
 					msg = nested.send(msg)
+					del (globals()['__builtins__'])['t']
 					msg = yield msg
+					globals()['__builtins__']['t'] = thread_vars
 			except StopIteration:
 				pass
 		else:
+			del (globals()['__builtins__'])['t']
 			msg = yield msg
+			globals()['__builtins__']['t'] = thread_vars
+

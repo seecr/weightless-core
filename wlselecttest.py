@@ -1,54 +1,49 @@
 #!/usr/bin/python2.5
+from __future__ import with_statement
 
-import unittest
-import wlselect
-import socket
+from unittest import main
+from wltestcase import TestCase
+from wlselect import WlSelect
+#from wlthreadpool import yield_cpu
+import wlfile
 
-class WlSelectTest(unittest.TestCase):
-	"""WlSelect runs a select loop in a separate thread"""
-	def tearDown(self):
-		wlselect.stop()
+class WlSelectTest(TestCase):
 
-	def testStartStop(self):
-		self.assertFalse(wlselect.isRunning())
-		wlselect.start()
-		self.assertTrue(wlselect.isRunning())
-		wlselect.stop()
-		self.assertFalse(wlselect.isRunning())
-		wlselect.start()
-		self.assertTrue(wlselect.isRunning())
-		wlselect.stop()
-		self.assertFalse(wlselect.isRunning())
-
-	def testStartRepeatedly(self):
-		self.assertFalse(wlselect.isRunning())
-		wlselect.start()
-		self.assertTrue(wlselect.isRunning())
-		wlselect.start()
-		self.assertTrue(wlselect.isRunning())
-
-	def testStopRepeatedly(self):
-		wlselect.start()
-		self.assertTrue(wlselect.isRunning())
-		wlselect.start()
-		self.assertTrue(wlselect.isRunning())
+	def setUp(self):
+		self.selector = WlSelect()
 
 	def testAddSocket(self):
-		wlselect.start()
-		sok = open('/home/erik/skype_1.2.0.18-2_i386.deb')
-		wlselect.addSocket(sok)
-		self.assertTrue(sok in wlselect._loop._readers)
+		sok = wlfile.open('wlselecttest.py')
+		self.selector.addReader(sok)
+		self.assertTrue(sok in self.selector._readers)
 
 	def testAddSocketRaisesException(self):
-		wlselect.start()
 		class Sok: # raise exception when put into set
 			def __hash__(self): raise Exception('aap')
 		try:
-			wlselect.addSocket(Sok())
+			self.selector.addReader(Sok())
 			self.fail()
 		except Exception, e:
 			self.assertEquals('aap', str(e))
 
+	def testReadFile(self):
+		data = [None]
+		with self.mktemp('aap noot mies') as f:
+			wlsok = wlfile.open(f.name)
+			self.selector.register(wlsok)
+			self.assertTrue(wlsok not in self.selector._readers)
+			def sink(): data[0] = yield None
+			wlsok.sink(sink())
+			self.assertTrue(wlsok in self.selector._readers)
+			self.selector.select()
+		self.assertEquals('aap noot mies', data[0])
 
+	def testRemoveFromReadersWhenGeneratorIsExhausted(self):
+		with self.mktemp('aap noot mies') as f:
+			wlsok = wlfile.open(f.name)
+			self.selector.register(wlsok)
+			wlsok.sink(i for i in [])
+			self.selector.select()
+		self.assertTrue(wlsok not in self.selector._readers)
 
-if __name__ == '__main__': unittest.main()
+if __name__ == '__main__': main()

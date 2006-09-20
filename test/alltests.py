@@ -8,9 +8,10 @@ if not platform.python_version() >= "2.5":
 import unittest
 
 from wlthreadtest import WlThreadTest
-from wlscheduletest import WlScheduleTest
+from wlfiletest import WlFileTest
 from wlselecttest import WlSelectTest
-from wlstreamtest import WlStreamTest
+from wlthreadpooltest import WlThreadPoolTest
+from wlsockettest import WlSocketTest
 
 if __name__ == '__main__':
 	unittest.main()

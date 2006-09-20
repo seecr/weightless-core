@@ -96,13 +96,43 @@ class WlThreadTest(unittest.TestCase):
 	def testPassValueToRecursiveThread(self):
 		def threadA():
 			r = yield threadB()	# <= C
-			yield r * 3 							# <= D
+			yield r * 3 					# <= D
 		def threadB():
-			r = yield 7 							# <= A
-			yield r * 2 							# <= B
+			r = yield 7 					# <= A
+			yield r * 2 					# <= B
 		t = WlThread(threadA())
 		self.assertEquals(7, t.next())		# 7 yielded at A
 		self.assertEquals(6, t.send(3))		# 3 send to A, 6 yielded at B
-		self.assertEquals(15, t.send(5))		# 5 send to B, threadB terminates and 15 yielded at D
+		self.assertEquals(15, t.send(5))	# 5 send to B, threadB terminates and 15 yielded at D
+
+	def testGlobalScope(self):
+		def threadA():
+			g.name = 'john'
+			yield None
+		def threadB():
+			yield g.name
+		ta = WlThread(threadA())
+		tb = WlThread(threadB())
+		list(ta)
+		john = list(tb)
+		self.assertEquals('john', john[0])
+
+	def testThreadScope(self):
+		def threadA():
+			t.name = 'john'
+			john = yield threadB()
+			yield john
+		def threadB():
+			yield t.name
+		ta = WlThread(threadA())
+		john = list(ta)
+		self.assertEquals('john', john[0])
+		def threadC():
+			yield t.name # raise execption
+		try:
+			list(WlThread(threadC()))
+			self.fail()
+		except Exception, e:
+			print '>', type(e), '<'
 
 if __name__ == '__main__': unittest.main()
