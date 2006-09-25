@@ -117,22 +117,4 @@ class WlThreadTest(unittest.TestCase):
 		john = list(tb)
 		self.assertEquals('john', john[0])
 
-	def testThreadScope(self):
-		def threadA():
-			t.name = 'john'
-			john = yield threadB()
-			yield john
-		def threadB():
-			yield t.name
-		ta = WlThread(threadA())
-		john = list(ta)
-		self.assertEquals('john', john[0])
-		def threadC():
-			yield t.name # raise execption
-		try:
-			list(WlThread(threadC()))
-			self.fail()
-		except Exception, e:
-			print '>', type(e), '<'
-
 if __name__ == '__main__': unittest.main()

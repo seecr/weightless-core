@@ -7,9 +7,14 @@ import select
 
 class WlFileTest(TestCase):
 
+	def addReader(self, r):
+		pass
+
 	def testOpenAndReadAsyncFile(self):
 		with self.mktemp('aap noot mies') as f:
 			wlf = wlfile.open(f.name)
+			wlf.register(self)
+			wlf.sink(i for i in range(999)) # fake stuff
 			r, w, e = select.select([wlf], [], [], 1.0)
 			self.assertEquals([wlf], r)
 			data = wlf.recv(4096)
@@ -18,6 +23,8 @@ class WlFileTest(TestCase):
 	def testReadChuncks(self):
 		with self.mktemp('%08d' % n for n in xrange(513)) as f:
 			wlf = wlfile.open(f.name)
+			wlf.register(self)
+			wlf.sink(i for i in range(999)) # fake stuff
 			r, w, e = select.select([wlf], [], [], 1.0)
 			self.assertEquals([wlf], r)
 			data = wlf.recv(24)
@@ -30,8 +37,6 @@ class WlFileTest(TestCase):
 			select.select([wlf], [wlf], [wlf], 1.0)
 			data = wlf.recv(99999)
 			self.assertEquals('', data) # EOF
-
-
 
 if __name__ =='__main__':
 	import unittest

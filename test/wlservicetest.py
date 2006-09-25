@@ -1,9 +1,12 @@
+#!/usr/bin/python2.5
 from __future__ import with_statement
 from contextlib import contextmanager
 
 import unittest, os, sys, threading, socket
 
 from wlservice import WlService
+from wlselect import WlSelect
+from wlthreadpool import Pool
 
 PORT = 7653
 
@@ -21,14 +24,15 @@ class WlServiceTest(unittest.TestCase):
 		PORT = PORT + 1 # trick to avoid 'post already in use'
 
 	def testCreateService(self):
-		"""		def sink(buf):
-			buf += yield None
-create service: create thread pool, and run select loop"""
-		service = WlService()
-		wlFileSok = service.open('file:///home/erik/development/wlservicetest.py')
-		fileContents = ''
-		wlFileSok.sink(sink(fileContents))
-		self.assertEquals('', fileContents)
+		service = WlService(with_status_and_bad_performance = True)
+		wlFileSok = service.open('file:///home/erik/development/weightless/trunk/test/wlservicetest.py')
+		def sink(buf):
+			data = yield None
+			buf.append(data)
+		fileContents = []
+		status = wlFileSok.sink(sink(fileContents))
+		status.sync()
+		self.assertEquals('#!/usr/bin/python2.5', fileContents[0][:20])
 
 
 	def xtestStartService(self):
@@ -53,7 +57,7 @@ create service: create thread pool, and run select loop"""
 		recv = []
 		def produmer(sock, host):
 			while True:
-				data = yield -1
+				data = yield ''
 				recv.append(data)
 		def acceptor(sock, host):
 			return produmer(sock, host)

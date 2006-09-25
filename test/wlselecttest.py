@@ -4,46 +4,85 @@ from __future__ import with_statement
 from unittest import main
 from wltestcase import TestCase
 from wlselect import WlSelect
-#from wlthreadpool import yield_cpu
+from threading import Event
+from time import sleep
 import wlfile
 
 class WlSelectTest(TestCase):
 
-	def setUp(self):
-		self.selector = WlSelect()
+	def fileno(self): return 9999
 
 	def testAddSocket(self):
-		sok = wlfile.open('wlselecttest.py')
-		self.selector.addReader(sok)
-		self.assertTrue(sok in self.selector._readers)
+		selector = WlSelect()
+		mockSok = self
+		self.assertTrue(mockSok not in selector._readers)
+		selector.addReader(mockSok)
+		try:
+			self.assertTrue(mockSok in selector._readers)
+		finally:
+			selector.removeReader(mockSok)
 
 	def testAddSocketRaisesException(self):
 		class Sok: # raise exception when put into set
 			def __hash__(self): raise Exception('aap')
+		selector = WlSelect()
 		try:
-			self.selector.addReader(Sok())
+			selector.addReader(Sok())
 			self.fail()
 		except Exception, e:
 			self.assertEquals('aap', str(e))
 
 	def testReadFile(self):
+		wait = Event()
+		selector = WlSelect()
 		data = [None]
-		with self.mktemp('aap noot mies') as f:
+		with self.mktemp('boom vuur vis') as f:
 			wlsok = wlfile.open(f.name)
-			self.selector.register(wlsok)
-			self.assertTrue(wlsok not in self.selector._readers)
-			def sink(): data[0] = yield None
-			wlsok.sink(sink())
-			self.assertTrue(wlsok in self.selector._readers)
-			self.selector.select()
-		self.assertEquals('aap noot mies', data[0])
+			selector.register(wlsok)
+			self.assertFalse(wlsok in selector._readers)
+			def sink():
+				data[0] = yield None
+				wait.set()
+			status = wlsok.sink(sink())
+			self.assertTrue(wlsok in selector._readers)
+		wait.wait()
+		self.assertFalse(wlsok in selector._readers)
+		self.assertEquals('boom vuur vis', data[0])
+
+	def testAddingExhaustedGeneratorRaisesException(self):
+		with self.mktemp('aap noot mies') as f:
+			sok = wlfile.open(f.name)
+			try:
+				sok.sink(i for i in [])
+				self.fail()
+			except ValueError, e:
+				self.assertEquals('useless generator: exhausted at first next()', str(e))
 
 	def testRemoveFromReadersWhenGeneratorIsExhausted(self):
+		wait = Event()
+		selector = WlSelect()
 		with self.mktemp('aap noot mies') as f:
 			wlsok = wlfile.open(f.name)
-			self.selector.register(wlsok)
-			wlsok.sink(i for i in [])
-			self.selector.select()
-		self.assertTrue(wlsok not in self.selector._readers)
+			selector.register(wlsok)
+			def sink():
+				data = yield None  # i.e. read
+				wait.set()
+			wlsok.sink(sink())
+		wait.wait()
+		self.assertTrue(wlsok not in selector._writers)
+		self.assertTrue(wlsok not in selector._readers)
+
+	def testCreateMultipleSelects(self):
+		s1 = WlSelect()
+		s2 = WlSelect()
+		s3 = WlSelect()
+		s4 = WlSelect()
+		s5 = WlSelect()
+		s6 = WlSelect()
+		s7 = WlSelect()
+		s8 = WlSelect()
+		s9 = WlSelect()
+		s10 = WlSelect()
+
 
 if __name__ == '__main__': main()
