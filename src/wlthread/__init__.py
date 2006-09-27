@@ -1,2 +1,3 @@
 from wlstatus import WlStatus
-__all__ = ['WlStatus']
+from wlpool import WlPool
+__all__ = ['WlStatus', 'WlPool']

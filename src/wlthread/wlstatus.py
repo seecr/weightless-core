@@ -18,6 +18,7 @@ class WlStatus:
 
 	def __init__(self):
 		self._event = Event()
+		self.isSet = self._event.isSet
 		self._exception = None
 		self._context = [f for f in extract_stack(currentframe().f_back) if 'unittest.py' not in f]
 
