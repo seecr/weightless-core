@@ -1,5 +1,5 @@
 from types import GeneratorType
-from wlstatus import WlStatus, WlMockStatus
+from wlthread import WlStatus, WlMockStatus
 
 class WlBaseSocket:
 

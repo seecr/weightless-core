@@ -1,18 +1,14 @@
-#!/usr/bin/python2.5
 from __future__ import with_statement
 from wltestcase import TestCase
 
-import wlfile
+from wlsocket import WlFileSocket
 import select
 
-class WlFileTest(TestCase):
-
-	def addReader(self, r):
-		pass
+class WlFileSocketTest(TestCase):
 
 	def testOpenAndReadAsyncFile(self):
 		with self.mktemp('aap noot mies') as f:
-			wlf = wlfile.open(f.name)
+			wlf = WlFileSocket(f.name)
 			wlf.register(self)
 			wlf.sink(i for i in range(999)) # fake stuff
 			r, w, e = select.select([wlf], [], [], 1.0)
@@ -22,7 +18,7 @@ class WlFileTest(TestCase):
 
 	def testReadChuncks(self):
 		with self.mktemp('%08d' % n for n in xrange(513)) as f:
-			wlf = wlfile.open(f.name)
+			wlf = WlFileSocket(f.name)
 			wlf.register(self)
 			wlf.sink(i for i in range(999)) # fake stuff
 			r, w, e = select.select([wlf], [], [], 1.0)
@@ -37,7 +33,3 @@ class WlFileTest(TestCase):
 			select.select([wlf], [wlf], [wlf], 1.0)
 			data = wlf.recv(99999)
 			self.assertEquals('', data) # EOF
-
-if __name__ =='__main__':
-	import unittest
-	unittest.main()

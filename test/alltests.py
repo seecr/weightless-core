@@ -12,11 +12,11 @@ import unittest
 
 from wlthreadtest import WlStatusTest
 from wlthreadtest import WlPoolTest
+from wlsockettest import WlSocketTest
 
 #from wlfiletest import WlFileTest
 #from wlselecttest import WlSelectTest
 
-#from wlsockettest import WlSocketTest
 #from wlservicetest import WlServiceTest
 
 if __name__ == '__main__':

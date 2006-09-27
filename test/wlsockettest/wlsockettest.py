@@ -1,8 +1,5 @@
-#!/usr/bin/python2.5
-from unittest import TestCase, main
-from wlselect import WlSelect
-from wlsocket import WlSocket
-from wlbasesocket import WlBaseSocket
+from unittest import TestCase
+from wlsocket import WlBaseSocket, WlSocket, WlSelect
 
 class WlSocketTest(TestCase):
 
@@ -32,7 +29,7 @@ class WlSocketTest(TestCase):
 		data = sok.recv(4096)
 		self.assertEquals('HTTP/1.0 302 Found\r\nLocation: http://www.google.nl', data[:50])
 
-	def testOpenAndSource(self):
+	def xtestOpenAndSource(self):
 		selector = WlSelect()
 		sok = WlSocket('www.cq2.nl', with_status_and_bad_performance = True)
 		selector.register(sok)
@@ -41,9 +38,5 @@ class WlSocketTest(TestCase):
 			yield 'GET / HTTP/1.0\n\n'
 			data[0] = yield None
 		status = sok.sink(http_get_handler('/'))
-		status.sync()
+		status.join()
 		self.assertEquals('HTTP/1.1 401 Authorization Required', data[0][:35])
-
-
-
-if __name__ =='__main__': main()

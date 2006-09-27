@@ -1,11 +1,11 @@
 from sendfile import sendfile
-from wlthreadpool import Pool
+from wlthread import WlPool
 from socket import socketpair, SHUT_RDWR
 from sys import maxint
-from wlbasesocket import WlBaseSocket
+from wlsocket import WlBaseSocket
 
 _open = open
-_pool = Pool()
+_pool = WlPool()
 
 def open(filename, mode = 'r'):
 	return WlFileReader(filename)
@@ -20,7 +20,7 @@ def _sendfile(targetSocket, sourceFilename):
 		targetSocket.close()
 	yield None
 
-class WlFileReader(WlBaseSocket):
+class WlFileSocket(WlBaseSocket):
 
 	def __init__(self, filename, with_status_and_bad_performance = False):
 		self._filename = filename

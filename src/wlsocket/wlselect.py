@@ -5,7 +5,7 @@ assert platform.python_version() >= "2.5", "Python 2.5 required"
 
 from threading import Lock
 from select import select as original_select_func
-from wlthreadpool import Pool
+from wlthread import WlPool
 from os import pipe, write, read, close
 
 SIGWAKEUP = 'sigwakeup'
@@ -31,7 +31,7 @@ class Signaller:
 
 class WlSelect:
 
-	def __init__(self, pool = Pool(), select_func = original_select_func):
+	def __init__(self, pool = WlPool(), select_func = original_select_func):
 		self._select_func = select_func
 		self._readers = set()
 		self._writers = set()
