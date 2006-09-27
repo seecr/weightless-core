@@ -80,3 +80,7 @@ class WlStatusTest(TestCase):
 		result = sink.getvalue()
 		self.assertEquals('testGetContext\n    status = WlStatus()\n', result[-39:])
 		self.assertFalse('unittest.py' in result)
+
+	def testIsSet(self):
+		status = WlStatus()
+		self.assertFalse(status.isSet())
