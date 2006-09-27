@@ -6,17 +6,16 @@ if not platform.python_version() >= "2.5":
 	sys.exit(0)
 
 sys.path.append('../src')
-#sys.setcheckinterval(sys.maxint)
-
+sys.setcheckinterval(sys.maxint)
 
 import unittest
 
-from wlthreadtest import WlThreadTest
-from wlfiletest import WlFileTest
-from wlselecttest import WlSelectTest
-from wlthreadpooltest import WlThreadPoolTest
-from wlsockettest import WlSocketTest
-from wlservicetest import WlServiceTest
+from wlthreadtest import WlStatusTest
+#from wlfiletest import WlFileTest
+#from wlselecttest import WlSelectTest
+#from wlthreadpooltest import WlThreadPoolTest
+#from wlsockettest import WlSocketTest
+#from wlservicetest import WlServiceTest
 
 if __name__ == '__main__':
 	unittest.main()

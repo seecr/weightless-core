@@ -78,11 +78,11 @@ class WlSelectTest(TestCase):
 		s3 = WlSelect()
 		s4 = WlSelect()
 		s5 = WlSelect()
-		s6 = WlSelect()
-		s7 = WlSelect()
-		s8 = WlSelect()
-		s9 = WlSelect()
-		s10 = WlSelect()
+		#s6 = WlSelect()
+		#s7 = WlSelect()
+		#s8 = WlSelect()
+		#s9 = WlSelect()
+		#s10 = WlSelect()
 
 
 if __name__ == '__main__': main()
