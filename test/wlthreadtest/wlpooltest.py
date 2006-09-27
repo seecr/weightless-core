@@ -1,15 +1,15 @@
 #!/usr/bin/python2.5
 
-from unittest import TestCase, main
-from wlthreadpool import Pool
+from unittest import TestCase
+from wlthread import WlPool
 from StringIO import StringIO
 from threading import Event
 import sys
 
-class WlThreadPoolTest(TestCase):
+class WlPoolTest(TestCase):
 
 	def setUp(self):
-		self.pool = Pool(with_status_and_bad_performance=True)
+		self.pool = WlPool(with_status_and_bad_performance=True)
 
 	def tearDown(self):
 		self.pool.shutdown()
@@ -21,7 +21,7 @@ class WlThreadPoolTest(TestCase):
 			yield None
 			result.append('noot')
 		status = self.pool.execute(worker())
-		status.wait()
+		status.join()
 		self.assertEquals(['aap','noot'], result)
 
 	def testWrongInput(self):
@@ -39,7 +39,7 @@ class WlThreadPoolTest(TestCase):
 		status = self.pool.execute(worker())
 		self.assertFalse(status.isSet())
 		wait.set()
-		status.wait()
+		status.join()
 		self.assertTrue(status.isSet())
 
 	def testStatusWithException(self):
@@ -51,7 +51,7 @@ class WlThreadPoolTest(TestCase):
 		try:
 			status = self.pool.execute(raiseException())
 			try:
-				status.sync()
+				status.join()
 				self.fail()
 			except Exception, e:
 				self.assertEquals('oops', str(e))
@@ -59,8 +59,6 @@ class WlThreadPoolTest(TestCase):
 			sys.stderr = saved_stderr
 
 	def testExceptionInThreadIsAnnotatedWithThreadThatStartedTheThread(self):
-		saved_stderr = sys.stderr
-		sys.stderr = StringIO()
 		try:
 			def raiseA(): raise Exception('some exception')
 			def raiseB(): raiseA()
@@ -68,21 +66,17 @@ class WlThreadPoolTest(TestCase):
 				yield None
 				raiseB()
 			status = self.pool.execute(raiseC())
-			status.wait()
-		finally:
-			txt = sys.stderr.getvalue().split('\n')
-			self.assertEquals('A thread created at (unittest calls filtered out):', txt[0])
-			self.assertTrue('wlthreadpooltest.py' in txt[1] or 'alltests.py' in txt[1])
-			self.assertTrue('main()' in txt[2])
-			self.assertTrue('testExceptionInThreadIsAnnotatedWithThreadThatStartedTheThread' in txt[3])
-			self.assertTrue('execute(raiseC())' in txt[4])
-			self.assertEquals('raised the following exception:', txt[6])
-			self.assertEquals('Traceback (most recent call last):', txt[7])
-			self.assertTrue('in raiseB' in txt[8])
-			self.assertTrue('def raiseB(): raiseA()' in txt[9])
-			self.assertTrue('in raiseA' in txt[10])
-			self.assertTrue("def raiseA(): raise Exception('some exception')" in txt[11])
-			self.assertEquals('Exception: some exception', txt[12])
-			sys.stderr = saved_stderr
-
-if __name__ == '__main__': main()
+			status.join()
+			self.fail()
+		except:
+			f = StringIO()
+			status.print_context(f)
+			txt = f.getvalue()
+			expected = """  File "./alltests.py", line 23, in <module>
+    unittest.main()
+  File "/home/erik/development/weightless/trunk/test/wlthreadtest/wlpooltest.py", line 68, in testExceptionInThreadIsAnnotatedWithThreadThatStartedTheThread
+    status = self.pool.execute(raiseC())
+  File "../src/wlthread/wlpool.py", line 43, in execute
+    status = self._createStatus()
+"""
+			self.assertEquals(expected, txt)

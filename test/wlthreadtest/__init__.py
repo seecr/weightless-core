@@ -1,2 +1,2 @@
 from wlstatustest import WlStatusTest
-__all__ = ['WlStatusTest']
+from wlpooltest import WlPoolTest
