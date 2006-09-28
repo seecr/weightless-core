@@ -5,7 +5,7 @@ from StringIO import StringIO
 from sys import stdout, exc_info
 
 class WlMockStatus:
-	"""Complete fake replacement for WlStatus.  Meant to avoid performance bottlenecks involved in WlStatus in production systems."""
+	"""Fake replacement for WlStatus.  Meant to avoid performance bottlenecks involved in WlStatus in production systems."""
 	def __enter__(self): pass
 	def __exit__(self, a, b, c): pass
 	def capture(self, f): pass

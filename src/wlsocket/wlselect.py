@@ -1,11 +1,7 @@
 from __future__ import with_statement
 
-import platform
-assert platform.python_version() >= "2.5", "Python 2.5 required"
-
-from threading import Lock
+from threading import Thread, Lock
 from select import select as original_select_func
-from wlthread import WlPool
 from os import pipe, write, read, close
 
 SIGWAKEUP = 'sigwakeup'
@@ -31,15 +27,16 @@ class Signaller:
 
 class WlSelect:
 
-	def __init__(self, pool = WlPool(), select_func = original_select_func):
+	def __init__(self, select_func = original_select_func):
 		self._select_func = select_func
 		self._readers = set()
 		self._writers = set()
 		self._lock = Lock()
 		self._signaller = Signaller()
+		self._thread = Thread(None, self._loop)
+		self._thread.setDaemon(True)
+		self._thread.start()
 		self.addReader(self._signaller)
-		self._pool = pool
-		self._pool.execute(self._loop())
 
 	def __del__(self):
 		print 'Tear down wlselect'
@@ -48,17 +45,19 @@ class WlSelect:
 	def _loop(self):
 		while True:
 			self._select()
-		yield None
 
 	def _select(self):
 		r, w, e = self._select_func(self._readers, self._writers, [])
 		for readable in r:
-			readable.readable()
+			try:
+				readable.readable()
+			except Exception:
+				self._readers.remove(readable)
 		for writable in w:
-			writable.writable()
-
-	def register(self, sok):
-		sok.register(self)
+			try:
+				writable.writable()
+			except Exception:
+				self._writers.remove(writable)
 
 	def addReader(self, sok):
 		with self._lock:

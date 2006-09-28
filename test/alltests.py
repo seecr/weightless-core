@@ -6,16 +6,15 @@ if not platform.python_version() >= "2.5":
 	sys.exit(0)
 
 sys.path.append('../src')
-#sys.setcheckinterval(sys.maxint) # i.e. cooperative scheduling
+sys.setcheckinterval(sys.maxint) # i.e. cooperative scheduling
 
 import unittest
 
 from wlthreadtest import WlStatusTest
 from wlthreadtest import WlPoolTest
 from wlsockettest import WlSocketTest
-
-#from wlfiletest import WlFileTest
-#from wlselecttest import WlSelectTest
+from wlsockettest import WlFileSocketTest
+from wlsockettest import WlSelectTest
 
 #from wlservicetest import WlServiceTest
 

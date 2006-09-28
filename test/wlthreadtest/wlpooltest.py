@@ -1,5 +1,3 @@
-#!/usr/bin/python2.5
-
 from unittest import TestCase
 from wlthread import WlPool
 from StringIO import StringIO
@@ -72,9 +70,9 @@ class WlPoolTest(TestCase):
 			f = StringIO()
 			status.print_context(f)
 			txt = f.getvalue()
-			expected = """  File "./alltests.py", line 23, in <module>
+			expected = """  File "./alltests.py", line 22, in <module>
     unittest.main()
-  File "/home/erik/development/weightless/trunk/test/wlthreadtest/wlpooltest.py", line 68, in testExceptionInThreadIsAnnotatedWithThreadThatStartedTheThread
+  File "/home/erik/development/weightless/trunk/test/wlthreadtest/wlpooltest.py", line 66, in testExceptionInThreadIsAnnotatedWithThreadThatStartedTheThread
     status = self.pool.execute(raiseC())
   File "../src/wlthread/wlpool.py", line 43, in execute
     status = self._createStatus()
