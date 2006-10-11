@@ -1,8 +1,14 @@
-TODO:
-
-- decide what to do with out-of bound data, it doesn't seem to be used in TCP
-- use recv buffer half the size of what getsockopt returns -- it seems that the kernel duplicates the buffer for internal administration, and that this duplicated size is reported.
+DONE:
+- decide what to do with out-of bound data, it doesn't seem to be used in TCP. -> NOTHING
 - check is socket.send() actually send all data, if not, send the rest in a subsequent loop
+- use recv buffer half the size of what getsockopt returns -- it seems that the kernel duplicates the buffer for internal administration, and that this duplicated size is reported.
+
+
+TODO:
 - create a facade for wlsocket/wlselect: open(url, generator) -> status
 - let WlPool record/log crashed threads for inspection in test or diagnosing a live system
--
+- let WlSelect record/log generators that came to an unnatural end.
+
+
+OPTIMIZATIONS
+- when socket.send, send only partial data, concatenate remaining bytes with new bytes to send?

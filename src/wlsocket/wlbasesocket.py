@@ -8,7 +8,7 @@ class WlBaseSocket:
 		self._sok = sok
 		self.fileno = sok.fileno
 		self.close = sok.close
-		self._recv = curry(sok.recv, sok.getsockopt(SOL_SOCKET, SO_RCVBUF))
+		self._recv = curry(sok.recv, sok.getsockopt(SOL_SOCKET, SO_RCVBUF) / 2)
 
 	def sink(self, generator, selector):
 		if not type(generator) == GeneratorType: raise TypeError('need generator')
@@ -31,8 +31,11 @@ class WlBaseSocket:
 				self._selector.addWriter(self)
 
 	def writable(self):
-		self._sok.send(self._to_write)
-		self._to_write = self._sink.next()
-		if not self._to_write:
-			self._selector.removeWriter(self)
-			self._selector.addReader(self)
+		bytesSend = self._sok.send(self._to_write)
+		if bytesSend < len(self._to_write):
+			self._to_write = self._to_write[bytesSend:]
+		else:
+			self._to_write = self._sink.next()
+			if not self._to_write:
+				self._selector.removeWriter(self)
+				self._selector.addReader(self)

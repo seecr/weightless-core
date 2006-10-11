@@ -6,26 +6,26 @@ class WlSocketTest(TestCase):
 
 	def testCreateSocketGetsReceiveBufferSizeFromSocketItself(self):
 		socket = CallTrace()
-		socket.returnValues['getsockopt'] = 98765
+		socket.returnValues['getsockopt'] = 98765  # kernel reports twice the size
 		sok = WlBaseSocket(socket)
 		self.assertEquals('getsockopt(1, 8)', str(socket.calledMethods[0]))
 		sok._recv()
-		self.assertEquals('recv(98765)', str(socket.calledMethods[1]))
+		self.assertEquals('recv(49382)', str(socket.calledMethods[1]))
 
 	def testSocketClose(self):
-		socket = CallTrace()
+		socket = CallTrace(returnValues={'getsockopt':10})
 		sok = WlBaseSocket(socket)
 		sok.close()
 		self.assertEquals('close()', str(socket.calledMethods[1]))
 
 	def testSinkNonGenerator(self):
 		try:
-			WlBaseSocket(CallTrace()).sink('wrong', None)
+			WlBaseSocket(CallTrace(returnValues={'getsockopt':4096})).sink('wrong', None)
 		except TypeError, e:
 			self.assertEquals('need generator', str(e))
 
 	def testAddingExhaustedGeneratorRaisesException(self):
-		sok = WlBaseSocket(CallTrace())
+		sok = WlBaseSocket(CallTrace(returnValues={'getsockopt':10}))
 		try:
 			sok.sink((i for i in []), None)
 			self.fail()
@@ -33,7 +33,7 @@ class WlSocketTest(TestCase):
 			self.assertEquals('useless generator: exhausted at first next()', str(e))
 
 	def testSink(self):
-		socket = CallTrace()
+		socket = CallTrace(returnValues={'getsockopt':10})
 		socket.returnValues['recv'] = 'aap noot mies'
 		sok = WlBaseSocket(socket)
 		data = [None]
@@ -45,9 +45,7 @@ class WlSocketTest(TestCase):
 		self.assertEquals('aap noot mies', data[0])
 
 	def testThrowStopIterationWhenEndOfFile(self):
-		mockSok = CallTrace()
-		mockSok.returnValues['recv'] = '' # i.e. EOF
-		sok = WlBaseSocket(mockSok)
+		sok = WlBaseSocket(CallTrace(returnValues = {'recv': '', 'getsockopt':4096}))
 		stopped = [None]
 		def sink():
 			try:
@@ -60,19 +58,19 @@ class WlSocketTest(TestCase):
 		self.assertTrue(stopped[0])
 
 	def testStartWithReading(self):
-		sok = WlBaseSocket(CallTrace())
+		sok = WlBaseSocket(CallTrace(returnValues={'getsockopt':10}))
 		mockSelect = CallTrace()
 		sok.sink((x for x in [None]), mockSelect)
 		self.assertEquals('addReader(<wlsocket.wlbasesocket.WlBaseSocket>)', str(mockSelect.calledMethods[0]))
 
 	def testStartWithWriting(self):
-		sok = WlBaseSocket(CallTrace())
+		sok = WlBaseSocket(CallTrace(returnValues={'getsockopt':10}))
 		mockSelect = CallTrace()
 		sok.sink((x for x in ['data']), mockSelect)
 		self.assertEquals('addWriter(<wlsocket.wlbasesocket.WlBaseSocket>)', str(mockSelect.calledMethods[0]))
 
 	def testReadDataFromSocketAndSendToGenerator(self):
-		mockSok = CallTrace()
+		mockSok = CallTrace(returnValues={'getsockopt':10})
 		sok = WlBaseSocket(mockSok)
 		data = []
 		def collect():
@@ -88,7 +86,7 @@ class WlSocketTest(TestCase):
 		self.assertEquals('noot', data[1])
 
 	def testGetDataFromGeneratorAndSendToSocket(self):
-		mockSok = CallTrace()
+		mockSok = CallTrace(returnValues = {'send': 999, 'getsockopt': 10})
 		sok = WlBaseSocket(mockSok)
 		sok.sink((data for data in ['aap', 'noot', 'mies']), CallTrace())
 		sok.writable()
@@ -97,14 +95,13 @@ class WlSocketTest(TestCase):
 		self.assertEquals("send('noot')", str(mockSok.calledMethods[2]))
 
 	def testSwitchFromReadingToWriting(self):
-		mockSok = CallTrace()
-		mockSok.returnValues['recv'] = 'keep things going'
+		mockSok = CallTrace(returnValues = {'send': 999, 'recv': 'keep things going', 'getsockopt': 10})
 		sok = WlBaseSocket(mockSok)
 		mockSelect = CallTrace()
 		sok.sink((data for data in [None, 'data to write', 'more', None, None, 'even more to write']), mockSelect)
 		self.assertEquals('addReader(<wlsocket.wlbasesocket.WlBaseSocket>)', str(mockSelect.calledMethods[0]))
 		sok.readable()
-		self.assertEquals('recv(None)', str(mockSok.calledMethods[1]))
+		self.assertEquals('recv(5)', str(mockSok.calledMethods[1]))
 		self.assertEquals('removeReader(<wlsocket.wlbasesocket.WlBaseSocket>)', str(mockSelect.calledMethods[1]))
 		self.assertEquals('addWriter(<wlsocket.wlbasesocket.WlBaseSocket>)', str(mockSelect.calledMethods[2]))
 		sok.writable()
@@ -114,9 +111,22 @@ class WlSocketTest(TestCase):
 		self.assertEquals('removeWriter(<wlsocket.wlbasesocket.WlBaseSocket>)', str(mockSelect.calledMethods[3]))
 		self.assertEquals('addReader(<wlsocket.wlbasesocket.WlBaseSocket>)', str(mockSelect.calledMethods[4]))
 		sok.readable()
-		self.assertEquals('recv(None)', str(mockSok.calledMethods[4]))
+		self.assertEquals('recv(5)', str(mockSok.calledMethods[4]))
 		sok.readable()
-		self.assertEquals('recv(None)', str(mockSok.calledMethods[5]))
+		self.assertEquals('recv(5)', str(mockSok.calledMethods[5]))
 		self.assertEquals('removeReader(<wlsocket.wlbasesocket.WlBaseSocket>)', str(mockSelect.calledMethods[5]))
 		self.assertEquals('addWriter(<wlsocket.wlbasesocket.WlBaseSocket>)', str(mockSelect.calledMethods[6]))
 		self.assertEquals(7, len(mockSelect.calledMethods))
+
+	def testSendDidNotSendAllData(self):
+		mockSok = CallTrace(returnValues = {'send': 5, 'getsockopt':10})
+		sok = WlBaseSocket(mockSok)
+		sok.sink((data for data in ['send in chunks', 'more', 'and more']), CallTrace())
+		sok.writable()
+		self.assertEquals("send('send in chunks')", str(mockSok.calledMethods[1]))
+		sok.writable()
+		self.assertEquals("send('in chunks')", str(mockSok.calledMethods[2]))
+		sok.writable()
+		self.assertEquals("send('unks')", str(mockSok.calledMethods[3]))
+		sok.writable()
+		self.assertEquals("send('more')", str(mockSok.calledMethods[4]))
