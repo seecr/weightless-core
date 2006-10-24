@@ -60,17 +60,17 @@ class WlSelectTest(TestCase):
 		self.assertTrue(wlsok not in selector._readers)
 
 	def testRemoveFromWRITERSWhenExceptionIsRaised(self):
-		def mockSelect(r, w, o): return set(r), set(w), set(o)
+		def mockSelect(r, w, o):
+			sleep(0.00001) # yield CPU, that's what select does normally !!
+			return set(r), set(w), set(o)
 		selector = WlSelect(select_func = mockSelect)
 		wlsok = WlBaseSocket(CallTrace(returnValues = {'fileno': 999, 'send': 999, 'getsockopt': 999}))
 		def sink():
-			print '++++++++++++++++++++1'
 			yield 'data to send'
-			print '++++++++++++++++++++2'
 			raise Exception('oops')
 		wlsok.sink(sink(), selector)
 		#wlsok.writable()
-		#sleep(0.5)
+		sleep(0.01)
 		self.assertTrue(wlsok not in selector._writers)
 		self.assertTrue(wlsok not in selector._readers)
 

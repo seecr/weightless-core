@@ -57,7 +57,6 @@ class WlSelect:
 		self._inSelect = True
 		r, w, e = self._select_func(self._readers, self._writers, [])
 		self._inSelect = False
-		print 'Huh?', fds(r), fds(w), fds(self._readers), fds(self._writers)
 		for readable in r:
 			try:
 				readable.readable()
@@ -66,14 +65,19 @@ class WlSelect:
 				#readable.close()
 		for writable in w:
 			try:
-				print 'writable: ---------------x-x-x-x', writable
 				writable.writable()
-			except Exception, e:
-				print '-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x'
+			except StopIteration:
 				self._writers.remove(writable)
 				writable.close()
-				if type(e) is not StopIteration:
-					print_exc()
+
+			#except ReadIteration:
+			#	self._writers.remove(writable)
+			#	self._readers.add(sok)
+
+			except Exception:
+				self._writers.remove(writable)
+				writable.close()
+				print_exc()
 
 	def addReader(self, sok):
 		self._readers.add(sok)
