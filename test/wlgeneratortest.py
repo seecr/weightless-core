@@ -25,48 +25,48 @@
 import unittest
 from timeit import Timer
 
-import wlthread
-from wlthread import WlThread
+import wlgenerator
+from wlgenerator import WlGenerator
 
-class WlThreadTest(unittest.TestCase):
+class WlGeneratorTest(unittest.TestCase):
 
-	def testCreateSingleThread(self):
+	def testCreateSingleWlGenerator(self):
 		def multplyBy2(number): yield number * 2
-		wlt = WlThread(multplyBy2(2))
+		wlt = WlGenerator(multplyBy2(2))
 		response = wlt.next()
 		self.assertEquals(4, response)
 
 	def testRunCompletely(self):
-		wlt = WlThread(x for x in range(3))
+		wlt = WlGenerator(x for x in range(3))
 		results = list(wlt)
 		self.assertEquals([0,1,2], results)
 
-	def testCreateNestedThread(self):
+	def testCreateNestedWlGenerator(self):
 		def multplyBy2(number): yield number * 2
 		def delegate(number): yield multplyBy2(number * 2)
-		wlt = WlThread(delegate(2))
+		wlt = WlGenerator(delegate(2))
 		response = wlt.next()
 		self.assertEquals(8, response)
 
-	def testCreateTripleNextedThread(self):
+	def testCreateTripleNextedWlGenerator(self):
 		def multplyBy2(number): yield number * 2
 		def delegate(number): yield multplyBy2(number * 2)
 		def master(number): yield delegate(number * 2)
-		wlt = WlThread(master(2))
+		wlt = WlGenerator(master(2))
 		response = wlt.next()
 		self.assertEquals(16, response)
 
-	def testResumeThread(self):
+	def testResumeWlGenerator(self):
 		def thread():
 			yield 'A'
 			yield 'B'
-		wlt = WlThread(thread())
+		wlt = WlGenerator(thread())
 		response = wlt.next()
 		self.assertEquals('A', response)
 		response = wlt.next()
 		self.assertEquals('B', response)
 
-	def testResumeNestedThread(self):
+	def testResumeNestedWlGenerator(self):
 		def threadA():
 			yield 'A'
 			yield 'B'
@@ -74,7 +74,7 @@ class WlThreadTest(unittest.TestCase):
 			yield 'C'
 			yield threadA()
 			yield 'D'
-		wlt = WlThread(threadB())
+		wlt = WlGenerator(threadB())
 		results = list(wlt)
 		self.assertEquals(['C','A','B','D'], results)
 
@@ -84,7 +84,7 @@ class WlThreadTest(unittest.TestCase):
 			response = yield first
 			response = yield response
 			response = yield response
-		t = WlThread(thread('first'))
+		t = WlGenerator(thread('first'))
 		response = t.next()
 		self.assertEquals('first', response)
 		response = t.send('second')
@@ -93,14 +93,14 @@ class WlThreadTest(unittest.TestCase):
 		self.assertEquals('third', response)
 
 
-	def testPassValueToRecursiveThread(self):
+	def testPassValueToRecursiveWlGenerator(self):
 		def threadA():
 			r = yield threadB()	# <= C
 			yield r * 3 					# <= D
 		def threadB():
 			r = yield 7 					# <= A
 			yield r * 2 					# <= B
-		t = WlThread(threadA())
+		t = WlGenerator(threadA())
 		self.assertEquals(7, t.next())		# 7 yielded at A
 		self.assertEquals(6, t.send(3))		# 3 send to A, 6 yielded at B
 		self.assertEquals(15, t.send(5))	# 5 send to B, threadB terminates and 15 yielded at D
@@ -111,8 +111,8 @@ class WlThreadTest(unittest.TestCase):
 			yield None
 		def threadB():
 			yield g.name
-		ta = WlThread(threadA())
-		tb = WlThread(threadB())
+		ta = WlGenerator(threadA())
+		tb = WlGenerator(threadB())
 		list(ta)
 		john = list(tb)
 		self.assertEquals('john', john[0])

@@ -16,6 +16,7 @@ from wlsockettest import WlSocketTest
 from wlsockettest import WlFileSocketTest
 from wlsockettest import WlSelectTest
 from wlservicetest import WlServiceTest
+from wlgeneratortest import WlGeneratorTest
 
 if __name__ == '__main__':
 	unittest.main()
