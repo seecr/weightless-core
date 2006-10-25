@@ -2,30 +2,42 @@ from __future__ import with_statement
 
 from wltestcase import TestCase
 from cq2utils.calltrace import CallTrace
-from wlsocket import WlSelect, WlFileSocket, WlBaseSocket
+from wlsocket import WlSelect, WlFileSocket, WlBaseSocket, ReadIteration, WriteIteration
 from threading import Event
 from time import sleep
 
+def mockSelect(r, w, o):
+	sleep(0.00001) # yield CPU, that's what select does normally !!
+	return set(r), set(w), set(o)
+
 class WlSelectTest(TestCase):
 
-	def testAddSocket(self):
-		class Sok: # raise exception when put into set
+	def testAddSocketReading(self):
+		class Sok:
 			def __hash__(self): return 1
 		selector = WlSelect()
 		mockSok = Sok()
 		self.assertTrue(mockSok not in selector._readers)
-		selector.addReader(mockSok)
-		try:
-			self.assertTrue(mockSok in selector._readers)
-		finally:
-			selector.removeReader(mockSok)
+		selector.add(mockSok)
+		self.assertTrue(mockSok in selector._readers)
+		selector._readers.remove(mockSok)
+
+	def testAddSocketWriting(self):
+		class Sok:
+			def __hash__(self): return 1
+		selector = WlSelect()
+		mockSok = Sok()
+		self.assertTrue(mockSok not in selector._writers)
+		selector.add(mockSok, 'w')
+		self.assertTrue(mockSok in selector._writers)
+		selector._writers.remove(mockSok)
 
 	def testAddSocketRaisesException(self):
 		class Sok: # raise exception when put into set
 			def __hash__(self): raise Exception('aap')
 		selector = WlSelect()
 		try:
-			selector.addReader(Sok())
+			selector.add(Sok())
 			self.fail()
 		except Exception, e:
 			self.assertEquals('aap', str(e))
@@ -47,30 +59,58 @@ class WlSelectTest(TestCase):
 		self.assertEquals('boom vuur vis', data[0])
 
 	def testRemoveFromREADERSWhenExceptionIsRaised(self):
-		wait = Event()
-		selector = WlSelect()
-		with self.mktemp('aap noot mies') as f:
-			wlsok = WlFileSocket(f.name)
-			def sink():
-				data = yield None  # i.e. read
-				wait.set()
-			wlsok.sink(sink(), selector)
-		wait.wait()
-		self.assertTrue(wlsok not in selector._writers)
-		self.assertTrue(wlsok not in selector._readers)
-
-	def testRemoveFromWRITERSWhenExceptionIsRaised(self):
+		f = Event()
 		def mockSelect(r, w, o):
-			sleep(0.00001) # yield CPU, that's what select does normally !!
+			f.wait()
+			f.clear()
 			return set(r), set(w), set(o)
 		selector = WlSelect(select_func = mockSelect)
-		wlsok = WlBaseSocket(CallTrace(returnValues = {'fileno': 999, 'send': 999, 'getsockopt': 999}))
+		wlsok = CallTrace(returnValues = {'fileno': 999, 'send': 999, 'getsockopt': 999, '__hash__': 1})
+		wlsok.exceptions['readable'] = Exception()
+		selector.add(wlsok)
+		f.set()
+		sleep(0.0001)
+		self.assertTrue(wlsok not in selector._readers)
+		self.assertEquals('close()', str(wlsok.calledMethods[-2]))
+
+	def testRemoveFromWRITERSWhenExceptionIsRaised(self):
+		selector = WlSelect(select_func = mockSelect)
+		mockSok = CallTrace(returnValues = {'fileno': 999, 'send': 999, 'getsockopt': 999})
+		wlsok = WlBaseSocket(mockSok)
 		def sink():
 			yield 'data to send'
 			raise Exception('oops')
 		wlsok.sink(sink(), selector)
-		#wlsok.writable()
 		sleep(0.01)
 		self.assertTrue(wlsok not in selector._writers)
 		self.assertTrue(wlsok not in selector._readers)
+		self.assertEquals('close()', str(mockSok.calledMethods[-1]))
+
+	def testWriteIterationExceptino(self):
+		f = Event()
+		def mockSelect(r, w, o):
+			f.wait()
+			f.clear()
+			return set(r), set(w), set(o)
+		class MockSok:
+			def readable(self): raise WriteIteration()
+			def writable(self): raise ReadIteration()
+		selector = WlSelect(select_func = mockSelect)
+		wlsok = MockSok()
+		selector.add(wlsok)
+		self.assertTrue(wlsok in selector._readers)
+		self.assertTrue(wlsok not in selector._writers)
+		f.set()
+		sleep(0.0001)
+		self.assertTrue(wlsok not in selector._readers)
+		self.assertTrue(wlsok in selector._writers)
+		f.set()
+		sleep(0.0001)
+		self.assertTrue(wlsok in selector._readers)
+		self.assertTrue(wlsok not in selector._writers)
+		f.set()
+		sleep(0.0001)
+		self.assertTrue(wlsok not in selector._readers)
+		self.assertTrue(wlsok in selector._writers)
+
 

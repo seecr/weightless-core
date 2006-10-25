@@ -1,6 +1,11 @@
 from types import GeneratorType
 from socket import SOL_SOCKET, SO_RCVBUF
 from functools import partial as curry
+from wlselect import WriteIteration, ReadIteration
+
+WRITE_ITERATION = WriteIteration()
+READ_ITERATION = ReadIteration()
+STOP_ITERATION = StopIteration()
 
 class WlBaseSocket:
 
@@ -11,24 +16,24 @@ class WlBaseSocket:
 		self._recv = curry(sok.recv, sok.getsockopt(SOL_SOCKET, SO_RCVBUF) / 2)
 
 	def sink(self, generator, selector):
-		if not type(generator) == GeneratorType: raise TypeError('need generator')
+		if not type(generator) == GeneratorType:
+			raise TypeError('need generator')
 		try:
 			self._to_write = generator.next()
 		except StopIteration:
 			raise ValueError('useless generator: exhausted at first next()')
 		self._sink = generator
 		self._selector = selector
-		self._selector.addWriter(self) if self._to_write else self._selector.addReader(self)
+		self._selector.add(self, 'w' if self._to_write else 'r')
 
 	def readable(self):
 		data = self._recv()
 		if not data: # orderly socket shutdown
-			self._sink.throw(StopIteration())
+			self._sink.throw(STOP_ITERATION)
 		else:
 			self._to_write = self._sink.send(data)
 			if self._to_write:
-				self._selector.removeReader(self)
-				self._selector.addWriter(self)
+				raise WRITE_ITERATION
 
 	def writable(self):
 		bytesSend = self._sok.send(self._to_write)
@@ -37,5 +42,4 @@ class WlBaseSocket:
 		else:
 			self._to_write = self._sink.next()
 			if not self._to_write:
-				self._selector.removeWriter(self)
-				self._selector.addReader(self)
+				raise READ_ITERATION
