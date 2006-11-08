@@ -8,12 +8,6 @@ from wlservice import WlService
 
 PORT = 7653
 
-@contextmanager
-def runInThread(function):
-	serviceThread = threading.Thread(None, function)
-	serviceThread.start()
-	yield serviceThread
-	serviceThread.join()
 
 class WlServiceTest(unittest.TestCase):
 
@@ -33,23 +27,7 @@ class WlServiceTest(unittest.TestCase):
 		self.assertEquals('#!/usr/bin/python2.5', fileContents[0][:20])
 
 
-	def xtestStartService(self):
-		service = wlservice.create('localhost', PORT)
-		service.listen(None)
-		self.assertEquals(0, os.system('netstat --ip --listening | grep localhost.*%d>/dev/null' % PORT))
 
-
-	def xtestConnect(self):
-		accept = [None]
-		def acceptor(sock, host):
-			accept[0] = 'y'
-			return (None for x in [])
-		service = wlservice.create('localhost', PORT)
-		service.listen(acceptor)
-		with runInThread(service.select):
-			soc = socket.socket()
-			soc.connect(('localhost', PORT))
-		self.assertEquals('y', accept[0])
 
 	def xtestSendData(self):
 		recv = []

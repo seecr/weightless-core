@@ -5,6 +5,8 @@ from cq2utils.calltrace import CallTrace
 from wlsocket import WlSelect, WlFileSocket, WlBaseSocket, ReadIteration, WriteIteration
 from threading import Event
 from time import sleep
+from StringIO import StringIO
+import sys
 
 def mockSelect(r, w, o):
 	sleep(0.00001) # yield CPU, that's what select does normally !!
@@ -74,17 +76,22 @@ class WlSelectTest(TestCase):
 		self.assertEquals('close()', str(wlsok.calledMethods[-2]))
 
 	def testRemoveFromWRITERSWhenExceptionIsRaised(self):
-		selector = WlSelect(select_func = mockSelect)
-		mockSok = CallTrace(returnValues = {'fileno': 999, 'send': 999, 'getsockopt': 999})
-		wlsok = WlBaseSocket(mockSok)
-		def sink():
-			yield 'data to send'
-			raise Exception('oops')
-		wlsok.sink(sink(), selector)
-		sleep(0.01)
-		self.assertTrue(wlsok not in selector._writers)
-		self.assertTrue(wlsok not in selector._readers)
-		self.assertEquals('close()', str(mockSok.calledMethods[-1]))
+		tmp = sys.stderr
+		try:
+			sys.stderr = StringIO()
+			selector = WlSelect(select_func = mockSelect)
+			mockSok = CallTrace(returnValues = {'fileno': 999, 'send': 999, 'getsockopt': 999})
+			wlsok = WlBaseSocket(mockSok)
+			def sink():
+				yield 'data to send'
+				raise Exception('oops')
+			wlsok.sink(sink(), selector)
+			sleep(0.01)
+			self.assertTrue(wlsok not in selector._writers)
+			self.assertTrue(wlsok not in selector._readers)
+			self.assertEquals('close()', str(mockSok.calledMethods[-1]))
+		finally:
+				sys.stderr = tmp
 
 	def testWriteIterationExceptino(self):
 		f = Event()

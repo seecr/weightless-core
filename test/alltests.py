@@ -1,4 +1,4 @@
-#!/usr/bin/python2.5
+#!/usr/local/bin/python2.5
 #
 import platform, sys
 if not platform.python_version() >= "2.5":
@@ -10,11 +10,8 @@ sys.setcheckinterval(sys.maxint) # i.e. cooperative scheduling
 
 import unittest
 
-from wlthreadtest import WlStatusTest
-from wlthreadtest import WlPoolTest
-from wlsockettest import WlSocketTest
-from wlsockettest import WlFileSocketTest
-from wlsockettest import WlSelectTest
+from wlthreadtest import WlStatusTest, WlPoolTest
+from wlsockettest import WlSocketTest, WlFileSocketTest, WlListenTest, WlSelectTest
 from wlservicetest import WlServiceTest
 from wlgeneratortest import WlGeneratorTest
 
