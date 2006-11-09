@@ -16,3 +16,6 @@ class WlListen:
 		sok, (host, port) = self._sok.accept()
 		wlsok = WlServerSocket(host, port, sok)
 		self._acceptor(wlsok)
+
+	def close(self):
+		self._sok.close()

@@ -8,7 +8,7 @@ from socket import socket
 from wlsocket import WlSocket
 from cq2utils.calltrace import CallTrace
 
-PORT = 8160
+PORT = 4500
 
 class WlListenTest(TestCase):
 
@@ -61,3 +61,6 @@ class WlListenTest(TestCase):
 		thread.join()
 		self.assertEquals('GET / HTTP/1.0\n\n', data[0])
 
+	def testClose(self):
+		s = WlListen('localhost', PORT, None)
+		s.close()

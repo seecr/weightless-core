@@ -29,7 +29,7 @@ class WlServiceTest(TestCase):
 			data = yield None
 			recv.append(data)
 			yield 'Response'
-		l = service.listen('localhost', PORT, handler)
+		service.listen('localhost', PORT, handler)
 		def client():
 			soc = socket()
 			soc.connect(('localhost', PORT))
