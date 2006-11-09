@@ -10,6 +10,7 @@ class WlListen:
 		self._sok.bind((hostname, port))
 		self._sok.listen(BACKLOG)
 		self._acceptor = acceptor
+		self.fileno = self._sok.fileno
 
 	def readable(self):
 		sok, (host, port) = self._sok.accept()

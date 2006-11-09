@@ -6,8 +6,9 @@ from os import system
 from threading import Thread
 from socket import socket
 from wlsocket import WlSocket
+from cq2utils.calltrace import CallTrace
 
-PORT = 8765
+PORT = 8160
 
 class WlListenTest(TestCase):
 
@@ -35,6 +36,28 @@ class WlListenTest(TestCase):
 		self.assertEquals('127.0.0.1', wlsok.host)
 		self.assertTrue(30000 < wlsok.port < 90000, wlsok.port)
 
-	def testItCouldBeThatThereIsNothingMoreToTest(self):
-		self.fail('bookmark')
+	def testHandleConnection(self):
+		data = []
+		def handler():
+			received = yield None
+			data.append(received)
+		accept = [None]
+		def acceptor(wlsok):
+			accept[0] = wlsok
+			wlsok.sink(handler(), CallTrace())
+			try:
+				wlsok.readable()
+			except StopIteration:
+				pass
+		s = WlListen('localhost', PORT, acceptor)
+		def client():
+			soc = socket()
+			soc.connect(('localhost', PORT))
+			soc.send('GET / HTTP/1.0\n\n')
+			soc.close()
+		thread = Thread(None, client)
+		thread.start()
+		s.readable() # fake what select does
+		thread.join()
+		self.assertEquals('GET / HTTP/1.0\n\n', data[0])
 

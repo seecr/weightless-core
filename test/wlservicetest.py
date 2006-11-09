@@ -1,53 +1,44 @@
-#!/usr/bin/python2.5
-from __future__ import with_statement
-from contextlib import contextmanager
-
-import unittest, os, sys, threading, socket
-
+from unittest import TestCase
 from wlservice import WlService
+from time import sleep
+from socket import socket
+from threading import Thread
 
-PORT = 7653
+PORT = 7353
 
+class WlServiceTest(TestCase):
 
-class WlServiceTest(unittest.TestCase):
-
-	def xtearDown(self):
+	def tearDown(self):
 		global PORT
 		PORT = PORT + 1 # trick to avoid 'post already in use'
 
-	def testCreateService(self):
+	def testOpen(self):
 		service = WlService()
 		def sink(buf):
 			data = yield None
 			buf.append(data)
 		fileContents = []
-		wlFileSok = service.open('file:wlservicetest.py', sink(fileContents))
-		from time import sleep
+		service.open('file:wlservicetest.py', sink(fileContents))
 		sleep(0.1)
-		self.assertEquals('#!/usr/bin/python2.5', fileContents[0][:20])
+		self.assertEquals('from unittest import', fileContents[0][:20])
 
-
-
-
-	def xtestSendData(self):
+	def testListen(self):
+		service = WlService()
 		recv = []
-		def produmer(sock, host):
-			while True:
-				data = yield ''
-				recv.append(data)
-		def acceptor(sock, host):
-			return produmer(sock, host)
-		service = wlservice.create('localhost', PORT)
-		service.listen(acceptor)
-		with runInThread(service.select):
-			soc = socket.socket()
+		def handler():
+			data = yield None
+			recv.append(data)
+			yield 'Response'
+		l = service.listen('localhost', PORT, handler)
+		def client():
+			soc = socket()
 			soc.connect(('localhost', PORT))
-		with runInThread(service.select):
-			soc.send((wlservice.BUFFSIZE + 10) * 'A')
-		self.assertEquals(wlservice.BUFFSIZE, len(recv[0]))
-		with runInThread(service.select): pass
-		self.assertEquals(10 * 'A', recv[1])
-
-
-if __name__ == '__main__':
-	unittest.main()
+			soc.send('GET / HTTP/1.0\n\n')
+			response = soc.recv(4096)
+			self.assertEquals('Response', response)
+			soc.close()
+		thread = Thread(None, client)
+		thread.start()
+		thread.join()
+		sleep(0.001)
+		self.assertEquals(['GET / HTTP/1.0\n\n'], recv)
