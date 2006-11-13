@@ -1,5 +1,5 @@
 from unittest import TestCase
-from wlservice import WlService
+from weightless.wlservice import WlService
 from time import sleep
 from socket import socket
 from threading import Thread

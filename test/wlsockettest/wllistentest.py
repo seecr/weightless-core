@@ -1,11 +1,11 @@
 from __future__ import with_statement
 from contextlib import contextmanager
 from unittest import TestCase
-from wlsocket import WlListen
+from weightless.wlsocket import WlListen
 from os import system
 from threading import Thread
 from socket import socket
-from wlsocket import WlSocket
+from weightless.wlsocket import WlSocket
 from cq2utils.calltrace import CallTrace
 
 PORT = 4500

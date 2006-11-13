@@ -1,7 +1,7 @@
 from __future__ import with_statement
 
 from wltestcase import TestCase
-from wlsocket import WlFileSocket
+from weightless.wlsocket import WlFileSocket
 from cq2utils.calltrace import CallTrace
 from functools import partial as curry
 import select

@@ -1,6 +1,6 @@
 from __future__ import with_statement
 from unittest import TestCase
-from wlthread import WlStatus
+from weightless.wlthread import WlStatus
 from traceback import format_tb
 from sys import exc_info
 from threading import Event

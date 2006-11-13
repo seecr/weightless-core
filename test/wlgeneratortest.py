@@ -25,8 +25,8 @@
 import unittest
 from timeit import Timer
 
-import wlgenerator
-from wlgenerator import WlGenerator
+import weightless.wlgenerator
+from weightless.wlgenerator import WlGenerator
 
 class WlGeneratorTest(unittest.TestCase):
 
