@@ -1,4 +1,4 @@
-from socket import socket
+from socket import socket, SOL_SOCKET, SO_REUSEADDR
 from wlserversocket import WlServerSocket
 
 BACKLOG = 1
@@ -9,6 +9,7 @@ class WlListen:
 		self._sok = socket()
 		self._sok.bind((hostname, port))
 		self._sok.listen(BACKLOG)
+		self._sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
 		self._acceptor = acceptor
 		self.fileno = self._sok.fileno
 

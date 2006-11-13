@@ -83,6 +83,7 @@ class WlSelect:
 			except Exception:
 				self._readers.remove(readable)
 				readable.close()
+				print_exc()
 
 		for writable in w:
 			try:
