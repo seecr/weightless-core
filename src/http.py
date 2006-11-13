@@ -8,6 +8,6 @@ class HTTP:
 		MessageHeader = '%(name)s: %(value)s' + CRLF
 		def _Headers(klas, headers = {}):
 			for name, value in headers.items():
-				yield MessageHeader % locals()
+				yield HTTP.Message.MessageHeader % locals()
 			yield CRLF
 		Headers = classmethod(_Headers)
