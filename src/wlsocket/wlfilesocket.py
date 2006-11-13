@@ -1,5 +1,5 @@
 from sendfile import sendfile
-from weightless.wlthread import WlPool
+from wlthread import WlPool
 from socket import socketpair, SHUT_RDWR
 from sys import maxint
 from wlsocket import WlBaseSocket
