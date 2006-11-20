@@ -50,9 +50,18 @@ class WlSelect:
 		self._writers = set()
 		self._signaller = Signaller()
 		self._readers.add(self._signaller)
+		self._go = True
 		self._thread = Thread(None, self._loop)
 		self._thread.setDaemon(True)
 		self._thread.start()
+
+	def stop(self):
+		self._go = False
+		self._thread.join()
+		for sock in self._readers: sock.close()
+		for sock in self._writers: sock.close()
+		self._readers = None
+		self._writers = None
 
 	def add(self, sok, mode = 'r'):
 		if mode == 'r':
@@ -63,7 +72,7 @@ class WlSelect:
 			self._signaller.signal()
 
 	def _loop(self):
-		while True:
+		while self._go:
 			self._select()
 
 	def _select(self):

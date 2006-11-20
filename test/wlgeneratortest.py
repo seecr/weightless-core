@@ -117,4 +117,15 @@ class WlGeneratorTest(unittest.TestCase):
 		john = list(tb)
 		self.assertEquals('john', john[0])
 
+	def testPushBack(self):
+		data = []
+		def genA():
+			data.append((yield None))
+			yield PushBack('aap')
+			data.append((yield None))
+		ga = WlGenerator(genA())
+		list(ga)
+		self.assertEquals('aap', data[1])
+
+
 if __name__ == '__main__': unittest.main()

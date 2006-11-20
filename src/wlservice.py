@@ -19,3 +19,6 @@ class WlService:
 		wlistener =  WlListen(host, port, acceptor)
 		self._selector.add(wlistener, 'r')
 		return wlistener
+
+	def stop(self):
+		self._selector.stop()
