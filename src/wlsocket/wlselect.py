@@ -57,6 +57,7 @@ class WlSelect:
 
 	def stop(self):
 		self._go = False
+		self._signaller.signal()
 		self._thread.join()
 		for sock in self._readers: sock.close()
 		for sock in self._writers: sock.close()
