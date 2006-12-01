@@ -5,8 +5,7 @@ if not platform.python_version() >= "2.5":
 	print "Needed python 2.5 or higher."
 	sys.exit(0)
 
-#sys.path.append('../src')
-sys.setcheckinterval(sys.maxint) # i.e. cooperative scheduling
+sys.path.insert(0, '..')
 
 import unittest
 
