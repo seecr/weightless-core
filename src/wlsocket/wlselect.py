@@ -5,9 +5,10 @@ from select import select as original_select_func
 from os import pipe, write, read, close
 from traceback import print_exc
 from time import sleep
-from sys import getcheckinterval, setcheckinterval, maxint, stderr
+from sys import getcheckinterval, setcheckinterval, stderr
 
-setcheckinterval(maxint)
+max32bitint = 2147483647
+setcheckinterval(max32bitint) # 32bit maxint
 
 SIGWAKEUP = 'sigwakeup'
 
@@ -43,7 +44,7 @@ class Signaller:
 class WlSelect:
 
 	def __init__(self, select_func = original_select_func):
-		assert(getcheckinterval() == maxint, 'Please disable pre-emptive scheduling if you want to use Weightless.  To do so, call sys.setcheckinterval(sys.maxint)')
+		assert(getcheckinterval() == max32bitint, 'Please disable pre-emptive scheduling if you want to use Weightless.  To do so, call sys.setcheckinterval(sys.maxint)')
 		self._inSelect = False
 		self._select_func = select_func
 		self._readers = set()
