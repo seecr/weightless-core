@@ -61,19 +61,24 @@ class WlSelectTest(TestCase):
 		self.assertEquals('boom vuur vis', data[0])
 
 	def testRemoveFromREADERSWhenExceptionIsRaised(self):
-		f = Event()
-		def mockSelect(r, w, o):
-			f.wait()
-			f.clear()
-			return set(r), set(w), set(o)
-		selector = WlSelect(select_func = mockSelect)
-		wlsok = CallTrace(returnValues = {'fileno': 999, 'send': 999, 'getsockopt': 999, '__hash__': 1})
-		wlsok.exceptions['readable'] = Exception()
-		selector.add(wlsok)
-		f.set()
-		sleep(0.0001)
-		self.assertTrue(wlsok not in selector._readers)
-		self.assertEquals('close()', str(wlsok.calledMethods[-2]))
+		tmp = sys.stderr
+		try:
+			sys.stderr = StringIO() # suppress error messages
+			f = Event()
+			def mockSelect(r, w, o):
+				f.wait()
+				f.clear()
+				return set(r), set(w), set(o)
+			selector = WlSelect(select_func = mockSelect)
+			wlsok = CallTrace(returnValues = {'fileno': 999, 'send': 999, 'getsockopt': 999, '__hash__': 1})
+			wlsok.exceptions['readable'] = Exception()
+			selector.add(wlsok)
+			f.set()
+			sleep(0.0001)
+			self.assertTrue(wlsok not in selector._readers)
+			self.assertEquals('close()', str(wlsok.calledMethods[-2]))
+		finally:
+				sys.stderr = tmp
 
 	def testRemoveFromWRITERSWhenExceptionIsRaised(self):
 		tmp = sys.stderr

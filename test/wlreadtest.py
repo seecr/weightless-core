@@ -8,9 +8,7 @@ def Read(regexp, vars):
 	data = ''
 	while not match:
 		data = data + (yield None)
-		print data
 		match = regExp.search(data)
-	print match
 	end = match.end()
 	vars.__dict__.update(match.groupdict())
 	restData = data[end:]

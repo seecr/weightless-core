@@ -3,8 +3,9 @@ from weightless.wlservice import WlService
 from time import sleep
 from socket import socket
 from threading import Thread
+from random import random
 
-PORT = 7353
+PORT = 2048 + int(random() * 4096.0)
 
 class WlServiceTest(TestCase):
 
