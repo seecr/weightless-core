@@ -14,7 +14,7 @@ from wlsockettest import WlSocketTest, WlFileSocketTest, WlListenTest, WlSelectT
 from wlservicetest import WlServiceTest
 from wlgeneratortest import WlGeneratorTest
 #from wlreadtest import WlReadTest
-from wlhttptest import WlHttpRequestTest
+from wlhttptest import WlHttpRequestTest, WlHttpResponseTest
 
 if __name__ == '__main__':
 	unittest.main()

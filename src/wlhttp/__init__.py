@@ -1,1 +1,2 @@
 from wlhttprequest import WlHttpRequest
+from wlhttpresponse import WlHttpResponse
