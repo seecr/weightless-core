@@ -26,7 +26,7 @@ import unittest
 from timeit import Timer
 
 import weightless.wlgenerator
-from weightless.wlgenerator import WlGenerator
+from weightless.wlgenerator import WlGenerator, PUSHBACK, WlGeneratorChain
 
 class WlGeneratorTest(unittest.TestCase):
 
@@ -116,3 +116,27 @@ class WlGeneratorTest(unittest.TestCase):
 		list(ta)
 		john = list(tb)
 		self.assertEquals('john', john[0])
+		
+	def testPushBackSimple(self):
+		data = []
+		def child():
+			yield PUSHBACK, 'mies'
+		def parent():
+			rest = yield child()
+			data.append(rest)
+		g = WlGenerator(parent())
+		list(g)
+		self.assertEquals('mies', data[0])
+
+	def testChain(self):
+		data = []
+		def gen1():
+			yield PUSHBACK, 'aap'
+			
+		def gen2():
+			data.append((yield None))
+
+		gen = WlGeneratorChain(gen1(), gen2())
+		list(gen)
+		self.assertEquals('aap', data[0])
+			

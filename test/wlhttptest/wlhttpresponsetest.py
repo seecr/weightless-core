@@ -21,6 +21,7 @@ class WlHttpResponseTest(TestCase):
 		response = WlHttpResponse(args)
 		response.next()
 		response.send('HTTP/1.1 200 Ok\r\n')
+		response.send('\r\n')
 		self.assertEquals('200', args.StatusCode)
 		self.assertEquals('1.1', args.HTTPVersion)
 		self.assertEquals('Ok', args.ReasonPhrase)
@@ -30,6 +31,20 @@ class WlHttpResponseTest(TestCase):
 		response = WlHttpResponse(args)
 		response.next()
 		response.send('HTTP/1.0 503 Kannie effe nie\r\n')
+		response.send('\r\n')
 		self.assertEquals('503', args.StatusCode)
 		self.assertEquals('1.0', args.HTTPVersion)
 		self.assertEquals('Kannie effe nie', args.ReasonPhrase)
+		
+	def testParseHeaderLines(self):
+		args = WlDict()
+		response = WlHttpResponse(args)
+		response.next()
+		response.send('HTTP/1.1 302 Redirect\r\n')
+		response.send('lOcatiOn: http:///www.somewhere.else\r\n')
+		response.send('Date: Fri, 08 Dec 2006 13:55:48 GMT\r\n')
+		response.send('\r\n')
+		
+		# directly into the WLDict or make the WLDict have a 'headers'-WLDict ?
+		self.assertEquals('Fri, 08 Dec 2006 13:55:48 GMT', args.Date)
+		self.assertEquals('http:///www.somewhere.else', args.Location)

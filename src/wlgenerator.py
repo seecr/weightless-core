@@ -27,6 +27,8 @@ assert platform.python_version() >= "2.5", "Python 2.5 required"
 
 from types import GeneratorType
 
+PUSHBACK = 1
+
 class Scope: pass
 global_vars = Scope()
 globals()['__builtins__']['g'] = global_vars
@@ -37,6 +39,7 @@ def WlGenerator(generator):
 	"""
 	msg = None
 	while True:
+		print '===', msg
 		msg = generator.send(msg)
 		if type(msg) == GeneratorType:
 			nested = WlGenerator(msg)
@@ -44,8 +47,32 @@ def WlGenerator(generator):
 			try:
 				while True:
 					msg = nested.send(msg)
-					msg = yield msg
+					if type(msg) == tuple:
+						print '>>>>>>', msg
+						opcode, msg = msg
+					else:
+						msg = yield msg
 			except StopIteration:
 				pass
 		else:
 			msg = yield msg
+
+def WlGeneratorChain(*generators):
+	rest = ''
+	for generator in generators:
+		try:
+			msg = generator.next()
+			while True:
+				if type(msg) == tuple:
+					opcode, rest = msg
+					break
+				else:
+					if rest:
+						msg = generator.send(rest)
+						rest = ''
+					msg = yield msg
+					msg = generator.send(msg)
+					rest = ''
+		except StopIteration:
+			break
+
