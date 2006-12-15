@@ -26,7 +26,7 @@ import unittest
 from timeit import Timer
 
 import weightless.wlgenerator
-from weightless.wlgenerator import WlGenerator, PUSHBACK, WlGeneratorChain
+from weightless.wlgenerator import WlGenerator, RETURN
 
 class WlGeneratorTest(unittest.TestCase):
 
@@ -95,15 +95,14 @@ class WlGeneratorTest(unittest.TestCase):
 
 	def testPassValueToRecursiveWlGenerator(self):
 		def threadA():
-			r = yield threadB()	# <= C
+			r = yield threadB()		# <= C
 			yield r * 3 					# <= D
 		def threadB():
 			r = yield 7 					# <= A
-			yield r * 2 					# <= B
+			yield RETURN, r * 2 	# <= B
 		t = WlGenerator(threadA())
-		self.assertEquals(7, t.next())		# 7 yielded at A
-		self.assertEquals(6, t.send(3))		# 3 send to A, 6 yielded at B
-		self.assertEquals(15, t.send(5))	# 5 send to B, threadB terminates and 15 yielded at D
+		self.assertEquals(7, t.next())				# 7 yielded at A
+		self.assertEquals(18, t.send(3))		# 3 send to A, 6 yielded at B, as return value to C, then yielded at D
 
 	def testGlobalScope(self):
 		def threadA():
@@ -116,27 +115,54 @@ class WlGeneratorTest(unittest.TestCase):
 		list(ta)
 		john = list(tb)
 		self.assertEquals('john', john[0])
-		
-	def testPushBackSimple(self):
+
+	def testReturnOne(self):
 		data = []
 		def child():
-			yield PUSHBACK, 'mies'
+			yield RETURN, 'result'
 		def parent():
-			rest = yield child()
-			data.append(rest)
+			result = yield child()
+			data.append(result)
 		g = WlGenerator(parent())
 		list(g)
-		self.assertEquals('mies', data[0])
+		self.assertEquals('result', data[0])
 
-	def testChain(self):
+	def testReturnThree(self):
 		data = []
-		def gen1():
-			yield PUSHBACK, 'aap'
-			
-		def gen2():
-			data.append((yield None))
+		def child():
+			yield RETURN, 'result', 'remainingData1', 'other2'
+		def parent():
+			result = yield child()
+			data.append(result)
+			remainingData = yield None
+			data.append(remainingData)
+			other2 = yield None
+			data.append(other2)
+		g = WlGenerator(parent())
+		list(g)
+		self.assertEquals('result', data[0])
+		self.assertEquals('remainingData1', data[1])
+		self.assertEquals('other2', data[2])
 
-		gen = WlGeneratorChain(gen1(), gen2())
-		list(gen)
-		self.assertEquals('aap', data[0])
-			
+	def testReturnAndCatchRemainingDataInNextGenerator(self):
+		messages = []
+		responses = []
+		def child1():
+			messages.append((yield RETURN, 'result', 'remainingData0', 'remainingData1'))
+		def child2():
+			messages.append((yield 'A'))				# append 'remainingData0'
+			messages.append((yield 'B'))				# append 'remainingData1'
+			messages.append((yield 'C'))				# append None
+		def parent():
+			messages.append((yield child1()))	# append 'result'
+			messages.append((yield child2()))	# what does 'yield child2()' return???
+		g = WlGenerator(parent())
+		responses.append(g.next())
+		responses.append(g.send('1'))
+		responses.append(g.send('2'))
+		try:
+			responses.append(g.send('3'))
+			self.fail('should raise stopiteration')
+		except StopIteration: pass
+		self.assertEquals([RETURN, 'result', 'remainingData0', 'remainingData1', '1', '2'], messages)
+		self.assertEquals(['A', 'B', 'C'], responses)

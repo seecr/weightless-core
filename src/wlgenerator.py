@@ -27,52 +27,30 @@ assert platform.python_version() >= "2.5", "Python 2.5 required"
 
 from types import GeneratorType
 
-PUSHBACK = 1
+RETURN = 1
 
 class Scope: pass
 global_vars = Scope()
 globals()['__builtins__']['g'] = global_vars
 
-def WlGenerator(generator):
+def WlGenerator(initial):
 	"""
-	A Weightless Thread is a chain of generators.  It begins with just one generator.  If it 'yield's another generator, this generator is executed.  This may go on recursively.  If one of the generators 'yield's something else, execution stops and the value is yielded.
+	A Weightless Thread is a chain of generators.  It begins with just one generator.  If it 'yield's another generator, this generator is executed.  This may go on recursively.  If one of the generators 'yield's something else, execution stops and the value is yielded. Generators can return values to parents by yielding RETURN value, ...
 	"""
-	msg = None
-	while True:
-		print '===', msg
-		msg = generator.send(msg)
-		if type(msg) == GeneratorType:
-			nested = WlGenerator(msg)
-			msg = None
-			try:
-				while True:
-					msg = nested.send(msg)
-					if type(msg) == tuple:
-						print '>>>>>>', msg
-						opcode, msg = msg
-					else:
-						msg = yield msg
-			except StopIteration:
-				pass
-		else:
-			msg = yield msg
-
-def WlGeneratorChain(*generators):
-	rest = ''
-	for generator in generators:
+	generators = [initial]
+	messages = [None]
+	while generators:
 		try:
-			msg = generator.next()
-			while True:
-				if type(msg) == tuple:
-					opcode, rest = msg
-					break
-				else:
-					if rest:
-						msg = generator.send(rest)
-						rest = ''
-					msg = yield msg
-					msg = generator.send(msg)
-					rest = ''
+			response = generators[-1].send(messages.pop(0))
+			if type(response) == GeneratorType:
+				generators.append(response)
+				messages.insert(0, None)
+			elif type(response) == tuple:
+				messages.extend(response)
+			else:
+				messages.append((yield response))
 		except StopIteration:
-			break
+			generators.pop()
+			if not messages:
+				messages.append(None)
 
