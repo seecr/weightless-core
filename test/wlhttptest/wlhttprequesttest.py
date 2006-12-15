@@ -7,7 +7,7 @@ from socket import socket
 
 from weightless.wlhttp import WlHttpRequest
 from weightless.wlsocket import WlSocket,  WlSelect
-from weightless import WlGenerator
+from weightless.wlgenerator import WlGenerator, RETURN
 
 #http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5
 

@@ -1,2 +1,2 @@
 from wlhttprequest import WlHttpRequest
-from wlhttpresponse import WlHttpResponse
+from wlhttpresponse import parseHTTPResponse

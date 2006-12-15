@@ -1,0 +1,3 @@
+
+class WlDict:
+	pass
