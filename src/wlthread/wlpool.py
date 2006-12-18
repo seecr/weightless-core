@@ -16,7 +16,7 @@ class WlPool:
 	def __init__(self, workers = 10, with_status_and_bad_performance = False, logger = stderr):
 		"""Create a pool of 'workers' threads.  The threads are started immediatly.  The threads are daemons, meaning they will disappear when the main program exits."""
 		self._createStatus = WlStatus if with_status_and_bad_performance else WlMockStatus
-		self._jobs = Queue(100)
+		self._jobs = Queue()
 		pool = [Thread(None, self._worker) for i in range(workers)]
 		map(lambda thread: thread.setDaemon(True), pool)
 		map(Thread.start, pool)

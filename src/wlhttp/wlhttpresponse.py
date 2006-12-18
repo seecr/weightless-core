@@ -22,13 +22,12 @@ named_message_headerRE = compile(named_message_header)
 
 def parseHTTPResponse(args = None):
 	args = args or WlDict()
-	data = ''
-	match = None
+	fragment = yield None
+	match = HTTP_RESPONSE.match(fragment)
 	while not match:
-		data = data + (yield None)
-		match = HTTP_RESPONSE.match(data)
-	end = match.end()
-	restData = data[end:]
+		fragment = fragment + (yield None)
+		match = HTTP_RESPONSE.match(fragment)
+	restData = buffer(fragment, match.end())
 	args.__dict__.update(match.groupdict())
 	for (groupname, fieldname, fieldvalue) in named_message_headerRE.findall(args.headers):
 		args.__dict__[fieldname.capitalize()] = fieldvalue.strip()

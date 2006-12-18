@@ -1,5 +1,5 @@
 #!/usr/bin/python2.5
-from wlservice import WlService
+from weightless.wlservice import WlService
 from os import system
 from sys import stdout, setcheckinterval, maxint
 from time import sleep
@@ -32,6 +32,6 @@ def do_assert():
 	for r in results: assert(len(r[0]) == 1062)
 
 from cq2utils.profile import profile
-#profile(do_test, runKCacheGrind=True)
-do_test()
-do_assert()
+profile(do_test, runKCacheGrind=True)
+#do_test()
+#do_assert()

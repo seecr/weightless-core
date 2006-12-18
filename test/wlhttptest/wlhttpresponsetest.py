@@ -30,17 +30,34 @@ class WlHttpResponseTest(TestCase):
 		response = parseHTTPResponse(args)
 		response.next()
 		retval = response.send('HTTP/1.0 503 Kannie effe nie\r\n\r\ntrailing data, e.g. body')
-		self.assertEquals((RETURN, args, 'trailing data, e.g. body'), retval)
+		self.assertEquals((RETURN, args, 'trailing data, e.g. body'), (retval[0], retval[1], str(retval[2])))
+
+	def testRestDataIsBufferInsteadOfCopiedString(self):
+		response = parseHTTPResponse()
+		response.next()
+		retval = response.send('HTTP/1.0 200 Ok\r\n\r\nthis must not be copied but in a buffer')
+		self.assertEquals(buffer, type(retval[2]))
+		self.assertEquals('this must not be copied but in a buffer', str(retval[2]))
 
 	def testAsItIsMeantToBeUsedInRealApplications(self):
+		done = [0]
 		def handler():
 			requestData = yield parseHTTPResponse()
 			self.assertEquals('503', requestData.StatusCode)
 			body = yield None
-			self.assertEquals('this is ze body', body)
+			self.assertEquals('this is ze body', str(body))
+			done[0] = 1
 		g = WlGenerator(handler())
 		g.next()
 		g.send('HTTP/1.0 503 Kannie effe nie\r\n\r\nthis is ze body')
+		list(g)
+		self.assertTrue(done[0])
+
+	def testReAcceptsBuffer(self):
+		from re import compile
+		r = compile('.*(?P<name>[123]{3}).*')
+		match = r.match(buffer('pqrabc123xyzklm', 3, 9))
+		self.assertEquals('123', match.groupdict()['name'])
 
 	def testDoNotShareArgs(self):
 		w1 = parseHTTPResponse()
