@@ -1,5 +1,5 @@
 from re import compile
-from weightless.wlgenerator import RETURN
+from weightless.wlcompose import RETURN
 from weightless.wldict import WlDict
 
 #Status-Line = HTTP-Version SP Status-Code SP Reason-Phrase CRLF
