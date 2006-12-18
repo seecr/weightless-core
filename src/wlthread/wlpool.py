@@ -36,8 +36,7 @@ class WlPool:
 
 	def execute(self, generator):
 		"""Adds a piece of work.  The first available thread wil pick it up.  Returns an WlStatus object that becomes set when on termination of the piece of work."""
-		if not type(generator) == GeneratorType:
-			raise TypeError('execute() expects a generator')
+		assert type(generator) == GeneratorType, 'execute() expects a generator'
 		status = self._createStatus()
 		self._jobs.put((generator, status))
 		return status

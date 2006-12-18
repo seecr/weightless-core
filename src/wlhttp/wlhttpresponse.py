@@ -1,6 +1,6 @@
 from re import compile
 from weightless.wlgenerator import RETURN
-from weightless import WlDict
+from weightless.wldict import WlDict
 
 #Status-Line = HTTP-Version SP Status-Code SP Reason-Phrase CRLF
 HTTP_Version = r'HTTP/(?P<HTTPVersion>\d\.\d)'
@@ -20,7 +20,7 @@ HTTP_RESPONSE = compile(Response)
 named_message_header = '(?P<fieldname>'+field_name+'):(?P<fieldvalue>'+field_value+")" + CRLF
 named_message_headerRE = compile(named_message_header)
 
-def parseHTTPResponse(args = None):
+def recvResponse(args = None):
 	args = args or WlDict()
 	fragment = yield None
 	match = HTTP_RESPONSE.match(fragment)

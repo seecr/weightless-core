@@ -33,7 +33,7 @@ class Scope: pass
 global_vars = Scope()
 globals()['__builtins__']['g'] = global_vars
 
-def WlGenerator(initial):
+def compose(initial):
 	"""
 	A Weightless Thread is a chain of generators.  It begins with just one generator.  If it 'yield's another generator, this generator is executed.  This may go on recursively.  If one of the generators 'yield's something else, execution stops and the value is yielded. Generators can return values to parents by yielding RETURN value, ...
 	"""
@@ -53,4 +53,3 @@ def WlGenerator(initial):
 			generators.pop()
 			if not messages:
 				messages.append(None)
-

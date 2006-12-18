@@ -14,7 +14,7 @@ RequestLine = '%(Method)s %(Path)s HTTP/1.1' + CRLF
 HostHeader = 'Host: %(Host)s' + CRLF
 UserAgentHeader = 'User-Agent: Weightless/0.1' + CRLF
 
-def WlHttpRequest(Method, RequestUri):
+def sendRequest(Method, RequestUri):
 	assert Method in SupportedMethods, InvalidMethodMsg % Method
 	Scheme, Host, Path, query, fragment = urlsplit(RequestUri)
 	assert Scheme in SupportedSchemes, InvalidSchemeMsg % Scheme

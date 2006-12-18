@@ -1,7 +1,7 @@
 from unittest import TestCase
 from weightless.wlservice import WlService
-from weightless.wlhttp import parseHTTPResponse, WlHttpRequest
-from weightless.wlgenerator import WlGenerator
+from weightless.wlhttp import recvResponse, sendRequest
+from weightless.wlcompose import compose
 from time import sleep
 from socket import socket
 from threading import Thread
@@ -49,10 +49,10 @@ class WlServiceTest(TestCase):
 	def testOpenHTTP(self):
 		codes = []
 		def handler():
-			yield WlHttpRequest('GET', 'http://www.cq2.org/')
-			response = yield parseHTTPResponse()
+			yield sendRequest('GET', 'http://www.cq2.org/')
+			response = yield recvResponse()
 			codes.append(response)
 		service = WlService()
-		service.open('http://www.cq2.org:80', WlGenerator(handler()))
+		service.open('http://www.cq2.org:80', compose(handler()))
 		sleep(0.1)
 		self.assertEquals('302', codes[0].StatusCode)

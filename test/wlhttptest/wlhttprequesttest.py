@@ -5,9 +5,9 @@ from threading import Thread
 from time import sleep
 from socket import socket
 
-from weightless.wlhttp import WlHttpRequest
+from weightless.wlhttp import sendRequest
 from weightless.wlsocket import WlSocket,  WlSelect
-from weightless.wlgenerator import WlGenerator, RETURN
+from weightless.wlcompose import compose, RETURN
 
 #http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5
 
@@ -38,13 +38,13 @@ def server(response):
 class WlHttpRequestTest(TestCase):
 
 	def testCreateSimple(self):
-		req = WlHttpRequest('GET', 'http://aap.noot.nl/mies')
+		req = sendRequest('GET', 'http://aap.noot.nl/mies')
 		data = req.next()
 		self.assertEquals('GET /mies HTTP/1.1\r\nHost: aap.noot.nl\r\nUser-Agent: Weightless/0.1\r\n\r\n', data)
 
 	def testSupportedMethod(self):
 		try:
-			req = WlHttpRequest('got', 'http://aap.noot.nl/mies')
+			req = sendRequest('got', 'http://aap.noot.nl/mies')
 			req.next()
 			self.fail('Incorrect method must raise assert error.')
 		except AssertionError, e:
@@ -52,20 +52,20 @@ class WlHttpRequestTest(TestCase):
 
 	def testSupportedScheme(self):
 		try:
-			req = WlHttpRequest('GET', 'ftp://aap.noot.nl/mies')
+			req = sendRequest('GET', 'ftp://aap.noot.nl/mies')
 			req.next()
 			self.fail('Incorrect scheme must raise assert error.')
 		except AssertionError, e:
 			self.assertEquals('Scheme "ftp" not supported.  Supported are: http.', str(e))
 
 	def testHostHeader(self):
-		req = WlHttpRequest('GET', 'http://this.host/path')
+		req = sendRequest('GET', 'http://this.host/path')
 		data = req.next()
 		self.assertEquals('GET /path HTTP/1.1\r\nHost: this.host\r\nUser-Agent: Weightless/0.1\r\n\r\n', data)
 
 	def testAllIn(self):
 		sel = WlSelect()
-		req = WlHttpRequest('GET', 'http://this.host/path')
+		req = sendRequest('GET', 'http://this.host/path')
 		with server('response') as (request, port):
 			sok = WlSocket('localhost', port)
 			sok.sink(req, sel)
@@ -76,8 +76,8 @@ class WlHttpRequestTest(TestCase):
 		def bodyHandler():
 			bodyLines.append((yield None))
 		sel = WlSelect()
-		req = WlHttpRequest('GET', 'http://this.host/path')
+		req = sendRequest('GET', 'http://this.host/path')
 		with server('response\r\n') as (request, port):
 			sok = WlSocket('localhost', port)
-			sok.sink(WlGenerator(h for h in [req, bodyHandler()]), sel)
+			sok.sink(compose(h for h in [req, bodyHandler()]), sel)
 		self.assertEquals('response\r\n', bodyLines[0])

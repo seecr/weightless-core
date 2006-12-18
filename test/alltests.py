@@ -12,7 +12,7 @@ import unittest
 from wlthreadtest import WlStatusTest, WlPoolTest
 from wlsockettest import WlSocketTest, WlFileSocketTest, WlListenTest, WlSelectTest
 from wlservicetest import WlServiceTest
-from wlgeneratortest import WlGeneratorTest
+from wlcomposetest import WlComposeTest
 #from wlreadtest import WlReadTest
 from wlhttptest import WlHttpRequestTest, WlHttpResponseTest
 

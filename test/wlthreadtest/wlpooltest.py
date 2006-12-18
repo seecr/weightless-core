@@ -26,7 +26,7 @@ class WlPoolTest(TestCase):
 		try:
 			self.pool.execute(None)
 			self.fail()
-		except TypeError, e:
+		except AssertionError, e:
 			self.assertEquals('execute() expects a generator', str(e))
 
 	def testStatus(self):
