@@ -1,9 +1,10 @@
-#!/usr/local/bin/python2.5
+#!/usr/bin/env python2.5
 #
+
 import platform, sys
 if not platform.python_version() >= "2.5":
 	print "Needed python 2.5 or higher."
-	sys.exit(0)
+	sys.exit(1)
 
 sys.path.insert(0, '..')
 
