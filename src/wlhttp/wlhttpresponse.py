@@ -22,8 +22,8 @@ named_message_headerRE = compile(named_message_header)
 
 def recvResponse(args = None):
 	args = args or WlDict()
-	fragment = yield None
-	match = HTTP_RESPONSE.match(fragment)
+	fragment = ''
+	match = False
 	while not match:
 		fragment = fragment + (yield None)
 		match = HTTP_RESPONSE.match(fragment)
