@@ -5,9 +5,10 @@ from threading import Thread
 from time import sleep
 from socket import socket
 
-from weightless.wlhttp import sendRequest
+from weightless.wlhttp import sendRequest, recvRequest
 from weightless.wlsocket import WlSocket,  WlSelect
 from weightless.wlcompose import compose, RETURN
+from weightless.wldict import WlDict
 
 #http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5
 
@@ -81,3 +82,32 @@ class WlHttpRequestTest(TestCase):
 			sok = WlSocket('localhost', port)
 			sok.sink(compose(h for h in [req, bodyHandler()]), sel)
 		self.assertEquals('response\r\n', bodyLines[0])
+		
+	def testRequest(self):
+		args = WlDict()
+		request = recvRequest(args)
+		request.next()
+		request.send('GET /path HTTP/1.1\r\n')
+		request.send('\r\n')
+		self.assertEquals('1.1', args.HTTPVersion)
+		self.assertEquals('/path', args.RequestURI)
+		self.assertEquals('', args.headers)
+
+	def testRequestWithHeaders(self):
+		args = WlDict()
+		request = recvRequest(args)
+		request.next()
+		request.send('GET /path HTTP/1.1\r\n')
+		request.send('host: we.want.more\r\n')
+		request.send('content-type: text/python\r\n')
+		request.send('\r\n')
+		self.assertEquals('host: we.want.more\r\ncontent-type: text/python\r\n', args.headers)
+		self.assertEquals('we.want.more', args.Host)
+		self.assertEquals('text/python', args.ContentType)
+	
+	def testRequestCreatesArgsWhenNotGiven(self):
+		request = recvRequest()
+		request.next()
+		rv, args, rest = request.send('GET /path HTTP/1.1\r\nhost: we.want.more\r\n\r\n')
+		self.assertEquals('we.want.more', args.Host)
+		
