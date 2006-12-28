@@ -1,2 +1,1 @@
-from wlhttprequest import sendRequest, recvRequest
-from wlhttpresponse import recvResponse
+from wlhttp import sendRequest, recvRequest, recvResponse

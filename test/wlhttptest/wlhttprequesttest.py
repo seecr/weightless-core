@@ -108,6 +108,6 @@ class WlHttpRequestTest(TestCase):
 	def testRequestCreatesArgsWhenNotGiven(self):
 		request = recvRequest()
 		request.next()
-		rv, args, rest = request.send('GET /path HTTP/1.1\r\nhost: we.want.more\r\n\r\n')
+		rv, args = request.send('GET /path HTTP/1.1\r\nhost: we.want.more\r\n\r\n')
 		self.assertEquals('we.want.more', args.Host)
 		
