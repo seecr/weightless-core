@@ -18,31 +18,25 @@ def sendRequest(Method, RequestUri):
 	assert Scheme in SupportedSchemes, InvalidSchemeMsg % Scheme
 	yield (FORMAT.RequestLine + FORMAT.HostHeader) % locals() + FORMAT.UserAgentHeader + HTTP.CRLF
 
-def recvRequest(args = None):
+def _recvRegexp(regexp, args):
 	args = args or WlDict()
 	fragment = yield None
-	match = REGEXP.REQUEST.match(fragment)
+	match = regexp.match(fragment)
 	while not match:
 		fragment = fragment + (yield None)
-		match = REGEXP.REQUEST.match(fragment)
+		match = regexp.match(fragment)
 	args.__dict__.update(match.groupdict())
-	for (groupname, fieldname, fieldvalue) in REGEXP.HEADER.findall(args.headers):
-		args.__dict__[fieldname.title().replace('-','')] = fieldvalue.strip()
+	
+	args.headers = WlDict()
+	for (groupname, fieldname, fieldvalue) in REGEXP.HEADER.findall(args._headers):
+		args.headers.__dict__[fieldname.title().replace('-','')] = fieldvalue.strip()
+	
 	if match.end() < len(fragment):
 		restData = buffer(fragment, match.end())
 		yield RETURN, args, restData
 	else:
 		yield RETURN, args
 
-def recvResponse(args = None):
-	args = args or WlDict()
-	fragment = yield None
-	match = REGEXP.RESPONSE.match(fragment)
-	while not match:
-		fragment = fragment + (yield None)
-		match = REGEXP.RESPONSE.match(fragment)
-	restData = buffer(fragment, match.end())
-	args.__dict__.update(match.groupdict())
-	for (groupname, fieldname, fieldvalue) in REGEXP.HEADER.findall(args.headers):
-		args.__dict__[fieldname.capitalize()] = fieldvalue.strip()
-	yield RETURN, args, restData
+
+recvRequest = lambda args = None: _recvRegexp(REGEXP.REQUEST, args)
+recvResponse = lambda args = None: _recvRegexp(REGEXP.RESPONSE, args)
