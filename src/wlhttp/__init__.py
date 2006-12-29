@@ -1,1 +1,1 @@
-from wlhttp import sendRequest, recvRequest, recvResponse
+from wlhttp import sendRequest, recvRequest, recvResponse, MAX_REQUESTLENGTH

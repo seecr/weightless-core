@@ -5,13 +5,15 @@ from threading import Thread
 from time import sleep
 from socket import socket
 
-from weightless.wlhttp import sendRequest, recvRequest
+from weightless.wlhttp import sendRequest, recvRequest, MAX_REQUESTLENGTH
+from weightless.wlhttp.httpspec import HTTP
 from weightless.wlsocket import WlSocket,  WlSelect
 from weightless.wlcompose import compose, RETURN
 from weightless.wldict import WlDict
 
 #http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5
 
+CRLF = HTTP.CRLF
 
 from contextlib import contextmanager
 @contextmanager
@@ -107,6 +109,37 @@ class WlHttpRequestTest(TestCase):
 	def testRequestCreatesArgsWhenNotGiven(self):
 		generator = recvRequest()
 		generator.next()
-		opcode, request = generator.send('GET /path HTTP/1.1\r\nhost: we.want.more\r\n\r\n')
+		opcode, request = generator.send('GET /path HTTP/1.1' + CRLF +'host: we.want.more' + CRLF * 2)
 		self.assertEquals('we.want.more', request.headers.Host)
 		
+	def testIgnoreStartingCRLF(self):
+		generator = recvRequest()
+		generator.next()
+		opcode, request = generator.send(CRLF * 3 + 'GET /path HTTP/1.1' + CRLF *2)
+		self.assertEquals('/path', request.RequestURI)
+		
+	def testAllMethodsAreAllowed(self):
+		message = WlDict()
+		generator = recvRequest(message)
+		generator.next()
+		result = generator.send('METHOD /path HTTP/1.1' + CRLF *2)
+		request = result[1]
+		self.assertEquals('METHOD', request.Method)
+		
+	def testOtherErrorsAreIgnored(self):
+		message = WlDict()
+		generator = recvRequest(message)
+		generator.next()
+		result = generator.send('REQUESTLINE' + CRLF *2)
+		self.assertTrue(result == None)
+		self.assertEquals({}, message.__dict__)
+		# to fix from waiting for input, a request needs to be stopped after a certain amount of time.
+		
+		
+	def testStillNoValidRequestAfterEnormousDataRead(self):
+		message = WlDict()
+		generator = recvRequest(message)
+		generator.next()
+		result = generator.send('GOT /path HTTP/1.1' + 'a' * MAX_REQUESTLENGTH + CRLF *2)
+		request = result[1]
+		self.assertEquals('Maximum request length exceeded.', request.Error)

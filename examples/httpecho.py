@@ -9,21 +9,26 @@ headers sent with the request.
 
 from server import main
 from weightless.wlhttp import recvRequest
+from weightless.wlhttp.httpspec import HTTP
 
-CRLF = "\r\n"
+CRLF = HTTP.CRLF
 
-def sendBody(path):
+def sendBody(path, headers):
 	result = "PATH: %s" % path
+	result += CRLF.join((':'.join(items) for items in headers.__dict__.items()))
 	yield "HTTP/1.1 200 OK" + CRLF + \
 				"Content-Length: %s" % len(result) + CRLF +\
 				CRLF + \
-				result
+				result + CRLF * 2
 	
 def sinkFactory():
 	"""endlessly read and echo back to the client"""
 	while 1:
 		request = yield recvRequest()
-		yield sendBody(request.RequestURI)
+		if hasattr(request, 'Error'):
+			yield sendError()
+		else:
+			yield sendBody(request.RequestURI, request.headers)
 
 if __name__ == '__main__':
 	main(sinkFactory)

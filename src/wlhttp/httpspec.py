@@ -8,8 +8,8 @@ from re import compile
 class HTTP:
 	SP = ' '
 	CRLF = '\r\n'
-	
-	token =  """([!#$%&'*+-./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ^_`abcdefghijklmnopqrstuvwxyz|~]+){1}"""
+	# http://www.w3.org/Protocols/rfc2616/rfc2616-sec2.html#sec2.2
+	token =  r"([!#$%&'*+\-.0-9A-Z^_`a-z|~]+){1}"
 	field_name = token
 	field_value = '.*'
 	named_field_name = '(?P<fieldname>' + field_name + ')'
@@ -20,10 +20,11 @@ class HTTP:
 	
 	Headers = "(?P<_headers>(" + message_header + ')*)'
 	
-	Method = r'(?P<Method>GET)'
+	Method = r'(?P<Method>' + token + ')'
 	Request_URI = r'(?P<RequestURI>.+)'
 	HTTP_Version = r'HTTP/(?P<HTTPVersion>\d\.\d)'
-	Request_Line   = Method + SP + Request_URI + SP + HTTP_Version + CRLF
+	ignoredCRLFs = '(' + CRLF + ')*'
+	Request_Line = ignoredCRLFs + Method + SP + Request_URI + SP + HTTP_Version + CRLF
 	
 	Status_Code = r'(?P<StatusCode>[0-9]{3})'
 	Reason_Phrase = r'(?P<ReasonPhrase>[^\r\n].+)'
@@ -37,6 +38,7 @@ class HTTP:
 class REGEXP:
 	RESPONSE = compile(HTTP.Response)
 	REQUEST = compile(HTTP.Request)
+	REQUESTLINE = compile(HTTP.Request_Line)
 	HEADER = compile(HTTP.named_message_header)
 
 class FORMAT:

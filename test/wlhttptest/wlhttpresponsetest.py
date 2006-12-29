@@ -10,27 +10,27 @@ from weightless.wldict import WlDict
 class WlHttpResponseTest(TestCase):
 
 	def testCreate(self):
-		parameters = {}
-		response = recvResponse(parameters)
+		message = {}
+		response = recvResponse(message)
 		r = response.next()
 		self.assertEquals(None, r)
 
 	def testParseOkStatusLine(self):
-		parameters = WlDict()
-		response = recvResponse(parameters)
+		message = WlDict()
+		response = recvResponse(message)
 		response.next()
 		response.send('HTTP/1.1 200 Ok\r\n')
 		response.send('\r\n')
-		self.assertEquals('200', parameters.StatusCode)
-		self.assertEquals('1.1', parameters.HTTPVersion)
-		self.assertEquals('Ok', parameters.ReasonPhrase)
+		self.assertEquals('200', message.StatusCode)
+		self.assertEquals('1.1', message.HTTPVersion)
+		self.assertEquals('Ok', message.ReasonPhrase)
 
 	def testReturnValueAndRemainingData(self):
-		parameters = WlDict()
-		response = recvResponse(parameters)
+		message = WlDict()
+		response = recvResponse(message)
 		response.next()
 		retval = response.send('HTTP/1.0 503 Kannie effe nie\r\n\r\ntrailing data, e.g. body')
-		self.assertEquals((RETURN, parameters, 'trailing data, e.g. body'), (retval[0], retval[1], str(retval[2])))
+		self.assertEquals((RETURN, message, 'trailing data, e.g. body'), (retval[0], retval[1], str(retval[2])))
 
 	def testRestDataIsBufferInsteadOfCopiedString(self):
 		response = recvResponse()
@@ -70,14 +70,14 @@ class WlHttpResponseTest(TestCase):
 		self.assertEquals('300', r2.StatusCode)
 
 	def testParseOtherStatusLine(self):
-		parameters = WlDict()
-		generator = recvResponse(parameters)
+		message = WlDict()
+		generator = recvResponse(message)
 		generator.next()
 		generator.send('HTTP/1.0 503 Sorry not now\r\n')
 		generator.send('\r\n')
-		self.assertEquals('503', parameters.StatusCode)
-		self.assertEquals('1.0', parameters.HTTPVersion)
-		self.assertEquals('Sorry not now', parameters.ReasonPhrase)
+		self.assertEquals('503', message.StatusCode)
+		self.assertEquals('1.0', message.HTTPVersion)
+		self.assertEquals('Sorry not now', message.ReasonPhrase)
 
 	def testParseHeaderLines(self):
 		generator = recvResponse()
@@ -85,7 +85,9 @@ class WlHttpResponseTest(TestCase):
 		generator.send('HTTP/1.1 302 Redirect\r\n')
 		generator.send('lOcatiOn: http:///www.somewhere.else\r\n')
 		generator.send('Date: Fri, 08 Dec 2006 13:55:48 GMT\r\n')
+		generator.send('ConteNT-TyPE: text/plain\r\n')
 		response = generator.send('\r\n')[1]
 
 		self.assertEquals('Fri, 08 Dec 2006 13:55:48 GMT', response.headers.Date)
 		self.assertEquals('http:///www.somewhere.else', response.headers.Location)
+		self.assertEquals('text/plain', response.headers.ContentType)
