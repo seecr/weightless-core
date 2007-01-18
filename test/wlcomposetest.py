@@ -166,3 +166,16 @@ class WlComposeTest(unittest.TestCase):
 		except StopIteration: pass
 		self.assertEquals([RETURN, 'result', 'remainingData0', 'remainingData1', '1', '2'], messages)
 		self.assertEquals(['A', 'B', 'C'], responses)
+
+	def testPassThrowCorrectly(self):
+		class MyException(Exception): pass
+		def child():
+			try:
+				yield 1
+			except Exception, e:
+				self.e = e
+			yield 2
+		g = compose(child())
+		g.next()
+		g.throw(MyException('aap'))
+		self.assertEquals('aap', str(self.e))

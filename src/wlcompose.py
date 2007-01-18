@@ -41,14 +41,23 @@ def compose(initial):
 	messages = [None]
 	while generators:
 		try:
-			response = generators[-1].send(messages.pop(0))
+			generator = generators[-1]
+			message = messages.pop(0)
+			if isinstance(message, Exception):
+				response = generator.throw(message)
+			else:
+				response = generator.send(message)
 			if type(response) == GeneratorType:
 				generators.append(response)
 				messages.insert(0, None)
 			elif type(response) == tuple:
 				messages.extend(response)
 			else:
-				messages.append((yield response))
+				try:
+					message = yield response
+				except Exception, exception:
+					message = exception
+				messages.append(message)
 		except StopIteration:
 			generators.pop()
 			if not messages:
