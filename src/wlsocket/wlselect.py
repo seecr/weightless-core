@@ -16,6 +16,7 @@ fds = lambda soklist: map(lambda sok: sok.fileno(), soklist)
 
 class ReadIteration(Exception): pass
 class WriteIteration(Exception): pass
+class SuspendIteration(Exception): pass
 
 class Signaller:
 

@@ -18,7 +18,7 @@ class WlService:
 				port = int(hostPort[1])
 			wlsok = WlSocket(host, port)
 		if sink:
-			wlsok.sink(sink, self._selector)
+			wlsok.sink(compose(sink), self._selector)
 		else:
 			return wlsok
 

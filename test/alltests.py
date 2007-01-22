@@ -11,10 +11,9 @@ sys.path.insert(0, '..')
 import unittest
 
 from wlthreadtest import WlStatusTest, WlPoolTest
-from wlsockettest import WlSocketTest, WlFileSocketTest, WlListenTest, WlSelectTest
+from wlsockettest import WlSocketTest, WlFileSocketTest, WlListenTest, WlSelectTest, WlAsyncProcessorTest
 from wlservicetest import WlServiceTest
 from wlcomposetest import WlComposeTest
-#from wlreadtest import WlReadTest
 from wlhttptest import WlHttpRequestTest, WlHttpResponseTest
 
 if __name__ == '__main__':

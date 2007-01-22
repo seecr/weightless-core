@@ -91,3 +91,6 @@ class WlHttpResponseTest(TestCase):
 		self.assertEquals('Fri, 08 Dec 2006 13:55:48 GMT', response.headers.Date)
 		self.assertEquals('http:///www.somewhere.else', response.headers.Location)
 		self.assertEquals('text/plain', response.headers.ContentType)
+
+	def testReadBody(self):
+		pass

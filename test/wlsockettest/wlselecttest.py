@@ -125,4 +125,14 @@ class WlSelectTest(TestCase):
 		self.assertTrue(wlsok not in selector._readers)
 		self.assertTrue(wlsok in selector._writers)
 
+	def testSuspendedSocket(self):
+		class Sok:
+			def __hash__(self): return 1
+		selector = WlSelect()
+		mockSok = Sok()
+		self.assertTrue(mockSok not in selector._readers)
+		selector.add(mockSok, 's') # it is basically a no-op
+		self.assertTrue(mockSok not in selector._readers)
+		self.assertTrue(mockSok not in selector._writers)
+		#selector._readers.remove(mockSok)
 
