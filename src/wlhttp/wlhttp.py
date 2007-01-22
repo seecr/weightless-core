@@ -22,6 +22,12 @@ def sendRequest(Method, RequestUri):
 	assert Scheme in SupportedSchemes, InvalidSchemeMsg % Scheme
 	yield (FORMAT.RequestLine + FORMAT.HostHeader) % locals() + FORMAT.UserAgentHeader + HTTP.CRLF
 
+def recvBody(response, sink):
+	sink.next()
+	while True:
+		data = yield None
+		sink.send(data)
+
 def _recvRegexp(regexp, message=None):
 	try:
 		message = message or WlDict()

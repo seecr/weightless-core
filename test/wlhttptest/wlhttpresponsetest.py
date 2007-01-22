@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from weightless.wlhttp import recvResponse
+from weightless.wlhttp import recvResponse, recvBody
 from weightless.wlcompose import compose, RETURN
 from weightless.wldict import WlDict
 
@@ -92,5 +92,27 @@ class WlHttpResponseTest(TestCase):
 		self.assertEquals('http:///www.somewhere.else', response.headers.Location)
 		self.assertEquals('text/plain', response.headers.ContentType)
 
-	def testReadBody(self):
-		pass
+	def testReadBodyImplicitIdentity(self):
+		response = WlDict()
+		data = []
+		def sink():
+			data.append((yield None))
+			data.append((yield None))
+			data.append((yield None))
+		generator = recvBody(response, sink())
+		generator.next() # init
+		generator.send('part 1')
+		generator.send('part 2')		
+		self.assertEquals(2, len(data))
+		self.assertEquals('part 1', data[0])
+		self.assertEquals('part 2', data[1])
+		
+	def testTerminate(self):
+		generator = recvBody(None, (x for x in []))
+		try:
+			generator.throw(StopIteration())
+			self.fail()
+		except StopIteration:
+			pass
+		
+	
