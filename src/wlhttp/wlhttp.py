@@ -24,9 +24,42 @@ def sendRequest(Method, RequestUri):
 
 def recvBody(response, sink):
 	sink.next()
-	while True:
-		data = yield None
-		sink.send(data)
+	encoding = getattr(response.headers, 'TransferEncoding', '')
+	if encoding == '':
+		while True:
+			data = yield None
+			sink.send(data)
+	elif encoding == 'chunked':
+		fragment = yield None
+		while True:
+			match = REGEXP.CHUNK_SIZE_LINE.match(fragment)
+			while not match:
+				fragment = fragment + (yield None)
+				match = REGEXP.CHUNK_SIZE_LINE.match(fragment)
+			size = int(match.groupdict()['ChunkSize'], 16)
+			fragment = buffer(fragment, match.end())
+			if size == 0:
+				break
+			else:
+				tobesendlength = size
+				while tobesendlength > 0:
+					if len(fragment) >= tobesendlength:
+						sink.send(fragment[:tobesendlength])
+						fragment = buffer(fragment, tobesendlength)
+						break
+					elif len(fragment) > 0:
+						sink.send(fragment)
+						tobesendlength = size - len(fragment)
+					fragment = yield None
+				while len(fragment) < 2:
+					fragment = fragment + (yield None)
+				fragment = buffer(fragment, 2)
+		yield None
+		
+		#fragment = fragment[match.end():]
+		
+	else:
+		raise WlHttpException('Transfer-Encoding: %s not supported' % encoding)
 
 def _recvRegexp(regexp, message=None):
 	try:

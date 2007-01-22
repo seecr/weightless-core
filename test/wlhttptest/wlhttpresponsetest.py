@@ -1,9 +1,10 @@
 from unittest import TestCase
 
-from weightless.wlhttp import recvResponse, recvBody
+from weightless.wlhttp import recvResponse, recvBody, HTTP
 from weightless.wlcompose import compose, RETURN
 from weightless.wldict import WlDict
 
+CRLF = HTTP.CRLF
 #http://www.w3.org/Protocols/rfc2616/rfc2616-sec6.html#sec6
 #Status-Line = HTTP-Version SP Status-Code SP Reason-Phrase CRLF
 
@@ -92,8 +93,13 @@ class WlHttpResponseTest(TestCase):
 		self.assertEquals('http:///www.somewhere.else', response.headers.Location)
 		self.assertEquals('text/plain', response.headers.ContentType)
 
-	def testReadBodyImplicitIdentity(self):
+	def _createResponse(self):
 		response = WlDict()
+		response.headers = WlDict()
+		return response
+
+	def testReadBodyImplicitIdentity(self):
+		response = self._createResponse()
 		data = []
 		def sink():
 			data.append((yield None))
@@ -107,6 +113,51 @@ class WlHttpResponseTest(TestCase):
 		self.assertEquals('part 1', data[0])
 		self.assertEquals('part 2', data[1])
 		
+	def testReadEmptyBodyWithChunkedEncoding(self):
+		generator, data = self._prepareChunkedGenerator()
+		generator.send('0' + CRLF)
+		
+		self.assertEquals(0, len(data))
+		
+	def testReadBodyWithChunkedEncoding(self):
+		generator, data = self._prepareChunkedGenerator()
+		generator.send('A' + CRLF + 'abcdefghij' + CRLF)
+		generator.send('0' + CRLF)
+		
+		self.assertEquals(1, len(data))
+		self.assertEquals('abcdefghij', str(data[0]))
+
+	def testReadBodyWithMultipleChunksEncoding(self):
+		generator, data = self._prepareChunkedGenerator()
+		generator.send('A' + CRLF + 'abcdefghij' + CRLF)
+		generator.send('B' + CRLF + 'bcdefghijkl' + CRLF)
+		generator.send('0' + CRLF)
+		
+		self.assertEquals(2, len(data), '\n'.join(data))
+		self.assertEquals('abcdefghij', str(data[0]))
+		self.assertEquals('bcdefghijkl', str(data[1]))
+		
+	def testReadBodyWithMultipleSplitUpChunks(self):
+		generator, data = self._prepareChunkedGenerator()
+		generator.send('5')
+		generator.send(CRLF)
+		generator.send('ABCD')
+		generator.send('E' + CRLF)
+		generator.send('0')
+		generator.send(CRLF)
+		self.assertEquals(2, len(data))
+		self.assertEquals('ABCD', str(data[0]))
+		self.assertEquals('E', str(data[1]))
+
+	def testReadBodyWithMultipleChunksEncoding2(self):
+		generator, data = self._prepareChunkedGenerator()
+		generator.send('A' + CRLF + 'abcdefg')
+		generator.send('hij' + CRLF+ 'B' + CRLF)
+		generator.send('bcdefghijkl' + '\r')
+		generator.send('\n0' + CRLF)
+
+		self.assertEquals(3, len(data), data)
+
 	def testTerminate(self):
 		generator = recvBody(None, (x for x in []))
 		try:
@@ -114,5 +165,17 @@ class WlHttpResponseTest(TestCase):
 			self.fail()
 		except StopIteration:
 			pass
+	
+	def _prepareChunkedGenerator(self):
+		response = self._createResponse()
+		response.headers.TransferEncoding = 'chunked'
+		data = []
+		def sink():
+			while True:
+				data.append((yield None))
+		generator = recvBody(response, sink())
+		generator.next() # init
+		return generator, data
+
 		
 	

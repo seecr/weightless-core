@@ -26,6 +26,9 @@ class HTTP:
 	ignoredCRLFs = '(' + CRLF + ')*'
 	Request_Line = ignoredCRLFs + Method + SP + Request_URI + SP + HTTP_Version + CRLF
 	
+	Chunk_Size = '(?P<ChunkSize>[0-9a-fA-F]+)'
+	Chunk_Size_Line = Chunk_Size + CRLF
+	
 	Status_Code = r'(?P<StatusCode>[0-9]{3})'
 	Reason_Phrase = r'(?P<ReasonPhrase>[^\r\n].+)'
 	Status_Line = HTTP_Version + SP + Status_Code + SP + Reason_Phrase + CRLF
@@ -40,6 +43,7 @@ class REGEXP:
 	REQUEST = compile(HTTP.Request)
 	REQUESTLINE = compile(HTTP.Request_Line)
 	HEADER = compile(HTTP.named_message_header)
+	CHUNK_SIZE_LINE = compile(HTTP.Chunk_Size_Line)
 
 class FORMAT:
 	RequestLine = '%(Method)s %(Path)s HTTP/1.1' + HTTP.CRLF
