@@ -105,7 +105,7 @@ class WlHttpResponseTest(TestCase):
 			data.append((yield None))
 			data.append((yield None))
 			data.append((yield None))
-		generator = recvBody(response, sink())
+		generator = compose(recvBody(response, sink()))
 		generator.next() # init
 		generator.send('part 1')
 		generator.send('part 2')		
@@ -119,6 +119,13 @@ class WlHttpResponseTest(TestCase):
 		
 		self.assertEquals(0, len(data))
 		
+	def testSimplestThing(self):
+		generator, data = self._prepareChunkedGenerator()
+		generator.send('A' + CRLF + 'abcdefghij' + CRLF + '0' + CRLF)
+		generator.send('aap')
+		self.assertEquals(1, len(data))
+		self.assertEquals('abcdefghij', str(data[0]))
+	
 	def testReadBodyWithChunkedEncoding(self):
 		generator, data = self._prepareChunkedGenerator()
 		generator.send('A' + CRLF + 'abcdefghij' + CRLF)
@@ -156,7 +163,7 @@ class WlHttpResponseTest(TestCase):
 		generator.send('bcdefghijkl' + '\r')
 		generator.send('\n0' + CRLF)
 
-		self.assertEquals(3, len(data), data)
+		self.assertEquals(3, len(data), [str(d) for d in data])
 
 	def testTerminate(self):
 		generator = recvBody(None, (x for x in []))
@@ -172,8 +179,10 @@ class WlHttpResponseTest(TestCase):
 		data = []
 		def sink():
 			while True:
-				data.append((yield None))
-		generator = recvBody(response, sink())
+				appendThis = yield None
+				print ">>>APPENDING>>>", appendThis
+				data.append(appendThis)
+		generator = compose(recvBody(response, sink()))
 		generator.next() # init
 		return generator, data
 

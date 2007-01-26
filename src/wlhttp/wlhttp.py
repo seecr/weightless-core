@@ -22,42 +22,62 @@ def sendRequest(Method, RequestUri):
 	assert Scheme in SupportedSchemes, InvalidSchemeMsg % Scheme
 	yield (FORMAT.RequestLine + FORMAT.HostHeader) % locals() + FORMAT.UserAgentHeader + HTTP.CRLF
 
+def copyBody(sink):
+	while True:
+		data = yield None
+		sink.send(data)
+
+def recvRegExp(regexp):
+	fragment = yield None
+	print 'recvRegExp >>>>>>>>>>>>>>>>', repr(fragment), '<<<<<<'
+	match = regexp.match(fragment)
+	while not match:
+		fragment = fragment + (yield None)
+		print 'recvRegExp 2 >>>>>>>>>>>>>>>>', repr(fragment), '<<<<<<'
+		match = REGEXP.CHUNK_SIZE_LINE.match(fragment)
+	if match.end() < len(fragment):
+		restData = buffer(fragment, match.end())
+		yield RETURN, match.groupdict(), restData
+	else:
+		yield RETURN, match.groupdict()
+	
+def recvBytes(bytes, sink):
+	sentBytes = 0
+	while sentBytes < bytes:
+		fragment = yield None
+		print 'recvBytes 2 >>>>>>>>>>>>>>>>', repr(fragment), '<<<<<<'
+		length = min(bytes - sentBytes, len(fragment))
+		sink.send(buffer(fragment, 0, length))
+		sentBytes += length
+	fragment = buffer(fragment, length)
+	print '=== restje:', fragment
+	if len(fragment) > 0:
+		yield RETURN, None, fragment
+	else:
+		yield RETURN, None
+			
+
 def recvBody(response, sink):
 	sink.next()
 	encoding = getattr(response.headers, 'TransferEncoding', '')
 	if encoding == '':
-		while True:
-			data = yield None
-			sink.send(data)
+		yield copyBody(sink)
 	elif encoding == 'chunked':
-		fragment = yield None
-		while True:
-			match = REGEXP.CHUNK_SIZE_LINE.match(fragment)
-			while not match:
-				fragment = fragment + (yield None)
-				match = REGEXP.CHUNK_SIZE_LINE.match(fragment)
-			size = int(match.groupdict()['ChunkSize'], 16)
-			fragment = buffer(fragment, match.end())
-			if size == 0:
-				break
-			else:
-				tobesendlength = size
-				while tobesendlength > 0:
-					if len(fragment) >= tobesendlength:
-						sink.send(fragment[:tobesendlength])
-						fragment = buffer(fragment, tobesendlength)
-						break
-					elif len(fragment) > 0:
-						sink.send(fragment)
-						tobesendlength = size - len(fragment)
-					fragment = yield None
-				while len(fragment) < 2:
-					fragment = fragment + (yield None)
-				fragment = buffer(fragment, 2)
-		yield None
 		
-		#fragment = fragment[match.end():]
+		chunkHeader = yield recvRegExp(REGEXP.CHUNK_SIZE_LINE)
+		size = int(chunkHeader['ChunkSize'], 16)
+		while size > 0:
+
+			r = yield recvBytes(size, sink)		
+			print '1----', r
+			r = yield recvRegExp(REGEXP.CRLF)
+			print '2----'	, r
+
+			chunkHeader = yield recvRegExp(REGEXP.CHUNK_SIZE_LINE)
+			print '3----', chunkHeader
+			size = int(chunkHeader['ChunkSize'], 16)
 		
+		yield recvRegExp(REGEXP.CRLF)
 	else:
 		raise WlHttpException('Transfer-Encoding: %s not supported' % encoding)
 

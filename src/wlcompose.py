@@ -51,7 +51,7 @@ def compose(initial):
 				generators.append(response)
 				messages.insert(0, None)
 			elif type(response) == tuple:
-				messages.extend(response)
+				messages = list(response) + messages
 			else:
 				try:
 					message = yield response
@@ -60,5 +60,6 @@ def compose(initial):
 				messages.append(message)
 		except StopIteration:
 			generators.pop()
+			#messages.pop()
 			if not messages:
 				messages.append(None)

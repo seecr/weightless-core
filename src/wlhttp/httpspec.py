@@ -44,6 +44,7 @@ class REGEXP:
 	REQUESTLINE = compile(HTTP.Request_Line)
 	HEADER = compile(HTTP.named_message_header)
 	CHUNK_SIZE_LINE = compile(HTTP.Chunk_Size_Line)
+	CRLF = compile(HTTP.CRLF)
 
 class FORMAT:
 	RequestLine = '%(Method)s %(Path)s HTTP/1.1' + HTTP.CRLF

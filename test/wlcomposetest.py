@@ -167,6 +167,29 @@ class WlComposeTest(unittest.TestCase):
 		self.assertEquals([RETURN, 'result', 'remainingData0', 'remainingData1', '1', '2'], messages)
 		self.assertEquals(['A', 'B', 'C'], responses)
 
+	def testReturnInNestedGenerator(self):
+		r = []
+		def ding1():
+			data = yield None
+			yield RETURN, 'ding1', data
+		def ding2():
+			data = yield None
+			yield RETURN, data
+		def child():
+			r.append('A:'+str((yield ding1())))
+			r.append('B:'+str((yield ding2())))
+		def parent():
+			r.append('C:'+str((yield child())))
+		g = compose(parent())
+		g.next()
+		g.send('een')
+		try:
+			g.send('twee')
+		except StopIteration:
+			pass
+		self.assertEquals(['A:ding1', 'B:een', 'C:twee'], r)
+		# IT is still a question as wether to return twee at C
+		
 	def testPassThrowCorrectly(self):
 		class MyException(Exception): pass
 		def child():
