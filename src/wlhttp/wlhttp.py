@@ -1,4 +1,4 @@
-
+from sys import stderr
 
 from urlparse import urlsplit
 from weightless.wlcompose import RETURN
@@ -27,35 +27,33 @@ def copyBody(sink):
 		data = yield None
 		sink.send(data)
 
+
 def recvRegExp(regexp):
 	fragment = yield None
-	print 'recvRegExp >>>>>>>>>>>>>>>>', repr(fragment), '<<<<<<'
 	match = regexp.match(fragment)
 	while not match:
 		fragment = fragment + (yield None)
-		print 'recvRegExp 2 >>>>>>>>>>>>>>>>', repr(fragment), '<<<<<<'
-		match = REGEXP.CHUNK_SIZE_LINE.match(fragment)
+		match = regexp.match(fragment)
 	if match.end() < len(fragment):
 		restData = buffer(fragment, match.end())
 		yield RETURN, match.groupdict(), restData
 	else:
 		yield RETURN, match.groupdict()
-	
+
+
 def recvBytes(bytes, sink):
 	sentBytes = 0
 	while sentBytes < bytes:
 		fragment = yield None
-		print 'recvBytes 2 >>>>>>>>>>>>>>>>', repr(fragment), '<<<<<<'
 		length = min(bytes - sentBytes, len(fragment))
 		sink.send(buffer(fragment, 0, length))
 		sentBytes += length
 	fragment = buffer(fragment, length)
-	print '=== restje:', fragment
 	if len(fragment) > 0:
 		yield RETURN, None, fragment
 	else:
 		yield RETURN, None
-			
+
 
 def recvBody(response, sink):
 	sink.next()
@@ -63,23 +61,17 @@ def recvBody(response, sink):
 	if encoding == '':
 		yield copyBody(sink)
 	elif encoding == 'chunked':
-		
 		chunkHeader = yield recvRegExp(REGEXP.CHUNK_SIZE_LINE)
 		size = int(chunkHeader['ChunkSize'], 16)
 		while size > 0:
-
-			r = yield recvBytes(size, sink)		
-			print '1----', r
-			r = yield recvRegExp(REGEXP.CRLF)
-			print '2----'	, r
-
+			yield recvBytes(size, sink)
+			yield recvRegExp(REGEXP.CRLF)
 			chunkHeader = yield recvRegExp(REGEXP.CHUNK_SIZE_LINE)
-			print '3----', chunkHeader
 			size = int(chunkHeader['ChunkSize'], 16)
-		
 		yield recvRegExp(REGEXP.CRLF)
 	else:
 		raise WlHttpException('Transfer-Encoding: %s not supported' % encoding)
+
 
 def _recvRegexp(regexp, message=None):
 	try:
@@ -92,11 +84,11 @@ def _recvRegexp(regexp, message=None):
 			fragment = fragment + (yield None)
 			match = regexp.match(fragment)
 		message.__dict__.update(match.groupdict())
-		
+
 		message.headers = WlDict()
 		for (groupname, fieldname, fieldvalue) in REGEXP.HEADER.findall(message._headers):
 			message.headers.__dict__[fieldname.title().replace('-','')] = fieldvalue.strip()
-		
+
 		if match.end() < len(fragment):
 			restData = buffer(fragment, match.end())
 			yield RETURN, message, restData
@@ -104,7 +96,7 @@ def _recvRegexp(regexp, message=None):
 			yield RETURN, message
 	except WlHttpException, e:
 		message.Error = str(e)
-		yield RETURN, message 
+		yield RETURN, message
 
 
 recvRequest = curry(_recvRegexp, REGEXP.REQUEST)

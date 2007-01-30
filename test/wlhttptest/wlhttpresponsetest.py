@@ -1,4 +1,5 @@
 from unittest import TestCase
+from sys import stderr
 
 from weightless.wlhttp import recvResponse, recvBody, HTTP
 from weightless.wlcompose import compose, RETURN
@@ -108,29 +109,29 @@ class WlHttpResponseTest(TestCase):
 		generator = compose(recvBody(response, sink()))
 		generator.next() # init
 		generator.send('part 1')
-		generator.send('part 2')		
+		generator.send('part 2')
 		self.assertEquals(2, len(data))
 		self.assertEquals('part 1', data[0])
 		self.assertEquals('part 2', data[1])
-		
+
 	def testReadEmptyBodyWithChunkedEncoding(self):
 		generator, data = self._prepareChunkedGenerator()
 		generator.send('0' + CRLF)
-		
+
 		self.assertEquals(0, len(data))
-		
+
 	def testSimplestThing(self):
 		generator, data = self._prepareChunkedGenerator()
 		generator.send('A' + CRLF + 'abcdefghij' + CRLF + '0' + CRLF)
 		generator.send('aap')
 		self.assertEquals(1, len(data))
 		self.assertEquals('abcdefghij', str(data[0]))
-	
+
 	def testReadBodyWithChunkedEncoding(self):
 		generator, data = self._prepareChunkedGenerator()
 		generator.send('A' + CRLF + 'abcdefghij' + CRLF)
 		generator.send('0' + CRLF)
-		
+
 		self.assertEquals(1, len(data))
 		self.assertEquals('abcdefghij', str(data[0]))
 
@@ -138,12 +139,13 @@ class WlHttpResponseTest(TestCase):
 		generator, data = self._prepareChunkedGenerator()
 		generator.send('A' + CRLF + 'abcdefghij' + CRLF)
 		generator.send('B' + CRLF + 'bcdefghijkl' + CRLF)
-		generator.send('0' + CRLF)
-		
-		self.assertEquals(2, len(data), '\n'.join(data))
 		self.assertEquals('abcdefghij', str(data[0]))
+		generator.send('0' + CRLF) # last chunked
+		generator.send(CRLF) # no trailer, end of chunked body
+		list(generator) # complete run
+		self.assertEquals(2, len(data), ''.join(str(data)))
 		self.assertEquals('bcdefghijkl', str(data[1]))
-		
+
 	def testReadBodyWithMultipleSplitUpChunks(self):
 		generator, data = self._prepareChunkedGenerator()
 		generator.send('5')
@@ -161,8 +163,9 @@ class WlHttpResponseTest(TestCase):
 		generator.send('A' + CRLF + 'abcdefg')
 		generator.send('hij' + CRLF+ 'B' + CRLF)
 		generator.send('bcdefghijkl' + '\r')
-		generator.send('\n0' + CRLF)
-
+		generator.send('\n0' + CRLF) # last chunk
+		generator.send(CRLF) # end of body
+		list(generator)
 		self.assertEquals(3, len(data), [str(d) for d in data])
 
 	def testTerminate(self):
@@ -172,7 +175,7 @@ class WlHttpResponseTest(TestCase):
 			self.fail()
 		except StopIteration:
 			pass
-	
+
 	def _prepareChunkedGenerator(self):
 		response = self._createResponse()
 		response.headers.TransferEncoding = 'chunked'
@@ -180,11 +183,10 @@ class WlHttpResponseTest(TestCase):
 		def sink():
 			while True:
 				appendThis = yield None
-				print ">>>APPENDING>>>", appendThis
 				data.append(appendThis)
+
 		generator = compose(recvBody(response, sink()))
 		generator.next() # init
 		return generator, data
 
-		
-	
+

@@ -26,6 +26,7 @@ import platform
 assert platform.python_version() >= "2.5", "Python 2.5 required"
 
 from types import GeneratorType
+from sys import stderr
 
 RETURN = 1
 
@@ -55,11 +56,12 @@ def compose(initial):
 			else:
 				try:
 					message = yield response
-				except Exception, exception:
+				except (StopIteration, GeneratorExit):
+					raise
+				except:
 					message = exception
 				messages.append(message)
 		except StopIteration:
 			generators.pop()
-			#messages.pop()
 			if not messages:
 				messages.append(None)
