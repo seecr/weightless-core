@@ -58,7 +58,7 @@ def compose(initial):
 					message = yield response
 				except (StopIteration, GeneratorExit):
 					raise
-				except:
+				except Exception, exception:
 					message = exception
 				messages.append(message)
 		except StopIteration:

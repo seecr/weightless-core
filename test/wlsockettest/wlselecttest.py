@@ -113,15 +113,15 @@ class WlSelectTest(TestCase):
 		self.assertTrue(wlsok in selector._readers)
 		self.assertTrue(wlsok not in selector._writers)
 		f.set()
-		sleep(0.0001)
+		sleep(0.01)
 		self.assertTrue(wlsok not in selector._readers)
 		self.assertTrue(wlsok in selector._writers)
 		f.set()
-		sleep(0.0001)
+		sleep(0.01)
 		self.assertTrue(wlsok in selector._readers)
 		self.assertTrue(wlsok not in selector._writers)
 		f.set()
-		sleep(0.0001)
+		sleep(0.01)
 		self.assertTrue(wlsok not in selector._readers)
 		self.assertTrue(wlsok in selector._writers)
 
@@ -133,6 +133,6 @@ class WlSelectTest(TestCase):
 		self.assertTrue(mockSok not in selector._readers)
 		selector.add(mockSok, 's') # it is basically a no-op
 		self.assertTrue(mockSok not in selector._readers)
-		self.assertTrue(mockSok not in selector._writers)
+		self.assertTrue(mockSok not in selector._writers, 'Bookmark, continue here')
 		#selector._readers.remove(mockSok)
 

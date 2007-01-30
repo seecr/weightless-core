@@ -17,4 +17,4 @@ class WlAsyncProcessorTest(TestCase):
 		#except SuspendIteration, e:
 			#pass
 		# socket must be suspended, i.e., not readable or writable
-		self.assertEquals("[add(<weightless.wlsocket.wlbasesocket.WlBaseSocket>, 's')]", str(mockSelect.calledMethods))
+		self.assertEquals("[add(<weightless.wlsocket.wlbasesocket.WlBaseSocket>, 's')]", str(mockSelect.calledMethods), 'Bookmark, continue here')
