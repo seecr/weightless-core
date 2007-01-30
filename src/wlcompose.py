@@ -39,29 +39,36 @@ def compose(initial):
 	A Weightless Thread is a chain of generators.  It begins with just one generator.  If it 'yield's another generator, this generator is executed.  This may go on recursively.  If one of the generators 'yield's something else, execution stops and the value is yielded. Generators can return values to parents by yielding RETURN value, ...
 	"""
 	generators = [initial]
+	if __debug__: generator_names = [initial.gi_frame.f_code.co_name]
 	messages = [None]
+	responses = []
 	while generators:
 		try:
 			generator = generators[-1]
-			message = messages.pop(0)
-			if isinstance(message, Exception):
-				response = generator.throw(message)
-			else:
-				response = generator.send(message)
-			if type(response) == GeneratorType:
-				generators.append(response)
-				messages.insert(0, None)
-			elif type(response) == tuple:
-				messages = list(response) + messages
-			else:
+			if messages:
+				message = messages.pop(0)
+				if isinstance(message, Exception):
+					response = generator.throw(message)
+				else:
+					response = generator.send(message)
+				if type(response) == GeneratorType:
+					generators.append(response)
+					#if __debug__: generator_names.append(response.gi_frame.f_code.co_name)
+					messages.insert(0, None)
+				elif type(response) == tuple:
+					messages = list(response) + messages
+				else:
+					responses.append(response)
+			if responses:
 				try:
-					message = yield response
+					message = yield responses.pop(0)
 				except (StopIteration, GeneratorExit):
 					raise
 				except Exception, exception:
 					message = exception
 				messages.append(message)
 		except StopIteration:
-			generators.pop()
+			g = generators.pop()
+			#if __debug__: print 'Stopping:', generator_names.pop()
 			if not messages:
 				messages.append(None)

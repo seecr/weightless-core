@@ -78,7 +78,6 @@ class WlComposeTest(unittest.TestCase):
 		results = list(wlt)
 		self.assertEquals(['C','A','B','D'], results)
 
-
 	def testPassValue(self):
 		def thread(first):
 			response = yield first
@@ -91,7 +90,6 @@ class WlComposeTest(unittest.TestCase):
 		self.assertEquals('second', response)
 		response = t.send('third')
 		self.assertEquals('third', response)
-
 
 	def testPassValueToRecursivecompose(self):
 		def threadA():
@@ -157,39 +155,43 @@ class WlComposeTest(unittest.TestCase):
 			messages.append((yield child1()))	# append 'result'
 			messages.append((yield child2()))	# what does 'yield child2()' return???
 		g = compose(parent())
-		responses.append(g.next())
-		responses.append(g.send('1'))
-		responses.append(g.send('2'))
+		responses.append(g.send(None))
+		responses.append(g.send(None))
+		responses.append(g.send(None))
 		try:
-			responses.append(g.send('3'))
-			self.fail('should raise stopiteration')
-		except StopIteration: pass
-		self.assertEquals([RETURN, 'result', 'remainingData0', 'remainingData1', '1', '2'], messages)
-		self.assertEquals(['A', 'B', 'C'], responses)
-
-	def testReturnInNestedGenerator(self):
-		r = []
-		def ding1():
-			data = yield None
-			yield RETURN, 'ding1', data
-		def ding2():
-			data = yield None
-			yield RETURN, data
-		def child():
-			r.append('A:'+str((yield ding1())))
-			r.append('B:'+str((yield ding2())))
-		def parent():
-			r.append('C:'+str((yield child())))
-		g = compose(parent())
-		g.next()
-		g.send('een')
-		try:
-			g.send('twee')
+			responses.append(g.send(None))
+			self.fail()
 		except StopIteration:
 			pass
-		self.assertEquals(['A:ding1', 'B:een', 'C:twee'], r)
-		# IT is still a question as wether to return twee at C
-		
+		self.assertEquals([RETURN, 'result', 'remainingData0', 'remainingData1', None, None], messages)
+		self.assertEquals(['A', 'B', 'C'], responses)
+
+	def testReturnInNestedGeneratorQuiteTricky(self):
+		r = []
+		def ding1():
+			dataIn = yield None		# receive 'dataIn'
+			yield RETURN, 'ding1retval', 'rest('+dataIn+')'
+		def ding2():
+			dataIn = yield None		# receive 'rest(dataIn)'
+			yield RETURN, 'ding2retval', 'rest('+dataIn+')'
+		def child():
+			ding1retval = yield ding1()
+			r.append('child-1:' + str(ding1retval))
+			ding2retval = yield ding2()
+			r.append('child-2:' + str(ding2retval))
+		def parent():
+			childRetVal = yield child()
+			r.append('parent:'+str(childRetVal))
+		g = compose(parent())
+		g.next()
+		g.send('dataIn')
+		try:
+			g.next()
+			self.fail()
+		except StopIteration:
+			pass
+		self.assertEquals(['child-1:ding1retval', 'child-2:ding2retval', 'parent:rest(rest(dataIn))'], r)
+
 	def testPassThrowCorrectly(self):
 		class MyException(Exception): pass
 		def child():
@@ -202,3 +204,28 @@ class WlComposeTest(unittest.TestCase):
 		g.next()
 		g.throw(MyException('aap'))
 		self.assertEquals('aap', str(self.e))
+
+	def testHandleAllDataAndDoAvoidSuperfluousSendCalls(self):
+		data = []
+		def f():
+			x = yield None
+			data.append(x)
+			r = yield tuple([RETURN] + list(x))
+			data.append(r)
+		def g():
+			r = yield f()
+			data.append(r)
+			while True:
+				data.append((yield None))
+		program = compose(g())
+		program.next()
+		program.send('mies')
+		program.next()	# generator produces more, we must get it
+		program.next()
+		program.next()
+		self.assertEquals('mies', data[0])
+		self.assertEquals(1, data[1])
+		self.assertEquals('m', data[2])
+		self.assertEquals('i', data[3])
+		self.assertEquals('e', data[4])
+		self.assertEquals('s', data[5])
