@@ -65,7 +65,7 @@ def compose(initial):
 			if responses:
 				try:
 					message = yield responses.pop(0)
-				except (StopIteration, GeneratorExit):
+				except GeneratorExit:
 					raise
 				except Exception, exception:
 					message = exception
@@ -76,6 +76,3 @@ def compose(initial):
 			g.close()
 			if not messages:
 				messages.append(None)
-		#except Exception, e:
-		#	print 'Exception in generator:', print_tb(exc_info()[1])
-		#	raise

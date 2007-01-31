@@ -218,7 +218,7 @@ class WlComposeTest(unittest.TestCase):
 			while True:
 				data.append((yield None))
 		program = compose(g())
-		program.next()
+		program.next() # init
 		program.send('mies')
 		program.next()	# generator produces more, we must get it
 		program.next()
@@ -229,6 +229,7 @@ class WlComposeTest(unittest.TestCase):
 		self.assertEquals('i', data[3])
 		self.assertEquals('e', data[4])
 		self.assertEquals('s', data[5])
+		program.close()
 
 	def testHandleClose(self):
 		r = []
