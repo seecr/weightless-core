@@ -116,22 +116,30 @@ class WlHttpResponseTest(TestCase):
 
 	def testReadEmptyBodyWithChunkedEncoding(self):
 		generator, data = self._prepareChunkedGenerator()
-		generator.send('0' + CRLF)
-
+		generator.send('0' + CRLF + CRLF)
 		self.assertEquals(0, len(data))
 
 	def testSimplestThing(self):
 		generator, data = self._prepareChunkedGenerator()
-		generator.send('A' + CRLF + 'abcdefghij' + CRLF + '0' + CRLF)
-		generator.send('aap')
+		generator.send('A' + CRLF + 'abcdefghij' + CRLF + '0' + CRLF + CRLF)
+		list(generator)
 		self.assertEquals(1, len(data))
 		self.assertEquals('abcdefghij', str(data[0]))
+		generator.close()
+
+	def testPrematureCloseDoesNotMaskException(self):
+		generator, data = self._prepareChunkedGenerator()
+		try:
+			generator.close()
+			self.fail()
+		except TypeError: # some sort of error, depending on the implementation
+			pass
 
 	def testReadBodyWithChunkedEncoding(self):
 		generator, data = self._prepareChunkedGenerator()
 		generator.send('A' + CRLF + 'abcdefghij' + CRLF)
-		generator.send('0' + CRLF)
-
+		generator.send('0' + CRLF + CRLF)
+		list(generator)
 		self.assertEquals(1, len(data))
 		self.assertEquals('abcdefghij', str(data[0]))
 
@@ -153,6 +161,7 @@ class WlHttpResponseTest(TestCase):
 		generator.send('ABCD')
 		generator.send('E' + CRLF)
 		generator.send('0')
+		generator.send(CRLF)
 		generator.send(CRLF)
 		self.assertEquals(2, len(data))
 		self.assertEquals('ABCD', str(data[0]))
@@ -181,10 +190,12 @@ class WlHttpResponseTest(TestCase):
 		response.headers.TransferEncoding = 'chunked'
 		data = []
 		def sink():
-			while True:
-				appendThis = yield None
-				data.append(appendThis)
-
+			try:
+				while True:
+					appendThis = yield None
+					data.append(appendThis)
+			except Exception, e:
+				raise
 		generator = compose(recvBody(response, sink()))
 		generator.next() # init
 		return generator, data

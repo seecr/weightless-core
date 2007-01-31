@@ -229,3 +229,32 @@ class WlComposeTest(unittest.TestCase):
 		self.assertEquals('i', data[3])
 		self.assertEquals('e', data[4])
 		self.assertEquals('s', data[5])
+
+	def testHandleClose(self):
+		r = []
+		def f():
+			try:
+				yield None
+			except Exception, e:
+				r.append(e)
+				raise
+		g = compose(f())
+		g.next()
+		g.close()
+		self.assertEquals(GeneratorExit, type(r[0]))
+
+	def testHandleStop(self):
+		r = []
+		def f():
+			try:
+				yield None
+			except Exception, e:
+				r.append(e)
+				raise
+		g = compose(f())
+		g.next()
+		try:
+			g.send(StopIteration())
+		except:
+			pass
+		self.assertEquals(StopIteration, type(r[0]))

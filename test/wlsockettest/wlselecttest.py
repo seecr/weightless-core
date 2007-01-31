@@ -98,7 +98,7 @@ class WlSelectTest(TestCase):
 		finally:
 				sys.stderr = tmp
 
-	def testWriteIterationExceptino(self):
+	def testWriteIterationException(self):
 		f = Event()
 		def mockSelect(r, w, o):
 			f.wait()
@@ -133,6 +133,8 @@ class WlSelectTest(TestCase):
 		self.assertTrue(mockSok not in selector._readers)
 		selector.add(mockSok, 's') # it is basically a no-op
 		self.assertTrue(mockSok not in selector._readers)
-		self.assertTrue(mockSok not in selector._writers, 'Bookmark, continue here')
-		#selector._readers.remove(mockSok)
+		try:
+			self.assertTrue(mockSok not in selector._writers, 'Bookmark, continue here')
+		finally:
+			selector._writers.remove(mockSok)
 

@@ -26,7 +26,8 @@ import platform
 assert platform.python_version() >= "2.5", "Python 2.5 required"
 
 from types import GeneratorType
-from sys import stderr
+from sys import stderr, exc_info
+from traceback import print_tb
 
 RETURN = 1
 
@@ -39,7 +40,7 @@ def compose(initial):
 	A Weightless Thread is a chain of generators.  It begins with just one generator.  If it 'yield's another generator, this generator is executed.  This may go on recursively.  If one of the generators 'yield's something else, execution stops and the value is yielded. Generators can return values to parents by yielding RETURN value, ...
 	"""
 	generators = [initial]
-	if __debug__: generator_names = [initial.gi_frame.f_code.co_name]
+	#if __debug__: generator_names = [initial.gi_frame.f_code.co_name]
 	messages = [None]
 	responses = []
 	while generators:
@@ -53,7 +54,9 @@ def compose(initial):
 					response = generator.send(message)
 				if type(response) == GeneratorType:
 					generators.append(response)
-					#if __debug__: generator_names.append(response.gi_frame.f_code.co_name)
+					#if __debug__:
+					#	generator_names.append(response.gi_frame.f_code.co_name)
+					#	print ' ' * len(generator_names), 'Starting', generator_names[-1]
 					messages.insert(0, None)
 				elif type(response) == tuple:
 					messages = list(response) + messages
@@ -67,8 +70,12 @@ def compose(initial):
 				except Exception, exception:
 					message = exception
 				messages.append(message)
-		except StopIteration:
+		except (StopIteration, GeneratorExit):
 			g = generators.pop()
-			#if __debug__: print 'Stopping:', generator_names.pop()
+			#if __debug__: print ' ' * len(generator_names), 'Stopping:', generator_names.pop()
+			g.close()
 			if not messages:
 				messages.append(None)
+		#except Exception, e:
+		#	print 'Exception in generator:', print_tb(exc_info()[1])
+		#	raise
