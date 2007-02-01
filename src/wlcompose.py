@@ -60,7 +60,7 @@ def compose(initial):
 					messages.insert(0, None)
 				elif type(response) == tuple:
 					messages = list(response) + messages
-				else:
+				elif response or not messages:
 					responses.append(response)
 			if responses:
 				try:

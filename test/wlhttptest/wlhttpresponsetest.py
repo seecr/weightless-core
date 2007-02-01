@@ -51,8 +51,11 @@ class WlHttpResponseTest(TestCase):
 			done[0] = 1
 		g = compose(handler())
 		g.next()
-		g.send('HTTP/1.0 503 Kannie effe nie\r\n\r\nthis is ze body')
-		list(g)
+		try:
+			g.send('HTTP/1.0 503 Kannie effe nie\r\n\r\nthis is ze body')
+			self.fail()
+		except StopIteration:
+			pass
 		self.assertTrue(done[0])
 
 	def testReAcceptsBuffer(self):
@@ -116,13 +119,20 @@ class WlHttpResponseTest(TestCase):
 
 	def testReadEmptyBodyWithChunkedEncoding(self):
 		generator, data = self._prepareChunkedGenerator()
-		generator.send('0' + CRLF + CRLF)
+		try:
+			generator.send('0' + CRLF + CRLF)
+			self.fail()
+		except StopIteration:
+			pass
 		self.assertEquals(0, len(data))
 
 	def testSimplestThing(self):
 		generator, data = self._prepareChunkedGenerator()
-		generator.send('A' + CRLF + 'abcdefghij' + CRLF + '0' + CRLF + CRLF)
-		list(generator)
+		try:
+			generator.send('A' + CRLF + 'abcdefghij' + CRLF + '0' + CRLF + CRLF)
+			self.fail()
+		except StopIteration:
+			pass
 		self.assertEquals(1, len(data))
 		self.assertEquals('abcdefghij', str(data[0]))
 		generator.close()
@@ -138,8 +148,11 @@ class WlHttpResponseTest(TestCase):
 	def testReadBodyWithChunkedEncoding(self):
 		generator, data = self._prepareChunkedGenerator()
 		generator.send('A' + CRLF + 'abcdefghij' + CRLF)
-		generator.send('0' + CRLF + CRLF)
-		list(generator)
+		try:
+			generator.send('0' + CRLF + CRLF)
+			self.fail()
+		except StopIteration:
+			pass
 		self.assertEquals(1, len(data))
 		self.assertEquals('abcdefghij', str(data[0]))
 
@@ -149,8 +162,11 @@ class WlHttpResponseTest(TestCase):
 		generator.send('B' + CRLF + 'bcdefghijkl' + CRLF)
 		self.assertEquals('abcdefghij', str(data[0]))
 		generator.send('0' + CRLF) # last chunked
-		generator.send(CRLF) # no trailer, end of chunked body
-		list(generator) # complete run
+		try:
+			generator.send(CRLF) # no trailer, end of chunked body
+			self.fail()
+		except StopIteration:
+			pass
 		self.assertEquals(2, len(data), ''.join(str(data)))
 		self.assertEquals('bcdefghijkl', str(data[1]))
 
@@ -162,7 +178,11 @@ class WlHttpResponseTest(TestCase):
 		generator.send('E' + CRLF)
 		generator.send('0')
 		generator.send(CRLF)
-		generator.send(CRLF)
+		try:
+			generator.send(CRLF)
+			self.fail()
+		except StopIteration:
+			pass
 		self.assertEquals(2, len(data))
 		self.assertEquals('ABCD', str(data[0]))
 		self.assertEquals('E', str(data[1]))
@@ -173,8 +193,11 @@ class WlHttpResponseTest(TestCase):
 		generator.send('hij' + CRLF+ 'B' + CRLF)
 		generator.send('bcdefghijkl' + '\r')
 		generator.send('\n0' + CRLF) # last chunk
-		generator.send(CRLF) # end of body
-		list(generator)
+		try:
+			generator.send(CRLF) # end of body
+			self.fail()
+		except StopIteration:
+			pass
 		self.assertEquals(3, len(data), [str(d) for d in data])
 
 	def testTerminate(self):

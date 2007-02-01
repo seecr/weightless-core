@@ -184,9 +184,8 @@ class WlComposeTest(unittest.TestCase):
 			r.append('parent:'+str(childRetVal))
 		g = compose(parent())
 		g.next()
-		g.send('dataIn')
 		try:
-			g.next()
+			g.send('dataIn')
 			self.fail()
 		except StopIteration:
 			pass
@@ -220,9 +219,9 @@ class WlComposeTest(unittest.TestCase):
 		program = compose(g())
 		program.next() # init
 		program.send('mies')
-		program.next()	# generator produces more, we must get it
-		program.next()
-		program.next()
+		#program.next()	# generator produces more, we must get it
+		#program.next()
+		#program.next()
 		self.assertEquals('mies', data[0])
 		self.assertEquals(1, data[1])
 		self.assertEquals('m', data[2])

@@ -14,26 +14,26 @@ url = argv[1]
 flag = Event()
 service = WlService()
 
-def body():
+def collect(buff):
 	while True:
-		try:
-			data = yield None
-		except Exception, e:
-			print 'DONE', type(e)
-			raise
+		data = yield None
 		print ' * received', len(data), 'bytes'
-		if verbose:
-			print data
+		if verbose:	print data
+		buff.append(data)
 
 def get(url):
 	yield sendRequest('GET', url)
 	response = yield recvResponse()
 	print ' * Status and headers'
 	print response.__dict__
-	yield recvBody(response, body())
+	buff = []
+	yield recvBody(response, collect(buff))
+	print ' * Received total of', sum(len(fragment) for fragment in buff), 'bytes.'
 	flag.set()
 
-s = service.open('http://www.darenet.nl', get(url))
+from urlparse import urlsplit
+addressing_scheme, network_location, path, query, fragment_identifier = urlsplit(url)
+s = service.open(addressing_scheme + '://' + network_location, get(url))
 
 flag.wait()
 
