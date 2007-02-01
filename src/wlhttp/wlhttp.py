@@ -57,10 +57,9 @@ def recvBytes(bytes, sink):
 
 def recvBody(response, sink):
 	sink.next()
-	encoding = getattr(response.headers, 'TransferEncoding', '')
-	if encoding == '':
-		yield copyBody(sink)
-	elif encoding == 'chunked':
+	if hasattr(response.headers, 'TransferEncoding'):
+		if response.headers.TransferEncoding != 'chunked':
+			raise WlHttpException('Transfer-Encoding: %s not supported' % response.headers.TransferEncoding)
 		chunkHeader = yield recvRegExp(REGEXP.CHUNK_SIZE_LINE)
 		size = int(chunkHeader['ChunkSize'], 16)
 		while size > 0:
@@ -69,9 +68,10 @@ def recvBody(response, sink):
 			chunkHeader = yield recvRegExp(REGEXP.CHUNK_SIZE_LINE)
 			size = int(chunkHeader['ChunkSize'], 16)
 		yield recvRegExp(REGEXP.CRLF)
+	elif hasattr(response.headers, 'ContentLength'):
+		yield recvBytes(int(response.headers.ContentLength), sink)
 	else:
-		raise WlHttpException('Transfer-Encoding: %s not supported' % encoding)
-
+		yield copyBody(sink) # connection close terminates body (HTTP 1.0)
 
 def _recvRegexp(regexp, message=None):
 	try:

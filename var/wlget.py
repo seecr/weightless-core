@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from weightless.wlservice import WlService
 from weightless.wlhttp import recvResponse, sendRequest, recvBody
 from time import sleep

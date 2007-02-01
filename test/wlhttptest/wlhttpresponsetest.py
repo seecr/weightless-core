@@ -223,4 +223,32 @@ class WlHttpResponseTest(TestCase):
 		generator.next() # init
 		return generator, data
 
+	def testReadContentLength(self):
+		testData = 'this string is xx bytes long'
+		args = self._createResponse()
+		args.headers.ContentLength = len(testData)
+		data = []
+		def sink():
+			while True: data.append((yield None))
+		g = compose(recvBody(args, sink()))
+		g.next()
+		try:
+			g.send(testData)
+			self.fail()
+		except StopIteration:
+			pass
+		self.assertEquals('this string is xx bytes long', str(data[0]))
+
+		data = []
+		g = compose(recvBody(args, sink()))
+		g.next()
+		g.send(testData[:1])
+		g.send(testData[1:-1])
+		try:
+			g.send(testData[-1])
+			self.fail()
+		except StopIteration:
+			pass
+		self.assertEquals('this string is xx bytes long', ''.join(str(d) for d in data))
+
 

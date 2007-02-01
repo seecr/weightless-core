@@ -37,7 +37,12 @@ globals()['__builtins__']['g'] = global_vars
 
 def compose(initial):
 	"""
-	A Weightless Thread is a chain of generators.  It begins with just one generator.  If it 'yield's another generator, this generator is executed.  This may go on recursively.  If one of the generators 'yield's something else, execution stops and the value is yielded. Generators can return values to parents by yielding RETURN value, ...
+	The method compose() allows program (de)composition with generators.  It enables calls like:
+		retvat = yield otherGenerator(args)
+	The otherGenerator may return values by:
+		yield RETURN, retvat, remaining data
+	Remaining data might be present if the otherGenerator consumes less than it get gets.  It must
+	make this remaining data available to the calling generator by yielding it as shown.
 	"""
 	generators = [initial]
 	#if __debug__: generator_names = [initial.gi_frame.f_code.co_name]
