@@ -49,5 +49,6 @@ class REGEXP:
 class FORMAT:
 	RequestLine = '%(Method)s %(Path)s HTTP/1.1' + HTTP.CRLF
 	HostHeader = 'Host: %(Host)s' + HTTP.CRLF
-	UserAgentHeader = 'User-Agent: Weightless/0.1' + HTTP.CRLF
+	svnRevision = '$Rev$'
+	UserAgentHeader = 'User-Agent: Weightless/v%s' % svnRevision[6:-2] + HTTP.CRLF
 
