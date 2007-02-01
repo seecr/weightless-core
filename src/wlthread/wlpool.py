@@ -8,7 +8,6 @@ from sys import stderr
 
 __author__ = "Erik Groeneveld"
 __email__ = "erik@cq2.org"
-__version__ = "0.1"
 
 
 class WlPool:
