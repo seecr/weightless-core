@@ -11,6 +11,8 @@ from weightless.wlsocket import WlSocket,  WlSelect
 from weightless.wlcompose import compose, RETURN
 from weightless.wldict import WlDict
 
+svnRevision = '$Rev$'[6:-2]
+
 #http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5
 
 CRLF = HTTP.CRLF
@@ -43,7 +45,7 @@ class WlHttpRequestTest(TestCase):
 	def testCreateSimple(self):
 		req = sendRequest('GET', 'http://aap.noot.nl/mies')
 		data = req.next()
-		self.assertEquals('GET /mies HTTP/1.1\r\nHost: aap.noot.nl\r\nUser-Agent: Weightless/0.1\r\n\r\n', data)
+		self.assertEquals('GET /mies HTTP/1.1\r\nHost: aap.noot.nl\r\nUser-Agent: Weightless/%s\r\n\r\n' % svnRevision, data)
 
 	def testSupportedMethod(self):
 		try:
@@ -64,7 +66,7 @@ class WlHttpRequestTest(TestCase):
 	def testHostHeader(self):
 		req = sendRequest('GET', 'http://this.host/path')
 		data = req.next()
-		self.assertEquals('GET /path HTTP/1.1\r\nHost: this.host\r\nUser-Agent: Weightless/0.1\r\n\r\n', data)
+		self.assertEquals('GET /path HTTP/1.1\r\nHost: this.host\r\nUser-Agent: Weightless/%s\r\n\r\n' % svnRevision, data)
 
 	def testAllIn(self):
 		sel = WlSelect()
@@ -72,7 +74,7 @@ class WlHttpRequestTest(TestCase):
 		with server('response') as (request, port):
 			sok = WlSocket('localhost', port)
 			sok.sink(req, sel)
-		self.assertEquals(['GET /path HTTP/1.1\r\nHost: this.host\r\nUser-Agent: Weightless/0.1\r\n\r\n'], request)
+		self.assertEquals(['GET /path HTTP/1.1\r\nHost: this.host\r\nUser-Agent: Weightless/%s\r\n\r\n' % svnRevision], request)
 
 	def testResponse(self):
 		bodyLines = []
@@ -84,7 +86,7 @@ class WlHttpRequestTest(TestCase):
 			sok = WlSocket('localhost', port)
 			sok.sink(compose(h for h in [req, bodyHandler()]), sel)
 		self.assertEquals('response\r\n', bodyLines[0])
-		
+
 	def testRequest(self):
 		generator = recvRequest()
 		generator.next()
@@ -105,19 +107,19 @@ class WlHttpRequestTest(TestCase):
 		self.assertEquals('host: we.want.more\r\ncontent-type: text/python\r\n', request._headers)
 		self.assertEquals('we.want.more', request.headers.Host)
 		self.assertEquals('text/python', request.headers.ContentType)
-	
+
 	def testRequestCreatesArgsWhenNotGiven(self):
 		generator = recvRequest()
 		generator.next()
 		opcode, request = generator.send('GET /path HTTP/1.1' + CRLF +'host: we.want.more' + CRLF * 2)
 		self.assertEquals('we.want.more', request.headers.Host)
-		
+
 	def testIgnoreStartingCRLF(self):
 		generator = recvRequest()
 		generator.next()
 		opcode, request = generator.send(CRLF * 3 + 'GET /path HTTP/1.1' + CRLF *2)
 		self.assertEquals('/path', request.RequestURI)
-		
+
 	def testAllMethodsAreAllowed(self):
 		message = WlDict()
 		generator = recvRequest(message)
@@ -125,7 +127,7 @@ class WlHttpRequestTest(TestCase):
 		result = generator.send('METHOD /path HTTP/1.1' + CRLF *2)
 		request = result[1]
 		self.assertEquals('METHOD', request.Method)
-		
+
 	def testOtherErrorsAreIgnored(self):
 		message = WlDict()
 		generator = recvRequest(message)
@@ -134,8 +136,8 @@ class WlHttpRequestTest(TestCase):
 		self.assertTrue(result == None)
 		self.assertEquals({}, message.__dict__)
 		# to fix from waiting for input, a request needs to be stopped after a certain amount of time.
-		
-		
+
+
 	def testStillNoValidRequestAfterEnormousDataRead(self):
 		message = WlDict()
 		generator = recvRequest(message)
