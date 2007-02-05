@@ -6,12 +6,10 @@ from time import sleep
 from socket import socket
 
 from weightless.wlhttp import sendRequest, recvRequest, MAX_REQUESTLENGTH
-from weightless.wlhttp.httpspec import HTTP
+from weightless.wlhttp.httpspec import HTTP, svnRevision
 from weightless.wlsocket import WlSocket,  WlSelect
 from weightless.wlcompose import compose, RETURN
 from weightless.wldict import WlDict
-
-svnRevision = '$Rev$'[6:-2]
 
 #http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5
 
@@ -45,7 +43,7 @@ class WlHttpRequestTest(TestCase):
 	def testCreateSimple(self):
 		req = sendRequest('GET', 'http://aap.noot.nl/mies')
 		data = req.next()
-		self.assertEquals('GET /mies HTTP/1.1\r\nHost: aap.noot.nl\r\nUser-Agent: Weightless/%s\r\n\r\n' % svnRevision, data)
+		self.assertEquals('GET /mies HTTP/1.1\r\nHost: aap.noot.nl\r\nUser-Agent: Weightless/v%s\r\n\r\n' % svnRevision, data)
 
 	def testSupportedMethod(self):
 		try:
@@ -66,7 +64,7 @@ class WlHttpRequestTest(TestCase):
 	def testHostHeader(self):
 		req = sendRequest('GET', 'http://this.host/path')
 		data = req.next()
-		self.assertEquals('GET /path HTTP/1.1\r\nHost: this.host\r\nUser-Agent: Weightless/%s\r\n\r\n' % svnRevision, data)
+		self.assertEquals('GET /path HTTP/1.1\r\nHost: this.host\r\nUser-Agent: Weightless/v%s\r\n\r\n' % svnRevision, data)
 
 	def testAllIn(self):
 		sel = WlSelect()
@@ -74,7 +72,7 @@ class WlHttpRequestTest(TestCase):
 		with server('response') as (request, port):
 			sok = WlSocket('localhost', port)
 			sok.sink(req, sel)
-		self.assertEquals(['GET /path HTTP/1.1\r\nHost: this.host\r\nUser-Agent: Weightless/%s\r\n\r\n' % svnRevision], request)
+		self.assertEquals(['GET /path HTTP/1.1\r\nHost: this.host\r\nUser-Agent: Weightless/v%s\r\n\r\n' % svnRevision], request)
 
 	def testResponse(self):
 		bodyLines = []

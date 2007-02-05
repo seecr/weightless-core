@@ -4,7 +4,7 @@ from weightless.wlhttp import recvResponse, sendRequest
 from weightless.wlcompose import compose
 from time import sleep
 from socket import socket
-from threading import Thread
+from threading import Thread, Event
 from random import random
 
 PORT = 2048 + int(random() * 4096.0)
@@ -47,12 +47,14 @@ class WlServiceTest(TestCase):
 		self.assertEquals(['GET / HTTP/1.0\n\n'], recv)
 
 	def testOpenHTTP(self):
+		wait = Event()
 		codes = []
 		def handler():
 			yield sendRequest('GET', 'http://www.cq2.org/')
 			response = yield recvResponse()
 			codes.append(response)
+			wait.set()
 		service = WlService()
-		service.open('http://www.cq2.org:80', compose(handler()))
-		sleep(0.1)
+		service.open('http://www.cq2.org', handler())
+		wait.wait()
 		self.assertEquals('302', codes[0].StatusCode)
