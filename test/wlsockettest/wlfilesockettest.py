@@ -6,6 +6,10 @@ from cq2utils.calltrace import CallTrace
 from functools import partial as curry
 import select
 
+from weightless.wlsocket import wlfilesocket
+from weightless.wlthread import WlPool
+wlfilesocket._pool = WlPool(with_status_and_bad_performance = True)
+
 class WlFileSocketTest(TestCase):
 
 	def testOpenAndReadAsyncFileLowLevelWhiteBoxTest(self):
@@ -69,3 +73,8 @@ class WlFileSocketTest(TestCase):
 		self.assertEquals(' m', data[4])
 		self.assertEquals('ie', data[5])
 		self.assertEquals('s', data[6])
+
+	def testAsyncOpenFile(self):
+		with self.mktemp('aap noot mies') as f:
+			fs = WlFileSocket(f.name)
+

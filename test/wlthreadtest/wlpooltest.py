@@ -16,9 +16,8 @@ class WlPoolTest(TestCase):
 		result = []
 		def worker():
 			result.append('aap')
-			yield None
 			result.append('noot')
-		status = self.pool.execute(worker())
+		status = self.pool.execute(worker)
 		status.join()
 		self.assertEquals(['aap','noot'], result)
 
@@ -27,14 +26,13 @@ class WlPoolTest(TestCase):
 			self.pool.execute(None)
 			self.fail()
 		except AssertionError, e:
-			self.assertEquals('execute() expects a generator', str(e))
+			self.assertEquals('execute() expects a callable', str(e))
 
 	def testStatus(self):
 		wait = Event()
 		def worker():
-			yield None
 			wait.wait()
-		status = self.pool.execute(worker())
+		status = self.pool.execute(worker)
 		self.assertFalse(status.isSet())
 		wait.set()
 		status.join()
@@ -42,12 +40,11 @@ class WlPoolTest(TestCase):
 
 	def testStatusWithException(self):
 		def raiseException():
-			yield None
 			raise Exception('oops')
 		saved_stderr = sys.stderr
 		sys.stderr = StringIO()
 		try:
-			status = self.pool.execute(raiseException())
+			status = self.pool.execute(raiseException)
 			try:
 				status.join()
 				self.fail()
@@ -61,9 +58,8 @@ class WlPoolTest(TestCase):
 			def raiseA(): raise Exception('some exception')
 			def raiseB(): raiseA()
 			def raiseC():
-				yield None
 				raiseB()
-			status = self.pool.execute(raiseC())
+			status = self.pool.execute(raiseC)
 			status.join()
 			self.fail()
 		except:

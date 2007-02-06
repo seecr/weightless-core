@@ -1,6 +1,10 @@
+from __future__ import with_statement
+
 from unittest import TestCase
-from weightless.wlsocket import WlBaseSocket, ReadIteration, WriteIteration
+from weightless.wlsocket import WlSocket, WlBaseSocket, ReadIteration, WriteIteration
 from cq2utils.calltrace import CallTrace
+from select import select
+from socket import gaierror
 
 class WlSocketTest(TestCase):
 
@@ -137,3 +141,31 @@ class WlSocketTest(TestCase):
 		self.assertEquals("send('unks')", str(mockSok.calledMethods[3]))
 		sok.writable()
 		self.assertEquals("send('more')", str(mockSok.calledMethods[4]))
+
+	def testFromOneSocketToTheOther(self):
+		def thisIsHowYouCanUseDifferentSocketsInOneGenerator(sokje):
+			requestedFile = yield None
+			yield 'header'
+			source = yield wlopen('/tmp/somefile')	# A: open a socket
+			with source:													# B: replace implicit socket in __enter__
+				yield 'GET / HTTP/1.1'									# C: yield to new socket
+																					# D: restore old socket in __exit__
+			while True:
+				with source:
+					data = yield None
+				yield data
+			yield 'trailer'
+
+	def testConnectAsync(self):
+		s = WlSocket('www.cq2.nl', 80) # async connect
+		counter = 0
+		while not select([], [s], [], 0)[1]:
+			counter += 1
+		self.assertTrue(counter > 1, counter) # it easily counts to 2000 when async
+
+	def testAsyncConnectWithUnknownHost(self):
+		try:
+			s = WlSocket('fhfkdieustdjcm.nl', 80) # async connect
+			self.fail()
+		except gaierror:
+			pass

@@ -26,16 +26,16 @@ class WlPool:
 			cmd, status = self._jobs.get()
 			if cmd == 'stop': return
 			with status:
-				list(cmd)
+				cmd()
 
 	def shutdown(self):
 		"""Shutdown the pool.  Issues stop commands and waits until ook threads are terminated.  Current jobs are finische normally, remaining work is discarded."""
 		for t in self._pool: self._jobs.put(('stop', None))
 		map(Thread.join, self._pool)
 
-	def execute(self, generator):
+	def execute(self, function):
 		"""Adds a piece of work.  The first available thread wil pick it up.  Returns an WlStatus object that becomes set when on termination of the piece of work."""
-		assert type(generator) == GeneratorType, 'execute() expects a generator'
+		assert callable(function), 'execute() expects a callable'
 		status = self._createStatus()
-		self._jobs.put((generator, status))
+		self._jobs.put((function, status))
 		return status
