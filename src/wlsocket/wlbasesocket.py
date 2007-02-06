@@ -38,7 +38,7 @@ class WlBaseSocket:
 	def writable(self):
 		bytesSend = self._sok.send(self._to_write)
 		if bytesSend < len(self._to_write):
-			self._to_write = self._to_write[bytesSend:]
+			self._to_write = buffer(self._to_write, bytesSend)
 		else:
 			self._to_write = self._sink.next()
 			if not self._to_write:

@@ -136,11 +136,11 @@ class WlSocketTest(TestCase):
 		sok.writable()
 		self.assertEquals("send('send in chunks')", str(mockSok.calledMethods[1]))
 		sok.writable()
-		self.assertEquals("send('in chunks')", str(mockSok.calledMethods[2]))
+		self.assertEquals("in chunks", str(mockSok.calledMethods[2].arguments[0]))
 		sok.writable()
-		self.assertEquals("send('unks')", str(mockSok.calledMethods[3]))
+		self.assertEquals("unks", str(mockSok.calledMethods[3].arguments[0]))
 		sok.writable()
-		self.assertEquals("send('more')", str(mockSok.calledMethods[4]))
+		self.assertEquals("more", str(mockSok.calledMethods[4].arguments[0]))
 
 	def testFromOneSocketToTheOther(self):
 		def thisIsHowYouCanUseDifferentSocketsInOneGenerator(sokje):
