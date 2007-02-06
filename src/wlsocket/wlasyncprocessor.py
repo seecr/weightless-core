@@ -1,26 +1,26 @@
+from weightless.wlthread import WlPool
+
+_pool = WlPool()
+
 class WlAsyncProcessor(object):
-	def _processStart(self): pass
 
-class sendFile:
+	def start(self, wlsok):
+		self.wlsok = wlsok
+		_pool.execute(self._process)
+
 	def _process(self):
-		f = open(file)
-		sendfile(f, self._wlsok.fileno())
-		self._wlsok._processDone('some return value')
+		self.process()
+		self.wlsok.async_completed()
 
-	def _processStart(self, wlsok):
-		self._wlsok = wlsok
-		self._thread = Thread(None, self._process)
+	def process(self):
+		pass
 
 
-def exampleHandler():
-	args = yield recvRequest()
-	yield sendResponse()
-	someReturnValue = yield sendFile('filename') # yield an object that does magic
-	yield 'Trailing-Header: 123\r\n'
+class sendFile(WlAsyncProcessor):
 
-	filesocket = service.open('file')
-	while True:
-		yield filesocket.read()
+	def __init__(self, filename):
+		self.filename = filename
 
-	for line in filesocket:
-		yield line
+	def process(self):
+		f = open(self.filename)
+		sendfile(f, self.wlsok.fileno())

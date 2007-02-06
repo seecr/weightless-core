@@ -32,9 +32,9 @@ def server(response):
 	t = Thread(None, server)
 	t.setDaemon(True)
 	t.start()
-	sleep(0.001)
+	sleep(0.01)
 	yield reqData, port
-	sleep(0.001)
+	sleep(0.01)
 	t.join()
 
 

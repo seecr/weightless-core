@@ -86,12 +86,14 @@ class WlSelect:
 		for readable in r:
 			try:
 				readable.readable()
-			except StopIteration:
-				self._readers.remove(readable)
-				readable.close()
 			except WriteIteration:
 				self._readers.remove(readable)
 				self._writers.add(readable)
+			except SuspendIteration:
+				self._readers.remove(readable)
+			except (StopIteration, GeneratorExit):
+				self._readers.remove(readable)
+				readable.close()
 			except Exception:
 				self._readers.remove(readable)
 				readable.close()
@@ -100,12 +102,14 @@ class WlSelect:
 		for writable in w:
 			try:
 				writable.writable()
-			except StopIteration:
-				self._writers.remove(writable)
-				writable.close()
 			except ReadIteration:
 				self._writers.remove(writable)
 				self._readers.add(writable)
+			except SuspendIteration:
+				self._writers.remove(writable)
+			except (StopIteration, GeneratorExit):
+				self._writers.remove(writable)
+				writable.close()
 			except Exception:
 				self._writers.remove(writable)
 				writable.close()

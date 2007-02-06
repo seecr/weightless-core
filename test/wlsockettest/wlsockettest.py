@@ -48,14 +48,15 @@ class WlSocketTest(TestCase):
 		sok.readable()
 		self.assertEquals('aap noot mies', data[0])
 
-	def testThrowStopIterationWhenEndOfFile(self):
+	def testThrowGeneratorExitWhenEndOfFile(self):
 		sok = WlBaseSocket(CallTrace(returnValues = {'recv': '', 'getsockopt':4096}))
 		stopped = [None]
 		def sink():
 			try:
 				yield None
-			except StopIteration:
+			except GeneratorExit:
 				stopped[0] = True
+				raise
 			yield None
 		sok.sink(sink(), CallTrace())
 		sok.readable()
@@ -143,6 +144,7 @@ class WlSocketTest(TestCase):
 		self.assertEquals("more", str(mockSok.calledMethods[4].arguments[0]))
 
 	def testFromOneSocketToTheOther(self):
+		# This is NOT A WORKING TEST, just an idea of how things are heading
 		def thisIsHowYouCanUseDifferentSocketsInOneGenerator(sokje):
 			requestedFile = yield None
 			yield 'header'
@@ -169,3 +171,18 @@ class WlSocketTest(TestCase):
 			self.fail()
 		except gaierror:
 			pass
+
+	def testBufferedSendForAsyncSupport(self):
+		# Eata comes in from One socket and sent to an Other. These both stream might need
+		# some buffering to allow sufficient throughput if One is faster than the Other.
+		# However, at some point, the One must be held to wait for the Other....
+		mockSok = CallTrace(returnValues = {'send': 999, 'recv': 'keep things going', 'getsockopt': 10})
+		sok = WlBaseSocket(mockSok)
+		sok.send('some data')
+		sok.send('more data')
+		self.assertEquals(['some data', 'more data'], sok._write_queue)
+		sok.writable()
+		self.assertEquals(['more data'], sok._write_queue)
+		sok.send('even more')
+		sok.writable()
+		self.assertEquals(['even more'], sok._write_queue)
