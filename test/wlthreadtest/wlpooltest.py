@@ -3,6 +3,7 @@ from weightless.wlthread import WlPool
 from StringIO import StringIO
 from threading import Event
 import sys
+from time import sleep
 
 class WlPoolTest(TestCase):
 
@@ -20,6 +21,26 @@ class WlPoolTest(TestCase):
 		status = self.pool.execute(worker)
 		status.join()
 		self.assertEquals(['aap','noot'], result)
+
+	def testReturnValue(self):
+		self.retval = None
+		def worker():
+			return 'retval'
+		def callback(retval):
+			self.retval = retval
+		self.pool.execute(worker, callback)
+		while not self.retval: sleep(0.001)
+		self.assertEquals('retval', self.retval)
+
+	def testReturnException(self):
+		self.retval = None
+		def worker():
+			raise Exception('something wrong')
+		def callback(retval):
+			self.retval = retval
+		self.pool.execute(worker, callback)
+		while not self.retval: sleep(0.001)
+		self.assertEquals("Exception('something wrong',)", repr(self.retval))
 
 	def testWrongInput(self):
 		try:

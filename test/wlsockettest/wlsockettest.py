@@ -145,6 +145,10 @@ class WlSocketTest(TestCase):
 
 	def testFromOneSocketToTheOther(self):
 		# This is NOT A WORKING TEST, just an idea of how things are heading
+		def wlopen(filename):
+			fs = WlFileSocket()
+			yield WlAsyncOpen(fs, filename)
+			yield RETURN, InWithMagicallySourceThisGeneratorFrom(fs)
 		def thisIsHowYouCanUseDifferentSocketsInOneGenerator(sokje):
 			requestedFile = yield None
 			yield 'header'

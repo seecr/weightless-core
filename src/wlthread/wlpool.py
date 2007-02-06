@@ -23,19 +23,24 @@ class WlPool:
 
 	def _worker(self):
 		while True:
-			cmd, status = self._jobs.get()
+			cmd, status, callback = self._jobs.get()
 			if cmd == 'stop': return
 			with status:
-				cmd()
+				try:
+					retval = cmd()
+					callback(retval)
+				except Exception, e:
+					callback(e)
+					raise
 
 	def shutdown(self):
 		"""Shutdown the pool.  Issues stop commands and waits until ook threads are terminated.  Current jobs are finische normally, remaining work is discarded."""
-		for t in self._pool: self._jobs.put(('stop', None))
+		for t in self._pool: self._jobs.put(('stop', None, None))
 		map(Thread.join, self._pool)
 
-	def execute(self, function):
+	def execute(self, function, callback = lambda x: None):
 		"""Adds a piece of work.  The first available thread wil pick it up.  Returns an WlStatus object that becomes set when on termination of the piece of work."""
 		assert callable(function), 'execute() expects a callable'
 		status = self._createStatus()
-		self._jobs.put((function, status))
+		self._jobs.put((function, status, callback))
 		return status

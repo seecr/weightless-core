@@ -14,13 +14,3 @@ class WlAsyncProcessor(object):
 
 	def process(self):
 		pass
-
-
-class sendFile(WlAsyncProcessor):
-
-	def __init__(self, filename):
-		self.filename = filename
-
-	def process(self):
-		f = open(self.filename)
-		sendfile(f, self.wlsok.fileno())

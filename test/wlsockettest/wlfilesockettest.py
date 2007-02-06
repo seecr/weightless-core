@@ -74,7 +74,3 @@ class WlFileSocketTest(TestCase):
 		self.assertEquals('ie', data[5])
 		self.assertEquals('s', data[6])
 
-	def testAsyncOpenFile(self):
-		with self.mktemp('aap noot mies') as f:
-			fs = WlFileSocket(f.name)
-
