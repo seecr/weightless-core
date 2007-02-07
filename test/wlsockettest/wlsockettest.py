@@ -162,12 +162,15 @@ class WlSocketTest(TestCase):
 				yield data
 			yield 'trailer'
 
-	def testConnectAsync(self):
-		s = WlSocket('www.cq2.nl', 80) # async connect
+	def testConnectNOTNOTNOTAsync(self):
+		# setting the socket to non-blocking makes error handling very difficult and
+		# it still is not completely async because the DNS lookup it synchronous.
+		# better solve this by doing the connect in a thread pool
+		s = WlSocket('www.cq2.nl', 80) # no async connect
 		counter = 0
 		while not select([], [s], [], 0)[1]:
 			counter += 1
-		self.assertTrue(counter > 1, counter) # it easily counts to 2000 when async
+		self.assertEquals(0, counter) # it easily counts to 2000 when async
 
 	def testAsyncConnectWithUnknownHost(self):
 		try:

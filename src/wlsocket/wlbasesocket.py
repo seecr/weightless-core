@@ -64,7 +64,7 @@ class WlBaseSocket:
 				raise READ_ITERATION
 			self._write_queue.append(response)
 
-	def async_completed(self):
+	def async_completed(self, retval):
 		try:
 			response = self._sink.next()
 		except (StopIteration, GeneratorExit):

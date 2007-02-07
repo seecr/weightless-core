@@ -82,7 +82,7 @@ class WlAsyncProcessorTest(TestCase):
 				work.append('work')
 		asyncp = MyAsyncProcessor()
 		class MockSok:
-			def async_completed(self):
+			def async_completed(self, retval):
 				flag.set()
 		asyncp.start(MockSok())
 		flag.wait()
@@ -99,7 +99,7 @@ class WlAsyncProcessorTest(TestCase):
 				self.wlsok.send('in between')
 		def startAndCompleteAsyncOperation():
 			yield 'something to write'
-			yield MyAsyncWriter()
+			whatIsItIGetBack = yield MyAsyncWriter()
 			yield 'more to write'
 			done.set()
 		mockSok = CallTrace(returnValues = {'send': 999, 'getsockopt': 999, 'recv': 'indata'})
