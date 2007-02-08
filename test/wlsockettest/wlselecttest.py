@@ -3,7 +3,7 @@ from __future__ import with_statement
 from wltestcase import TestCase
 from cq2utils.calltrace import CallTrace
 from weightless.wlsocket import WlSelect, WlFileSocket, WlBaseSocket, ReadIteration, WriteIteration
-from threading import Event
+from threading import Event, Semaphore
 from time import sleep
 from StringIO import StringIO
 import sys
@@ -124,3 +124,37 @@ class WlSelectTest(TestCase):
 		sleep(0.01)
 		self.assertTrue(wlsok not in selector._readers)
 		self.assertTrue(wlsok in selector._writers)
+
+	def testGlobalReactor(self):
+		flag = Event()
+		selector = WlSelect(select_func = mockSelect)
+		class MockSok:
+			def readable(inner):
+				self.assertEquals(selector, __reactor__)
+				flag.set()
+			def close(inner): pass
+		sok1 = MockSok()
+		selector.add(sok1, 'r')
+		flag.wait()
+		self.assertTrue(__reactor__)
+
+	def testCurrent(self):
+		selector = WlSelect(select_func = mockSelect)
+		class MockSok:
+			def __init__(self):
+				self.flag = Event()
+			def readable(self):
+				self.current = __current__
+				self.flag.set()
+			def writable(self):
+				self.current = __current__
+				self.flag.set()
+			def close(self): pass
+		sok1 = MockSok()
+		sok2 = MockSok()
+		selector.add(sok1, 'r')
+		selector.add(sok2, 'w')
+		sok1.flag.wait()
+		sok2.flag.wait()
+		self.assertEquals(sok1, sok1.current)
+		self.assertEquals(sok2, sok2.current)

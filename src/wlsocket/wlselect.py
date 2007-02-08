@@ -5,7 +5,8 @@ from select import select as original_select_func
 from os import pipe, write, read, close
 from traceback import print_exc
 from time import sleep
-from sys import getcheckinterval, setcheckinterval, stderr
+from sys import getcheckinterval, setcheckinterval, stderr, _getframe
+import __builtin__
 
 max32bitint = 2147483647
 setcheckinterval(max32bitint) # 32bit maxint
@@ -56,6 +57,11 @@ class WlSelect:
 		self._thread = Thread(None, self._loop)
 		self._thread.setDaemon(True)
 		self._thread.start()
+		__builtin__.__reactor__ = self
+
+	def __del__(self):
+		del __builtin__.__reactor__
+		del __builtin__.__current__
 
 	def stop(self):
 		self._go = False
@@ -85,7 +91,9 @@ class WlSelect:
 
 		for readable in r:
 			try:
+				__builtin__.__current__ = readable
 				readable.readable()
+				__builtin__.__current__ = None
 			except WriteIteration:
 				self._readers.remove(readable)
 				self._writers.add(readable)
@@ -101,7 +109,9 @@ class WlSelect:
 
 		for writable in w:
 			try:
+				__builtin__.__current__ = writable
 				writable.writable()
+				__builtin__.__current__ = None
 			except ReadIteration:
 				self._writers.remove(writable)
 				self._readers.add(writable)
