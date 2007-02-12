@@ -5,7 +5,7 @@ from threading import Thread
 from time import sleep
 from socket import socket
 
-from weightless.wlhttp import sendRequest, recvRequest, MAX_REQUESTLENGTH
+from weightless.wlhttp import sendRequest, recvRequest, MAX_REQUESTLENGTH, WlHttpException
 from weightless.wlhttp.httpspec import HTTP, svnRevision
 from weightless.wlsocket import WlSocket,  WlSelect
 from weightless.wlcompose import compose, RETURN
@@ -122,7 +122,7 @@ class WlHttpRequestTest(TestCase):
 		message = WlDict()
 		generator = recvRequest(message)
 		generator.next()
-		result = generator.send('METHOD /path HTTP/1.1' + CRLF *2)
+		result = generator.send('METHOD /path HTTP/1.1' + CRLF + CRLF)
 		request = result[1]
 		self.assertEquals('METHOD', request.Method)
 
@@ -133,13 +133,17 @@ class WlHttpRequestTest(TestCase):
 		result = generator.send('REQUESTLINE' + CRLF *2)
 		self.assertTrue(result == None)
 		self.assertEquals({}, message.__dict__)
-		# to fix from waiting for input, a request needs to be stopped after a certain amount of time.
-
+		try:
+			generator.close()
+			self.fail()
+		except WlHttpException, e:
+			pass
 
 	def testStillNoValidRequestAfterEnormousDataRead(self):
 		message = WlDict()
 		generator = recvRequest(message)
 		generator.next()
-		result = generator.send('GOT /path HTTP/1.1' + 'a' * MAX_REQUESTLENGTH + CRLF *2)
-		request = result[1]
-		self.assertEquals('Maximum request length exceeded.', request.Error)
+		try:
+			result = generator.send('GOT /path HTTP/1.1' + 'a' * MAX_REQUESTLENGTH + CRLF *2)
+		except WlHttpException, e:
+			self.assertEquals('Maximum request length exceeded but no sensible headers found.', str(e))

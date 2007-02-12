@@ -61,7 +61,8 @@ class WlSocketTest(TestCase):
 		sok.sink(sink(), CallTrace())
 		try:
 			sok.readable()
-		except Exception, e:
+			self.fail('must raise StopIteration')
+		except StopIteration, e:
 			pass
 		self.assertTrue(stopped[0])
 

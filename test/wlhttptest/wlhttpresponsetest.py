@@ -1,7 +1,7 @@
 from unittest import TestCase
 from sys import stderr
 
-from weightless.wlhttp import recvResponse, recvBody, HTTP
+from weightless.wlhttp import recvResponse, recvBody, HTTP, WlHttpException
 from weightless.wlcompose import compose, RETURN
 from weightless.wldict import WlDict
 
@@ -11,11 +11,16 @@ CRLF = HTTP.CRLF
 
 class WlHttpResponseTest(TestCase):
 
+	def setUp(self):
+		self.exception = None
+
 	def testCreate(self):
 		message = {}
 		response = recvResponse(message)
 		r = response.next()
 		self.assertEquals(None, r)
+		try: response.close()
+		except: pass
 
 	def testParseOkStatusLine(self):
 		message = WlDict()
@@ -137,13 +142,34 @@ class WlHttpResponseTest(TestCase):
 		self.assertEquals('abcdefghij', str(data[0]))
 		generator.close()
 
+	def testCloseCatchesStopIterationAndGeneratorExitButNotOtherExceptions(self):
+		def f():
+			yield None
+		g = f()
+		g.next()
+		g.close()
+		def f():
+			try: yield None
+			except: raise StopIteration()
+		g = f()
+		g.next()
+		g.close()
+		def f():
+			try: yield None
+			except: raise Exception('X')
+		g = f()
+		g.next()
+		try: g.close()
+		except Exception, e: self.assertEquals('X', str(e))
+
 	def testPrematureCloseDoesNotMaskException(self):
 		generator, data = self._prepareChunkedGenerator()
+		self.exception = WlHttpException('No good, no good meme')
 		try:
 			generator.close()
 			self.fail()
-		except TypeError: # some sort of error, depending on the implementation
-			pass
+		except WlHttpException, e: # some sort of error, depending on the implementation
+			self.assertEquals(self.exception, e)
 
 	def testReadBodyWithChunkedEncoding(self):
 		generator, data = self._prepareChunkedGenerator()
@@ -203,22 +229,29 @@ class WlHttpResponseTest(TestCase):
 	def testTerminate(self):
 		generator = recvBody(None, (x for x in []))
 		try:
-			generator.throw(StopIteration())
+  			generator.next()
 			self.fail()
 		except StopIteration:
 			pass
+
+		generator = compose(recvBody(WlDict({'headers': {}}), (None for x in range(99))))
+		generator.next()
+		generator.send('the body')
+		generator.close() # terminate body
 
 	def _prepareChunkedGenerator(self):
 		response = self._createResponse()
 		response.headers.TransferEncoding = 'chunked'
 		data = []
 		def sink():
-			try:
-				while True:
+			while True:
+				try:
 					appendThis = yield None
-					data.append(appendThis)
-			except Exception, e:
-				raise
+				except GeneratorExit:
+					if self.exception:
+						raise self.exception
+					raise
+				data.append(appendThis)
 		generator = compose(recvBody(response, sink()))
 		generator.next() # init
 		return generator, data

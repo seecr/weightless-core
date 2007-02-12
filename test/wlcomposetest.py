@@ -102,18 +102,6 @@ class WlComposeTest(unittest.TestCase):
 		self.assertEquals(7, t.next())				# 7 yielded at A
 		self.assertEquals(18, t.send(3))		# 3 send to A, 6 yielded at B, as return value to C, then yielded at D
 
-	def testGlobalScope(self):
-		def threadA():
-			g.name = 'john'
-			yield None
-		def threadB():
-			yield g.name
-		ta = compose(threadA())
-		tb = compose(threadB())
-		list(ta)
-		john = list(tb)
-		self.assertEquals('john', john[0])
-
 	def testReturnOne(self):
 		data = []
 		def child():
@@ -258,3 +246,40 @@ class WlComposeTest(unittest.TestCase):
 		except:
 			pass
 		self.assertEquals(StopIteration, type(r[0]))
+
+	def testPassException1(self):
+		class MyException(Exception): pass
+		class WrappedException(Exception): pass
+		def child():
+			raise MyException('abc')
+			yield None
+		def parent():
+			try:
+				yield child()
+			except MyException, e:
+				raise WrappedException(e)
+		g = compose(parent())
+		try:
+			g.next()
+			self.fail()
+		except WrappedException, e:
+			self.assertEquals('abc', str(e))
+
+	def testPassException2(self):
+		class MyException(Exception): pass
+		class WrappedException(Exception): pass
+		def child():
+			yield None
+			raise MyException('abc')
+		def parent():
+			try:
+				yield child()
+			except MyException, e:
+				raise WrappedException(e)
+		g = compose(parent())
+		g.next()
+		try:
+			g.next()
+			self.fail()
+		except WrappedException, e:
+			self.assertEquals('abc', str(e))

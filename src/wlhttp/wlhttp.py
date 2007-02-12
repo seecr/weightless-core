@@ -57,49 +57,47 @@ def recvBytes(bytes, sink):
 
 def recvBody(response, sink):
 	sink.next()
-	if hasattr(response.headers, 'TransferEncoding'):
-		if response.headers.TransferEncoding != 'chunked':
-			raise WlHttpException('Transfer-Encoding: %s not supported' % response.headers.TransferEncoding)
-		chunkHeader = yield recvRegExp(REGEXP.CHUNK_SIZE_LINE)
-		size = int(chunkHeader['ChunkSize'], 16)
-		while size > 0:
-			yield recvBytes(size, sink)
-			yield recvRegExp(REGEXP.CRLF)
+	try:
+		if hasattr(response.headers, 'TransferEncoding'):
+			if response.headers.TransferEncoding != 'chunked':
+				raise WlHttpException('Transfer-Encoding: %s not supported' % response.headers.TransferEncoding)
 			chunkHeader = yield recvRegExp(REGEXP.CHUNK_SIZE_LINE)
 			size = int(chunkHeader['ChunkSize'], 16)
-		yield recvRegExp(REGEXP.CRLF)
-	elif hasattr(response.headers, 'ContentLength'):
-		yield recvBytes(int(response.headers.ContentLength), sink)
-	else:
-		yield copyBody(sink) # connection close terminates body (HTTP 1.0)
+			while size > 0:
+				yield recvBytes(size, sink)
+				yield recvRegExp(REGEXP.CRLF)
+				chunkHeader = yield recvRegExp(REGEXP.CHUNK_SIZE_LINE)
+				size = int(chunkHeader['ChunkSize'], 16)
+			yield recvRegExp(REGEXP.CRLF)
+		elif hasattr(response.headers, 'ContentLength'):
+			yield recvBytes(int(response.headers.ContentLength), sink)
+		else:
+			yield copyBody(sink) # connection close terminates body (HTTP 1.0)
+	except Exception, e:
+		sink.throw(e)
 
 def _recvRegexp(regexp, message=None):
 	fragment = ''
+	message = message or WlDict()
 	try:
-		message = message or WlDict()
 		fragment = yield None
 		match = regexp.match(fragment)
 		while not match:
 			if len(fragment) > MAX_REQUESTLENGTH:
-				raise WlHttpException('Maximum request length exceeded.')
+				raise WlHttpException('Maximum request length exceeded but no sensible headers found.')
 			fragment = fragment + (yield None)
 			match = regexp.match(fragment)
-		message.__dict__.update(match.groupdict())
-
-		message.headers = WlDict()
-		for (groupname, fieldname, fieldvalue) in REGEXP.HEADER.findall(message._headers):
-			message.headers.__dict__[fieldname.title().replace('-','')] = fieldvalue.strip()
-
-		if match.end() < len(fragment):
-			restData = buffer(fragment, match.end())
-			yield RETURN, message, restData
-		else:
-			yield RETURN, message
-	except WlHttpException, e:
-		message.Error = str(e)
+	except GeneratorExit:
+		raise WlHttpException('Connection closed but no sensible headers found. Response was: \n' + fragment)
+	message.__dict__.update(match.groupdict())
+	message.headers = WlDict()
+	for (groupname, fieldname, fieldvalue) in REGEXP.HEADER.findall(message._headers):
+		message.headers.__dict__[fieldname.title().replace('-','')] = fieldvalue.strip()
+	if match.end() < len(fragment):
+		restData = buffer(fragment, match.end())
+		yield RETURN, message, restData
+	else:
 		yield RETURN, message
-	except (StopIteration, GeneratorExit):
-		raise WlHttpException('Connection was closed while no sensible headers have been received. Response was: \n' + fragment)
 
 
 recvRequest = curry(_recvRegexp, REGEXP.REQUEST)

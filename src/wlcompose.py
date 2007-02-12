@@ -26,14 +26,8 @@ import platform
 assert platform.python_version() >= "2.5", "Python 2.5 required"
 
 from types import GeneratorType
-from sys import stderr, exc_info
-from traceback import print_tb
 
 RETURN = 1
-
-class Scope: pass
-global_vars = Scope()
-globals()['__builtins__']['g'] = global_vars
 
 def compose(initial):
 	"""
@@ -45,13 +39,13 @@ def compose(initial):
 	make this remaining data available to the calling generator by yielding it as shown.
 	"""
 	generators = [initial]
-	#if __debug__: generator_names = [initial.gi_frame.f_code.co_name]
 	messages = [None]
 	responses = []
 	while generators:
 		generator = generators[-1]
 		if messages:
 			message = messages.pop(0)
+			#print '>' * len(generators), 'sending', repr(message), 'to', generator.gi_frame.f_code.co_name, 'at line', generator.gi_frame.f_lineno, 'in', generator.gi_frame.f_code.co_filename
 			send = generator.send if not isinstance(message, Exception) else generator.throw
 			try:
 				response = send(message)
