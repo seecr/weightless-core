@@ -49,35 +49,31 @@ def compose(initial):
 	messages = [None]
 	responses = []
 	while generators:
-		try:
-			generator = generators[-1]
-			if messages:
-				message = messages.pop(0)
-				if isinstance(message, Exception):
-					response = generator.throw(message)
-				else:
-					response = generator.send(message)
+		generator = generators[-1]
+		if messages:
+			message = messages.pop(0)
+			send = generator.send if not isinstance(message, Exception) else generator.throw
+			try:
+				response = send(message)
 				if type(response) == GeneratorType:
 					generators.append(response)
-					#if __debug__:
-					#	generator_names.append(response.gi_frame.f_code.co_name)
-					#	print ' ' * len(generator_names), 'Starting', generator_names[-1]
 					messages.insert(0, None)
 				elif type(response) == tuple:
 					messages = list(response) + messages
 				elif response or not messages:
 					responses.append(response)
-			if responses:
-				try:
-					message = yield responses.pop(0)
-				except GeneratorExit:
-					raise
-				except Exception, exception:
-					message = exception
-				messages.append(message)
-		except (StopIteration, GeneratorExit):
-			g = generators.pop()
-			#if __debug__: print ' ' * len(generator_names), 'Stopping:', generator_names.pop()
-			g.close()
-			if not messages:
-				messages.append(None)
+			except StopIteration:
+				generators.pop()
+				if not messages:
+					messages.append(None)
+			except Exception, exception:
+				generators.pop()
+				messages.insert(0, exception)
+		if responses:
+			try:
+				message = yield responses.pop(0)
+			except Exception, exception:
+				message = exception
+			messages.append(message)
+	if messages and isinstance(messages[0], Exception):
+		raise messages[0]

@@ -74,6 +74,7 @@ def recvBody(response, sink):
 		yield copyBody(sink) # connection close terminates body (HTTP 1.0)
 
 def _recvRegexp(regexp, message=None):
+	fragment = ''
 	try:
 		message = message or WlDict()
 		fragment = yield None
@@ -97,6 +98,8 @@ def _recvRegexp(regexp, message=None):
 	except WlHttpException, e:
 		message.Error = str(e)
 		yield RETURN, message
+	except (StopIteration, GeneratorExit):
+		raise WlHttpException('Connection was closed while no sensible headers have been received. Response was: \n' + fragment)
 
 
 recvRequest = curry(_recvRegexp, REGEXP.REQUEST)

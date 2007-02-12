@@ -59,7 +59,10 @@ class WlSocketTest(TestCase):
 				raise
 			yield None
 		sok.sink(sink(), CallTrace())
-		sok.readable()
+		try:
+			sok.readable()
+		except Exception, e:
+			pass
 		self.assertTrue(stopped[0])
 
 	def testStartWithReading(self):

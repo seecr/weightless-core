@@ -4,6 +4,7 @@ from functools import partial as curry
 from wlselect import WriteIteration, ReadIteration, SuspendIteration
 from wlasyncprocessor import WlAsyncProcessor
 
+from time import sleep
 
 WRITE_ITERATION = WriteIteration()
 READ_ITERATION = ReadIteration()
@@ -40,6 +41,7 @@ class WlBaseSocket:
 		data = self._recv()
 		if not data: # orderly socket shutdown
 			self._sink.close()
+			raise STOP_ITERATION
 		else:
 			response = self._sink.send(data)
 			if isinstance(response, WlAsyncProcessor):
