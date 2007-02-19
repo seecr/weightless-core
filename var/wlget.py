@@ -4,6 +4,7 @@ from weightless.wlhttp import recvResponse, sendRequest, recvBody
 from time import sleep
 from threading import Event
 from sys import argv
+from urllib import quote
 
 if len(argv) < 2:
 	print 'Usage:', argv[0], '<url> [--verbose]'
@@ -23,6 +24,7 @@ def collect(buff):
 		buff.append(data)
 
 def get(url):
+	if verbose: print ' * Sending GET', quote(url)
 	yield sendRequest('GET', url)
 	response = yield recvResponse()
 	print ' * Status and headers'
