@@ -1,15 +1,19 @@
 
 
-def wlTee(*generatorList):
+def wlTee(generatorList):
 	gens = list(generatorList)
 	response = ''.join(generator.next() for generator in gens)
 	while gens:
-		data = yield response
+		try:
+			message = yield response
+		except Exception, e:
+			message = e
 		responses = []
 		for generator in gens[:]:
 			try:
-				responses.append(generator.send(data))
-			except StopIteration:
+				send = generator.throw if isinstance(message, Exception) else generator.send
+				responses.append(send(message))
+			except:
 				gens.remove(generator)
 		response = ''.join(responses)
 
