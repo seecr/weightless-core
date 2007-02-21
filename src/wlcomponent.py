@@ -24,3 +24,22 @@ class Observable:
 
 class WlComponent(Observable):
 	pass
+
+"""
+
+
+class ExampleComponent(Component):
+
+	def notify(self, args):
+		...
+		return self.sink(args)
+
+	def sink(self, args):
+		next = self.changed(args)
+		while True:
+			data = yield None
+   			next.send(data)
+
+	def undo(self, *args):
+		...
+"""
