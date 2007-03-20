@@ -1,6 +1,7 @@
 from __future__ import with_statement
 
-from threading import Thread, Lock
+from threading import Lock
+from cq2utils.cq2thread import CQ2Thread as Thread
 from select import select as original_select_func
 from os import pipe, write, read, close
 from traceback import print_exc

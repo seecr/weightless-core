@@ -1,7 +1,7 @@
 from __future__ import with_statement
 
 from Queue import Queue
-from threading import Thread
+from cq2utils.cq2thread import CQ2Thread as Thread
 from types import GeneratorType
 from wlstatus import WlStatus, WlMockStatus
 from sys import stderr
