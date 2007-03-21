@@ -16,11 +16,13 @@ class WlHttpException(Exception):
 
 MAX_REQUESTLENGTH = 10 * 1024
 
-def sendRequest(Method, RequestUri):
+def sendRequest(Method, Request_URI):
 	assert Method in SupportedMethods, InvalidMethodMsg % Method
-	Scheme, Host, Path, query, fragment = urlsplit(RequestUri)
+	Scheme, Host, Path, query, fragment = urlsplit(Request_URI)
 	assert Scheme in SupportedSchemes, InvalidSchemeMsg % Scheme
-	yield (FORMAT.RequestLine + FORMAT.HostHeader) % locals() + FORMAT.UserAgentHeader + HTTP.CRLF
+	r = (FORMAT.RequestLine + FORMAT.HostHeader) % locals() + FORMAT.UserAgentHeader + HTTP.CRLF
+	print r
+	yield r
 
 def copyBody(sink):
 	while True:

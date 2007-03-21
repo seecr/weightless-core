@@ -1,4 +1,4 @@
-from socket import socket, SOL_SOCKET, SO_REUSEADDR, SHUT_RDWR
+from socket import socket, SOL_SOCKET, SO_REUSEADDR, SHUT_RDWR, SOL_TCP, TCP_CORK
 from wlserversocket import WlServerSocket
 from traceback import print_exc
 
@@ -16,13 +16,14 @@ class WlListen:
 		self.fileno = self._sok.fileno
 
 	def readable(self):
-		try:
-			sok, (host, port) = self._sok.accept()
-			sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-			wlsok = WlServerSocket(host, port, sok)
-			self._acceptor(wlsok)
-		except Exception, e:
-			print_exc()
+		#try:
+		#sok, (host, port) =
+		#sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+		sok = self._sok.accept()[0]
+		#sok.setsockopt(SOL_TCP, TCP_CORK, 1)
+		self._acceptor(WlServerSocket(sok))
+		#except Exception, e:
+		#	print_exc()
 
 	def close(self):
 		print 'Closing ACCEPTOR.  This is an ERROR.', self.fileno()
