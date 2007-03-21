@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.5
 from weightless.wlservice import WlService
 from weightless.wlhttp import recvResponse, sendRequest, recvBody
 from time import sleep
@@ -24,15 +24,17 @@ def collect(buff):
 		buff.append(data)
 
 def get(url):
-	if verbose: print ' * Sending GET', quote(url)
-	yield sendRequest('GET', url)
-	response = yield recvResponse()
-	print ' * Status and headers'
-	print response.__dict__
-	buff = []
-	yield recvBody(response, collect(buff))
-	print ' * Received total of', sum(len(fragment) for fragment in buff), 'bytes.'
-	flag.set()
+	try:
+		if verbose: print ' * Sending GET', url
+		yield sendRequest('GET', url)
+		response = yield recvResponse()
+		print ' * Status and headers'
+		print response.__dict__
+		buff = []
+		yield recvBody(response, collect(buff))
+		print ' * Received total of', sum(len(fragment) for fragment in buff), 'bytes.'
+	finally:
+		flag.set()
 
 from urlparse import urlsplit
 addressing_scheme, network_location, path, query, fragment_identifier = urlsplit(url)
