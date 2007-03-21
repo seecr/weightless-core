@@ -1,5 +1,5 @@
 from types import GeneratorType
-from socket import SOL_SOCKET, SO_RCVBUF
+from socket import SOL_SOCKET, SO_RCVBUF, SHUT_RDWR
 from functools import partial as curry
 from wlselect import WriteIteration, ReadIteration, SuspendIteration
 from wlasyncprocessor import WlAsyncProcessor
@@ -16,9 +16,11 @@ class WlBaseSocket:
 	def __init__(self, sok):
 		self._sok = sok
 		self.fileno = sok.fileno
-		self.close = sok.close
 		self._recv = curry(sok.recv, sok.getsockopt(SOL_SOCKET, SO_RCVBUF) / 2)
 		self._write_queue = []
+
+	def close(self):
+		self._sok.close()
 
 	def sink(self, generator, selector):
 		if not type(generator) == GeneratorType:

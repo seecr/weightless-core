@@ -88,6 +88,8 @@ class WlSelect:
 	def _select(self):
 		self._inSelect = True
 		r, w, e = self._select_func(self._readers, self._writers, [])
+		#print len(self._readers), len(r), len(self._writers), len(w)
+		#print fds(self._readers), fds(r), fds(self._writers), fds(w)
 		self._inSelect = False
 
 		for readable in r:
