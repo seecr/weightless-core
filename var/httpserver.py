@@ -8,16 +8,13 @@ from functools import partial as curry
 from urlparse import urlsplit
 from types import GeneratorType
 
-#from cq2utils import cq2thread
-#cq2thread.profilingEnabled = True
+#import psyco
+#psyco.full()
+
+from cq2utils import cq2thread
+cq2thread.profilingEnabled = True
 
 service = WlService()
-
-#def myOptimizedClose(sok):
-	#sok._sock.close()
-
-#from socket import _socketobject
-#_socketobject.close = myOptimizedClose
 
 class AComponent:
 	def display(self, x, y):
@@ -59,8 +56,13 @@ def handler():
 def sinkFactory():
 	return handler()
 
-service.listen('127.0.0.1', 1235, sinkFactory)
+service.listen('127.0.0.1', 1234, sinkFactory)
 
-while True:
-	print '.'
-	sleep(1)
+try:
+	while True:
+		print '.'
+		sleep(1)
+except KeyboardInterrupt:
+	pass
+
+service.stop()
