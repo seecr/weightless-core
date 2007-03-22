@@ -33,8 +33,8 @@ class WlListenTest(TestCase):
 		s.readable() # fake what select does
 		thread.join()
 		wlsok = accept[0]
-		self.assertEquals('127.0.0.1', wlsok.host)
-		self.assertTrue(30000 < wlsok.port < 90000, wlsok.port)
+		self.assertEquals('127.0.0.1', wlsok._sok.getpeername()[0])
+		self.assertTrue(30000 < wlsok._sok.getpeername()[1] < 90000)
 
 	def testHandleConnection(self):
 		data = []

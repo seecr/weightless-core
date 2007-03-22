@@ -85,4 +85,4 @@ class WlDividiTest(TestCase):
 			comp1.changed({})
 			self.fail('should raise error')
 		except Exception, e:
-			self.assertEquals('sorry', str(e))
+			self.assertEquals("sorry I can't help", str(e))

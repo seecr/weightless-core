@@ -283,3 +283,25 @@ class WlComposeTest(unittest.TestCase):
 			self.fail()
 		except WrappedException, e:
 			self.assertEquals('abc', str(e))
+
+	def xxtestPerformance(self):
+		def f1(arg):
+			r = yield None
+			yield arg
+			yield RETURN, 'aap', 'rest'
+		def f2(arg):
+			r1 = yield f1('noot')
+			r2 = yield f1('mies')
+		def f3(arg):
+			yield 'A'
+			r = yield None
+			yield 'B'
+			a = yield f2('C')
+			b = yield f2('D')
+			yield a
+			yield b
+		from cq2utils import profileit
+		def doOften(n=1000):
+			[list(compose(f3('begin'))) for x in range(n)]
+		profileit.profile(doOften, runKCacheGrind=True)
+
