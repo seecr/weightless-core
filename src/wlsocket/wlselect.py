@@ -5,7 +5,7 @@ from cq2utils.cq2thread import CQ2Thread as Thread
 from select import select as original_select_func
 from os import pipe, write, read, close
 from traceback import print_exc
-from time import sleep
+from time import sleep, time
 from sys import getcheckinterval, setcheckinterval, stderr, _getframe
 import __builtin__
 
@@ -88,9 +88,8 @@ class WlSelect:
 	def _select(self):
 		self._inSelect = True
 		r, w, e = self._select_func(self._readers, self._writers, [])
-		#print len(self._readers), len(r), len(self._writers), len(w)
-		#print fds(self._readers), fds(r), fds(self._writers), fds(w)
 		self._inSelect = False
+		start = time()
 
 		for readable in r:
 			try:
@@ -127,3 +126,6 @@ class WlSelect:
 				self._writers.remove(writable)
 				writable.close()
 				print_exc()
+
+		duration = time() - start
+		#print int(duration * 10000.0) * '*' # each * is 0.1ms

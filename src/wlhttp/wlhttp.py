@@ -20,9 +20,7 @@ def sendRequest(Method, Request_URI):
 	assert Method in SupportedMethods, InvalidMethodMsg % Method
 	Scheme, Host, Path, query, fragment = urlsplit(Request_URI)
 	assert Scheme in SupportedSchemes, InvalidSchemeMsg % Scheme
-	r = (FORMAT.RequestLine + FORMAT.HostHeader) % locals() + FORMAT.UserAgentHeader + HTTP.CRLF
-	print r
-	yield r
+	yield (FORMAT.RequestLine + FORMAT.HostHeader) % locals() + FORMAT.UserAgentHeader + HTTP.CRLF
 
 def copyBody(sink):
 	while True:

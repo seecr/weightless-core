@@ -18,14 +18,13 @@ class WlListen:
 	def readable(self):
 		#try:
 		#sok, (host, port) =
-		#sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
 		sok = self._sok.accept()[0]
 		#sok.setsockopt(SOL_TCP, TCP_CORK, 1)
+		sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
 		self._acceptor(WlServerSocket(sok))
 		#except Exception, e:
 		#	print_exc()
 
 	def close(self):
-		print 'Closing ACCEPTOR.  This is an ERROR.', self.fileno()
 		self._sok.shutdown(SHUT_RDWR)
 		self._sok.close()
