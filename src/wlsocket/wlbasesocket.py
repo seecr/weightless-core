@@ -20,11 +20,11 @@ class WlBaseSocket:
 		self._write_queue = []
 
 	def close(self):
+		#self._sok.shutdown(SHUT_RDWR) can fail if client closes first
 		self._sok.close()
 
 	def sink(self, generator, selector):
-		if not type(generator) == GeneratorType:
-			raise TypeError('need generator')
+		assert all(x in dir(generator) for x in ('send', 'next', 'throw', 'close')), 'need generator'
 		self._sink = generator
 		self._selector = selector
 		try:
@@ -54,9 +54,12 @@ class WlBaseSocket:
 				raise WRITE_ITERATION
 
 	def writable(self):
-		bytesSend = self._sok.send(self._write_queue[0])
-		if bytesSend < len(self._write_queue[0]):
-			self._write_queue[0] = buffer(self._write_queue[0], bytesSend)
+		dataToSend = self._write_queue[0]
+		bytesSend = self._sok.send(dataToSend)
+		a = 1
+		b = 2
+		if bytesSend < len(dataToSend):
+			self._write_queue[0] = buffer(dataToSend, bytesSend)
 		else:
 			self._write_queue.pop(0)
 		if not self._write_queue:

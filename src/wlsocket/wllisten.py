@@ -1,4 +1,5 @@
-from socket import socket, SOL_SOCKET, SO_REUSEADDR, SHUT_RDWR, SOL_TCP, TCP_CORK
+from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, \
+	SHUT_RDWR, SOL_TCP, TCP_CORK
 from wlserversocket import WlServerSocket
 from traceback import print_exc
 

@@ -25,7 +25,7 @@ class WlSocketTest(TestCase):
 	def testSinkNonGenerator(self):
 		try:
 			WlBaseSocket(CallTrace(returnValues={'getsockopt':4096})).sink('wrong', None)
-		except TypeError, e:
+		except AssertionError, e:
 			self.assertEquals('need generator', str(e))
 
 	def testAddingExhaustedGeneratorRaisesException(self):

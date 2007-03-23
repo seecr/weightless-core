@@ -17,6 +17,7 @@ from wlcomposetest import WlComposeTest
 from wlhttptest import WlHttpRequestTest, WlHttpResponseTest
 from wldividitest import WlDividiTest
 from wlteetest import WlTeeTest
+from wldicttest import WlDictTest
 
 if __name__ == '__main__':
 	unittest.main()

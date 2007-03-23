@@ -102,3 +102,19 @@ def _recvRegexp(regexp, message=None):
 
 recvRequest = curry(_recvRegexp, REGEXP.REQUEST)
 recvResponse = curry(_recvRegexp, REGEXP.RESPONSE)
+
+def sendBody(response, source):
+	chunked = response.headers.__dict__.get('Transfer-Encoding',None) == 'chunked'
+	while True:
+		try:
+			data = source.next()
+		except StopIteration, e:
+			if chunked:
+				yield '0\r\n\r\n'
+			return
+		else:
+			if chunked:
+				yield '%x\r\n'  % len(data)
+			yield data
+			if chunked:
+				yield HTTP.CRLF

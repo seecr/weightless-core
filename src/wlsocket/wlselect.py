@@ -5,8 +5,7 @@ from cq2utils.cq2thread import CQ2Thread as Thread
 from select import select as original_select_func
 from os import pipe, write, read, close
 from traceback import print_exc
-from time import sleep, time
-from sys import getcheckinterval, setcheckinterval, stderr, _getframe
+from sys import getcheckinterval, setcheckinterval, stderr
 import __builtin__
 
 max32bitint = 2147483647
@@ -46,7 +45,7 @@ class Signaller:
 
 class WlSelect:
 
-	def __init__(self, select_func = original_select_func):
+	def __init__(self, select_func = original_select_func, dontCallUsWeCallYou=False):
 		assert(getcheckinterval() == max32bitint, 'Please disable pre-emptive scheduling if you want to use Weightless.  To do so, call sys.setcheckinterval(sys.maxint)')
 		self._inSelect = False
 		self._select_func = select_func
@@ -55,9 +54,11 @@ class WlSelect:
 		self._signaller = Signaller()
 		self._readers.add(self._signaller)
 		self._go = True
-		self._thread = Thread(None, self._loop)
-		self._thread.setDaemon(True)
-		self._thread.start()
+		self.peak = 0
+		if not dontCallUsWeCallYou:
+			self._thread = Thread(None, self._loop)
+			self._thread.setDaemon(True)
+			self._thread.start()
 		__builtin__.__reactor__ = self
 
 	def __del__(self):
@@ -88,8 +89,15 @@ class WlSelect:
 	def _select(self):
 		self._inSelect = True
 		r, w, e = self._select_func(self._readers, self._writers, [])
+
+		a = 1
+		b = 2
+
+		activeSockets = len(r) + len(w)
+		if activeSockets > self.peak:
+			self.peak = activeSockets
+			#print self.peak * '*'
 		self._inSelect = False
-		start = time()
 
 		for readable in r:
 			try:
@@ -126,6 +134,3 @@ class WlSelect:
 				self._writers.remove(writable)
 				writable.close()
 				print_exc()
-
-		duration = time() - start
-		#print int(duration * 10000.0) * '*' # each * is 0.1ms

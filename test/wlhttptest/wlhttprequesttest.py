@@ -5,7 +5,7 @@ from threading import Thread
 from time import sleep
 from socket import socket
 
-from weightless.wlhttp import sendRequest, recvRequest, MAX_REQUESTLENGTH, WlHttpException
+from weightless.wlhttp import sendRequest, recvRequest, sendBody, MAX_REQUESTLENGTH, WlHttpException
 from weightless.wlhttp.httpspec import HTTP, svnRevision
 from weightless.wlsocket import WlSocket,  WlSelect
 from weightless.wlcompose import compose, RETURN
@@ -147,3 +147,36 @@ class WlHttpRequestTest(TestCase):
 			result = generator.send('GOT /path HTTP/1.1' + 'a' * MAX_REQUESTLENGTH + CRLF *2)
 		except WlHttpException, e:
 			self.assertEquals('Maximum request length exceeded but no sensible headers found.', str(e))
+
+	def testSendBody(self):
+		req = self._createResponse()
+		s = sendBody(req, (str(x) for x in range(2)))
+		self.assertEquals('0', s.next())
+		self.assertEquals('1', s.next())
+		try:
+			s.next()
+			self.fail('must stop here')
+		except StopIteration:
+			pass
+
+	def _createResponse(self):
+		response = WlDict()
+		response.headers = WlDict({})
+		return response
+
+	def testSendBodyChunked(self):
+		req = self._createResponse()
+		req.headers.__dict__['Transfer-Encoding'] = 'chunked'
+		s = sendBody(req, (c for c in ['A', 'B']))
+		self.assertEquals('1\r\n', s.next())
+		self.assertEquals('A', s.next())
+		self.assertEquals('\r\n', s.next())
+		self.assertEquals('1\r\n', s.next())
+		self.assertEquals('B', s.next())
+		self.assertEquals('\r\n', s.next())
+		self.assertEquals('0\r\n\r\n', s.next())
+		try:
+			s.next()
+			self.fail('must stop here')
+		except StopIteration:
+			pass

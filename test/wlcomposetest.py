@@ -284,7 +284,7 @@ class WlComposeTest(unittest.TestCase):
 		except WrappedException, e:
 			self.assertEquals('abc', str(e))
 
-	def xxtestPerformance(self):
+	def testPerformance(self):
 		def f1(arg):
 			r = yield None
 			yield arg
@@ -301,7 +301,45 @@ class WlComposeTest(unittest.TestCase):
 			yield a
 			yield b
 		from cq2utils import profileit
-		def doOften(n=1000):
+		from time import time
+		def doOften(n=100):
 			[list(compose(f3('begin'))) for x in range(n)]
-		profileit.profile(doOften, runKCacheGrind=True)
+		def go():
+			start = time()
+			doOften()
+			#print time() - start
+		profileit.profile(go, runKCacheGrind=False)
 
+	def testNestedExceptionHandling(self):
+		def f():
+			yield 'A'
+		def g():
+			try:
+				yield f()
+			except Exception, e:
+				raise Exception(e)
+		c = compose(g())
+		r = c.next()
+		self.assertEquals('A', r)
+		try:
+			c.throw(Exception('wrong'))
+			self.fail('must raise wrapped exception')
+		except Exception, e:
+			self.assertEquals("Exception(Exception('wrong',),)", repr(e))
+
+	def testNestedClose(self):
+		def f():
+			yield 'A'
+		def g():
+			try:
+				yield f()
+			except Exception, e:
+				raise Exception(e)
+		c = compose(g())
+		r = c.next()
+		self.assertEquals('A', r)
+		try:
+			c.close()
+			self.fail('must raise wrapped CLOSE exception')
+		except Exception, e:
+			self.assertEquals("Exception(GeneratorExit(),)", repr(e))

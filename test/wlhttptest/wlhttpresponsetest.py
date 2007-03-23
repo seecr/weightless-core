@@ -164,7 +164,7 @@ class WlHttpResponseTest(TestCase):
 
 	def testPrematureCloseDoesNotMaskException(self):
 		generator, data = self._prepareChunkedGenerator()
-		self.exception = WlHttpException('No good, no good meme')
+		self.exception = WlHttpException('No good')
 		try:
 			generator.close()
 			self.fail()
