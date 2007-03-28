@@ -65,10 +65,10 @@ def handler():
 def sinkFactory():
 	return handler()
 
-service.listen('127.0.0.1', 1235, sinkFactory)
+service.listen('127.0.0.1', 1234, sinkFactory)
 
-profileit.profile(select._loop)
-#select._loop()
+#profileit.profile(select._loop)
+select._loop()
 
 try:
 	while True:

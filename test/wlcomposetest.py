@@ -23,16 +23,18 @@
 ## end license ##
 
 import unittest
-from timeit import Timer
+from sys import stdout
 
 import weightless.wlcompose
 from weightless.wlcompose import compose, RETURN
+from weightless.wlcompose_old import compose as compose_old
 
 class WlComposeTest(unittest.TestCase):
 
 	def testCreateSinglecompose(self):
 		def multplyBy2(number): yield number * 2
-		wlt = compose(multplyBy2(2))
+		g = multplyBy2(2)
+		wlt = compose(g)
 		response = wlt.next()
 		self.assertEquals(4, response)
 
@@ -161,7 +163,8 @@ class WlComposeTest(unittest.TestCase):
 			yield RETURN, 'ding1retval', 'rest('+dataIn+')'
 		def ding2():
 			dataIn = yield None		# receive 'rest(dataIn)'
-			yield RETURN, 'ding2retval', 'rest('+dataIn+')'
+			retval = RETURN, 'ding2retval', 'rest('+dataIn+')'
+			yield retval
 		def child():
 			ding1retval = yield ding1()
 			r.append('child-1:' + str(ding1retval))
@@ -300,16 +303,26 @@ class WlComposeTest(unittest.TestCase):
 			b = yield f2('D')
 			yield a
 			yield b
-		from cq2utils import profileit
+		def baseline():
+			list(f3('A'))
+			list(f2('B'))
+			list(f2('B'))
+			list(f1('C'))
+			#list(f1('C'))
+			#list(f1('C'))
+			#list(f1('C'))
 		from time import time
-		def doOften(n=100):
-			[list(compose(f3('begin'))) for x in range(n)]
-		def go():
-			start = time()
-			doOften()
-			#print time() - start
-		profileit.profile(go, runKCacheGrind=False)
-
+		start = time()
+		n = 100*100000
+		for i in range(1000):
+			stdout.write('*')
+			stdout.flush()
+			[list(compose(f3('begin'))) for i in range(n/1000)]
+		t1 = time()-start
+		start = time()
+		#[baseline() for i in range(n)]
+		#t2 = time()-start
+		#print 'Overhead compose:', t1/t2-1
 	def testNestedExceptionHandling(self):
 		def f():
 			yield 'A'
