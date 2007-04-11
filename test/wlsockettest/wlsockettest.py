@@ -70,13 +70,13 @@ class WlSocketTest(TestCase):
 		sok = WlBaseSocket(CallTrace(returnValues={'getsockopt':10}))
 		mockSelect = CallTrace()
 		sok.sink((x for x in [None]), mockSelect)
-		self.assertEquals("add(<weightless.wlsocket.wlbasesocket.WlBaseSocket>, 'r')", str(mockSelect.calledMethods[0]))
+		self.assertEquals("add(<wlsocket.wlbasesocket.WlBaseSocket>, 'r')", str(mockSelect.calledMethods[0]))
 
 	def testStartWithWriting(self):
 		sok = WlBaseSocket(CallTrace(returnValues={'getsockopt':10}))
 		mockSelect = CallTrace()
 		sok.sink((x for x in ['data']), mockSelect)
-		self.assertEquals("add(<weightless.wlsocket.wlbasesocket.WlBaseSocket>, 'w')", str(mockSelect.calledMethods[0]))
+		self.assertEquals("add(<wlsocket.wlbasesocket.WlBaseSocket>, 'w')", str(mockSelect.calledMethods[0]))
 
 	def testReadDataFromSocketAndSendToGenerator(self):
 		mockSok = CallTrace(returnValues={'getsockopt':10})
@@ -108,7 +108,7 @@ class WlSocketTest(TestCase):
 		sok = WlBaseSocket(mockSok)
 		mockSelect = CallTrace()
 		sok.sink((data for data in [None, 'data to write', 'more', None, None, 'even more to write']), mockSelect)
-		self.assertEquals("add(<weightless.wlsocket.wlbasesocket.WlBaseSocket>, 'r')", str(mockSelect.calledMethods[0]))
+		self.assertEquals("add(<wlsocket.wlbasesocket.WlBaseSocket>, 'r')", str(mockSelect.calledMethods[0]))
 		try:
 			sok.readable()
 			self.fail()
