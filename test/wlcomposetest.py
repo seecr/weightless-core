@@ -25,9 +25,9 @@
 import unittest
 from sys import stdout
 
-import weightless.wlcompose
-from weightless.wlcompose import compose, RETURN
-from weightless.wlcompose_old import compose as compose_old
+import wlcompose
+from wlcompose import compose, RETURN
+from wlcompose_old import compose as compose_old
 
 class WlComposeTest(unittest.TestCase):
 
@@ -287,7 +287,7 @@ class WlComposeTest(unittest.TestCase):
 		except WrappedException, e:
 			self.assertEquals('abc', str(e))
 
-	def testPerformance(self):
+	def xtestPerformance(self):
 		def f1(arg):
 			r = yield None
 			yield arg

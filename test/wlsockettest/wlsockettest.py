@@ -1,7 +1,7 @@
 from __future__ import with_statement
 
 from unittest import TestCase
-from weightless.wlsocket import WlSocket, WlBaseSocket, ReadIteration, WriteIteration
+from wlsocket import WlSocket, WlBaseSocket, ReadIteration, WriteIteration
 from cq2utils.calltrace import CallTrace
 from select import select
 from socket import gaierror

@@ -1,9 +1,9 @@
 from unittest import TestCase
 from sys import stderr
 
-from weightless.wlhttp import recvResponse, recvBody, HTTP, WlHttpException
-from weightless.wlcompose import compose, RETURN
-from weightless.wldict import WlDict
+from wlhttp import recvResponse, recvBody, HTTP, WlHttpException
+from wlcompose import compose, RETURN
+from wldict import WlDict
 
 CRLF = HTTP.CRLF
 #http://www.w3.org/Protocols/rfc2616/rfc2616-sec6.html#sec6

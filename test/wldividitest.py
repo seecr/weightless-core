@@ -1,7 +1,8 @@
 from unittest import TestCase
 from types import GeneratorType
 
-from weightless import WlDict, WlComponent
+from wldict import WlDict
+from wlcomponent import WlComponent
 
 class MyComponent(WlComponent):
 	def notify(self, *args, **kwargs):

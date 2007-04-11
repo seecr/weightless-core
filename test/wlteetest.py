@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from weightless import wlTee
+from wltee import wlTee
 
 class WlTeeTest(TestCase):
 

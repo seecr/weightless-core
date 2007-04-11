@@ -1,13 +1,13 @@
 from __future__ import with_statement
 
 from wltestcase import TestCase
-from weightless.wlsocket import WlFileSocket
+from wlsocket import WlFileSocket
 from cq2utils.calltrace import CallTrace
 from functools import partial as curry
 import select
 
-from weightless.wlsocket import wlfilesocket
-from weightless.wlthread import WlPool
+from wlsocket import wlfilesocket
+from wlthread import WlPool
 wlfilesocket._pool = WlPool(with_status_and_bad_performance = True)
 
 class WlFileSocketTest(TestCase):
