@@ -14,7 +14,7 @@ from wlthreadtest import WlStatusTest, WlPoolTest
 from wlsockettest import WlSocketTest, WlFileSocketTest, WlListenTest, WlSelectTest, WlAsyncProcessorTest
 from wlservicetest import WlServiceTest
 from wlcomposetest import WlComposeTest
-#from wlhttptest import WlHttpRequestTest, WlHttpResponseTest
+from wlhttptest import WlHttpRequestTest, WlHttpResponseTest
 from wldividitest import WlDividiTest
 from wlteetest import WlTeeTest
 from wldicttest import WlDictTest

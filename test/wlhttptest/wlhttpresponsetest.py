@@ -22,7 +22,7 @@ class WlHttpResponseTest(TestCase):
 		try: response.close()
 		except: pass
 
-	def xtestParseHeaderLines(self):
+	def testParseHeaderLines(self):
 		generator = recvResponse()
 		generator.next()
 		generator.send('HTTP/1.1 302 Redirect\r\n')
@@ -173,7 +173,7 @@ class WlHttpResponseTest(TestCase):
 		except WlHttpException, e: # some sort of error, depending on the implementation
 			self.assertEquals(self.exception, e)
 
-	def xtestReadBodyWithChunkedEncoding(self):
+	def testReadBodyWithChunkedEncoding(self):
 		generator, data = self._prepareChunkedGenerator()
 		generator.send('A' + CRLF + 'abcdefghij' + CRLF)
 		try:
@@ -184,7 +184,7 @@ class WlHttpResponseTest(TestCase):
 		self.assertEquals(1, len(data))
 		self.assertEquals('abcdefghij', str(data[0]))
 
-	def xtestReadBodyWithMultipleChunksEncoding(self):
+	def testReadBodyWithMultipleChunksEncoding(self):
 		generator, data = self._prepareChunkedGenerator()
 		generator.send('A' + CRLF + 'abcdefghij' + CRLF)
 		generator.send('B' + CRLF + 'bcdefghijkl' + CRLF)
@@ -198,7 +198,7 @@ class WlHttpResponseTest(TestCase):
 		self.assertEquals(2, len(data), ''.join(str(data)))
 		self.assertEquals('bcdefghijkl', str(data[1]))
 
-	def xtestReadBodyWithMultipleSplitUpChunks(self):
+	def testReadBodyWithMultipleSplitUpChunks(self):
 		generator, data = self._prepareChunkedGenerator()
 		generator.send('5')
 		generator.send(CRLF)
@@ -215,7 +215,7 @@ class WlHttpResponseTest(TestCase):
 		self.assertEquals('ABCD', str(data[0]))
 		self.assertEquals('E', str(data[1]))
 
-	def xtestReadBodyWithMultipleChunksEncoding2(self):
+	def testReadBodyWithMultipleChunksEncoding2(self):
 		generator, data = self._prepareChunkedGenerator()
 		generator.send('A' + CRLF + 'abcdefg')
 		generator.send('hij' + CRLF+ 'B' + CRLF)
