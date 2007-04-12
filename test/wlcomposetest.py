@@ -245,7 +245,7 @@ class WlComposeTest(unittest.TestCase):
 		g = compose(f())
 		g.next()
 		try:
-			g.send(StopIteration())
+			g.throw(StopIteration())
 		except:
 			pass
 		self.assertEquals(StopIteration, type(r[0]))
@@ -267,6 +267,18 @@ class WlComposeTest(unittest.TestCase):
 			self.fail()
 		except WrappedException, e:
 			self.assertEquals('abc', str(e))
+
+	def testDealloc(self):
+		def f():
+			yield 'A'
+			yield (1,2,3,4)
+			yield 'B'
+			yield 'C'
+			yield 'D'
+		g = compose(f())
+		g.next()
+		g.send('aap')
+		del g
 
 	def testPassException2(self):
 		class MyException(Exception): pass
@@ -303,26 +315,61 @@ class WlComposeTest(unittest.TestCase):
 			b = yield f2('D')
 			yield a
 			yield b
+		# name, creates, runs
+		#		f3			1			1
+		#		f2			2			2
+		#		f1			4			4
+		#	total		7			7
 		def baseline():
-			list(f3('A'))
-			list(f2('B'))
-			list(f2('B'))
-			list(f1('C'))
-			#list(f1('C'))
-			#list(f1('C'))
-			#list(f1('C'))
+			list(f3('A'))	# 3		1
+			list(f2('B'))	# 3		1
+			list(f1('C'))	# 1		1
+			list(f1('C'))	# 1		1
+								# 8		4  (versus 7		7)
 		from time import time
-		start = time()
-		n = 100*100000
-		for i in range(1000):
+		tg = tb = 0.0
+		for i in range(10):
 			stdout.write('*')
 			stdout.flush()
-			[list(compose(f3('begin'))) for i in range(n/1000)]
-		t1 = time()-start
-		start = time()
-		#[baseline() for i in range(n)]
-		#t2 = time()-start
-		#print 'Overhead compose:', t1/t2-1
+			t0 = time()
+			[list(compose(f3('begin'))) for i in xrange(100)]
+			t1 = time()
+			tg = tg + t1 - t0
+			[baseline() for i in xrange(100)]
+			t2 = time()
+			tb = tb + t2 - t1
+		print 'Overhead compose compared to list(): %2.2f %%' % ((tg/tb - 1) * 100.0)
+
+	def testMemLeaks(self):
+		def f1(arg):
+			r = yield arg						# 'B'
+			raise Exception()
+		def f2(arg):
+			r1 = yield None					# 'A'
+			try:
+				r2 = yield f1(r1)
+			except GeneratorExit:
+				raise
+			except Exception, e:
+				yield RETURN, e, 'more'
+		def f3(arg):
+			e = yield f2('aa')
+			more = yield None
+			try:
+				yield more						#	'X'
+			except Exception:
+				raise
+		# runs this a zillion times and watch 'top'
+		for i in xrange(1):
+			g = compose(f3('noot'))
+			g.next()
+			g.send('A')
+			g.send('B')
+			try:
+				g.throw(Exception('X'))
+			except:
+				pass
+
 	def testNestedExceptionHandling(self):
 		def f():
 			yield 'A'

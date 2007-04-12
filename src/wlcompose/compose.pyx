@@ -16,13 +16,15 @@ cdef extern from "Python.h":
 	int PyTuple_Check(PyObject* o)
 	PyObject* PyTuple_GET_ITEM(PyObject* o, int index)
 	int PyTuple_Size(PyObject* o)
-	int PyErr_GivenExceptionMatches(PyObject* given, PyObject* exc)
 	int PyErr_ExceptionMatches(PyObject* exc)
 	PyObject* PyObject_CallFunctionObjArgs(PyObject *callable, ...)
-	PyObject* __Pyx_GetExcValue()
+	PyObject* PyErr_Occurred(  )
 	PyObject* PyExc_Exception
 	PyObject* PyExc_StopIteration
 	PyObject* PyExc_GeneratorExit
+	void PyErr_Clear()
+	void PyErr_Fetch(PyObject** ptype, PyObject** pvalue, PyObject** ptrace)
+	void __Pyx_Raise(PyObject* exc, PyObject* na1, PyObject* na2)
 
 # Speeds up significantly because it avoids reference counting etc.
 cdef enum:
@@ -65,6 +67,12 @@ cdef class compose:
 		Py_INCREF(<PyObject*>generator)
 
 	def __dealloc__(self):
+		cdef PyObject* msg
+		while self.moreMessages():
+			msg = self.messages_next()
+			Py_DECREF(msg)
+		while self.generatorIndex >= 0:
+			self.generators_pop()
 		PyMem_Free(self.generators)
 
 	cdef void generators_push(self, PyObject* generator):
@@ -87,7 +95,6 @@ cdef class compose:
 
 	cdef PyObject* messages_next(self):
 		self.messagesTail = (self.messagesTail + 1) % QUEUESIZE
-		Py_DECREF(self.messages[self.messagesTail])
 		return self.messages[self.messagesTail]
 
 	cdef void messages_insert(self, PyObject* message):
@@ -107,29 +114,40 @@ cdef class compose:
 		return self.messagesHead != self.messagesTail
 
 	def __next__(self):
-		return self.send_(Py_None)
+		self.messages_append(Py_None)
+		Py_INCREF(Py_None)
+		return self.send_(NULL)
 
 	def send(self, message):
-		return self.send_(<PyObject*>message)
+		self.messages_append(<PyObject*>message)
+		Py_INCREF(<PyObject*>message)
+		return self.send_(NULL)
 
-	cdef send_(self, PyObject* message):
+	cdef send_(self, PyObject* exception):
+		cdef PyObject* message
 		cdef PyObject* response
-		Py_INCREF(message) # because messages_next releases it
-		self.messages_append(message)
+		cdef PyObject* na1
+		cdef PyObject* na2
 		while self.generatorIndex >= 0:
-			message = self.messages_next()
-			if PyErr_GivenExceptionMatches(<PyObject*>message, <PyObject*>PyExc_Exception):
-				response = PyObject_CallFunctionObjArgs(<PyObject*>generator_throw, self.generators[self.generatorIndex], message, NULL)
+			if exception:
+				response = PyObject_CallFunctionObjArgs(<PyObject*>generator_throw, self.generators[self.generatorIndex], exception, NULL)
+				Py_DECREF(exception)
+				exception = NULL
 			else:
+				message = self.messages_next()
 				response = PyObject_CallFunctionObjArgs(<PyObject*>generator_send, self.generators[self.generatorIndex], message, NULL)
+				Py_DECREF(message)
 			if response == NULL:
 				self.generators_pop()
 				if PyErr_ExceptionMatches(PyExc_StopIteration):
-					if not self.moreMessages():
+					PyErr_Clear()
+					if not self.moreMessages(): #  generator didn't provide return value
 						Py_INCREF(Py_None)
 						self.messages_append(Py_None)
 				else:
-					self.messages_insert(__Pyx_GetExcValue())
+					PyErr_Fetch(&na1, &exception, &na2) # I own the refs
+					Py_DECREF(na1)
+					Py_DECREF(na2)
 			elif PyGen_Check(response):
 				self.generators_push(response)
 				Py_INCREF(Py_None)
@@ -139,17 +157,21 @@ cdef class compose:
 			elif response != Py_None or not self.moreMessages():
 				Py_DECREF(response)
 				return <object>response
-		if self.moreMessages():
-			message =  self.messages_next()
-			if PyErr_GivenExceptionMatches(message, <PyObject*>PyExc_Exception):
-				raise <object>message
+		if exception:
+			# ugly and slow, but exception must be released, rather use C here
+			try:
+				raise <object>exception
+			finally:
+				Py_DECREF(exception)
 		raise <object>STOP
 
 	def throw(self, exception):
+		Py_INCREF(<PyObject*>exception)
 		return self.send_(<PyObject*>exception)
 
 	def close(self):
 		try:
+			Py_INCREF(<PyObject*>EXIT)
 			return self.send_(<PyObject*>EXIT)
 		except (<object>PyExc_GeneratorExit, <object>PyExc_StopIteration):
 			pass	  # mimic genuine GeneratorType.close()
