@@ -1,8 +1,8 @@
 from sys import stderr
 
 from urlparse import urlsplit
-from wlcompose import RETURN
-from wldict import WlDict
+from weightless import RETURN
+from weightless import WlDict
 from httpspec import HTTP, REGEXP, FORMAT
 from functools import partial as curry
 

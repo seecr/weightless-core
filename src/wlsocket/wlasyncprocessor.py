@@ -1,4 +1,4 @@
-from wlthread import WlPool
+from weightless.wlthread import WlPool
 
 _pool = WlPool()
 
