@@ -1,6 +1,6 @@
 from unittest import TestCase
 from cq2utils.calltrace import CallTrace
-from wlsocket import WlBaseSocket, WlAsyncProcessor, SuspendIteration, WlSelect
+from weightless.wlsocket import WlBaseSocket, WlAsyncProcessor, SuspendIteration, WlSelect
 from threading import Event
 from time import sleep
 

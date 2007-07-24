@@ -6,7 +6,7 @@ if not platform.python_version() >= "2.5":
 	print "Needed python 2.5 or higher."
 	sys.exit(1)
 
-sys.path.append('weightless')
+sys.path.append('..')
 
 import unittest
 

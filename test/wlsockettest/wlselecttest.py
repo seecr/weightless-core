@@ -2,7 +2,7 @@ from __future__ import with_statement
 
 from wltestcase import TestCase
 from cq2utils.calltrace import CallTrace
-from wlsocket import WlSelect, WlFileSocket, WlBaseSocket, ReadIteration, WriteIteration
+from weightless.wlsocket import WlSelect, WlFileSocket, WlBaseSocket, ReadIteration, WriteIteration
 from threading import Event, Semaphore
 from time import sleep
 from StringIO import StringIO

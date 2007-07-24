@@ -25,9 +25,9 @@
 import unittest
 from sys import stdout
 
-import wlcompose
-from wlcompose import compose, RETURN
-from wlcompose_old import compose as compose_old
+import weightless.wlcompose
+from weightless.wlcompose import compose, RETURN
+from weightless.wlcompose_old import compose as compose_old
 
 class WlComposeTest(unittest.TestCase):
 

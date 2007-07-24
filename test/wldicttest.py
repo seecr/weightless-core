@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from wldict import WlDict
+from weightless.wldict import WlDict
 
 class WlDictTest(TestCase):
 	def xxtestOne(self):

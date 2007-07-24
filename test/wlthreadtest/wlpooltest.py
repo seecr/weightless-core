@@ -1,5 +1,5 @@
 from unittest import TestCase
-from wlthread import WlPool
+from weightless.wlthread import WlPool
 from StringIO import StringIO
 from threading import Event
 import sys

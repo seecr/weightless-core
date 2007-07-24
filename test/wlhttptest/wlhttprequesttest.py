@@ -5,11 +5,11 @@ from threading import Thread
 from time import sleep
 from socket import socket
 
-from wlhttp import sendRequest, recvRequest, sendBody, MAX_REQUESTLENGTH, WlHttpException
-from wlhttp.httpspec import HTTP, svnRevision
-from wlsocket import WlSocket,  WlSelect
-from wlcompose import compose, RETURN
-from wldict import WlDict
+from weightless.wlhttp import sendRequest, recvRequest, sendBody, MAX_REQUESTLENGTH, WlHttpException
+from weightless.wlhttp.httpspec import HTTP, svnRevision
+from weightless.wlsocket import WlSocket,  WlSelect
+from weightless.wlcompose import compose, RETURN
+from weightless.wldict import WlDict
 
 #http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5
 
