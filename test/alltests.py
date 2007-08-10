@@ -6,7 +6,7 @@ if not platform.python_version() >= "2.5":
 	print "Needed python 2.5 or higher."
 	sys.exit(1)
 
-#sys.path.append('..')
+sys.path.insert(0, '..')
 
 import unittest
 
@@ -18,6 +18,7 @@ from wlhttptest import WlHttpRequestTest, WlHttpResponseTest
 from wldividitest import WlDividiTest
 from wlteetest import WlTeeTest
 from wldicttest import WlDictTest
+from wltemplatetest import WlTemplateTest
 
 if __name__ == '__main__':
 	unittest.main()

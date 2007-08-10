@@ -4,3 +4,4 @@ from wltee import wlTee
 from wlcompose import compose, RETURN
 from wlservice import WlService
 import wlthread
+from wltemplate import Template
