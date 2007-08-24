@@ -49,7 +49,6 @@ def compose(initial):
 			else:
 				message = messages.pop(0)
 				response = generator.send(message)
-				#response = send(message)
 			if type(response) == GeneratorType:
 				generators.append(response)
 				messages.insert(0, None)
@@ -61,7 +60,6 @@ def compose(initial):
 					messages.append(message)
 				except Exception, ex:
 					exception = ex
-				#responses.append(response)
 		except StopIteration:
 			generators.pop()
 			if not messages:
