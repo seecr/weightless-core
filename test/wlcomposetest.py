@@ -22,14 +22,20 @@
 #
 ## end license ##
 
-import unittest
+from unittest import TestCase
 from sys import stdout
 
-import weightless.wlcompose
-from weightless.wlcompose import compose, RETURN
-from weightless.wlcompose_old import compose as compose_old
+from weightless.wlcompose_old import compose as compose_python, RETURN
+from weightless.wlcompose import compose as compose_pyrex
 
-class WlComposeTest(unittest.TestCase):
+class WlComposeTest(TestCase):
+
+	def setUp(self):
+		global compose
+		compose = self.compose
+
+	def assertComposeImpl(self, impl):
+		self.assertEquals(impl, compose)
 
 	def testCreateSinglecompose(self):
 		def multplyBy2(number): yield number * 2
@@ -403,3 +409,16 @@ class WlComposeTest(unittest.TestCase):
 			self.fail('must raise wrapped CLOSE exception')
 		except Exception, e:
 			self.assertEquals("Exception(GeneratorExit(),)", repr(e))
+
+class WlComposePyrexTest(WlComposeTest):
+	def setUp(self):
+		self.compose = compose_pyrex
+		WlComposeTest.setUp(self)
+		self.assertComposeImpl(compose_pyrex)
+
+class WlComposePythonTest(WlComposeTest):
+	def setUp(self):
+		self.compose = compose_python
+		WlComposeTest.setUp(self)
+		self.assertComposeImpl(compose_python)
+

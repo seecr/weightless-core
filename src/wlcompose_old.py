@@ -39,34 +39,35 @@ def compose(initial):
 	"""
 	generators = [initial]
 	messages = [None]
-	responses = []
+	exception = None
 	while generators:
 		generator = generators[-1]
-		if messages:
-			message = messages.pop(0)
-			#print '>' * len(generators), 'sending', repr(message), 'to', generator.gi_frame.f_code.co_name, 'at line', generator.gi_frame.f_lineno, 'in', generator.gi_frame.f_code.co_filename
-			send = generator.send if not isinstance(message, Exception) else generator.throw
-			try:
-				response = send(message)
-				if type(response) == GeneratorType:
-					generators.append(response)
-					messages.insert(0, None)
-				elif type(response) == tuple:
-					messages = list(response) + messages
-				elif response or not messages:
-					responses.append(response)
-			except StopIteration:
-				generators.pop()
-				if not messages:
-					messages.append(None)
-			except Exception, exception:
-				generators.pop()
-				messages.insert(0, exception)
-		if responses:
-			try:
-				message = yield responses.pop(0)
-			except Exception, exception:
-				message = exception
-			messages.append(message)
-	if messages and isinstance(messages[0], Exception):
-		raise messages[0]
+		try:
+			if exception:
+				response = generator.throw(exception)
+				exception = None
+			else:
+				message = messages.pop(0)
+				response = generator.send(message)
+				#response = send(message)
+			if type(response) == GeneratorType:
+				generators.append(response)
+				messages.insert(0, None)
+			elif type(response) == tuple:
+				messages = list(response) + messages
+			elif response or not messages:
+				try:
+					message = yield response
+					messages.append(message)
+				except Exception, ex:
+					exception = ex
+				#responses.append(response)
+		except StopIteration:
+			generators.pop()
+			if not messages:
+				messages.append(None)
+		except Exception, ex:
+			generators.pop()
+			exception = ex
+	if exception:
+		raise exception
