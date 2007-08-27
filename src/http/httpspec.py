@@ -8,6 +8,16 @@ svnRevision = '$Rev$'[6:-2]
 """
 
 class HTTP:
+    class Response:
+        StatusLine = 'HTTP/%(version)s %(status)s %(reason)s' + CRLF
+    class Message:
+        MessageHeader = '%(name)s: %(value)s' + CRLF
+        def _Headers(klas, headers = {}):
+            for name, value in headers.items():
+                yield HTTP.Message.MessageHeader % locals()
+            yield CRLF
+        Headers = classmethod(_Headers)
+
 	SP = ' '
 	CRLF = '\r\n'
 	# http://www.w3.org/Protocols/rfc2616/rfc2616-sec2.html#sec2.2
