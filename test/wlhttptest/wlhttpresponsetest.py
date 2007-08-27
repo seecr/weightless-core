@@ -2,7 +2,7 @@ from unittest import TestCase
 from sys import stderr
 
 from weightless.wlhttp import recvResponse, recvBody, HTTP, WlHttpException
-from weightless.wlcompose import compose, RETURN
+from weightless import compose, RETURN
 from weightless.wldict import WlDict
 
 CRLF = HTTP.CRLF

@@ -1,7 +1,7 @@
 from unittest import TestCase
 from weightless.wlservice import WlService
 from weightless.wlhttp import recvResponse, sendRequest
-from weightless.wlcompose import compose
+from weightless import compose
 from time import sleep
 from socket import socket
 from threading import Thread, Event

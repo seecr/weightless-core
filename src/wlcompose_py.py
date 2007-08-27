@@ -21,8 +21,8 @@
 #
 ## end license ##
 
-import platform
-assert platform.python_version() >= "2.5", "Python 2.5 required"
+from platform import python_version
+assert python_version() >= "2.5", "Python 2.5 required"
 
 from types import GeneratorType
 
@@ -36,6 +36,12 @@ def compose(initial):
 		yield RETURN, retvat, remaining data
 	Remaining data might be present if the otherGenerator consumes less than it get gets.  It must
 	make this remaining data available to the calling generator by yielding it as shown.
+    Most notably, compose enables catching exceptions:
+        try:
+            retvat = yield otherGenerator(args)
+        except Exception:
+            pass
+    This will work as expected: it catches an exception thrown by otherGenerator.
 	"""
 	generators = [initial]
 	messages = [None]

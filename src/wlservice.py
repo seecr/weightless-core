@@ -1,6 +1,6 @@
 from wlsocket import WlFileSocket, WlSelect, WlListen, WlSocket
 from urlparse import urlsplit
-from wlcompose import compose
+from weightless import compose
 
 class WlService:
 	def __init__(self, selector = None):
