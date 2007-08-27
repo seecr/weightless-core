@@ -1,4 +1,4 @@
-from wlsocket import WlFileSocket, WlSelect, WlListen, WlSocket
+from weightless import Socket, Select, compose
 from urlparse import urlsplit
 from weightless import compose
 

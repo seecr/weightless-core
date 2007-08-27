@@ -1,35 +1,60 @@
+#!/usr/bin/env python2.5
+## begin license ##
+#
+#    "Weightless" is a package with a wide range of valuable tools.
+#    Copyright (C) 2005, 2006 Seek You Too B.V. (CQ2) http://www.cq2.nl
+#
+#    This file is part of "Weightless".
+#
+#    "Weightless" is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    "Weightless" is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with "Weightless"; if not, write to the Free Software
+#    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+#
+## end license ##
+#
 from __future__ import with_statement
 
 from unittest import TestCase
-from weightless.wlsocket import WlSocket, WlBaseSocket, ReadIteration, WriteIteration
+from weightless import Socket
+from weightless._select import ReadIteration, WriteIteration
 from cq2utils.calltrace import CallTrace
 from select import select
 from socket import gaierror
 
-class WlSocketTest(TestCase):
+class SocketTest(TestCase):
 
 	def testCreateSocketGetsReceiveBufferSizeFromSocketItself(self):
 		socket = CallTrace()
 		socket.returnValues['getsockopt'] = 98765  # kernel reports twice the size
-		sok = WlBaseSocket(socket)
+		sok = Socket(socket)
 		self.assertEquals('getsockopt(1, 8)', str(socket.calledMethods[0]))
 		sok._recv()
 		self.assertEquals('recv(49382)', str(socket.calledMethods[1]))
 
 	def testSocketClose(self):
 		socket = CallTrace(returnValues={'getsockopt':10})
-		sok = WlBaseSocket(socket)
+		sok = Socket(socket)
 		sok.close()
 		self.assertEquals('close()', str(socket.calledMethods[1]))
 
 	def testSinkNonGenerator(self):
 		try:
-			WlBaseSocket(CallTrace(returnValues={'getsockopt':4096})).sink('wrong', None)
+			Socket(CallTrace(returnValues={'getsockopt':4096})).sink('wrong', None)
 		except AssertionError, e:
 			self.assertEquals('need generator', str(e))
 
 	def testAddingExhaustedGeneratorRaisesException(self):
-		sok = WlBaseSocket(CallTrace(returnValues={'getsockopt':10}))
+		sok = Socket(CallTrace(returnValues={'getsockopt':10}))
 		try:
 			sok.sink((i for i in []), None)
 			self.fail()
@@ -39,7 +64,7 @@ class WlSocketTest(TestCase):
 	def testSink(self):
 		socket = CallTrace(returnValues={'getsockopt':10})
 		socket.returnValues['recv'] = 'aap noot mies'
-		sok = WlBaseSocket(socket)
+		sok = Socket(socket)
 		data = [None]
 		def generator():
 			data[0] = yield None
@@ -49,7 +74,7 @@ class WlSocketTest(TestCase):
 		self.assertEquals('aap noot mies', data[0])
 
 	def testThrowGeneratorExitWhenEndOfFile(self):
-		sok = WlBaseSocket(CallTrace(returnValues = {'recv': '', 'getsockopt':4096}))
+		sok = Socket(CallTrace(returnValues = {'recv': '', 'getsockopt':4096}))
 		stopped = [None]
 		def sink():
 			try:
@@ -67,20 +92,20 @@ class WlSocketTest(TestCase):
 		self.assertTrue(stopped[0])
 
 	def testStartWithReading(self):
-		sok = WlBaseSocket(CallTrace(returnValues={'getsockopt':10}))
+		sok = Socket(CallTrace(returnValues={'getsockopt':10}))
 		mockSelect = CallTrace()
 		sok.sink((x for x in [None]), mockSelect)
-		self.assertEquals("add(<weightless.wlsocket.wlbasesocket.WlBaseSocket>, 'r')", str(mockSelect.calledMethods[0]))
+		self.assertEquals("add(<weightless.wlsocket.wlbasesocket.Socket>, 'r')", str(mockSelect.calledMethods[0]))
 
 	def testStartWithWriting(self):
-		sok = WlBaseSocket(CallTrace(returnValues={'getsockopt':10}))
+		sok = Socket(CallTrace(returnValues={'getsockopt':10}))
 		mockSelect = CallTrace()
 		sok.sink((x for x in ['data']), mockSelect)
-		self.assertEquals("add(<weightless.wlsocket.wlbasesocket.WlBaseSocket>, 'w')", str(mockSelect.calledMethods[0]))
+		self.assertEquals("add(<weightless.wlsocket.wlbasesocket.Socket>, 'w')", str(mockSelect.calledMethods[0]))
 
 	def testReadDataFromSocketAndSendToGenerator(self):
 		mockSok = CallTrace(returnValues={'getsockopt':10})
-		sok = WlBaseSocket(mockSok)
+		sok = Socket(mockSok)
 		data = []
 		def collect():
 			while True:
@@ -96,7 +121,7 @@ class WlSocketTest(TestCase):
 
 	def testGetDataFromGeneratorAndSendToSocket(self):
 		mockSok = CallTrace(returnValues = {'send': 999, 'getsockopt': 10})
-		sok = WlBaseSocket(mockSok)
+		sok = Socket(mockSok)
 		sok.sink((data for data in ['aap', 'noot', 'mies']), CallTrace())
 		sok.writable()
 		sok.writable()
@@ -105,10 +130,10 @@ class WlSocketTest(TestCase):
 
 	def testSwitchFromReadingToWriting(self):
 		mockSok = CallTrace(returnValues = {'send': 999, 'recv': 'keep things going', 'getsockopt': 10})
-		sok = WlBaseSocket(mockSok)
+		sok = Socket(mockSok)
 		mockSelect = CallTrace()
 		sok.sink((data for data in [None, 'data to write', 'more', None, None, 'even more to write']), mockSelect)
-		self.assertEquals("add(<weightless.wlsocket.wlbasesocket.WlBaseSocket>, 'r')", str(mockSelect.calledMethods[0]))
+		self.assertEquals("add(<weightless.wlsocket.wlbasesocket.Socket>, 'r')", str(mockSelect.calledMethods[0]))
 		try:
 			sok.readable()
 			self.fail()
@@ -136,7 +161,7 @@ class WlSocketTest(TestCase):
 
 	def testSendDidNotSendAllData(self):
 		mockSok = CallTrace(returnValues = {'send': 5, 'getsockopt':10})
-		sok = WlBaseSocket(mockSok)
+		sok = Socket(mockSok)
 		sok.sink((data for data in ['send in chunks', 'more', 'and more']), CallTrace())
 		sok.writable()
 		self.assertEquals("send('send in chunks')", str(mockSok.calledMethods[1]))
@@ -188,7 +213,7 @@ class WlSocketTest(TestCase):
 		# some buffering to allow sufficient throughput if One is faster than the Other.
 		# However, at some point, the One must be held to wait for the Other....
 		mockSok = CallTrace(returnValues = {'send': 999, 'recv': 'keep things going', 'getsockopt': 10})
-		sok = WlBaseSocket(mockSok)
+		sok = Socket(mockSok)
 		sok.send('some data')
 		sok.send('more data')
 		self.assertEquals(['some data', 'more data'], sok._write_queue)

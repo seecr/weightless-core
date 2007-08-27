@@ -1,8 +1,33 @@
+#!/usr/bin/env python2.5
+## begin license ##
+#
+#    "Weightless" is a package with a wide range of valuable tools.
+#    Copyright (C) 2005, 2006 Seek You Too B.V. (CQ2) http://www.cq2.nl
+#
+#    This file is part of "Weightless".
+#
+#    "Weightless" is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    "Weightless" is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with "Weightless"; if not, write to the Free Software
+#    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+#
+## end license ##
+#
 from __future__ import with_statement
 
-from wltestcase import TestCase
+from testcase import TestCase
 from cq2utils.calltrace import CallTrace
-from weightless.wlsocket import WlSelect, WlFileSocket, WlBaseSocket, ReadIteration, WriteIteration
+from weightless import Select, Socket
+from weightless._select import ReadIteration, WriteIteration
 from threading import Event, Semaphore
 from time import sleep
 from StringIO import StringIO
@@ -12,12 +37,12 @@ def mockSelect(r, w, o):
 	sleep(0.00001) # yield CPU, that's what select does normally !!
 	return set(r), set(w), set(o)
 
-class WlSelectTest(TestCase):
+class SelectTest(TestCase):
 
 	def testAddSocketReading(self):
 		class Sok:
 			def __hash__(self): return 1
-		selector = WlSelect()
+		selector = Select()
 		mockSok = Sok()
 		self.assertTrue(mockSok not in selector._readers)
 		selector.add(mockSok)
@@ -27,7 +52,7 @@ class WlSelectTest(TestCase):
 	def testAddSocketWriting(self):
 		class Sok:
 			def __hash__(self): return 1
-		selector = WlSelect()
+		selector = Select()
 		mockSok = Sok()
 		self.assertTrue(mockSok not in selector._writers)
 		selector.add(mockSok, 'w')
@@ -37,7 +62,7 @@ class WlSelectTest(TestCase):
 	def testAddSocketRaisesException(self):
 		class Sok: # raise exception when put into set
 			def __hash__(self): raise Exception('aap')
-		selector = WlSelect()
+		selector = Select()
 		try:
 			selector.add(Sok())
 			self.fail()
@@ -46,10 +71,10 @@ class WlSelectTest(TestCase):
 
 	def testReadFile(self):
 		wait = Event()
-		selector = WlSelect()
+		selector = Select()
 		data = [None]
 		with self.mktemp('boom vuur vis') as f:
-			wlsok = WlFileSocket(f.name)
+			wlsok = Socket(f.name)
 			self.assertFalse(wlsok in selector._readers)
 			def sink():
 				data[0] = yield None
@@ -69,7 +94,7 @@ class WlSelectTest(TestCase):
 				f.wait()
 				f.clear()
 				return set(r), set(w), set(o)
-			selector = WlSelect(select_func = mockSelect)
+			selector = Select(select_func = mockSelect)
 			wlsok = CallTrace(returnValues = {'fileno': 999, 'send': 999, 'getsockopt': 999, '__hash__': 1})
 			wlsok.exceptions['readable'] = Exception()
 			selector.add(wlsok)
@@ -84,9 +109,9 @@ class WlSelectTest(TestCase):
 		tmp = sys.stderr
 		try:
 			sys.stderr = StringIO()
-			selector = WlSelect(select_func = mockSelect)
+			selector = Select(select_func = mockSelect)
 			mockSok = CallTrace(returnValues = {'fileno': 999, 'send': 999, 'getsockopt': 999})
-			wlsok = WlBaseSocket(mockSok)
+			wlsok = Socket(mockSok)
 			def sink():
 				yield 'data to send'
 				raise Exception('oops')
@@ -107,7 +132,7 @@ class WlSelectTest(TestCase):
 		class MockSok:
 			def readable(self): raise WriteIteration()
 			def writable(self): raise ReadIteration()
-		selector = WlSelect(select_func = mockSelect)
+		selector = Select(select_func = mockSelect)
 		wlsok = MockSok()
 		selector.add(wlsok)
 		self.assertTrue(wlsok in selector._readers)
@@ -127,7 +152,7 @@ class WlSelectTest(TestCase):
 
 	def testGlobalReactor(self):
 		flag = Event()
-		selector = WlSelect(select_func = mockSelect)
+		selector = Select(select_func = mockSelect)
 		class MockSok:
 			def readable(inner):
 				self.assertEquals(selector, __reactor__)
@@ -139,7 +164,7 @@ class WlSelectTest(TestCase):
 		self.assertTrue(__reactor__)
 
 	def testCurrent(self):
-		selector = WlSelect(select_func = mockSelect)
+		selector = Select(select_func = mockSelect)
 		class MockSok:
 			def __init__(self):
 				self.flag = Event()

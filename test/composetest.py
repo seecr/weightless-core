@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.5
 ## begin license ##
 #
 #    "Weightless" is a package with a wide range of valuable tools.
@@ -28,7 +28,7 @@ from sys import stdout
 from weightless.wlcompose_py import compose as compose_python, RETURN
 from weightless.wlcompose_pyx import compose as compose_pyrex
 
-class WlComposeTest(TestCase):
+class ComposeTest(TestCase):
 
 	def setUp(self):
 		global compose
@@ -410,15 +410,15 @@ class WlComposeTest(TestCase):
 		except Exception, e:
 			self.assertEquals("Exception(GeneratorExit(),)", repr(e))
 
-class WlComposePyrexTest(WlComposeTest):
+class ComposePyrexTest(ComposeTest):
 	def setUp(self):
 		self.compose = compose_pyrex
-		WlComposeTest.setUp(self)
+		ComposeTest.setUp(self)
 		self.assertComposeImpl(compose_pyrex)
 
-class WlComposePythonTest(WlComposeTest):
+class ComposePythonTest(ComposeTest):
 	def setUp(self):
 		self.compose = compose_python
-		WlComposeTest.setUp(self)
+		ComposeTest.setUp(self)
 		self.assertComposeImpl(compose_python)
 

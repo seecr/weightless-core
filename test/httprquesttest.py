@@ -1,3 +1,27 @@
+#!/usr/bin/env python2.5
+## begin license ##
+#
+#    "Weightless" is a package with a wide range of valuable tools.
+#    Copyright (C) 2005, 2006 Seek You Too B.V. (CQ2) http://www.cq2.nl
+#
+#    This file is part of "Weightless".
+#
+#    "Weightless" is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    "Weightless" is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with "Weightless"; if not, write to the Free Software
+#    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+#
+## end license ##
+#
 from __future__ import with_statement
 from unittest import TestCase
 from random import random
@@ -5,11 +29,9 @@ from threading import Thread
 from time import sleep
 from socket import socket
 
-from weightless.wlhttp import sendRequest, recvRequest, sendBody, MAX_REQUESTLENGTH, WlHttpException
-from weightless.wlhttp.httpspec import HTTP, svnRevision
-from weightless.wlsocket import WlSocket,  WlSelect
-from weightless import compose, RETURN
-from weightless import WlDict
+from weightless.http import sendRequest, recvRequest, sendBody, MAX_REQUESTLENGTH, HttpException, HTTP, svnRevision
+from weightless import Socket,  Select, compose, RETURN,
+from weightless.utils import Dict
 
 #http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5
 
@@ -38,7 +60,7 @@ def server(response):
 	t.join()
 
 
-class WlHttpRequestTest(TestCase):
+class HttpRequestTest(TestCase):
 
 	def testCreateSimple(self):
 		req = sendRequest('GET', 'http://aap.noot.nl/mies')
@@ -67,7 +89,7 @@ class WlHttpRequestTest(TestCase):
 		self.assertEquals('GET http://this.host/path HTTP/1.1\r\nHost: this.host\r\nUser-Agent: Weightless/v%s\r\n\r\n' % svnRevision, data)
 
 	def testAllIn(self):
-		sel = WlSelect()
+		sel = Select()
 		req = sendRequest('GET', 'http://this.host/path')
 		with server('response') as (request, port):
 			sok = WlSocket('localhost', port)
@@ -78,7 +100,7 @@ class WlHttpRequestTest(TestCase):
 		bodyLines = []
 		def bodyHandler():
 			bodyLines.append((yield None))
-		sel = WlSelect()
+		sel = Select()
 		req = sendRequest('GET', 'http://this.host/path')
 		with server('response\r\n') as (request, port):
 			sok = WlSocket('localhost', port)
@@ -119,7 +141,7 @@ class WlHttpRequestTest(TestCase):
 		self.assertEquals('/path', request.RequestURI)
 
 	def testAllMethodsAreAllowed(self):
-		message = WlDict()
+		message = Dict()
 		generator = recvRequest(message)
 		generator.next()
 		result = generator.send('METHOD /path HTTP/1.1' + CRLF + CRLF)
@@ -127,7 +149,7 @@ class WlHttpRequestTest(TestCase):
 		self.assertEquals('METHOD', request.Method)
 
 	def testOtherErrorsAreIgnored(self):
-		message = WlDict()
+		message = Dict()
 		generator = recvRequest(message)
 		generator.next()
 		result = generator.send('REQUESTLINE' + CRLF *2)
@@ -140,7 +162,7 @@ class WlHttpRequestTest(TestCase):
 			pass
 
 	def testStillNoValidRequestAfterEnormousDataRead(self):
-		message = WlDict()
+		message = Dict()
 		generator = recvRequest(message)
 		generator.next()
 		try:
@@ -160,8 +182,8 @@ class WlHttpRequestTest(TestCase):
 			pass
 
 	def _createResponse(self):
-		response = WlDict()
-		response.headers = WlDict({})
+		response = Dict()
+		response.headers = Dict({})
 		return response
 
 	def testSendBodyChunked(self):

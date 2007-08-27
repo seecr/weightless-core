@@ -1,15 +1,39 @@
+#!/usr/bin/env python2.5
+## begin license ##
+#
+#    "Weightless" is a package with a wide range of valuable tools.
+#    Copyright (C) 2005, 2006 Seek You Too B.V. (CQ2) http://www.cq2.nl
+#
+#    This file is part of "Weightless".
+#
+#    "Weightless" is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    "Weightless" is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with "Weightless"; if not, write to the Free Software
+#    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+#
+## end license ##
+#
 from unittest import TestCase
 from sys import stderr
 
-from weightless.wlhttp import recvResponse, recvBody, HTTP, WlHttpException
+from weightless.http import recvResponse, recvBody, HTTP, WlHttpException
 from weightless import compose, RETURN
-from weightless.wldict import WlDict
+from weightless.utils import Dict
 
 CRLF = HTTP.CRLF
 #http://www.w3.org/Protocols/rfc2616/rfc2616-sec6.html#sec6
 #Status-Line = HTTP-Version SP Status-Code SP Reason-Phrase CRLF
 
-class WlHttpResponseTest(TestCase):
+class HttpResponseTest(TestCase):
 
 	def setUp(self):
 		self.exception = None
@@ -36,7 +60,7 @@ class WlHttpResponseTest(TestCase):
 		self.assertEquals('text/plain', response.headers.ContentType)
 
 	def testParseOkStatusLine(self):
-		message = WlDict()
+		message = Dict()
 		response = recvResponse(message)
 		response.next()
 		response.send('HTTP/1.1 200 Ok\r\n')
@@ -46,7 +70,7 @@ class WlHttpResponseTest(TestCase):
 		self.assertEquals('Ok', message.ReasonPhrase)
 
 	def testReturnValueAndRemainingData(self):
-		message = WlDict()
+		message = Dict()
 		response = recvResponse(message)
 		response.next()
 		retval = response.send('HTTP/1.0 503 Kannie effe nie\r\n\r\ntrailing data, e.g. body')
@@ -93,7 +117,7 @@ class WlHttpResponseTest(TestCase):
 		self.assertEquals('300', r2.StatusCode)
 
 	def testParseOtherStatusLine(self):
-		message = WlDict()
+		message = Dict()
 		generator = recvResponse(message)
 		generator.next()
 		generator.send('HTTP/1.0 503 Sorry not now\r\n')
@@ -105,8 +129,8 @@ class WlHttpResponseTest(TestCase):
 
 
 	def _createResponse(self):
-		response = WlDict()
-		response.headers = WlDict()
+		response = Dict()
+		response.headers = Dict()
 		return response
 
 	def testReadBodyImplicitIdentity(self):
@@ -236,7 +260,7 @@ class WlHttpResponseTest(TestCase):
 		except StopIteration:
 			pass
 
-		generator = compose(recvBody(WlDict({'headers': {}}), (None for x in range(99))))
+		generator = compose(recvBody(Dict({'headers': {}}), (None for x in range(99))))
 		generator.next()
 		generator.send('the body')
 		generator.close() # terminate body

@@ -1,7 +1,5 @@
-from wldict import WlDict
-from wlcomponent import WlComponent
-from wltee import wlTee
-from wlcompose_pyx import compose, RETURN
-from wlservice import WlService
-import wlthread
-from wltemplate import Template
+from _pool import Pool
+from _socket import Socket
+from _select import Select
+from _service import Service
+from _compose_pyc import compose

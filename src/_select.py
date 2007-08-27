@@ -26,8 +26,6 @@ class Select:
 	def loop(self):
 		while True:
 			self._select()
-        for sock in self._readers: sock.close()
-        for sock in self._writers: sock.close()
 
 	def _select(self):
 		r, w, e = self._select_func(self._readers, self._writers, [])
