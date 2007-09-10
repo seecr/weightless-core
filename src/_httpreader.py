@@ -35,13 +35,13 @@ class HttpReader(object):
             return #for more data
         if match.end() < len(self._responseBuffer):
             self._restData = self._responseBuffer[match.end():]
-        request = match.groupdict()
+        response = match.groupdict()
         headers = {}
-        for (groupname, fieldname, fieldvalue) in REGEXP.HEADER.findall(request['_headers']):
+        for (groupname, fieldname, fieldvalue) in REGEXP.HEADER.findall(response['_headers']):
             headers[fieldname.title()] = fieldvalue.strip()
-        del request['_headers']
-        request['Headers'] = headers
-        self._callback(self, **request)
+        del response['_headers']
+        response['Headers'] = headers
+        self._callback(self, **response)
 
     def receiveFragment(self, callback):
         if self._restData:

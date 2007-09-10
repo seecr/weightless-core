@@ -25,9 +25,9 @@
 from testcase import TestCase
 from cq2utils.calltrace import CallTrace
 from time import time
-import os
+import os, sys
 from tempfile import mkstemp
-
+from StringIO import StringIO
 from weightless import Reactor
 
 class ReactorTest(TestCase):
@@ -91,13 +91,56 @@ class ReactorTest(TestCase):
         itstime = []
         while not itstime:
             reactor.step()
-        self.assertTrue(0.04 < time() - start < 0.06)
+        self.assertTrue(0.045 < time() - start < 0.055)
         itstime = []
         while not itstime:
             reactor.step()
         self.assertTrue(0.20 < time() - start < 0.30, time()-start)
-        start = time()
+        itstime = []
         while not itstime:
             reactor.step()
-        self.assertTrue(0.04 < time() - start < 0.06)
+        self.assertTrue(0.45 < time() - start < 0.55, time()-start)
         itstime = []
+
+    def testInvalidTime(self):
+        reactor = Reactor()
+        try:
+            reactor.addTimer(-1, None)
+            self.fail('should raise exeption')
+        except Exception, e:
+            self.assertEquals('Timeout must be greater than 0. It was -1.', str(e))
+
+    def testDuplicateTimerDoesNotCauseZeroTimeout(self):
+        itstime = []
+        def itsTime():
+            itstime.append(True)
+        reactor = Reactor()
+        reactor.addTimer(0.05, itsTime)
+        reactor.addTimer(0.05, itsTime)
+        reactor.addTimer(0.05, itsTime)
+        reactor.addTimer(0.05, itsTime)
+        reactor.addTimer(0.05, itsTime)
+        while itstime != [True, True, True, True, True]:
+            reactor.step()
+        self.assertEquals([True, True, True, True, True], itstime)
+
+    def testRemoveTimer(self):
+        def itsTime(): pass
+        reactor = Reactor()
+        token1 = reactor.addTimer(0.05, itsTime)
+        token2 = reactor.addTimer(0.051, itsTime)
+        reactor.removeTimer(token1)
+        self.assertEquals(1, len(reactor._timers))
+
+    def testExceptionInTimeoutCallback(self):
+        sys.stderr = StringIO()
+        try:
+            def itsTime(): raise Exception('here is the exception')
+            reactor = Reactor()
+            token1 = reactor.addTimer(0.001, itsTime)
+            try:
+                reactor.step()
+            except:
+                self.fail('must not raise exception')
+        finally:
+            sys.stderr = sys.__stderr__

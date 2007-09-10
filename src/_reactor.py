@@ -1,5 +1,10 @@
 from traceback import print_exc
 from select import select
+from time import time
+import os
+
+def cmpTimer((second1, callback1), (second2, callback2)):
+    return cmp(second2, second1)
 
 class Reactor(object):
 
@@ -16,12 +21,18 @@ class Reactor(object):
     def step(self):
         timeout = None
         if self._timers:
-            timeout, timerCallback = self._timers[-1]
+            timer = self._timers[-1]
+            setTime, timerCallback = timer
+            timeout =  max(0, setTime - time())
+
         selectResult = self._select(self._readers.keys(), self._writers.keys(), [], timeout)
 
         if selectResult == ([],[],[]):
-            timerCallback()
-            self._timers.pop()
+            try:
+                timerCallback()
+            except:
+                print_exc()
+            self._timers.remove(timer)
 
         rReady, wReady, ignored = selectResult
         for sok in rReady:
@@ -29,11 +40,13 @@ class Reactor(object):
                 self._readers[sok]()
             except:
                 print_exc()
+                del self._readers[sok]
         for sok in wReady:
             try:
                 self._writers[sok]()
             except:
                 print_exc()
+                del self._writers[sok]
 
     def addReader(self, sok, sink):
         self._readers[sok] = sink
@@ -42,8 +55,11 @@ class Reactor(object):
         self._writers[sok] = source
 
     def addTimer(self, seconds, callback):
-        self._timers.append((seconds, callback))
-        self._timers = sorted(self._timers, lambda (second1, callback1), (second2, callback2): cmp(second2, second1))
+        assert seconds > 0, 'Timeout must be greater than 0. It was %s.' % seconds
+        timer = (time()+seconds, callback)
+        self._timers.append(timer)
+        self._timers.sort(cmpTimer)
+        return timer
 
     def removeReader(self, sok):
         del self._readers[sok]
@@ -51,4 +67,9 @@ class Reactor(object):
     def removeWriter(self, sok):
         del self._writers[sok]
 
+    def removeTimer(self, token):
+        self._timers.remove(token)
 
+    def shutdown(self):
+        for sok in self._readers: sok.close()
+        for sok in self._writers: sok.close()

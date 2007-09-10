@@ -45,6 +45,7 @@ import unittest
 from acceptortest import AcceptorTest
 from reactortest import ReactorTest
 from readertest import ReaderTest
+from httpservertest import HttpServerTest
 
 if __name__ == '__main__':
 	unittest.main()
