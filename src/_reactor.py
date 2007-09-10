@@ -15,10 +15,12 @@ class Reactor(object):
         self._select = select_func
 
     def loop(self):
+        """Calls step() endlessly."""
         while True:
             self.step()
 
     def step(self):
+        """Performs one single select and calls handlers on active sockets."""
         timeout = None
         if self._timers:
             timer = self._timers[-1]
@@ -49,12 +51,15 @@ class Reactor(object):
                 del self._writers[sok]
 
     def addReader(self, sok, sink):
+        """Adds a socket and calls sink() when the socket becomes readable. It remains at the readers list."""
         self._readers[sok] = sink
 
     def addWriter(self, sok, source):
+        """Adds a socket and calls source() whenever the socket is writable. It remains at the writers list."""
         self._writers[sok] = source
 
     def addTimer(self, seconds, callback):
+        """Add a timer that calls callback() after the specified number of seconds. Afterwards, the timer is deleted.  It returns a token for removeTimer()."""
         assert seconds > 0, 'Timeout must be greater than 0. It was %s.' % seconds
         timer = (time()+seconds, callback)
         self._timers.append(timer)
@@ -62,14 +67,18 @@ class Reactor(object):
         return timer
 
     def removeReader(self, sok):
+        """Removes a sockets callback from the readers list."""
         del self._readers[sok]
 
     def removeWriter(self, sok):
+        """Removes a sockets callback from the writers list."""
         del self._writers[sok]
 
     def removeTimer(self, token):
+        """Removes a timer.  The token is a token as returned by addTimer"""
         self._timers.remove(token)
 
     def shutdown(self):
+        """Closes all readers and writers."""
         for sok in self._readers: sok.close()
         for sok in self._writers: sok.close()
