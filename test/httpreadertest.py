@@ -21,7 +21,7 @@ def server(port, response, request):
     sleep(0.01) # yield
     return thread
 
-class ReaderTest(TestCase):
+class HttpReaderTest(TestCase):
 
     def testRequestAndHeaders(self):
         HttpReader.RECVSIZE = 7
