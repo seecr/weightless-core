@@ -2,8 +2,8 @@ from sys import stderr
 
 from urlparse import urlsplit
 from weightless import RETURN
-from weightless import WlDict
-from httpspec import HTTP, REGEXP, FORMAT
+from weightless.utils import Dict
+from spec import HTTP, REGEXP, FORMAT
 from functools import partial as curry
 
 SupportedMethods = ['GET']
@@ -11,7 +11,7 @@ InvalidMethodMsg = 'Method "%s" not supported.  Supported are: ' + ', '.join(Sup
 SupportedSchemes = ['http']
 InvalidSchemeMsg = 'Scheme "%s" not supported.  Supported are: ' + ', '.join(SupportedSchemes) + '.'
 
-class WlHttpException(Exception):
+class HttpException(Exception):
 	pass
 
 MAX_REQUESTLENGTH = 10 * 1024

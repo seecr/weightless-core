@@ -8,15 +8,15 @@ svnRevision = '$Rev$'[6:-2]
 """
 
 class HTTP:
-    class Response:
-        StatusLine = 'HTTP/%(version)s %(status)s %(reason)s' + CRLF
-    class Message:
-        MessageHeader = '%(name)s: %(value)s' + CRLF
-        def _Headers(klas, headers = {}):
-            for name, value in headers.items():
-                yield HTTP.Message.MessageHeader % locals()
-            yield CRLF
-        Headers = classmethod(_Headers)
+    #class Response:
+        #StatusLine = 'HTTP/%(version)s %(status)s %(reason)s' + CRLF
+    #class Message:
+        #MessageHeader = '%(name)s: %(value)s' + CRLF
+        #def _Headers(klas, headers = {}):
+            #for name, value in headers.items():
+                #yield HTTP.Message.MessageHeader % locals()
+            #yield CRLF
+        #Headers = classmethod(_Headers)
 
 	SP = ' '
 	CRLF = '\r\n'
@@ -59,7 +59,7 @@ class REGEXP:
 	CRLF = compile(HTTP.CRLF)
 
 class FORMAT:
-	RequestLine = '%(Method)s %(Request_URI)s HTTP/1.1' + HTTP.CRLF
+	RequestLine = '%(Method)s %(Request_URI)s HTTP/1.0' + HTTP.CRLF
 	HostHeader = 'Host: %(Host)s' + HTTP.CRLF
-	UserAgentHeader = 'User-Agent: Weightless/v%s' % svnRevision + HTTP.CRLF
+	UserAgentHeader = 'User-Agent: Weightless/v0.1' + HTTP.CRLF
 
