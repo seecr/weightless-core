@@ -1,2 +1,2 @@
-from wlhttp import sendRequest, recvRequest, recvResponse, MAX_REQUESTLENGTH, recvBody, sendBody, WlHttpException
-from httpspec import HTTP
+#from http import sendRequest, recvRequest, recvResponse, MAX_REQUESTLENGTH, recvBody, sendBody, HttpException
+from spec import HTTP, svnRevision, REGEXP
