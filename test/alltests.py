@@ -23,30 +23,30 @@
 ## end license ##
 #
 from platform import python_version
-assert python_version() >= "2.5", "Needed python 2.5 or higher."
-
 from sys import path
 from glob import glob
 for file in glob('../deps.d/*'):
     path.insert(0, file)
 path.insert(0, '..')
 
-
 import unittest
 
-#from pooltest import PoolTest
-#from sockettest import SocketTest
-#from selecttest import SelectTest
-#from servicetest import ServiceTest
-#from composetest import ComposePythonTest, ComposePyrexTest
-#from httpresponsetest import HttpResponseTest
-#from httprequesttest import HttpRequestTest
-#from templatetest import TemplateTest
+# Python >= 2.4
 from acceptortest import AcceptorTest
 from reactortest import ReactorTest
 from httpreadertest import HttpReaderTest
 from httpservertest import HttpServerTest
 
+if python_version() >= "2.5":
+    from composetest import ComposePythonTest, ComposePyrexTest
+
+#from pooltest import PoolTest
+#from sockettest import SocketTest
+#from selecttest import SelectTest
+#from servicetest import ServiceTest
+#from httpresponsetest import HttpResponseTest
+#from httprequesttest import HttpRequestTest
+#from templatetest import TemplateTest
+
 if __name__ == '__main__':
 	unittest.main()
-

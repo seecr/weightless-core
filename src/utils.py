@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 @contextmanager
 def running(function):
     t = Thread(None, function)
@@ -5,7 +7,7 @@ def running(function):
     yield t
     t.join()
 
-class dict(object):
+class Dict(object):
 	def __init__(self, dict = None):
 		if dict is not None:
 			self.__dict__ = dict

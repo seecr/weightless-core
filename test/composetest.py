@@ -25,8 +25,8 @@
 from unittest import TestCase
 from sys import stdout
 
-from weightless.wlcompose_py import compose as compose_python, RETURN
-from weightless.wlcompose_pyx import compose as compose_pyrex
+from weightless._compose_py import compose as compose_python, RETURN
+from weightless._compose_pyx import compose as compose_pyrex
 
 class ComposeTest(TestCase):
 

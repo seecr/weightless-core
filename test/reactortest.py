@@ -22,7 +22,7 @@
 #
 ## end license ##
 #
-from testcase import TestCase
+from unittest import TestCase
 from cq2utils.calltrace import CallTrace
 from time import time
 import os, sys
