@@ -3,6 +3,7 @@ from random import randint
 from socket import socket
 from weightless import Reactor, HttpServer
 from time import sleep
+from weightless import _httpserver
 
 class HttpServerTest(TestCase):
 
@@ -69,7 +70,7 @@ class HttpServerTest(TestCase):
         return sok.recv(4096)
 
     def testSmallFragments(self):
-        HttpServer.RECVSIZE = 3
+        _httpserver.RECVSIZE = 3
         response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
         self.assertEquals('The Response', response)
 

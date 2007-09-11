@@ -2,12 +2,18 @@ from _acceptor import Acceptor
 from weightless.http.spec import REGEXP, FORMAT, HTTP
 from socket import SHUT_RDWR
 
-class Handler(object):
+RECVSIZE = 4096
 
-    def __init__(self, reactor, sok, generator, timeout):
+def HttpServer(reactor, port, generatorFactory, timeout=1):
+    """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
+    return Acceptor(reactor, port, lambda sok: HttpHandler(reactor, sok, generatorFactory, timeout))
+
+class HttpHandler(object):
+
+    def __init__(self, reactor, sok, generatorFactory, timeout):
         self._reactor = reactor
         self._sok = sok
-        self._generator = generator
+        self._generatorFactory = generatorFactory
         self._request = ''
         self._rest = None
         self._timeout = timeout
@@ -15,7 +21,7 @@ class Handler(object):
 
     def __call__(self):
         kwargs = {}
-        self._request += self._sok.recv(HttpServer.RECVSIZE)
+        self._request += self._sok.recv(RECVSIZE)
         match = REGEXP.REQUEST.match(self._request)
         if not match:
             # this creates multiple timers, must not do that
@@ -30,7 +36,7 @@ class Handler(object):
             headers[fieldname.title()] = fieldvalue.strip()
         del request['_headers']
         request['Headers'] = headers
-        self._handler = self._generator(**request)
+        self._handler = self._generatorFactory(**request)
         self._reactor.removeReader(self._sok)
         self._reactor.addWriter(self._sok, self._writeResponse)
 
@@ -54,16 +60,3 @@ class Handler(object):
             self._reactor.removeWriter(self._sok)
             self._sok.shutdown(SHUT_RDWR)
             self._sok.close()
-
-class HttpServer:
-
-    RECVSIZE = 4096
-
-    def __init__(self, reactor, port, callback, timeout=1):
-        self._reactor = reactor
-        self._callback = callback
-        self._timeout = timeout
-        self._acceptor = Acceptor(reactor, port, self._handlerFactory)
-
-    def _handlerFactory(self, sok):
-        return Handler(self._reactor, sok, self._callback, self._timeout)
