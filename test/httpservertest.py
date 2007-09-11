@@ -2,6 +2,7 @@ from unittest import TestCase
 from random import randint
 from socket import socket
 from weightless import Reactor, HttpServer
+from time import sleep
 
 class HttpServerTest(TestCase):
 
@@ -94,3 +95,29 @@ class HttpServerTest(TestCase):
             reactor.step()
         fragment = sok.recv(4096)
         self.assertEquals('some text that is longer than the lenght of fragments sent', fragment)
+
+    def testInvalidRequest(self):
+        port = randint(2**10, 2**16)
+        reactor = Reactor()
+        server = HttpServer(reactor, port, None, timeout=0.01)
+        sok = socket()
+        sok.connect(('localhost', port))
+        sok.send('GET HTTP/1.0\r\n\r\n') # no path
+        reactor.step()
+        reactor.step()
+        reactor.step()
+        response = sok.recv(4096)
+        self.assertEquals('HTTP/1.0 400 Bad Request\r\n\r\n', response)
+
+    def testValidRequestResetsTimer(self):
+        port = randint(2**10, 2**16)
+        reactor = Reactor()
+        server = HttpServer(reactor, port, lambda **kwargs: ('a' for a in range(3)), timeout=0.01)
+        sok = socket()
+        sok.connect(('localhost', port))
+        sok.send('GET / HTTP/1.0\r\n\r\n')
+        sleep(0.02)
+        for i in range(10):
+            reactor.step()
+        response = sok.recv(4096)
+        self.assertEquals('aaa', response)
