@@ -11,6 +11,7 @@ class HttpReader(object):
         port = '80'
         if ':' in host:
             host, port = host.split(':')
+        path = path or '/'
         self._responseBuffer = ''
         self._restData = None
         self._callback = callback

@@ -80,14 +80,23 @@ class HttpReaderTest(TestCase):
                 done.append(True)
             else:
                 fragments.append(fragment)
-
         def receiveResponse(reader, HTTPVersion=None, StatusCode=None, ReasonPhrase=None, Headers=None):
             self.dataReceived = HTTPVersion, StatusCode, ReasonPhrase, Headers
             reader.receiveFragment(receiveFragment)
-
         reactor = Reactor()
         reader = HttpReader(reactor, "http://www.opener.ou.nl/rss_all", receiveResponse)
         while not done:
             reactor.step()
-
         self.assertTrue('<dc:subject>managementwetenschappen</dc:subject>' in ''.join(fragments))
+
+    def testEmptyPath(self):
+        port = randint(2**10, 2**16)
+        reactor = Reactor()
+        request = []
+        serverThread = server(port, "HTTP/1.0 200 OK\r\n\r\n", request)
+        reader = HttpReader(reactor, "http://localhost:%s" % port, lambda data: 'a')
+        reactor.step()
+        #reactor.step()
+        #reactor.step()
+        serverThread.join()
+        self.assertTrue(request[0].startswith('GET / HTTP/1.0\r\n'), request[0])
