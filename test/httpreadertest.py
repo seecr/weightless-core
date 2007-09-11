@@ -143,12 +143,11 @@ class HttpReaderTest(TestCase):
         def response(fragment):
             fragments.append(fragment)
         def error(msg):
-            print 'AAP'
             self.msg = msg
         HttpReader.RECVSIZE = 3
         reader = HttpReader(reactor, "http://localhost:%s" % port, connect, error, timeout=0.01)
         while not fragments:
             reactor.step()
-        sleep(0.02)
+        sleep(0.02) # 2 * timeout, just to be sure
         reactor.step()
         self.assertFalse(self.msg)

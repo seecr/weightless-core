@@ -25,7 +25,9 @@ class HttpHandler(object):
         match = REGEXP.REQUEST.match(self._request)
         if not match:
             # this creates multiple timers, must not do that
-            self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
+            #print 'creating timer'
+            if not self._timer:
+                self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
             return # for more data
         if self._timer:
             self._reactor.removeTimer(self._timer)
@@ -42,6 +44,7 @@ class HttpHandler(object):
 
     def _badRequest(self):
         self._sok.send('HTTP/1.0 400 Bad Request\r\n\r\n')
+        self._reactor.removeReader(self._sok)
         self._sok.shutdown(SHUT_RDWR)
         self._sok.close()
 

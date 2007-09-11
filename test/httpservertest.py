@@ -31,6 +31,7 @@ class HttpServerTest(TestCase):
         self.assertEquals(True, self.req)
 
     def testSendHeader(self):
+        self.kwargs = None
         def response(**kwargs):
             self.kwargs = kwargs
             yield 'nosense'
@@ -40,9 +41,8 @@ class HttpServerTest(TestCase):
         sok = socket()
         sok.connect(('localhost', port))
         sok.send('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
-        reactor.step() # connect/accept
-        reactor.step() # read GET request
-        reactor.step() # call onRequest for response data
+        while not self.kwargs:
+            reactor.step()
         self.assertEquals({'RequestURI': '/path/here', 'HTTPVersion': '1.0', 'Method': 'GET', 'Headers': {'Connection': 'close', 'Ape-Nut': 'Mies'}}, self.kwargs)
 
     def testGetResponse(self):
@@ -97,18 +97,26 @@ class HttpServerTest(TestCase):
         fragment = sok.recv(4096)
         self.assertEquals('some text that is longer than the lenght of fragments sent', fragment)
 
-    def testInvalidRequest(self):
+    def testInvalidRequestStartsOnlyOneTimer(self):
+        _httpserver.RECVSIZE = 3
         port = randint(2**10, 2**16)
         reactor = Reactor()
+        timers = []
+        orgAddTimer = reactor.addTimer
+        def addTimerInterceptor(*timer):
+            #print timer
+            timers.append(timer)
+            return orgAddTimer(*timer)
+        reactor.addTimer = addTimerInterceptor
         server = HttpServer(reactor, port, None, timeout=0.01)
         sok = socket()
         sok.connect(('localhost', port))
         sok.send('GET HTTP/1.0\r\n\r\n') # no path
-        reactor.step()
-        reactor.step()
-        reactor.step()
+        for i in range(8):
+            reactor.step()
         response = sok.recv(4096)
         self.assertEquals('HTTP/1.0 400 Bad Request\r\n\r\n', response)
+        self.assertEquals(1, len(timers))
 
     def testValidRequestResetsTimer(self):
         port = randint(2**10, 2**16)
