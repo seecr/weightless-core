@@ -35,6 +35,7 @@ class Reactor(object):
                 timeout = None
                 return
 
+        #print self._readers, self._writers, self._timers
         selectResult = self._select(self._readers.keys(), self._writers.keys(), [], timeout)
 
         if selectResult == ([],[],[]):

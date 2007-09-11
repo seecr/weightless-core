@@ -4,6 +4,8 @@ from time import sleep
 from socket import socket
 from threading import Thread
 from weightless import HttpReader, Reactor
+import sys
+from StringIO import StringIO
 
 def server(port, response, request):
     def serverProcess():
@@ -113,3 +115,39 @@ class HttpReaderTest(TestCase):
             reactor.step()
         serverThread.join()
         self.assertEquals([('timeout while receiving headers',)], errorArgs)
+
+    def testDefaultErrorHandling(self):
+        port = randint(2**10, 2**16)
+        reactor = Reactor()
+        serverThread = server(port, "HTTP/1.0 *invalid reponse* 200 OK\r\n\r\n", [])
+        reader = HttpReader(reactor, "http://localhost:%s" % port, None, None)
+        myerrorstream = StringIO()
+        sys.stderr = myerrorstream
+        try:
+            while not myerrorstream.getvalue():
+                reactor.step()
+        finally:
+            sys.stderr = sys.__stderr__
+        serverThread.join()
+        self.assertEquals('timeout while receiving headers', myerrorstream.getvalue())
+
+    def testResetTimer(self):
+        port = randint(2**10, 2**16)
+        reactor = Reactor()
+        serverThread = server(port, "HTTP/1.0 200 OK\r\n\r\nresponse", [])
+        self.msg = None
+        fragments = []
+        def connect(*args, **kwargs):
+            reader.receiveFragment(response)
+        def response(fragment):
+            fragments.append(fragment)
+        def error(msg):
+            print 'AAP'
+            self.msg = msg
+        HttpReader.RECVSIZE = 3
+        reader = HttpReader(reactor, "http://localhost:%s" % port, connect, error, timeout=0.01)
+        while not fragments:
+            reactor.step()
+        sleep(0.02)
+        reactor.step()
+        self.assertFalse(self.msg)

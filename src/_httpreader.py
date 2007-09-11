@@ -1,12 +1,13 @@
 from socket import socket, SHUT_RDWR
 from urlparse import urlsplit
 from weightless.http.spec import REGEXP, FORMAT, HTTP
+import sys
 
 class HttpReader(object):
 
     RECVSIZE = 4096
 
-    def __init__(self, reactor, url, callback, errorHandler=None):
+    def __init__(self, reactor, url, callback, errorHandler=None, timeout=1):
         scheme, host, path, query, fragment = urlsplit(url)
         port = '80'
         if ':' in host:
@@ -19,8 +20,12 @@ class HttpReader(object):
         self._sok.connect((host, int(port)))
         self._reactor = reactor
         self._reactor.addWriter(self._sok, lambda: self._sendRequest(path, host))
-        self._errorHandler = errorHandler
+        self._errorHandler = errorHandler or self._defaultErrorHandler
         self._timer = None
+        self._timeOuttime = timeout
+
+    def _defaultErrorHandler(self, msg):
+        sys.stderr.write(msg)
 
     def _sendRequest(self, path, host):
         sent = self._sok.send(
@@ -36,11 +41,11 @@ class HttpReader(object):
         match = REGEXP.RESPONSE.match(self._responseBuffer)
         if not match:
             if not self._timer:
-                self._timer = self._reactor.addTimer(1, self._timeOut)
+                self._timer = self._reactor.addTimer(self._timeOuttime, self._timeOut)
             return #for more data
-        #if self._timer:
-        #    self._reactor.removeTimer(self._timer)
-        #    self._timer = None
+        if self._timer:
+            self._reactor.removeTimer(self._timer)
+            self._timer = None
         if match.end() < len(self._responseBuffer):
             self._restData = self._responseBuffer[match.end():]
         response = match.groupdict()
@@ -52,10 +57,12 @@ class HttpReader(object):
         self._callback(self, **response)
 
     def _timeOut(self):
-        self._errorHandler('timeout while receiving headers')
-        self._reactor.removeReader(self._sok)
-        self._sok.shutdown(SHUT_RDWR)
-        self._sok.close()
+        try:
+            self._errorHandler('timeout while receiving headers')
+        finally:
+            self._reactor.removeReader(self._sok)
+            self._sok.shutdown(SHUT_RDWR)
+            self._sok.close()
 
     def receiveFragment(self, callback):
         if self._restData:

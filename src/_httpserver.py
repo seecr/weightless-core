@@ -18,6 +18,7 @@ class Handler(object):
         self._request += self._sok.recv(HttpServer.RECVSIZE)
         match = REGEXP.REQUEST.match(self._request)
         if not match:
+            # this creates multiple timers, must not do that
             self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
             return # for more data
         if self._timer:
