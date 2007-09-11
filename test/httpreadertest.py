@@ -30,14 +30,15 @@ class HttpReaderTest(TestCase):
         port = randint(2**10, 2**16)
         request = []
         serverThread = server(port, "HTTP/1.1 200 OK\r\ncOnteNt-type: text/html\r\n\r\nHello World!", request)
-        def receiveResponse(reader, HTTPVersion=None, StatusCode=None, ReasonPhrase=None, Headers=None):
-            self.dataReceived = HTTPVersion, StatusCode, ReasonPhrase, Headers
+        def receiveResponse(reader, Client=None, HTTPVersion=None, StatusCode=None, ReasonPhrase=None, Headers=None):
+            self.dataReceived = Client, HTTPVersion, StatusCode, ReasonPhrase, Headers
         reactor = Reactor()
         reader = HttpReader(reactor, 'http://localhost:%s/aap/noot/mies' % port, receiveResponse)
         for i in range(8): reactor.step()
         self.assertEquals('GET /aap/noot/mies HTTP/1.0\r\nHost: localhost\r\nUser-Agent: Weightless/v0.1\r\n\r\n', request[0])
         serverThread.join()
-        self.assertEquals(('1.1', '200', 'OK', {'Content-Type': 'text/html'}), self.dataReceived)
+        self.assertEquals(('1.1', '200', 'OK', {'Content-Type': 'text/html'}), self.dataReceived[1:])
+        self.assertEquals('127.0.0.1', self.dataReceived[0][0])
 
     def testGetAllData(self):
         HttpReader.RECVSIZE = 7
@@ -46,7 +47,7 @@ class HttpReaderTest(TestCase):
         serverThread = server(port, "HTTP/1.1 200 OK\r\ncOnteNt-type: text/html\r\n\r\nHello World!", [])
         def receiveFragment(fragment):
             fragments.append(fragment)
-        def receiveResponse(reader, HTTPVersion=None, StatusCode=None, ReasonPhrase=None, Headers=None):
+        def receiveResponse(reader, Client=None, HTTPVersion=None, StatusCode=None, ReasonPhrase=None, Headers=None):
             reader.receiveFragment(receiveFragment)
         reactor = Reactor()
         reader = HttpReader(reactor, 'http://localhost:%s/aap/noot/mies' % port, receiveResponse)
@@ -62,7 +63,7 @@ class HttpReaderTest(TestCase):
                 done.append(True)
             else:
                 fragments.append(fragment)
-        def receiveResponse(reader, HTTPVersion=None, StatusCode=None, ReasonPhrase=None, Headers=None):
+        def receiveResponse(reader, Client=None, HTTPVersion=None, StatusCode=None, ReasonPhrase=None, Headers=None):
             self.dataReceived = HTTPVersion, StatusCode, ReasonPhrase, Headers
             reader.receiveFragment(receiveFragment)
         reactor = Reactor()
@@ -82,7 +83,7 @@ class HttpReaderTest(TestCase):
                 done.append(True)
             else:
                 fragments.append(fragment)
-        def receiveResponse(reader, HTTPVersion=None, StatusCode=None, ReasonPhrase=None, Headers=None):
+        def receiveResponse(reader, Client, HTTPVersion=None, StatusCode=None, ReasonPhrase=None, Headers=None):
             self.dataReceived = HTTPVersion, StatusCode, ReasonPhrase, Headers
             reader.receiveFragment(receiveFragment)
         reactor = Reactor()

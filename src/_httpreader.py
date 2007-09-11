@@ -54,6 +54,7 @@ class HttpReader(object):
             headers[fieldname.title()] = fieldvalue.strip()
         del response['_headers']
         response['Headers'] = headers
+        response['Client'] = self._sok.getpeername()
         self._callback(self, **response)
 
     def _timeOut(self):
