@@ -100,3 +100,16 @@ class HttpReaderTest(TestCase):
         #reactor.step()
         serverThread.join()
         self.assertTrue(request[0].startswith('GET / HTTP/1.0\r\n'), request[0])
+
+    def testTimeoutOnInvalidRequest(self):
+        port = randint(2**10, 2**16)
+        reactor = Reactor()
+        serverThread = server(port, "HTTP/1.0 *invalid reponse* 200 OK\r\n\r\n", [])
+        errorArgs = []
+        def error(*args, **kwargs):
+            errorArgs.append(args)
+        reader = HttpReader(reactor, "http://localhost:%s" % port, None, error)
+        while not errorArgs:
+            reactor.step()
+        serverThread.join()
+        self.assertEquals([('timeout while receiving headers',)], errorArgs)

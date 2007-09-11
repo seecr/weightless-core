@@ -26,6 +26,14 @@ class Reactor(object):
             timer = self._timers[-1]
             setTime, timerCallback = timer
             timeout =  max(0, setTime - time())
+            if timeout == 0:
+                self._timers.remove(timer)
+                try:
+                    timerCallback()
+                except:
+                    print_exc()
+                timeout = None
+                return
 
         selectResult = self._select(self._readers.keys(), self._writers.keys(), [], timeout)
 
