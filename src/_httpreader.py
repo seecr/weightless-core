@@ -1,6 +1,6 @@
 from socket import socket, SHUT_RDWR
 from urlparse import urlsplit
-from weightless.http.spec import REGEXP, FORMAT, HTTP
+from weightless.http import REGEXP, FORMAT, HTTP, parseHeaders
 import sys
 
 class HttpReader(object):
@@ -49,11 +49,8 @@ class HttpReader(object):
         if match.end() < len(self._responseBuffer):
             self._restData = self._responseBuffer[match.end():]
         response = match.groupdict()
-        headers = {}
-        for (groupname, fieldname, fieldvalue) in REGEXP.HEADER.findall(response['_headers']):
-            headers[fieldname.title()] = fieldvalue.strip()
+        response['Headers'] = parseHeaders(response['_headers'])
         del response['_headers']
-        response['Headers'] = headers
         response['Client'] = self._sok.getpeername()
         self._callback(self, **response)
 

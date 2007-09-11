@@ -1,5 +1,5 @@
 from _acceptor import Acceptor
-from weightless.http.spec import REGEXP, FORMAT, HTTP
+from weightless.http import REGEXP, FORMAT, HTTP, parseHeaders
 from socket import SHUT_RDWR
 
 RECVSIZE = 4096
@@ -24,8 +24,6 @@ class HttpHandler(object):
         self._request += self._sok.recv(RECVSIZE)
         match = REGEXP.REQUEST.match(self._request)
         if not match:
-            # this creates multiple timers, must not do that
-            #print 'creating timer'
             if not self._timer:
                 self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
             return # for more data
@@ -33,11 +31,8 @@ class HttpHandler(object):
             self._reactor.removeTimer(self._timer)
             self._timer = None
         request = match.groupdict()
-        headers = {}
-        for (groupname, fieldname, fieldvalue) in REGEXP.HEADER.findall(request['_headers']):
-            headers[fieldname.title()] = fieldvalue.strip()
+        request['Headers'] = parseHeaders(request['_headers'])
         del request['_headers']
-        request['Headers'] = headers
         self._handler = self._generatorFactory(**request)
         self._reactor.removeReader(self._sok)
         self._reactor.addWriter(self._sok, self._writeResponse)

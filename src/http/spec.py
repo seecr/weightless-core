@@ -1,11 +1,16 @@
 from re import compile
-svnRevision = '$Rev$'[6:-2]
-
 
 """
 	HTTP specifications.
 	http://www.w3.org/Protocols/rfc2616/rfc2616.html
 """
+
+def parseHeaders(headerString):
+    headers = {}
+    for (groupname, fieldname, fieldvalue) in REGEXP.HEADER.findall(headerString):
+        headers[fieldname.title()] = fieldvalue.strip()
+    return headers
+
 
 class HTTP:
     #class Response:

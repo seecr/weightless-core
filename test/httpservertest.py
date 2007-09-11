@@ -75,6 +75,7 @@ class HttpServerTest(TestCase):
         self.assertEquals('The Response', response)
 
     def testSmallFragmentsWhileSendingResponse(self):
+        _httpserver.RECVSIZE = 3
         def response(**kwargs):
             yield 'some text that is longer than '
             yield 'the lenght of fragments sent'
