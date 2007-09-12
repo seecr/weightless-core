@@ -25,7 +25,7 @@ from random import randint
 from time import sleep
 from socket import socket
 from threading import Thread
-from weightless import HttpReader, Reactor
+from weightless import HttpReader, Reactor, VERSION as WlVersion
 import sys
 from StringIO import StringIO
 
@@ -57,7 +57,7 @@ class HttpReaderTest(TestCase):
         reactor = Reactor()
         reader = HttpReader(reactor, 'http://localhost:%s/aap/noot/mies' % port, receiveResponse)
         for i in range(8): reactor.step()
-        self.assertEquals('GET /aap/noot/mies HTTP/1.0\r\nHost: localhost\r\nUser-Agent: Weightless/v1.9\r\n\r\n', request[0])
+        self.assertEquals('GET /aap/noot/mies HTTP/1.0\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n' % WlVersion, request[0])
         serverThread.join()
         self.assertEquals(('1.1', '200', 'OK', {'Content-Type': 'text/html'}), self.dataReceived[1:])
         self.assertEquals('127.0.0.1', self.dataReceived[0][0])

@@ -20,6 +20,7 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
+VERSION='1.9'
 from platform import python_version
 
 #from _compose_py import compose, RETURN

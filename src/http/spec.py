@@ -21,6 +21,7 @@
 #
 ## end license ##
 from re import compile
+from weightless import VERSION
 
 """
 	HTTP specifications.
@@ -88,5 +89,5 @@ class REGEXP:
 class FORMAT:
 	RequestLine = '%(Method)s %(Request_URI)s HTTP/1.0' + HTTP.CRLF
 	HostHeader = 'Host: %(Host)s' + HTTP.CRLF
-	UserAgentHeader = 'User-Agent: Weightless/v1.9' + HTTP.CRLF
+	UserAgentHeader = 'User-Agent: Weightless/v' + VERSION + HTTP.CRLF
 
