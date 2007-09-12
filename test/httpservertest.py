@@ -4,6 +4,7 @@ from socket import socket
 from weightless import Reactor, HttpServer
 from time import sleep
 from weightless import _httpserver
+from cq2utils import MATCHALL
 
 class HttpServerTest(TestCase):
 
@@ -43,7 +44,7 @@ class HttpServerTest(TestCase):
         sok.send('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
         while not self.kwargs:
             reactor.step()
-        self.assertEquals({'RequestURI': '/path/here', 'HTTPVersion': '1.0', 'Method': 'GET', 'Headers': {'Connection': 'close', 'Ape-Nut': 'Mies'}}, self.kwargs)
+        self.assertEquals({'RequestURI': '/path/here', 'HTTPVersion': '1.0', 'Method': 'GET', 'Headers': {'Connection': 'close', 'Ape-Nut': 'Mies'}, 'Client': ('127.0.0.1', MATCHALL)}, self.kwargs)
 
     def testGetResponse(self):
         response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')

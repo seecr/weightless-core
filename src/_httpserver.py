@@ -33,6 +33,7 @@ class HttpHandler(object):
         request = match.groupdict()
         request['Headers'] = parseHeaders(request['_headers'])
         del request['_headers']
+        request['Client'] = self._sok.getpeername()
         self._handler = self._generatorFactory(**request)
         self._reactor.removeReader(self._sok)
         self._reactor.addWriter(self._sok, self._writeResponse)
