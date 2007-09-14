@@ -39,14 +39,7 @@ from httpservertest import HttpServerTest
 
 if python_version() >= "2.5":
     from composetest import ComposePythonTest, ComposePyrexTest
-
-#from pooltest import PoolTest
-#from sockettest import SocketTest
-#from selecttest import SelectTest
-#from servicetest import ServiceTest
-#from httpresponsetest import HttpResponseTest
-#from httprequesttest import HttpRequestTest
-#from templatetest import TemplateTest
+    from teetest import TeeTest
 
 if __name__ == '__main__':
 	unittest.main()
