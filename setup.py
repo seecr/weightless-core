@@ -26,7 +26,7 @@ from Pyrex.Distutils import build_ext
 
 setup(
     name='weightless',
-    packages=['weightless', 'weightless.wlcompose', 'weightless.wlhttp', 'weightless.wlsocket', 'weightless.wlthread'],
+    packages=['weightless'],
     ext_modules=[Extension("weightless.wlcompose.compose", ["src/wlcompose/compose.pyx"])],
     cmdclass = {'build_ext': build_ext}
 )
