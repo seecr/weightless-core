@@ -410,6 +410,9 @@ class ComposeTest(TestCase):
 		except Exception, e:
 			self.assertEquals("Exception(GeneratorExit(),)", repr(e))
 
+    def testStopIterationWithReturnValue(self):
+        sefl.fail()
+
 class ComposePyrexTest(ComposeTest):
 	def setUp(self):
 		self.compose = compose_pyrex

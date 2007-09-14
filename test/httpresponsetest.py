@@ -25,7 +25,7 @@
 from unittest import TestCase
 from sys import stderr
 
-from weightless.http import recvResponse, recvBody, HTTP, WlHttpException
+from weightless.http import recvResponse, recvBody, HTTP, HttpException
 from weightless import compose, RETURN
 from weightless.utils import Dict
 

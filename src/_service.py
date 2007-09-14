@@ -24,21 +24,21 @@ from weightless import Socket, Select, compose
 from urlparse import urlsplit
 from weightless import compose
 
-class WlService:
+class Service:
 	def __init__(self, selector = None):
-		self._selector = selector or WlSelect()
+		self._selector = selector or Select()
 
 	def open(self, url, sink = None):
 		addressing_scheme, network_location, path, query, fragment_identifier = urlsplit(url)
 		if addressing_scheme == 'file':
-			wlsok = WlFileSocket(path)
+			wlsok = Socket(path)
 		else:
 			hostPort = network_location.split(':')
 			host = hostPort[0]
 			port = 80
 			if len(hostPort) > 1:
 				port = int(hostPort[1])
-			wlsok = WlSocket(host, port)
+			wlsok = Socket(host, port)
 		if sink:
 			wlsok.sink(compose(sink), self._selector)
 		else:
@@ -47,7 +47,7 @@ class WlService:
 	def listen(self, host, port, sinkFactory = None):
 		def acceptor(wlsok):
 			wlsok.sink(compose(sinkFactory()), self._selector)
-		wlistener =  WlListen(host, port, acceptor)
+		wlistener =  Listen(host, port, acceptor)
 		self._selector.add(wlistener, 'r')
 		return wlistener
 

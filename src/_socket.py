@@ -25,14 +25,13 @@
 from types import GeneratorType
 from socket import SOL_SOCKET, SO_RCVBUF, SHUT_RDWR
 from functools import partial as curry
-from weightless._select import WriteIteration, ReadIteration, SuspendIteration
+from weightless._select import WriteIteration, ReadIteration
 
 from time import sleep
 
 WRITE_ITERATION = WriteIteration()
 READ_ITERATION = ReadIteration()
 STOP_ITERATION = StopIteration()
-SUSPEND_ITERATION = SuspendIteration()
 
 class Socket:
 
@@ -54,9 +53,7 @@ class Socket:
             response = generator.next()
         except (StopIteration, GeneratorExit):
             raise ValueError('useless generator: exhausted at first next()')
-        if isinstance(response, WlAsyncProcessor):
-            response.start(self)
-        elif response:
+        if response:
             self._write_queue.append(response)
             self._selector.add(self, 'w')
         else:
@@ -69,9 +66,6 @@ class Socket:
             raise STOP_ITERATION
         else:
             response = self._sink.send(data)
-            if isinstance(response, WlAsyncProcessor):
-                response.start(self)
-                raise SUSPEND_ITERATION
             if response:
                 self._write_queue.append(response)
                 raise WRITE_ITERATION
@@ -87,9 +81,6 @@ class Socket:
             self._write_queue.pop(0)
         if not self._write_queue:
             response = self._sink.next()
-            if isinstance(response, WlAsyncProcessor):
-                response.start(self)
-                raise SUSPEND_ITERATION
             if not response:
                 raise READ_ITERATION
             self._write_queue.append(response)
@@ -99,9 +90,7 @@ class Socket:
             response = self._sink.next()
         except (StopIteration, GeneratorExit):
             return
-        if isinstance(response, WlAsyncProcessor):
-            response.start(self)
-        elif response:
+        if response:
             self._write_queue.append(response)
             self._selector.add(self, 'w')
         else:

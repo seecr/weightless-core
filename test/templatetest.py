@@ -103,8 +103,6 @@ def template(sets, prefixes, stamp, unique):
 		'<setSpec>%s</setSpec>' % set
 	'</sets>'
 	'<prefixes>'
-	a=2*3
-	yield str(a)
 	for prefix in prefixes:
 		'<prefix>%s</prefix>' % prefix
 	'</prefixes>'

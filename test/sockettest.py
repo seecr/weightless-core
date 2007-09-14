@@ -95,13 +95,13 @@ class SocketTest(TestCase):
 		sok = Socket(CallTrace(returnValues={'getsockopt':10}))
 		mockSelect = CallTrace()
 		sok.sink((x for x in [None]), mockSelect)
-		self.assertEquals("add(<weightless.wlsocket.wlbasesocket.Socket>, 'r')", str(mockSelect.calledMethods[0]))
+		self.assertEquals("add(<weightless._socket.Socket>, 'r')", str(mockSelect.calledMethods[0]))
 
 	def testStartWithWriting(self):
 		sok = Socket(CallTrace(returnValues={'getsockopt':10}))
 		mockSelect = CallTrace()
 		sok.sink((x for x in ['data']), mockSelect)
-		self.assertEquals("add(<weightless.wlsocket.wlbasesocket.Socket>, 'w')", str(mockSelect.calledMethods[0]))
+		self.assertEquals("add(<weightless._socket.Socket>, 'w')", str(mockSelect.calledMethods[0]))
 
 	def testReadDataFromSocketAndSendToGenerator(self):
 		mockSok = CallTrace(returnValues={'getsockopt':10})
@@ -133,7 +133,7 @@ class SocketTest(TestCase):
 		sok = Socket(mockSok)
 		mockSelect = CallTrace()
 		sok.sink((data for data in [None, 'data to write', 'more', None, None, 'even more to write']), mockSelect)
-		self.assertEquals("add(<weightless.wlsocket.wlbasesocket.Socket>, 'r')", str(mockSelect.calledMethods[0]))
+		self.assertEquals("add(<weightless._socket.Socket>, 'r')", str(mockSelect.calledMethods[0]))
 		try:
 			sok.readable()
 			self.fail()
@@ -190,23 +190,6 @@ class SocketTest(TestCase):
 					data = yield None
 				yield data
 			yield 'trailer'
-
-	def testConnectNOTNOTNOTAsync(self):
-		# setting the socket to non-blocking makes error handling very difficult and
-		# it still is not completely async because the DNS lookup it synchronous.
-		# better solve this by doing the connect in a thread pool
-		s = WlSocket('www.cq2.nl', 80) # no async connect
-		counter = 0
-		while not select([], [s], [], 0)[1]:
-			counter += 1
-		self.assertEquals(0, counter) # it easily counts to 2000 when async
-
-	def testAsyncConnectWithUnknownHost(self):
-		try:
-			s = WlSocket('fhfkdieustdjcm.nl', 80) # async connect
-			self.fail()
-		except gaierror:
-			pass
 
 	def testBufferedSendForAsyncSupport(self):
 		# Eata comes in from One socket and sent to an Other. These both stream might need

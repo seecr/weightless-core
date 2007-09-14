@@ -30,14 +30,14 @@ from random import random
 
 PORT = 2048 + int(random() * 4096.0)
 
-class WlServiceTest(TestCase):
+class ServiceTest(TestCase):
 
 	def tearDown(self):
 		global PORT
 		PORT = PORT + 1 # trick to avoid 'post already in use'
 
 	def testOpen(self):
-		service = WlService()
+		service = Service()
 		def sink(buf):
 			data = yield None
 			buf.append(data)
@@ -47,7 +47,7 @@ class WlServiceTest(TestCase):
 		self.assertEquals('from unittest import', fileContents[0][:20])
 
 	def testListen(self):
-		service = WlService()
+		service = Service()
 		recv = []
 		def handler():
 			data = yield None
@@ -75,7 +75,7 @@ class WlServiceTest(TestCase):
 			response = yield recvResponse()
 			codes.append(response)
 			wait.set()
-		service = WlService()
+		service = Service()
 		service.open('http://www.cq2.org', handler())
 		wait.wait()
 		self.assertEquals('302', codes[0].StatusCode)
