@@ -24,6 +24,8 @@
 
 from unittest import TestCase
 from sys import stdout
+from StringIO import StringIO
+import sys
 
 from weightless._compose_py import compose as compose_python, RETURN
 from weightless._compose_pyx import compose as compose_pyrex
@@ -161,6 +163,15 @@ class ComposeTest(TestCase):
             pass
         self.assertEquals([RETURN, 'result', 'remainingData0', 'remainingData1', None, None], messages)
         self.assertEquals(['A', 'B', 'C'], responses)
+
+    def testStopIterationWithReturnValue(self):
+        def f():
+            raise StopIteration('return value')
+            yield 'something'
+        def g():
+            self.retval = yield f()
+        list(compose(g()))
+        self.assertEquals('return value', self.retval)
 
     def testReturnInNestedGeneratorQuiteTricky(self):
         r = []
@@ -423,15 +434,3 @@ class ComposePythonTest(ComposeTest):
         self.compose = compose_python
         ComposeTest.setUp(self)
         self.assertComposeImpl(compose_python)
-
-    def testStopIterationWithReturnValue(self):
-        data = []
-        def child():
-            raise StopIteration('retval')
-            yield 'something'
-        def parent():
-            result = yield child()
-            data.append(result)
-        g = compose(parent())
-        list(g)
-        self.assertEquals('retval', data[0])
