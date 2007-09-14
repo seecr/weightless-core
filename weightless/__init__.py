@@ -20,17 +20,11 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-VERSION='1.9'
+
+VERSION='0.20'
+
 from platform import python_version
 
-#from _compose_py import compose, RETURN
-#from _pool import Pool
-#from _socket import Socket
-#from _select import Select
-#from _service import Service
-#from _template import Template
-
-#python 2.4 stuff
 from _acceptor import Acceptor
 from _reactor import Reactor
 from _httpreader import HttpReader

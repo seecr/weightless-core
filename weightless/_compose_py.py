@@ -29,49 +29,51 @@ from types import GeneratorType
 RETURN = 1
 
 def compose(initial):
-	"""
-	The method compose() allows program (de)composition with generators.  It enables calls like:
-		retvat = yield otherGenerator(args)
-	The otherGenerator may return values by:
-		yield RETURN, retvat, remaining data
-	Remaining data might be present if the otherGenerator consumes less than it get gets.  It must
-	make this remaining data available to the calling generator by yielding it as shown.
+    """
+    The method compose() allows program (de)composition with generators.  It enables calls like:
+        retvat = yield otherGenerator(args)
+    The otherGenerator may return values by:
+        yield RETURN, retvat, remaining data
+    Remaining data might be present if the otherGenerator consumes less than it get gets.  It must
+    make this remaining data available to the calling generator by yielding it as shown.
     Most notably, compose enables catching exceptions:
         try:
             retvat = yield otherGenerator(args)
         except Exception:
             pass
     This will work as expected: it catches an exception thrown by otherGenerator.
-	"""
-	generators = [initial]
-	messages = [None]
-	exception = None
-	while generators:
-		generator = generators[-1]
-		try:
-			if exception:
-				response = generator.throw(exception)
-				exception = None
-			else:
-				message = messages.pop(0)
-				response = generator.send(message)
-			if type(response) == GeneratorType:
-				generators.append(response)
-				messages.insert(0, None)
-			elif type(response) == tuple:
-				messages = list(response) + messages
-			elif response or not messages:
-				try:
-					message = yield response
-					messages.append(message)
-				except Exception, ex:
-					exception = ex
-		except StopIteration:
-			generators.pop()
-			if not messages:
-				messages.append(None)
-		except Exception, ex:
-			generators.pop()
-			exception = ex
-	if exception:
-		raise exception
+    """
+    generators = [initial]
+    messages = [None]
+    exception = None
+    while generators:
+        generator = generators[-1]
+        try:
+            if exception:
+                response = generator.throw(exception)
+                exception = None
+            else:
+                message = messages.pop(0)
+                response = generator.send(message)
+            if type(response) == GeneratorType:
+                generators.append(response)
+                messages.insert(0, None)
+            elif type(response) == tuple:
+                messages = list(response) + messages
+            elif response or not messages:
+                try:
+                    message = yield response
+                    messages.append(message)
+                except Exception, ex:
+                    exception = ex
+        except StopIteration, returnValue:
+            generators.pop()
+            if returnValue.args:
+                messages = list(returnValue.args) + messages
+            if not messages:
+                messages.append(None)
+        except Exception, ex:
+            generators.pop()
+            exception = ex
+    if exception:
+        raise exception

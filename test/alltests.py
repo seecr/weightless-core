@@ -39,7 +39,6 @@ from httpservertest import HttpServerTest
 
 if python_version() >= "2.5":
     from composetest import ComposePythonTest, ComposePyrexTest
-    from teetest import TeeTest
 
 if __name__ == '__main__':
 	unittest.main()
