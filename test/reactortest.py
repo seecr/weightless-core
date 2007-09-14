@@ -24,7 +24,9 @@
 #
 from unittest import TestCase
 from cq2utils.calltrace import CallTrace
-from time import time
+from time import time, sleep
+from signal import signal, SIGALRM, alarm, pause
+from select import error as ioerror
 import os, sys
 from tempfile import mkstemp
 from StringIO import StringIO
@@ -108,7 +110,7 @@ class ReactorTest(TestCase):
             reactor.addTimer(-1, None)
             self.fail('should raise exeption')
         except Exception, e:
-            self.assertEquals('Timeout must be greater than 0. It was -1.', str(e))
+            self.assertEquals('Timeout must be >= 0. It was -1.', str(e))
 
     def testDuplicateTimerDoesNotCauseZeroTimeout(self):
         itstime = []
@@ -144,3 +146,109 @@ class ReactorTest(TestCase):
                 self.fail('must not raise exception')
         finally:
             sys.stderr = sys.__stderr__
+
+    def testWriteFollowsRead(self):
+        reactor = Reactor(lambda r,w,o,t: (r,w,o))
+        t = []
+        def read():
+            t.append('t1')
+        def write():
+            t.append('t2')
+        reactor.addWriter('sok1', write)
+        reactor.addReader('sok1', read)
+        reactor.step()
+        self.assertEquals(['t1', 't2'], t)
+
+    def testReadDeletesWrite(self):
+        reactor = Reactor(lambda r,w,o,t: (r,w,o))
+        self.read = self.write = False
+        def read():
+            self.read = True
+            reactor.removeWriter('sok1')
+        def write():
+            self.write = True
+        reactor.addWriter('sok1', write)
+        reactor.addReader('sok1', read)
+        reactor.step()
+        self.assertTrue(self.read)
+        self.assertFalse(self.write)
+
+    def testReadFollowsTimer(self):
+        reactor = Reactor(lambda r,w,o,t: (r,w,o))
+        t = []
+        def timer():
+            t.append('t1')
+        def read():
+            t.append('t2')
+        reactor.addTimer(0, timer)
+        reactor.addReader('sok1', read)
+        reactor.step()
+        self.assertEquals(['t1', 't2'], t)
+
+    def testTimerDeletesRead(self):
+        reactor = Reactor(lambda r,w,o,t: (r,w,o))
+        self.read = self.timer = False
+        def read():
+            self.read = True
+        def timer():
+            self.timer = True
+            reactor.removeReader('sok1')
+        reactor.addTimer(0, timer)
+        reactor.addReader('sok1', read)
+        reactor.step()
+        self.assertTrue(self.timer)
+        self.assertFalse(self.read)
+
+    def testInterruptedSelectDoesNotDisturbTimer(self):
+        reactor = Reactor()
+        self.time = False
+        def signalHandler(signum, frame):
+            self.alarm = True
+        def timeout():
+            self.time = time()
+        signal(SIGALRM, signalHandler)
+        targetTime = time() + 1.1
+        reactor.addTimer(1.1, timeout)
+        alarm(1) # alarm only accept ints....
+        try:
+            while not self.time:
+                reactor.step()
+            self.assertTrue(self.alarm)
+            self.assertTrue(targetTime - 0.01 < self.time, targetTime + 0.01)
+        except ioerror:
+            self.fail('must not fail on Interrupted system call')
+
+    def testGetRidOfBadFileDescriptors(self):
+        reactor = Reactor()
+        self.timeout = False
+        def timeout():
+            self.timeout = True
+        reactor.addReader(99, None) # broken
+        reactor.addWriter(99, None) # broken
+        reactor.addTimer(0.01, timeout)
+        for i in range(10):
+            if self.timeout:
+                break
+            reactor.step()
+        self.assertTrue(self.timeout)
+
+    def testDoNotDieButLogOnProgrammingErrors(self):
+        reactor = Reactor()
+        reactor.addReader('not a sok', None)
+        try:
+            sys.stderr = StringIO()
+            reactor.step()
+            sys.stderr.seek(0)
+            self.assertTrue('TypeError: argument must be an int' in sys.stderr.getvalue())
+            sys.stderr = sys.__stderr__
+        except TypeError:
+            self.fail('must not fail')
+
+    def testDoNotMaskOtherErrors(self):
+        def raiser(*args): raise Exception('oops')
+        reactor = Reactor(raiser)
+        try:
+            reactor.step()
+            self.fail('must raise oops')
+        except Exception, e:
+            self.assertEquals('oops', str(e))
