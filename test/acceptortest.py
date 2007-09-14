@@ -25,15 +25,17 @@ from socket import socket
 from weightless import Acceptor
 from cq2utils import CallTrace
 from random import randint
+from os import system
 
 class AcceptorTest(TestCase):
 
     def testStartListening(self):
         reactor = CallTrace()
-        acceptor = Acceptor(reactor, randint(2**10, 2**16), None)
+        port = randint(2**10, 2**16)
+        acceptor = Acceptor(reactor, port, None)
         self.assertEquals('addReader', reactor.calledMethods[0].name)
         sok = reactor.calledMethods[0].args[0]
-        self.assertEquals(3, sok.fileno())
+        self.assertEquals(0, system('netstat --ip --listening | grep "*:%d">/dev/null' % port))
         sok.close()
         callback = reactor.calledMethods[0].args[1]
         self.assertTrue(callable(callback))
@@ -43,7 +45,6 @@ class AcceptorTest(TestCase):
         port = randint(2**10, 2**16)
         acceptor = Acceptor(reactor, port, lambda sok: None)
         self.assertEquals('addReader', reactor.calledMethods[0].name)
-        self.assertEquals(3, reactor.calledMethods[0].args[0].fileno())
         acceptCallback = reactor.calledMethods[0].args[1]
         sok = socket()
         sok.connect(('localhost', port))
