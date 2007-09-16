@@ -93,7 +93,7 @@ class ReactorTest(TestCase):
         itstime = []
         while not itstime:
             reactor.step()
-        self.assertTrue(0.045 < time() - start < 0.055)
+        self.assertTrue(0.045 < time() - start < 0.055, time() - start)
         itstime = []
         while not itstime:
             reactor.step()
