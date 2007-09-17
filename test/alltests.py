@@ -36,10 +36,10 @@ from acceptortest import AcceptorTest
 from reactortest import ReactorTest
 from httpreadertest import HttpReaderTest
 from httpservertest import HttpServerTest
-from giotest import GioTest
 
 if python_version() >= "2.5":
     from composetest import ComposePythonTest, ComposePyrexTest
+    from giotest import GioTest
 
 if __name__ == '__main__':
 	unittest.main()

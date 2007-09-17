@@ -23,6 +23,7 @@
 from unittest import TestCase
 from random import randint
 from socket import socket
+from select import select
 from weightless import Reactor, HttpServer
 from time import sleep
 from weightless import _httpserver
@@ -128,7 +129,6 @@ class HttpServerTest(TestCase):
         timers = []
         orgAddTimer = reactor.addTimer
         def addTimerInterceptor(*timer):
-            #print timer
             timers.append(timer)
             return orgAddTimer(*timer)
         reactor.addTimer = addTimerInterceptor
@@ -136,7 +136,7 @@ class HttpServerTest(TestCase):
         sok = socket()
         sok.connect(('localhost', port))
         sok.send('GET HTTP/1.0\r\n\r\n') # no path
-        for i in range(8):
+        while select([sok],[], [], 0) != ([sok], [], []):
             reactor.step()
         response = sok.recv(4096)
         self.assertEquals('HTTP/1.0 400 Bad Request\r\n\r\n', response)

@@ -27,10 +27,10 @@ from platform import python_version
 
 if python_version() >= "2.5":
     from _compose_pyx import compose, RETURN
+    import _gio as gio
 
 from _acceptor import Acceptor
 from _reactor import Reactor
 from _httpreader import HttpReader
 from _httpserver import HttpServer
-import _gio as gio
 

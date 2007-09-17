@@ -42,7 +42,9 @@ def server(port, response, request):
 
     thread=Thread(None, serverProcess)
     thread.start()
-    sleep(0.01) # yield
+    sleep(0.02) # yield to give serverProcess a chance to create a socket and listen
+    sleep(0.02) # yield to give serverProcess a chance to create a socket and listen
+    sleep(0.02) # yield to give serverProcess a chance to create a socket and listen
     return thread
 
 class HttpReaderTest(TestCase):
