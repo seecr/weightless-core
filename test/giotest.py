@@ -31,3 +31,15 @@ class GioTest(TestCase):
         reactor.step()
         reactor.step()
         self.assertEquals('ape', self.data)
+
+    def testNonExistingFile(self):
+        reactor = Reactor()
+        def eventGenerator():
+            try:
+                sok = yield gio.open('nonexisting')
+            except IOError, e:
+                self.assertEquals("[Errno 2] No such file or directory: 'nonexisting'", str(e))
+        try:
+            gio.Gio(reactor, eventGenerator())
+        except IOError, e:
+            self.fail(e)

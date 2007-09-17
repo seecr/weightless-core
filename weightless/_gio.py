@@ -12,9 +12,13 @@ class Gio(object):
     def _continue(self, value):
         try:
             event = self._eventGenerator.send(value)
-            event(self._reactor, self._continue)
+            event(self._reactor, self._continue, self._error)
         except StopIteration:
             pass
+
+    def _error(self, exception):
+        event = self._eventGenerator.throw(exception)
+        event(self._reactor, self._continue, self._error)
 
 class open(object):
 
@@ -22,10 +26,13 @@ class open(object):
         self._uri = uri
         self._mode = mode
 
-    def __call__(self, reactor, continuation):
-        self._sok = python_open(self._uri, self._mode)
-        self.fileno = self._sok.fileno
-        continuation(self)
+    def __call__(self, reactor, continuation, error):
+        try:
+            self._sok = python_open(self._uri, self._mode)
+            self.fileno = self._sok.fileno
+            continuation(self)
+        except IOError, e:
+            error(e)
 
     def read(self):
         return _read(self)
@@ -41,7 +48,7 @@ class _read(object):
     def __init__(self, sok):
         self._sok = sok._sok
 
-    def __call__(self, reactor, continuation):
+    def __call__(self, reactor, continuation, error):
         self._reactor = reactor
         self._continuation = continuation
         reactor.addReader(self._sok, self._doread)
@@ -56,7 +63,7 @@ class _write(object):
         self._sok = sok._sok
         self._data = data
 
-    def __call__(self, reactor, continuation):
+    def __call__(self, reactor, continuation, error):
         self._reactor = reactor
         self._continuation = continuation
         reactor.addWriter(self._sok, self._dowrite)
@@ -70,5 +77,5 @@ class _close(object):
     def __init__(self, sok):
         self._sok = sok
 
-    def __call__(self, reactor, continuation):
+    def __call__(self, reactor, continuation, error):
         continuation(self._sok.close())
