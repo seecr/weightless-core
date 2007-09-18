@@ -21,11 +21,13 @@
 #
 ## end license ##
 from os import system
+import sys
 from os.path import dirname, abspath
 
 # development support; the simplest thing that could possibly work
 dirName = abspath(dirname(__file__))
 if "trunk/" in dirName:
-    system("cd %s; python2.5 setup.py build_ext --inplace" % dirName)
+    x = ":".join(abspath(path) for path in sys.path)
+    system("cd %s/../..; PYTHONPATH=%s python2.5 setup.py build_ext --inplace" % (dirName,x))
 
-from compose import compose, RETURN
+from _compose_pyx import compose, RETURN
