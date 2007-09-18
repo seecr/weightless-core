@@ -421,6 +421,21 @@ class ComposeTest(TestCase):
         except Exception, e:
             self.assertEquals("Exception(GeneratorExit(),)", repr(e))
 
+    def testMaskException(self):
+        def f():
+            try:
+                yield 'a'
+            except:
+                pass
+        c = compose(f())
+        c.next()
+        try:
+            c.throw(Exception('aap'))
+        except StopIteration:
+            pass
+        except Exception, e:
+            self.fail(str(e))
+
 class ComposePyrexTest(ComposeTest):
 
     def setUp(self):

@@ -67,6 +67,7 @@ def compose(initial):
                 except Exception, ex:
                     exception = ex
         except StopIteration, returnValue:
+            exception = None
             generators.pop()
             if returnValue.args:
                 messages = list(returnValue.args) + messages
