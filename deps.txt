@@ -1,1 +1,2 @@
-svn+ssh://svn@svn.cq2.org/svn/cq2utils/trunk
+python-cq2utils (>=5.0)
+python-sendfile (>=1.2.2)

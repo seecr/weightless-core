@@ -24,16 +24,18 @@ from unittest import TestCase
 from random import randint
 from time import sleep
 from socket import socket
-from threading import Thread
+from threading import Thread, Event
 from weightless import HttpReader, Reactor, VERSION as WlVersion
 import sys
 from StringIO import StringIO
 
 def server(port, response, request):
+    isListening = Event()
     def serverProcess():
         serverSok = socket()
         serverSok.bind(('0.0.0.0', port))
         serverSok.listen(1)
+        isListening.set()
         newSok, addr = serverSok.accept()
         request.append(newSok.recv(4096))
         newSok.send(response)
@@ -42,9 +44,7 @@ def server(port, response, request):
 
     thread=Thread(None, serverProcess)
     thread.start()
-    sleep(0.02) # yield to give serverProcess a chance to create a socket and listen
-    sleep(0.02) # yield to give serverProcess a chance to create a socket and listen
-    sleep(0.02) # yield to give serverProcess a chance to create a socket and listen
+    isListening.wait()
     return thread
 
 class HttpReaderTest(TestCase):

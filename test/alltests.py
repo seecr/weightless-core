@@ -23,11 +23,14 @@
 ## end license ##
 #
 from platform import python_version
-from sys import path
 from glob import glob
+import os, sys
+
 for file in glob('../deps.d/*'):
-    path.insert(0, file)
-path.insert(0, '..')
+    sys.path.insert(0, file)
+
+if os.environ.get('PYTHONPATH', '') == '':
+    sys.path.insert(0, '..')
 
 import unittest
 
@@ -40,6 +43,8 @@ from httpservertest import HttpServerTest
 if python_version() >= "2.5":
     from composetest import ComposePythonTest, ComposePyrexTest
     from giotest import GioTest
+else:
+    print 'Skipping Python 2.5 tests.'
 
 if __name__ == '__main__':
 	unittest.main()

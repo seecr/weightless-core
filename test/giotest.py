@@ -8,7 +8,7 @@ class GioTest(TestCase):
         def eventGenerator():
             self.sok = yield gio.open('data/testdata5kb')
         gio.Gio(reactor, eventGenerator())
-        self.assertEquals(4, self.sok.fileno())
+        self.assertEquals('data/testdata5kb', self.sok._sok.name)
 
     def testSokRead(self):
         reactor = Reactor()
