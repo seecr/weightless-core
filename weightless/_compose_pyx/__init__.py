@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
@@ -21,30 +20,14 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-#
-from platform import python_version
-from glob import glob
-import os, sys
+from os import system
+import sys
+from os.path import dirname, abspath
 
-for file in glob('../deps.d/*'):
-    sys.path.insert(0, file)
+# development support; the simplest thing that could possibly work
+dirName = abspath(dirname(__file__))
+if "trunk/" in dirName:
+    x = ":".join(abspath(path) for path in sys.path)
+    system("cd %s/../..; PYTHONPATH=%s python2.5 setup.py build_ext --inplace" % (dirName,x))
 
-if os.environ.get('PYTHONPATH', '') == '':
-    sys.path.insert(0, '..')
-
-import unittest
-
-# Python >= 2.4
-from acceptortest import AcceptorTest
-from reactortest import ReactorTest
-from httpreadertest import HttpReaderTest
-from httpservertest import HttpServerTest
-
-if python_version() >= "2.5":
-    from composetest import ComposePythonTest, ComposePyrexTest
-    from giotest import GioTest
-else:
-    print 'Skipping Python 2.5 tests.'
-
-if __name__ == '__main__':
-	unittest.main()
+from _compose_pyx import compose, RETURN

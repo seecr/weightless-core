@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
@@ -21,30 +20,13 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-#
-from platform import python_version
-from glob import glob
-import os, sys
+from distutils.core import setup
+from distutils.extension import Extension
+from Pyrex.Distutils import build_ext
 
-for file in glob('../deps.d/*'):
-    sys.path.insert(0, file)
-
-if os.environ.get('PYTHONPATH', '') == '':
-    sys.path.insert(0, '..')
-
-import unittest
-
-# Python >= 2.4
-from acceptortest import AcceptorTest
-from reactortest import ReactorTest
-from httpreadertest import HttpReaderTest
-from httpservertest import HttpServerTest
-
-if python_version() >= "2.5":
-    from composetest import ComposePythonTest, ComposePyrexTest
-    from giotest import GioTest
-else:
-    print 'Skipping Python 2.5 tests.'
-
-if __name__ == '__main__':
-	unittest.main()
+setup(
+    name='weightless',
+    packages=['weightless', 'weightless.http', 'weightless._compose_pyx'],
+    ext_modules=[Extension("weightless._compose_pyx/_compose_pyx", ["weightless/_compose_pyx/_compose_pyx.pyx"])],
+    cmdclass = {'build_ext': build_ext}
+)

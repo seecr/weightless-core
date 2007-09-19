@@ -1,2 +1,0 @@
-from wlstatustest import WlStatusTest
-from wlpooltest import WlPoolTest
