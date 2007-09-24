@@ -23,10 +23,19 @@
 from distutils.core import setup
 from distutils.extension import Extension
 from Pyrex.Distutils import build_ext
+from platform import python_version
 
-setup(
-    name='weightless',
-    packages=['weightless', 'weightless.http', 'weightless._compose_pyx'],
-    ext_modules=[Extension("weightless._compose_pyx/_compose_pyx", ["weightless/_compose_pyx/_compose_pyx.pyx"])],
-    cmdclass = {'build_ext': build_ext}
+if python_version() >= '2.5':
+    setup(
+        name='weightless',
+        packages=['weightless', 'weightless.http', 'weightless._compose_pyx'],
+        ext_modules=[Extension("weightless._compose_pyx/_compose_pyx", ["weightless/_compose_pyx/_compose_pyx.pyx"])],
+        cmdclass = {'build_ext': build_ext}
 )
+
+else:
+    setup(
+        name='weightless',
+        packages=['weightless', 'weightless.http']
+)
+
