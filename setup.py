@@ -28,7 +28,7 @@ from platform import python_version
 if python_version() >= '2.5':
     setup(
         name='weightless',
-        packages=['weightless', 'weightless.http', 'weightless.utils'],
+        packages=['weightless', 'weightless.python2_5', 'weightless.http', 'weightless.utils'],
         ext_modules=[Extension("weightless.python2_5._compose_pyx", ["weightless/python2_5/_compose_pyx.pyx"])],
         cmdclass = {'build_ext': build_ext}
 )
