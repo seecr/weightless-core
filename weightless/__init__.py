@@ -26,11 +26,11 @@ VERSION='0.1.x'
 from platform import python_version
 
 if python_version() >= "2.5":
-    from python2_5 import *
+    from python2_5._compose_pyx import compose, RETURN
+    import python2_5._gio as gio
+    from python2_5.http import sendRequest, recvRegExp, recvBytes, recvBody, sendBody, copyBody, HttpException
 
 from _acceptor import Acceptor
 from _reactor import Reactor
 from _httpreader import HttpReader
 from _httpserver import HttpServer
-
-import httpspec as http

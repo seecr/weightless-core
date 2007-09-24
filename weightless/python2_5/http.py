@@ -25,7 +25,7 @@ from sys import stderr
 from urlparse import urlsplit
 from weightless import RETURN
 from weightless.utils import Dict
-from spec import HTTP, REGEXP, FORMAT
+from weightless.http import HTTP, REGEXP, FORMAT
 from functools import partial as curry
 
 SupportedMethods = ['GET']
