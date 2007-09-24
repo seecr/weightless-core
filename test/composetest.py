@@ -27,8 +27,8 @@ from sys import stdout
 from StringIO import StringIO
 import sys
 
-from weightless._compose_py import compose as compose_python, RETURN
-from weightless._compose_pyx import compose as compose_pyrex
+from weightless.python2_5._compose_py import compose as compose_python, RETURN
+from weightless.python2_5._compose_pyx import compose as compose_pyrex
 
 class ComposeTest(TestCase):
 
