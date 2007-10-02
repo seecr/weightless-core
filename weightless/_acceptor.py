@@ -20,7 +20,8 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-from socket import socket
+from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER
+from struct import pack
 
 class Acceptor(object):
     """Listens on a port for incoming internet (TCP/IP) connections and calls a factory to create a handler for the new connection.  It does not use threads but a asynchronous reactor instead."""
@@ -30,6 +31,9 @@ class Acceptor(object):
         sok = socket()
         sok.bind(('0.0.0.0', port))
         sok.listen(1)
+        sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+        sok.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
+
         reactor.addReader(sok, self._accept)
         self._sinkFactory = sinkFactory
         self._sok = sok

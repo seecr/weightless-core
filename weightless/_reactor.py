@@ -73,7 +73,11 @@ class Reactor(object):
 
     def loop(self):
         while True:
-            self.step()
+            try:
+                self.step()
+            except KeyboardInterrupt:
+                self.shutdown()
+                break
 
     def step(self):
         if self._timers:
