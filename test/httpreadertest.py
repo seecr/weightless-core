@@ -99,23 +99,6 @@ class HttpReaderTest(TestCase):
         self.assertEquals('close', self.dataReceived[3]['Connection'])
         self.assertEquals('<p>The document has moved <a href="/page/softwarestudio.page/show">here</a></p>\n', ''.join(fragments))
 
-    def testOpenerRssFeed(self):
-        fragments = []
-        done = []
-        def receiveFragment(fragment):
-            if fragment == None:
-                done.append(True)
-            else:
-                fragments.append(fragment)
-        def receiveResponse(reader, Client, HTTPVersion=None, StatusCode=None, ReasonPhrase=None, Headers=None):
-            self.dataReceived = HTTPVersion, StatusCode, ReasonPhrase, Headers
-            reader.receiveFragment(receiveFragment)
-        reactor = Reactor()
-        reader = HttpReader(reactor, "http://www.opener.ou.nl/rss_all", receiveResponse)
-        while not done:
-            reactor.step()
-        self.assertTrue('<dc:subject>managementwetenschappen</dc:subject>' in ''.join(fragments))
-
     def testEmptyPath(self):
         port = randint(2**10, 2**16)
         reactor = Reactor()
