@@ -154,3 +154,48 @@ class HttpServerTest(TestCase):
             reactor.step()
         response = sok.recv(4096)
         self.assertEquals('aaa', response)
+
+    def testPostMethodReadsBody(self):
+        self.requestData = None
+        def handler(**kwargs):
+            self.requestData = kwargs
+
+        port = randint(20000,25000)
+        reactor = Reactor()
+        server = HttpServer(reactor, port, handler, timeout=0.01)
+        sok = socket()
+        sok.connect(('localhost', port))
+        sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\nbodydata')
+
+        while not self.requestData:
+            reactor.step()
+        self.assertEquals(dict, type(self.requestData))
+        self.assertTrue('Headers' in self.requestData)
+        headers = self.requestData['Headers']
+        self.assertEquals('POST', self.requestData['Method'])
+        self.assertEquals('application/x-www-form-urlencoded', headers['Content-Type'])
+        self.assertEquals(8, int(headers['Content-Length']))
+
+        self.assertTrue('Body' in self.requestData)
+        self.assertEquals('bodydata', self.requestData['Body'])
+
+    def testPostMethodTimesOutOnBadBody(self):
+        self.requestData = None
+        def handler(**kwargs):
+            self.requestData = kwargs
+
+        port = randint(20000,25000)
+        reactor = Reactor()
+        server = HttpServer(reactor, port, handler, timeout=0.01)
+        sok = socket()
+        sok.connect(('localhost', port))
+        sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\n')
+
+        reactor.step()
+
+        self.assertEquals(dict, type(self.requestData))
+        self.assertTrue('Headers' in self.requestData)
+        headers = self.requestData['Headers']
+        self.assertEquals(8, int(headers['Content-Length']))
+
+        self.assertFalse('Body' in self.requestData)

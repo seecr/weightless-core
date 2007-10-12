@@ -54,6 +54,13 @@ class HttpHandler(object):
             self._timer = None
         request = match.groupdict()
         request['Headers'] = parseHeaders(request['_headers'])
+
+        if request['Method'] == 'POST':
+            matchEnd = match.end()
+            if len(self._request[matchEnd:]) < int(request['Headers']['Content-Length']):
+                return
+            request['Body'] = self._request[matchEnd:]
+
         del request['_headers']
         request['Client'] = self._sok.getpeername()
         self._handler = self._generatorFactory(**request)
