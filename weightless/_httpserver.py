@@ -26,13 +26,13 @@ from socket import SHUT_RDWR
 
 RECVSIZE = 4096
 
-def HttpServer(reactor, port, generatorFactory, timeout=1):
+def HttpServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
-    return Acceptor(reactor, port, lambda sok: HttpHandler(reactor, sok, generatorFactory, timeout))
+    return Acceptor(reactor, port, lambda sok: HttpHandler(reactor, sok, generatorFactory, timeout, recvSize))
 
 class HttpHandler(object):
 
-    def __init__(self, reactor, sok, generatorFactory, timeout):
+    def __init__(self, reactor, sok, generatorFactory, timeout, recvSize=RECVSIZE):
         self._reactor = reactor
         self._sok = sok
         self._generatorFactory = generatorFactory
@@ -40,10 +40,11 @@ class HttpHandler(object):
         self._rest = None
         self._timeout = timeout
         self._timer = None
+        self._recvSize = recvSize
 
     def __call__(self):
         kwargs = {}
-        self._request += self._sok.recv(RECVSIZE)
+        self._request += self._sok.recv(self._recvSize)
         match = REGEXP.REQUEST.match(self._request)
         if not match:
             if not self._timer:

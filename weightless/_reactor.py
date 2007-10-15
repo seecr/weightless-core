@@ -107,7 +107,6 @@ class Reactor(object):
                 raise
             return
 
-
         for timer in self._timers:
             if timer.time > time(): # - fasterThanLightCorrection > time():
                 break

@@ -38,13 +38,13 @@ class HttpServerTest(TestCase):
         self.reactor.shutdown()
         self.reactor = None
 
-    def sendRequestAndReceiveResponse(self, request):
+    def sendRequestAndReceiveResponse(self, request, recvSize=4096):
         self.responseCalled = False
         def response(**kwargs):
             yield 'The Response'
             self.responseCalled = True
         port = randint(2**10, 2**16)
-        server = HttpServer(self.reactor, port, response)
+        server = HttpServer(self.reactor, port, response, recvSize=recvSize)
         sok = socket()
         sok.connect(('localhost', port))
         sok.send(request)
@@ -94,18 +94,17 @@ class HttpServerTest(TestCase):
         self.assertEquals({}, self.reactor._writers)
 
     def testSmallFragments(self):
-        _httpserver.RECVSIZE = 3
-        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
+        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n', recvSize=3)
         self.assertEquals('The Response', response)
 
     def testSmallFragmentsWhileSendingResponse(self):
-        _httpserver.RECVSIZE = 3
+
         def response(**kwargs):
             yield 'some text that is longer than '
             yield 'the lenght of fragments sent'
         port = randint(2**10, 2**16)
         reactor = Reactor()
-        server = HttpServer(reactor, port, response)
+        server = HttpServer(reactor, port, response, recvSize=3)
         sok = socket()
         sok.connect(('localhost', port))
         sok.send('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
@@ -145,7 +144,7 @@ class HttpServerTest(TestCase):
     def testValidRequestResetsTimer(self):
         port = randint(2**10, 2**16)
         reactor = Reactor()
-        server = HttpServer(reactor, port, lambda **kwargs: ('a' for a in range(3)), timeout=0.01)
+        server = HttpServer(reactor, port, lambda **kwargs: ('a' for a in range(3)), timeout=0.01, recvSize=3)
         sok = socket()
         sok.connect(('localhost', port))
         sok.send('GET / HTTP/1.0\r\n\r\n')
@@ -180,7 +179,6 @@ class HttpServerTest(TestCase):
         self.assertEquals('bodydata', self.requestData['Body'])
 
     def testPostMethodTimesOutOnBadBody(self):
-        _httpserver.RECVSIZE = 1024
         self.requestData = None
         def handler(**kwargs):
             self.requestData = kwargs
@@ -198,3 +196,4 @@ class HttpServerTest(TestCase):
         fromServer = sok.recv(1024)
 
         self.assertTrue('HTTP/1.0 400 Bad Request' in fromServer)
+
