@@ -57,8 +57,16 @@ class HttpHandler(object):
 
         if request['Method'] == 'POST':
             matchEnd = match.end()
-            if len(self._request[matchEnd:]) < int(request['Headers']['Content-Length']):
+            contentLength = int(request['Headers']['Content-Length'])
+
+            if len(self._request[matchEnd:]) < contentLength:
+                if not self._timer:
+                    self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
                 return
+            if self._timer:
+                self._reactor.removeTimer(self._timer)
+                self._timer = None
+
             request['Body'] = self._request[matchEnd:]
 
         del request['_headers']

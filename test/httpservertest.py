@@ -38,6 +38,20 @@ class HttpServerTest(TestCase):
         self.reactor.shutdown()
         self.reactor = None
 
+    def sendRequestAndReceiveResponse(self, request):
+        self.responseCalled = False
+        def response(**kwargs):
+            yield 'The Response'
+            self.responseCalled = True
+        port = randint(2**10, 2**16)
+        server = HttpServer(self.reactor, port, response)
+        sok = socket()
+        sok.connect(('localhost', port))
+        sok.send(request)
+        while not self.responseCalled:
+            self.reactor.step()
+        return sok.recv(4096)
+
     def testConnect(self):
         self.req = False
         def onRequest(**kwargs):
@@ -78,20 +92,6 @@ class HttpServerTest(TestCase):
         self.assertEquals('The Response', response)
         self.assertEquals(1, len(self.reactor._readers)) # only acceptor left
         self.assertEquals({}, self.reactor._writers)
-
-    def sendRequestAndReceiveResponse(self, request):
-        self.responseCalled = False
-        def response(**kwargs):
-            yield 'The Response'
-            self.responseCalled = True
-        port = randint(2**10, 2**16)
-        server = HttpServer(self.reactor, port, response)
-        sok = socket()
-        sok.connect(('localhost', port))
-        sok.send(request)
-        while not self.responseCalled:
-            self.reactor.step()
-        return sok.recv(4096)
 
     def testSmallFragments(self):
         _httpserver.RECVSIZE = 3
@@ -180,6 +180,7 @@ class HttpServerTest(TestCase):
         self.assertEquals('bodydata', self.requestData['Body'])
 
     def testPostMethodTimesOutOnBadBody(self):
+        _httpserver.RECVSIZE = 1024
         self.requestData = None
         def handler(**kwargs):
             self.requestData = kwargs
@@ -191,11 +192,9 @@ class HttpServerTest(TestCase):
         sok.connect(('localhost', port))
         sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\n')
 
-        reactor.step()
+        for i in range(3):
+            reactor.step()
 
-        self.assertEquals(dict, type(self.requestData))
-        self.assertTrue('Headers' in self.requestData)
-        headers = self.requestData['Headers']
-        self.assertEquals(8, int(headers['Content-Length']))
+        fromServer = sok.recv(1024)
 
-        self.assertFalse('Body' in self.requestData)
+        self.assertTrue('HTTP/1.0 400 Bad Request' in fromServer)

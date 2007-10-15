@@ -80,13 +80,19 @@ class Reactor(object):
                 break
 
     def step(self):
+        fasterThanLightCorrection = 0
         if self._timers:
             timeout = max(0, self._timers[0].time - time())
+            beforeSelectTime = time()
         else:
             timeout = None
 
         try:
             rReady, wReady, ignored = self._select(self._readers.keys(), self._writers.keys(), [], timeout)
+            if timeout and rReady == wReady == ignored == []:
+                selectTimeTaken = time() - beforeSelectTime
+                if selectTimeTaken < timeout:
+                    fasterThanLightCorrection = timeout - selectTimeTaken
         except TypeError:
             print_exc()
             self._findAndRemoveBadFd()
@@ -101,7 +107,7 @@ class Reactor(object):
             return
 
         for timer in self._timers:
-            if timer.time > time():
+            if timer.time - fasterThanLightCorrection > time():
                 break
             try:
                 timer.callback()
