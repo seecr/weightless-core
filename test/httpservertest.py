@@ -192,8 +192,8 @@ class HttpServerTest(TestCase):
         sok.connect(('localhost', port))
         sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\n')
 
-        for i in range(3):
-            reactor.step()
+        while not reactor.step():
+            pass
 
         fromServer = sok.recv(1024)
 
