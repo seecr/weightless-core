@@ -81,7 +81,7 @@ class HttpServerTest(TestCase):
         sok.send('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
         while not self.kwargs:
             reactor.step()
-        self.assertEquals({'RequestURI': '/path/here', 'HTTPVersion': '1.0', 'Method': 'GET', 'Headers': {'Connection': 'close', 'Ape-Nut': 'Mies'}, 'Client': ('127.0.0.1', MATCHALL)}, self.kwargs)
+        self.assertEquals({'Body': '', 'RequestURI': '/path/here', 'HTTPVersion': '1.0', 'Method': 'GET', 'Headers': {'Connection': 'close', 'Ape-Nut': 'Mies'}, 'Client': ('127.0.0.1', MATCHALL)}, self.kwargs)
 
     def testGetResponse(self):
         response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
@@ -194,6 +194,23 @@ class HttpServerTest(TestCase):
             pass
 
         fromServer = sok.recv(1024)
-
         self.assertTrue('HTTP/1.0 400 Bad Request' in fromServer)
+
+    def testReadChunkedPost(self):
+        self.requestData = None
+        def handler(**kwargs):
+            self.requestData = kwargs
+
+        port = randint(20000,25000)
+        reactor = Reactor()
+        server = HttpServer(reactor, port, handler, timeout=0.01)
+        sok = socket()
+        sok.connect(('localhost', port))
+        sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nabcde\r\n5\r\nfghij\r\n0\r\n')
+
+        reactor.step()
+        reactor.step()
+
+        self.assertTrue('Body' in self.requestData)
+        self.assertEquals('abcdefghij', self.requestData['Body'])
 

@@ -25,6 +25,7 @@ from weightless.http import REGEXP, FORMAT, HTTP, parseHeaders
 from socket import SHUT_RDWR
 
 RECVSIZE = 4096
+CRLF_LEN = 2
 
 def HttpServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
@@ -36,16 +37,26 @@ class HttpHandler(object):
         self._reactor = reactor
         self._sok = sok
         self._generatorFactory = generatorFactory
-        self._request = ''
+        self._dataBuffer = ''
         self._rest = None
         self._timeout = timeout
         self._timer = None
         self._recvSize = recvSize
+        self.request = None
+        self._dealWithCall = self._readHeaders
 
     def __call__(self):
         kwargs = {}
-        self._request += self._sok.recv(self._recvSize)
-        match = REGEXP.REQUEST.match(self._request)
+        self._dataBuffer += self._sok.recv(self._recvSize)
+        self._dealWithCall()
+
+    def setCallDealer(self, aMethod):
+        self._dealWithCall = aMethod
+        self._dealWithCall()
+
+    def _readHeaders(self):
+
+        match = REGEXP.REQUEST.match(self._dataBuffer)
         if not match:
             if not self._timer:
                 self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
@@ -53,26 +64,62 @@ class HttpHandler(object):
         if self._timer:
             self._reactor.removeTimer(self._timer)
             self._timer = None
-        request = match.groupdict()
-        request['Headers'] = parseHeaders(request['_headers'])
+        self.request = match.groupdict()
+        self.request['Body'] = ''
+        self.request['Headers'] = parseHeaders(self.request['_headers'])
+        matchEnd = match.end()
+        self._dataBuffer = self._dataBuffer[matchEnd:]
+        self.setCallDealer(self._readBody)
 
-        if request['Method'] == 'POST':
-            matchEnd = match.end()
-            contentLength = int(request['Headers']['Content-Length'])
+    def _readBody(self):
+        if self.request['Method'] == 'GET':
+            self.finalize()
+        elif self.request['Method'] == 'POST':
+            if 'Content-Length' in self.request['Headers']:
+                contentLength = int(self.request['Headers']['Content-Length'])
 
-            if len(self._request[matchEnd:]) < contentLength:
+                if len(self._dataBuffer) < contentLength:
+                    if not self._timer:
+                        self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
+                    return
+                if self._timer:
+                    self._reactor.removeTimer(self._timer)
+                    self._timer = None
+
+                self.request['Body'] = self._dataBuffer
+                self.finalize()
+            elif 'Transfer-Encoding' in self.request['Headers'] and self.request['Headers']['Transfer-Encoding'] == 'chunked':
+                self.setCallDealer(self._readChunk)
+
+    def _readChunk(self):
+        match = REGEXP.CHUNK_SIZE_LINE.match(self._dataBuffer)
+        if not match:
+            if not self._timer:
+                self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
+            return # for more data
+        if self._timer:
+            self._reactor.removeTimer(self._timer)
+            self._timer = None
+        chunkSize = int(match.groupdict()['ChunkSize'], 16)
+        self._dataBuffer = self._dataBuffer[match.end():]
+        if chunkSize == 0:
+            self.finalize()
+        else:
+            if len(self._dataBuffer) < chunkSize:
                 if not self._timer:
                     self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
-                return
+                return # for more data
             if self._timer:
                 self._reactor.removeTimer(self._timer)
                 self._timer = None
+            self.request['Body'] += self._dataBuffer[:chunkSize]
+            self._dataBuffer = self._dataBuffer[chunkSize + CRLF_LEN:]
+            self._readChunk()
 
-            request['Body'] = self._request[matchEnd:]
-
-        del request['_headers']
-        request['Client'] = self._sok.getpeername()
-        self._handler = self._generatorFactory(**request)
+    def finalize(self):
+        del self.request['_headers']
+        self.request['Client'] = self._sok.getpeername()
+        self._handler = self._generatorFactory(**self.request)
         self._reactor.removeReader(self._sok)
         self._reactor.addWriter(self._sok, self._writeResponse)
 
