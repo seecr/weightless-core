@@ -69,6 +69,8 @@ class HttpHandler(object):
         self.request['Headers'] = parseHeaders(self.request['_headers'])
         matchEnd = match.end()
         self._dataBuffer = self._dataBuffer[matchEnd:]
+        if 'Expect' in self.request['Headers']:
+            self._sok.send('HTTP/1.1 100 Continue\r\n\r\n')
         self.setCallDealer(self._readBody)
 
     def _readBody(self):
