@@ -28,6 +28,7 @@ from threading import Thread, Event
 from weightless import HttpReader, Reactor, VERSION as WlVersion
 import sys
 from StringIO import StringIO
+from cq2utils import CallTrace
 
 def server(port, response, request):
     isListening = Event()
@@ -50,14 +51,13 @@ def server(port, response, request):
 class HttpReaderTest(TestCase):
 
     def testRequestAndHeaders(self):
-        HttpReader.RECVSIZE = 7
         port = randint(2**10, 2**16)
         request = []
         serverThread = server(port, "HTTP/1.1 200 OK\r\ncOnteNt-type: text/html\r\n\r\nHello World!", request)
         def receiveResponse(reader, Client=None, HTTPVersion=None, StatusCode=None, ReasonPhrase=None, Headers=None):
             self.dataReceived = Client, HTTPVersion, StatusCode, ReasonPhrase, Headers
         reactor = Reactor()
-        reader = HttpReader(reactor, 'http://localhost:%s/aap/noot/mies' % port, receiveResponse)
+        reader = HttpReader(reactor, 'http://localhost:%s/aap/noot/mies' % port, receiveResponse, recvSize=7)
         for i in range(8): reactor.step()
         self.assertEquals('GET /aap/noot/mies HTTP/1.0\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n' % WlVersion, request[0])
         serverThread.join()
@@ -65,7 +65,6 @@ class HttpReaderTest(TestCase):
         self.assertEquals('127.0.0.1', self.dataReceived[0][0])
 
     def testGetAllData(self):
-        HttpReader.RECVSIZE = 7
         fragments = []
         port = randint(2**10, 2**16)
         serverThread = server(port, "HTTP/1.1 200 OK\r\ncOnteNt-type: text/html\r\n\r\nHello World!", [])
@@ -74,7 +73,7 @@ class HttpReaderTest(TestCase):
         def receiveResponse(reader, Client=None, HTTPVersion=None, StatusCode=None, ReasonPhrase=None, Headers=None):
             reader.receiveFragment(receiveFragment)
         reactor = Reactor()
-        reader = HttpReader(reactor, 'http://localhost:%s/aap/noot/mies' % port, receiveResponse)
+        reader = HttpReader(reactor, 'http://localhost:%s/aap/noot/mies' % port, receiveResponse, recvSize=7)
         for i in range(9): reactor.step()
         serverThread.join()
         self.assertEquals('Hello World!', ''.join(fragments))
@@ -151,10 +150,57 @@ class HttpReaderTest(TestCase):
             fragments.append(fragment)
         def error(msg):
             self.msg = msg
-        HttpReader.RECVSIZE = 3
-        reader = HttpReader(reactor, "http://localhost:%s" % port, connect, error, timeout=0.01)
+        reader = HttpReader(reactor, "http://localhost:%s" % port, connect, error, timeout=0.01, recvSize=3)
         while not fragments:
             reactor.step()
         sleep(0.02) # 2 * timeout, just to be sure
         reactor.step()
         self.assertFalse(self.msg)
+
+    def testPost(self):
+        port = randint(2048, 4096)
+        reactor = Reactor()
+        serverThread = server(port, "HTTP/1.0 200 OK\r\n\r\nresponse", [])
+        fragments = []
+        responseKwargs = {}
+        def responseHandler(*args, **kwargs):
+            responseKwargs.update(kwargs)
+            reader.receiveFragment(fragmentReceiver)
+
+        def fragmentReceiver(fragment):
+            fragments.append(fragment)
+
+        def errorHandler(msg):
+            self.msg = msg
+
+        def bodyHandler():
+            yield "A"
+            yield "B"
+            yield "C"
+
+        reader = HttpReader(reactor, "http://localhost:%s" % port, responseHandler, errorHandler=errorHandler, timeout=0.1, headers={'SOAPAction': 'blah'}, bodyHandler=bodyHandler)
+
+        realCreateChunk = reader._createChunk
+        chunksCreated = []
+        def createChunk(chunk):
+            chunksCreated.append(chunk)
+            return realCreateChunk(chunk)
+        reader._createChunk = createChunk
+
+        while not fragments:
+            reactor.step()
+        sleep(0.02) # 2 * timeout, just to be sure
+        reactor.step()
+        self.assertEquals('200', responseKwargs['StatusCode'])
+        self.assertEquals(['response', None], fragments)
+        self.assertEquals(3, len(chunksCreated))
+
+    def testWriteChunks(self):
+        try:
+            old = HttpReader._createSocket
+            HttpReader._createSocket = lambda clazz, host, port: CallTrace("socket")
+            reader  = HttpReader(CallTrace("reactor"), '', '', None)
+            self.assertEquals('1\r\nA\r\n', reader._createChunk('A'))
+            self.assertEquals('A\r\n' + 10*'B' + '\r\n', reader._createChunk(10*'B'))
+        finally:
+            HttpReader._createSocket = old

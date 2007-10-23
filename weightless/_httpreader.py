@@ -29,7 +29,7 @@ class HttpReader(object):
 
     RECVSIZE = 4096
 
-    def __init__(self, reactor, url, callback, errorHandler=None, timeout=1):
+    def __init__(self, reactor, url, responseHandler, errorHandler=None, timeout=1, headers={}, bodyHandler=None, recvSize=RECVSIZE):
         scheme, host, path, query, fragment = urlsplit(url)
         port = '80'
         if ':' in host:
@@ -37,19 +37,46 @@ class HttpReader(object):
         path = path or '/'
         self._responseBuffer = ''
         self._restData = None
-        self._callback = callback
-        self._sok = socket()
-        self._sok.connect((host, int(port)))
+        self._responseHandler = responseHandler
+        self._sok = self._createSocket(host, int(port))
         self._reactor = reactor
-        self._reactor.addWriter(self._sok, lambda: self._sendRequest(path, host))
+        if bodyHandler:
+            requestSendMethod = lambda: self._sendPostRequest(path, host, headers, bodyHandler)
+        else:
+            requestSendMethod = lambda: self._sendGetRequest(path, host)
+        self._reactor.addWriter(self._sok, requestSendMethod)
         self._errorHandler = errorHandler or self._defaultErrorHandler
         self._timer = None
         self._timeOuttime = timeout
+        self._recvSize = recvSize
+
+    def _createSocket(self, host, port):
+        sok = socket()
+        sok.connect((host, int(port)))
+        return sok
 
     def _defaultErrorHandler(self, msg):
         sys.stderr.write(msg)
 
-    def _sendRequest(self, path, host):
+    def _sendPostRequest(self, path, host, headers, bodyHandler):
+        headers['Transfer-Encoding'] = 'chunked'
+        sent = self._sok.send(
+            FORMAT.RequestLine % {'Method': 'POST', 'Request_URI': path}
+            + FORMAT.HostHeader % {'Host': host}
+            + ''.join(FORMAT.Header % header for header in headers.items())
+            + FORMAT.UserAgentHeader
+            + HTTP.CRLF)
+        for item in bodyHandler():
+            chunk = self._createChunk(item)
+            self._sok.send(chunk)
+        self._sok.send("0" + HTTP.CRLF)
+        self._reactor.removeWriter(self._sok)
+        self._reactor.addReader(self._sok, self._headerFragment)
+
+    def _createChunk(self, data):
+        return hex(len(data))[len('0x'):].upper() + HTTP.CRLF + data + HTTP.CRLF
+
+    def _sendGetRequest(self, path, host):
         sent = self._sok.send(
             FORMAT.RequestLine % {'Method': 'GET', 'Request_URI': path}
             + FORMAT.HostHeader % {'Host': host}
@@ -59,7 +86,7 @@ class HttpReader(object):
         self._reactor.addReader(self._sok, self._headerFragment)
 
     def _headerFragment(self):
-        self._responseBuffer += self._sok.recv(HttpReader.RECVSIZE)
+        self._responseBuffer += self._sok.recv(self._recvSize)
         match = REGEXP.RESPONSE.match(self._responseBuffer)
         if not match:
             if not self._timer:
@@ -74,7 +101,7 @@ class HttpReader(object):
         response['Headers'] = parseHeaders(response['_headers'])
         del response['_headers']
         response['Client'] = self._sok.getpeername()
-        self._callback(self, **response)
+        self._responseHandler(self, **response)
 
     def _timeOut(self):
         try:
@@ -88,15 +115,15 @@ class HttpReader(object):
         if self._restData:
             callback(self._restData)
             self._restData = None
-        self._callback = callback
+        self._responseHandler = callback
         self._reactor.removeReader(self._sok)
         self._reactor.addReader(self._sok, self._bodyFragment)
 
     def _bodyFragment(self):
-        fragment = self._sok.recv(HttpReader.RECVSIZE)
+        fragment = self._sok.recv(self._recvSize)
         if not fragment:
             self._reactor.removeReader(self._sok)
             self._sok.close()
-            self._callback(None)
+            self._responseHandler(None)
         else:
-            self._callback(fragment)
+            self._responseHandler(fragment)
