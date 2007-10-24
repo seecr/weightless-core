@@ -253,18 +253,11 @@ class ReactorTest(TestCase):
         except Exception, e:
             self.assertEquals('oops', str(e))
 
-    def testSelectMayBeFasterThanSystemClock(self):
-        from time import time
-        from select import select
-        from sys import stdin
-        selectFasterThanSystemClock = False
-        PHASE_OF_THE_MOON_TRIES = 20
-        timeout = 0.05
-        for i in range(PHASE_OF_THE_MOON_TRIES):
-            start = time()
-            a, b, c = select([], [], [], timeout)
-            timeTaken = time() - start
-            if a == b == c == [] and timeTaken < timeout:
-                selectFasterThanSystemClock = True
-                break
-        self.assertTrue(selectFasterThanSystemClock)
+    def testTimerDoesNotMaskAssertionErrors(self):
+        reactor = Reactor()
+        reactor.addTimer(0, lambda: self.fail("Assertion Error"))
+        try:
+            reactor.step()
+            raise Exception('step() must raise AssertionError')
+        except AssertionError:
+            pass

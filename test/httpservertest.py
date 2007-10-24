@@ -183,18 +183,23 @@ class HttpServerTest(TestCase):
         def handler(**kwargs):
             self.requestData = kwargs
 
+        done = []
+        def onDone():
+            fromServer = sok.recv(1024)
+            self.assertTrue('HTTP/1.0 400 Bad Request' in fromServer)
+            done.append(True)
+
         port = randint(20000,25000)
         reactor = Reactor()
         server = HttpServer(reactor, port, handler, timeout=0.01)
+        reactor.addTimer(0.02, onDone)
         sok = socket()
         sok.connect(('localhost', port))
         sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\n')
 
-        while not reactor.step():
-            pass
+        while not done:
+            reactor.step()
 
-        fromServer = sok.recv(1024)
-        self.assertTrue('HTTP/1.0 400 Bad Request' in fromServer)
 
     def testReadChunkedPost(self):
         self.requestData = None

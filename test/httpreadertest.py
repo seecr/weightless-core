@@ -54,7 +54,7 @@ class HttpReaderTest(TestCase):
         port = randint(2**10, 2**16)
         request = []
         serverThread = server(port, "HTTP/1.1 200 OK\r\ncOnteNt-type: text/html\r\n\r\nHello World!", request)
-        def receiveResponse(reader, Client=None, HTTPVersion=None, StatusCode=None, ReasonPhrase=None, Headers=None):
+        def receiveResponse(Client=None, HTTPVersion=None, StatusCode=None, ReasonPhrase=None, Headers=None):
             self.dataReceived = Client, HTTPVersion, StatusCode, ReasonPhrase, Headers
         reactor = Reactor()
         reader = HttpReader(reactor, 'http://localhost:%s/aap/noot/mies' % port, receiveResponse, recvSize=7)
@@ -70,7 +70,7 @@ class HttpReaderTest(TestCase):
         serverThread = server(port, "HTTP/1.1 200 OK\r\ncOnteNt-type: text/html\r\n\r\nHello World!", [])
         def receiveFragment(fragment):
             fragments.append(fragment)
-        def receiveResponse(reader, Client=None, HTTPVersion=None, StatusCode=None, ReasonPhrase=None, Headers=None):
+        def receiveResponse(Client=None, HTTPVersion=None, StatusCode=None, ReasonPhrase=None, Headers=None):
             reader.receiveFragment(receiveFragment)
         reactor = Reactor()
         reader = HttpReader(reactor, 'http://localhost:%s/aap/noot/mies' % port, receiveResponse, recvSize=7)
@@ -86,7 +86,7 @@ class HttpReaderTest(TestCase):
                 done.append(True)
             else:
                 fragments.append(fragment)
-        def receiveResponse(reader, Client=None, HTTPVersion=None, StatusCode=None, ReasonPhrase=None, Headers=None):
+        def receiveResponse(Client=None, HTTPVersion=None, StatusCode=None, ReasonPhrase=None, Headers=None):
             self.dataReceived = HTTPVersion, StatusCode, ReasonPhrase, Headers
             reader.receiveFragment(receiveFragment)
         reactor = Reactor()
@@ -187,13 +187,13 @@ class HttpReaderTest(TestCase):
             return realCreateChunk(chunk)
         reader._createChunk = createChunk
 
-        while not fragments:
+        reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
+        while len(fragments) < 2:
             reactor.step()
-        sleep(0.02) # 2 * timeout, just to be sure
-        reactor.step()
-        self.assertEquals('200', responseKwargs['StatusCode'])
+
         self.assertEquals(['response', None], fragments)
-        self.assertEquals(3, len(chunksCreated))
+        self.assertEquals('200', responseKwargs['StatusCode'])
+        self.assertEquals(['A', 'B', 'C', ''], chunksCreated)
 
     def testWriteChunks(self):
         try:
