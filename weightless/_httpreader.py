@@ -68,8 +68,13 @@ class HttpReader(object):
             + HTTP.CRLF)
         for item in bodyHandler():
             chunk = self._createChunk(item)
-            self._sok.send(chunk)
-        self._sok.send("0" + HTTP.CRLF)
+            bytesSent = self._sok.send(chunk)
+            assert bytesSent == len(chunk)
+
+        chunk = self._createChunk('')
+        bytesSent = self._sok.send(chunk)
+        assert bytesSent == len(chunk)
+
         self._reactor.removeWriter(self._sok)
         self._reactor.addReader(self._sok, self._headerFragment)
 
@@ -101,7 +106,7 @@ class HttpReader(object):
         response['Headers'] = parseHeaders(response['_headers'])
         del response['_headers']
         response['Client'] = self._sok.getpeername()
-        self._responseHandler(self, **response)
+        self._responseHandler(**response)
 
     def _timeOut(self):
         try:
