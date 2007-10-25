@@ -28,7 +28,7 @@ from threading import Thread, Event
 
 
 from weightless import HttpReader, Reactor, VERSION as WlVersion
-from weightless._httpreader import HttpReaderFacade, Connector, HandlerFacade
+from weightless._httpreader import HttpReaderFacade, Connector, HandlerFacade, _httpParseUrl
 import sys
 from StringIO import StringIO
 from cq2utils import CallTrace
@@ -76,42 +76,41 @@ class HttpReaderTest(TestCase):
         reactor.addTimer(0.1, lambda: self.fail("Test Stuck"))
         while 'Hello World!' != "".join((x for x in dataReceived[1:] if x)):
             reactor.step()
-        self.assertEquals('GET /aap/noot/mies HTTP/1.0\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n' % WlVersion, request[0])
+        self.assertEquals('GET /aap/noot/mies HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n' % WlVersion, request[0])
         serverThread.join()
         self.assertEquals({'HTTPVersion': '1.1', 'StatusCode': '200', 'ReasonPhrase': 'OK', 'Headers': {'Content-Type': 'text/html'}, 'Client': ('127.0.0.1', Wildcard())}, dataReceived[0])
 
-    def testNoPort(self):
-        fragments = []
-        done = []
-        def send(data):
-            fragments.append(data)
-        def throw(exception):
-            if isinstance(exception, StopIteration):
-                done.append(True)
-        reactor = Reactor()
-        reader = HttpReaderFacade(reactor, 'http://www.cq2.org/', send, errorHandler=throw)
-        reactor.addTimer(0.1, lambda: self.fail('Test Stuck'))
-        while not done:
-            reactor.step()
-        self.assertEquals('302', fragments[0]['StatusCode'])
-        self.assertEquals('Found', fragments[0]['ReasonPhrase'])
-        self.assertEquals('close', fragments[0]['Headers']['Connection'])
-        self.assertEquals('<p>The document has moved <a href="/page/softwarestudio.page/show">here</a></p>\n', ''.join(fragments[1:]))
+    def testHttpUrlParse(self):
+        host, port, path = _httpParseUrl('http://www.cq2.org')
+        self.assertEquals('www.cq2.org', host)
+        self.assertEquals(80, port)
+        self.assertEquals('/', path)
+
+        host, port, path = _httpParseUrl('http://www.cq2.org:5000/page#anchor')
+        self.assertEquals('www.cq2.org', host)
+        self.assertEquals(5000, port)
+        self.assertEquals('/page#anchor', path)
+
+        host, port, path = _httpParseUrl('http://www.cq2.org:5000/page?x=1')
+        self.assertEquals('www.cq2.org', host)
+        self.assertEquals(5000, port)
+        self.assertEquals('/page?x=1', path)
+
 
     def testEmptyPath(self):
         port = randint(2**10, 2**16)
         reactor = Reactor()
         request = []
-        serverThread = server(port, "HTTP/1.0 200 OK\r\n\r\n", request)
+        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\n", request)
         reader = HttpReaderFacade(reactor, "http://localhost:%s" % port, lambda data: 'a')
         reactor.step()
         serverThread.join()
-        self.assertTrue(request[0].startswith('GET / HTTP/1.0\r\n'), request[0])
+        self.assertTrue(request[0].startswith('GET / HTTP/1.1\r\n'), request[0])
 
     def testTimeoutOnInvalidRequest(self):
         port = randint(2**10, 2**16)
         reactor = Reactor()
-        serverThread = server(port, "HTTP/1.0 *invalid reponse* 200 OK\r\n\r\n", [])
+        serverThread = server(port, "HTTP/1.1 *invalid reponse* 200 OK\r\n\r\n", [])
         errorArgs = []
         def error(exception):
             errorArgs.append(exception)
@@ -141,7 +140,7 @@ class HttpReaderTest(TestCase):
     def testTimeoutOnServerGoingSilentAfterHeaders(self):
         port = randint(2**10, 2**16)
         reactor = Reactor()
-        serverThread = server(port, "HTTP/1.0 200 OK\r\n\r\n", [], delay=1)
+        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\n", [], delay=1)
         errorArgs = []
         class Handler:
             def send(self, data):
@@ -160,7 +159,7 @@ class HttpReaderTest(TestCase):
     def testClearTimer(self):
         port = randint(2**10, 2**16)
         reactor = Reactor()
-        serverThread = server(port, "HTTP/1.0 200 OK\r\n\r\nresponse", [])
+        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\nresponse", [])
         self.exception = None
         sentData = []
         def send(data):
@@ -178,7 +177,7 @@ class HttpReaderTest(TestCase):
         port = randint(2048, 4096)
         reactor = Reactor()
         request = []
-        serverThread = server(port, "HTTP/1.0 200 OK\r\n\r\nresponse", request)
+        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\nresponse", request)
         sentData = []
         done = []
         def send(data):
@@ -200,7 +199,7 @@ class HttpReaderTest(TestCase):
 
         self.assertEquals(['response'], sentData[1:])
         self.assertEquals('200', sentData[0]['StatusCode'])
-        expected = 'POST / HTTP/1.0\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nSOAPAction: blah\r\nUser-Agent: Weightless/v0.1.x\r\n\r\n' + '1\r\nA\r\n' + '1\r\nB\r\n' + '1\r\nC\r\n' + '0\r\n\r\n'
+        expected = 'POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nSOAPAction: blah\r\nUser-Agent: Weightless/v0.1.x\r\n\r\n' + '1\r\nA\r\n' + '1\r\nB\r\n' + '1\r\nC\r\n' + '0\r\n\r\n'
         self.assertEquals(expected, "".join(request))
 
     def testWriteChunks(self):

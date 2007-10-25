@@ -42,12 +42,20 @@ class HandlerFacade(object):
     def __iter__(self):
         return self
 
-def HttpReaderFacade(reactor, url, responseHandler, errorHandler=None, timeout=1, headers={}, bodyHandler=None, recvSize=RECVSIZE):
+def _httpParseUrl(url):
     scheme, host, path, query, fragment = urlsplit(url)
     port = '80'
     if ':' in host:
         host, port = host.split(':')
     path = path or '/'
+    if query:
+        path += '?' + query
+    if fragment:
+        path += '#' + fragment
+    return host, int(port), path
+
+def HttpReaderFacade(reactor, url, responseHandler, errorHandler=None, timeout=1, headers={}, bodyHandler=None, recvSize=RECVSIZE):
+    host, port, path = _httpParseUrl(url)
     method = bodyHandler and 'POST' or 'GET'
     return HttpReader(reactor, Connector(reactor, host, int(port)), HandlerFacade(responseHandler, errorHandler, bodyHandler), method, host, path, timeout=timeout,  headers=headers, recvSize=recvSize)
 
