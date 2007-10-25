@@ -105,14 +105,13 @@ class HttpReader(object):
 
     def _headerFragment(self):
         self._responseBuffer += self._sok.recv(self._recvSize)
+
         match = REGEXP.RESPONSE.match(self._responseBuffer)
         if not match:
             if not self._timer:
-                self._timer = self._reactor.addTimer(self._timeOuttime, self._timeOut)
+                self._startTimer()
             return #for more data
-        if self._timer:
-            self._reactor.removeTimer(self._timer)
-            self._timer = None
+        self._stopTimer()
         if match.end() < len(self._responseBuffer):
             restData = self._responseBuffer[match.end():]
         else:
@@ -125,25 +124,28 @@ class HttpReader(object):
         if restData:
             self._handler.send(restData)
         self._reactor.removeReader(self._sok)
-        self._timer = self._reactor.addTimer(self._timeOuttime, self._timeOut)
         self._reactor.addReader(self._sok, self._bodyFragment)
+        self._startTimer()
 
     def _bodyFragment(self):
+        self._stopTimer()
         fragment = self._sok.recv(self._recvSize)
-        if self._timer:
-            self._reactor.removeTimer(self._timer)
-            self._timer = None
 
         if not fragment:
-            #print "NOT fragment"
             self._reactor.removeReader(self._sok)
             self._sok.close()
             self._handler.throw(StopIteration())
         else:
-            #print "fragment", fragment
             self._handler.send(fragment)
-            self._timer = self._reactor.addTimer(self._timeOuttime, self._timeOut)
+            self._startTimer()
 
+    def _startTimer(self):
+        self._timer = self._reactor.addTimer(self._timeOuttime, self._timeOut)
+
+    def _stopTimer(self):
+        if self._timer:
+            self._reactor.removeTimer(self._timer)
+            self._timer = None
 
     def _timeOut(self):
         try:
