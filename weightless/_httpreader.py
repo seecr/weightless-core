@@ -65,8 +65,9 @@ class HttpReader(object):
         else:
             requestSendMethod = lambda: self._sendGetRequest(path, host)
         self._reactor.addWriter(self._sok, requestSendMethod)
-        self._timer = None
         self._timeOuttime = timeout
+
+        self._timer = self._reactor.addTimer(self._timeOuttime, self._timeOut)
         self._recvSize = recvSize
 
     def _sendPostRequest(self, path, host, headers):
@@ -114,6 +115,8 @@ class HttpReader(object):
             self._timer = None
         if match.end() < len(self._responseBuffer):
             restData = self._responseBuffer[match.end():]
+        else:
+            restData = ''
         response = match.groupdict()
         response['Headers'] = parseHeaders(response['_headers'])
         del response['_headers']
@@ -122,20 +125,29 @@ class HttpReader(object):
         if restData:
             self._handler.send(restData)
         self._reactor.removeReader(self._sok)
+        self._timer = self._reactor.addTimer(self._timeOuttime, self._timeOut)
         self._reactor.addReader(self._sok, self._bodyFragment)
 
     def _bodyFragment(self):
         fragment = self._sok.recv(self._recvSize)
+        if self._timer:
+            self._reactor.removeTimer(self._timer)
+            self._timer = None
+
         if not fragment:
+            #print "NOT fragment"
             self._reactor.removeReader(self._sok)
             self._sok.close()
             self._handler.throw(StopIteration())
         else:
+            #print "fragment", fragment
             self._handler.send(fragment)
+            self._timer = self._reactor.addTimer(self._timeOuttime, self._timeOut)
+
 
     def _timeOut(self):
         try:
-            self._handler.throw(Exception('timeout while receiving headers'))
+            self._handler.throw(Exception('timeout while receiving data'))
         finally:
             self._reactor.removeReader(self._sok)
             self._sok.shutdown(SHUT_RDWR)
