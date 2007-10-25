@@ -87,7 +87,7 @@ class REGEXP:
     CRLF = compile(HTTP.CRLF)
 
 class FORMAT:
-    RequestLine = '%(Method)s %(Request_URI)s HTTP/1.0' + HTTP.CRLF
+    RequestLine = '%(Method)s %(Request_URI)s HTTP/%(HTTPVersion)s' + HTTP.CRLF
     HostHeader = 'Host: %(Host)s' + HTTP.CRLF
     Header = '%s: %s' + HTTP.CRLF
     UserAgentHeader = 'User-Agent: Weightless/v' + VERSION + HTTP.CRLF

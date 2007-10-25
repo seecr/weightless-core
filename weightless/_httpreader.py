@@ -73,7 +73,7 @@ class HttpReader(object):
     def _sendPostRequest(self, path, host, headers):
         headers['Transfer-Encoding'] = 'chunked'
         sent = self._sok.send(
-            FORMAT.RequestLine % {'Method': 'POST', 'Request_URI': path}
+            FORMAT.RequestLine % {'Method': 'POST', 'Request_URI': path, 'HTTPVersion':'1.1'}
             + FORMAT.HostHeader % {'Host': host}
             + ''.join(FORMAT.Header % header for header in headers.items())
             + FORMAT.UserAgentHeader
@@ -96,7 +96,7 @@ class HttpReader(object):
 
     def _sendGetRequest(self, path, host):
         sent = self._sok.send(
-            FORMAT.RequestLine % {'Method': 'GET', 'Request_URI': path}
+            FORMAT.RequestLine % {'Method': 'GET', 'Request_URI': path, 'HTTPVersion':'1.1'}
             + FORMAT.HostHeader % {'Host': host}
             + FORMAT.UserAgentHeader
             + HTTP.CRLF)
