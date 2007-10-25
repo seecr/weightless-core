@@ -25,40 +25,51 @@ from urlparse import urlsplit
 from weightless.http import REGEXP, FORMAT, HTTP, parseHeaders
 import sys
 
+RECVSIZE = 4096
+
+def Connector(reactor, host, port):
+    sok = socket()
+    sok.connect((host, port))
+    return sok
+
+class HandlerFacade(object):
+    def __init__(self, responseHandler, errorHandler, bodyHandler):
+        self._bodyHandler = bodyHandler and bodyHandler() or xrange(0)
+        self.throw = errorHandler
+        self.send = responseHandler
+    def next(self):
+        return self._bodyHandler.next()
+    def __iter__(self):
+        return self
+
+def HttpReaderFacade(reactor, url, responseHandler, errorHandler=None, timeout=1, headers={}, bodyHandler=None, recvSize=RECVSIZE):
+    scheme, host, path, query, fragment = urlsplit(url)
+    port = '80'
+    if ':' in host:
+        host, port = host.split(':')
+    path = path or '/'
+    method = bodyHandler and 'POST' or 'GET'
+    return HttpReader(reactor, Connector(reactor, host, int(port)), HandlerFacade(responseHandler, errorHandler, bodyHandler), method, host, path, timeout=timeout,  headers=headers, recvSize=recvSize)
+
 class HttpReader(object):
 
-    RECVSIZE = 4096
-
-    def __init__(self, reactor, url, responseHandler, errorHandler=None, timeout=1, headers={}, bodyHandler=None, recvSize=RECVSIZE):
-        scheme, host, path, query, fragment = urlsplit(url)
-        port = '80'
-        if ':' in host:
-            host, port = host.split(':')
-        path = path or '/'
+    def __init__(self, reactor, sokket, handler, method, host, path, headers={}, timeout=1, recvSize=RECVSIZE):
+        #host, path, headers = handler.next(), handler.next(), handler.next()
         self._responseBuffer = ''
         self._restData = None
-        self._responseHandler = responseHandler
-        self._sok = self._createSocket(host, int(port))
+        self._handler = handler
+        self._sok = sokket
         self._reactor = reactor
-        if bodyHandler:
-            requestSendMethod = lambda: self._sendPostRequest(path, host, headers, bodyHandler)
+        if method == 'POST':
+            requestSendMethod = lambda: self._sendPostRequest(path, host, headers)
         else:
             requestSendMethod = lambda: self._sendGetRequest(path, host)
         self._reactor.addWriter(self._sok, requestSendMethod)
-        self._errorHandler = errorHandler or self._defaultErrorHandler
         self._timer = None
         self._timeOuttime = timeout
         self._recvSize = recvSize
 
-    def _createSocket(self, host, port):
-        sok = socket()
-        sok.connect((host, int(port)))
-        return sok
-
-    def _defaultErrorHandler(self, msg):
-        sys.stderr.write(msg)
-
-    def _sendPostRequest(self, path, host, headers, bodyHandler):
+    def _sendPostRequest(self, path, host, headers):
         headers['Transfer-Encoding'] = 'chunked'
         sent = self._sok.send(
             FORMAT.RequestLine % {'Method': 'POST', 'Request_URI': path}
@@ -66,20 +77,21 @@ class HttpReader(object):
             + ''.join(FORMAT.Header % header for header in headers.items())
             + FORMAT.UserAgentHeader
             + HTTP.CRLF)
-        for item in bodyHandler():
-            chunk = self._createChunk(item)
-            bytesSent = self._sok.send(chunk)
-            assert bytesSent == len(chunk)
+        item = self._handler.next()
+        while item:
+            self._sendChunk(item)
+            item = self._handler.next()
 
-        chunk = self._createChunk('')
-        bytesSent = self._sok.send(chunk)
-        assert bytesSent == len(chunk)
+        self._sendChunk('')
 
         self._reactor.removeWriter(self._sok)
         self._reactor.addReader(self._sok, self._headerFragment)
 
     def _createChunk(self, data):
         return hex(len(data))[len('0x'):].upper() + HTTP.CRLF + data + HTTP.CRLF
+
+    def _sendChunk(self, data):
+        self._sok.sendall(self._createChunk(data))
 
     def _sendGetRequest(self, path, host):
         sent = self._sok.send(
@@ -101,26 +113,14 @@ class HttpReader(object):
             self._reactor.removeTimer(self._timer)
             self._timer = None
         if match.end() < len(self._responseBuffer):
-            self._restData = self._responseBuffer[match.end():]
+            restData = self._responseBuffer[match.end():]
         response = match.groupdict()
         response['Headers'] = parseHeaders(response['_headers'])
         del response['_headers']
         response['Client'] = self._sok.getpeername()
-        self._responseHandler(**response)
-
-    def _timeOut(self):
-        try:
-            self._errorHandler('timeout while receiving headers')
-        finally:
-            self._reactor.removeReader(self._sok)
-            self._sok.shutdown(SHUT_RDWR)
-            self._sok.close()
-
-    def receiveFragment(self, callback):
-        if self._restData:
-            callback(self._restData)
-            self._restData = None
-        self._responseHandler = callback
+        self._handler.send(response)
+        if restData:
+            self._handler.send(restData)
         self._reactor.removeReader(self._sok)
         self._reactor.addReader(self._sok, self._bodyFragment)
 
@@ -129,6 +129,14 @@ class HttpReader(object):
         if not fragment:
             self._reactor.removeReader(self._sok)
             self._sok.close()
-            self._responseHandler(None)
+            self._handler.throw(StopIteration())
         else:
-            self._responseHandler(fragment)
+            self._handler.send(fragment)
+
+    def _timeOut(self):
+        try:
+            self._handler.throw(Exception('timeout while receiving headers'))
+        finally:
+            self._reactor.removeReader(self._sok)
+            self._sok.shutdown(SHUT_RDWR)
+            self._sok.close()
