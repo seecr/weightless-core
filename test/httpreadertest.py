@@ -207,3 +207,34 @@ class HttpReaderTest(TestCase):
         self.assertEquals('1\r\nA\r\n', reader._createChunk('A'))
         self.assertEquals('A\r\n' + 10*'B' + '\r\n', reader._createChunk(10*'B'))
 
+    def testDealWithChunkedResponse(self):
+        port = randint(2048, 4096)
+        reactor = Reactor()
+        sentData = []
+        done = []
+        serverThread = server(port, "\r\n".join("""HTTP/1.1 302 Found
+Date: Fri, 26 Oct 2007 07:23:26 GMT
+Server: Apache/2.2.3 (Debian) mod_python/3.2.10 Python/2.4.4 mod_ssl/2.2.3 OpenSSL/0.9.8c
+Location: /page/softwarestudio.page/show
+Transfer-Encoding: chunked
+Content-Type: text/html; charset=utf-8
+
+4F
+<p>The document has moved <a href="/page/softwarestudio.page/show">here</a></p>
+
+0
+
+
+""".split("\n")), [])
+        class Handler:
+            def send(self, data):
+                sentData.append(data)
+            def throw(self, exception):
+                if isinstance(exception, StopIteration):
+                    done.append(True)
+        reader = HttpReader(reactor, Connector(reactor, 'localhost', int(port)), Handler(), 'GET', 'localhost', '/', recvSize=5)
+
+        reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
+        while not done:
+            reactor.step()
+        self.assertEquals("""<p>The document has moved <a href="/page/softwarestudio.page/show">here</a></p>""", "".join(sentData[1:]))

@@ -62,7 +62,6 @@ def HttpReaderFacade(reactor, url, responseHandler, errorHandler=None, timeout=1
 class HttpReader(object):
 
     def __init__(self, reactor, sokket, handler, method, host, path, headers={}, timeout=1, recvSize=RECVSIZE):
-        #host, path, headers = handler.next(), handler.next(), handler.next()
         self._responseBuffer = ''
         self._restData = None
         self._handler = handler
@@ -77,6 +76,7 @@ class HttpReader(object):
 
         self._timer = self._reactor.addTimer(self._timeOuttime, self._timeOut)
         self._recvSize = recvSize
+        self._buffer = ''
 
     def _sendPostRequest(self, path, host, headers):
         headers['Transfer-Encoding'] = 'chunked'
@@ -126,11 +126,12 @@ class HttpReader(object):
             restData = ''
         response = match.groupdict()
         response['Headers'] = parseHeaders(response['_headers'])
+        self._chunked = 'Transfer-Encoding' in response['Headers'] and response['Headers']['Transfer-Encoding'] == 'chunked'
         del response['_headers']
         response['Client'] = self._sok.getpeername()
         self._handler.send(response)
         if restData:
-            self._handler.send(restData)
+            self._sendFragment(restData)
         self._reactor.removeReader(self._sok)
         self._reactor.addReader(self._sok, self._bodyFragment)
         self._startTimer()
@@ -140,12 +141,34 @@ class HttpReader(object):
         fragment = self._sok.recv(self._recvSize)
 
         if not fragment:
-            self._reactor.removeReader(self._sok)
-            self._sok.close()
-            self._handler.throw(StopIteration())
+            self._stop()
+        else:
+            self._sendFragment(fragment)
+            self._startTimer()
+
+    def _stop(self):
+        self._reactor.removeReader(self._sok)
+        self._sok.close()
+        self._handler.throw(StopIteration())
+
+    def _sendFragment(self, fragment):
+        if self._chunked:
+            self._buffer += fragment
+
+            match = REGEXP.CHUNK_SIZE_LINE.match(self._buffer)
+            if match:
+                chunkSize = int("0x" + self._buffer[:match.end()], 16)
+                if chunkSize == 0:
+                    self._stop()
+                    return
+
+                if len(self._buffer) >= chunkSize + match.end():
+                    self._buffer = self._buffer[match.end():]
+                    data = self._buffer[:chunkSize]
+                    self._buffer = self._buffer[chunkSize + len(HTTP.CRLF):]
+                    self._handler.send(data)
         else:
             self._handler.send(fragment)
-            self._startTimer()
 
     def _startTimer(self):
         self._timer = self._reactor.addTimer(self._timeOuttime, self._timeOut)
