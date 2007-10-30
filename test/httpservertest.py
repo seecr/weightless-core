@@ -202,20 +202,19 @@ class HttpServerTest(TestCase):
 
 
     def testReadChunkedPost(self):
-        self.requestData = None
+        self.requestData = {}
         def handler(**kwargs):
             self.requestData = kwargs
 
         port = randint(20000,25000)
         reactor = Reactor()
-        server = HttpServer(reactor, port, handler, timeout=0.01)
+        server = HttpServer(reactor, port, handler, timeout=0.01, recvSize=3)
         sok = socket()
         sok.connect(('localhost', port))
         sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nabcde\r\n5\r\nfghij\r\n0\r\n')
 
-        reactor.step()
-        reactor.step()
+        reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
+        while self.requestData.get('Body', None) != 'abcdefghij':
+            reactor.step()
 
-        self.assertTrue('Body' in self.requestData)
-        self.assertEquals('abcdefghij', self.requestData['Body'])
 

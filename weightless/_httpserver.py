@@ -55,7 +55,6 @@ class HttpHandler(object):
         self._dealWithCall()
 
     def _readHeaders(self):
-
         match = REGEXP.REQUEST.match(self._dataBuffer)
         if not match:
             if not self._timer:
@@ -102,21 +101,24 @@ class HttpHandler(object):
         if self._timer:
             self._reactor.removeTimer(self._timer)
             self._timer = None
-        chunkSize = int(match.groupdict()['ChunkSize'], 16)
+        self._chunkSize = int(match.groupdict()['ChunkSize'], 16)
         self._dataBuffer = self._dataBuffer[match.end():]
-        if chunkSize == 0:
+        self.setCallDealer(self._readChunkBody)
+
+    def _readChunkBody(self):
+        if self._chunkSize == 0:
             self.finalize()
         else:
-            if len(self._dataBuffer) < chunkSize:
+            if len(self._dataBuffer) < self._chunkSize + CRLF_LEN:
                 if not self._timer:
                     self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
                 return # for more data
             if self._timer:
                 self._reactor.removeTimer(self._timer)
                 self._timer = None
-            self.request['Body'] += self._dataBuffer[:chunkSize]
-            self._dataBuffer = self._dataBuffer[chunkSize + CRLF_LEN:]
-            self._readChunk()
+            self.request['Body'] += self._dataBuffer[:self._chunkSize]
+            self._dataBuffer = self._dataBuffer[self._chunkSize + CRLF_LEN:]
+            self.setCallDealer(self._readChunk)
 
     def finalize(self):
         del self.request['_headers']
