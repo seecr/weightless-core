@@ -118,7 +118,8 @@ class Reactor(object):
                     self._readers[sok]()
                 except:
                     print_exc()
-                    del self._readers[sok]
+                    if sok in self._readers:
+                        del self._readers[sok]
 
         for sok in wReady:
             if sok in self._writers:
