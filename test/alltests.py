@@ -39,6 +39,7 @@ from acceptortest import AcceptorTest
 from reactortest import ReactorTest
 from httpreadertest import HttpReaderTest
 from httpservertest import HttpServerTest
+from transparentsockettest import TransparentSocketTest
 
 if python_version() >= "2.5":
     from composetest import ComposePythonTest, ComposePyrexTest
