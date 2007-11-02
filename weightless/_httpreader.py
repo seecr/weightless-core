@@ -23,9 +23,16 @@
 from socket import socket, SHUT_RDWR
 from urlparse import urlsplit
 from weightless.http import REGEXP, FORMAT, HTTP, parseHeaders
+from weightless.bufferedhandler import BufferedHandler
+
 import sys
 
 RECVSIZE = 4096
+
+def soapPost(reactor, serverUrl, soapAction, body, responseCallback=lambda x:None, timeout=15):
+    handler = BufferedHandler(HandlerFacade(responseCallback, lambda x: None, [body, None].__iter__))
+    host, port, path = _httpParseUrl(serverUrl)
+    HttpReader(reactor, Connector(reactor, host, port), handler, "POST", host, path, headers={'SOAPAction': soapAction}, timeout=timeout)
 
 def Connector(reactor, host, port):
     sok = socket()
@@ -80,7 +87,7 @@ class HttpReader(object):
 
     def _sendPostRequest(self, path, host, headers):
         headers['Transfer-Encoding'] = 'chunked'
-        sent = self._sok.send(
+        self._sok.sendall(
             FORMAT.RequestLine % {'Method': 'POST', 'Request_URI': path, 'HTTPVersion':'1.1'}
             + FORMAT.HostHeader % {'Host': host}
             + ''.join(FORMAT.Header % header for header in headers.items())
@@ -103,7 +110,7 @@ class HttpReader(object):
         self._sok.sendall(self._createChunk(data))
 
     def _sendGetRequest(self, path, host):
-        sent = self._sok.send(
+        self._sok.sendall(
             FORMAT.RequestLine % {'Method': 'GET', 'Request_URI': path, 'HTTPVersion':'1.1'}
             + FORMAT.HostHeader % {'Host': host}
             + FORMAT.UserAgentHeader
