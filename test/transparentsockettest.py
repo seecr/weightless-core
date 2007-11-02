@@ -2,6 +2,8 @@ from unittest import TestCase
 from cq2utils import CallTrace
 from tempfile import mkstemp
 from os import remove
+from socket import socket
+from select import select
 
 from weightless.transparentsocket import TransparentSocket
 
@@ -51,4 +53,11 @@ class TransparentSocketTest(TestCase):
         self.assertEquals(10*'0', method.arguments[0])
         logfileContents = open(self._filename).read()
         self.assertEquals("send(('1111111111',), {}) -> 5\nsendall(('0000000000',), {})\n", logfileContents)
+
+
+    def testWorksInSelect(self):
+        s = socket()
+        s.connect(('localhost', 22))
+        ts = TransparentSocket(s)
+        select([ts], [ts], [], 0)
 

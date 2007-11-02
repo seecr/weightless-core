@@ -4,7 +4,10 @@ class TransparentSocket(object):
         self._logFile = logFile
 
     def __getattr__(self, attrname):
-        return self._originalObject.__getattr__(attrname)
+        return getattr(self._originalObject, attrname)
+
+    def __hasattr__(self, attrname):
+        return hasattr(self._originalObject, attrname)
 
     def _logString(self, aString):
         if self._logFile:
