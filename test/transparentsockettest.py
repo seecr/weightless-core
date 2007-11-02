@@ -29,31 +29,29 @@ class TransparentSocketTest(TestCase):
         originalObject.returnValues={'recv':25*'1'}
         ts = TransparentSocket(originalObject, logFile=self._filename)
         data = ts.recv(1024)
+        data = ts.recv(1024)
         self.assertEquals(25*'1', data)
-        self.assertEquals('recv((1024,), {}) -> "%s"\n' % (25*'1'), open(self._filename).read())
+        self.assertEquals('\nrecv:\n%s' % (50*'1'), open(self._filename).read())
 
-    def testRecordSendAndSendall(self):
+    def testRecordRecvAndSendall(self):
+        originalObject = CallTrace("Original")
+        originalObject.returnValues={'recv':25*'0', 'sendall': None}
+        ts = TransparentSocket(originalObject, logFile=self._filename)
+        ts.recv(1024)
+        ts.sendall("1" * 10)
+        self.assertEquals('\nrecv:\n%s\nsendall:\n%s' % (25*'0', 10 * '1'), open(self._filename).read())
+
+    def testRecordSend(self):
         originalObject = CallTrace("Original")
         originalObject.returnValues={'send': 5, 'sendall': None}
         ts = TransparentSocket(originalObject, logFile=self._filename)
         byteSend = ts.send(10*'1')
         self.assertEquals(5, byteSend)
-        self.assertEquals(1, len(originalObject.calledMethods))
-        method = originalObject.calledMethods[0]
-        self.assertEquals("send", method.name)
-        self.assertEquals(10*'1', method.arguments[0])
-        logfileContents = open(self._filename).read()
-        self.assertEquals("send(('1111111111',), {}) -> 5\n", logfileContents)
+        byteSend = ts.send(5*'1')
+        self.assertEquals(5, byteSend)
 
-        result = ts.sendall(10*'0')
-        self.assertEquals(None, result)
-        self.assertEquals(2, len(originalObject.calledMethods))
-        method = originalObject.calledMethods[1]
-        self.assertEquals("sendall", method.name)
-        self.assertEquals(10*'0', method.arguments[0])
         logfileContents = open(self._filename).read()
-        self.assertEquals("send(('1111111111',), {}) -> 5\nsendall(('0000000000',), {})\n", logfileContents)
-
+        self.assertEquals("\nsend:\n%s" % (10 * '1'), logfileContents)
 
     def testWorksInSelect(self):
         s = socket()
