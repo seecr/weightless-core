@@ -39,7 +39,7 @@ class TransparentSocketTest(TestCase):
         ts = TransparentSocket(originalObject, logFile=self._filename)
         ts.recv(1024)
         ts.sendall("1" * 10)
-        self.assertEquals('\nrecv:\n%s\nsendall:\n%s' % (25*'0', 10 * '1'), open(self._filename).read())
+        self.assertEquals('\nrecv:\n%s\nsend:\n%s' % (25*'0', 10 * '1'), open(self._filename).read())
 
     def testRecordSend(self):
         originalObject = CallTrace("Original")
@@ -52,6 +52,15 @@ class TransparentSocketTest(TestCase):
 
         logfileContents = open(self._filename).read()
         self.assertEquals("\nsend:\n%s" % (10 * '1'), logfileContents)
+
+    def testSendAndSendallAreDisplayedAsSend(self):
+        originalObject = CallTrace("Original")
+        originalObject.returnValues={'send': 1, 'sendall': None}
+        ts = TransparentSocket(originalObject, logFile=self._filename)
+        ts.send('0')
+        ts.sendall('1')
+        logfileContents = open(self._filename).read()
+        self.assertEquals("\nsend:\n01", logfileContents)
 
     def testWorksInSelect(self):
         s = socket()

@@ -32,5 +32,5 @@ class TransparentSocket(object):
         return bytesSent
 
     def sendall(self, data, *args, **kwargs):
-        self._logString("sendall", data)
+        self._logString("send", data)
         return self._originalObject.sendall(data, *args, **kwargs)
