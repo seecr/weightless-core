@@ -28,7 +28,7 @@ class TransparentSocketTest(TestCase):
         ts = TransparentSocket(originalObject, logFile=self._filename)
         data = ts.recv(1024)
         self.assertEquals(25*'1', data)
-        self.assertEquals('recv((1024,), {})\n', open(self._filename).read())
+        self.assertEquals('recv((1024,), {}) -> "%s"\n' % (25*'1'), open(self._filename).read())
 
     def testRecordSendAndSendall(self):
         originalObject = CallTrace("Original")
@@ -41,7 +41,7 @@ class TransparentSocketTest(TestCase):
         self.assertEquals("send", method.name)
         self.assertEquals(10*'1', method.arguments[0])
         logfileContents = open(self._filename).read()
-        self.assertEquals("send(('1111111111',), {})\n", logfileContents)
+        self.assertEquals("send(('1111111111',), {}) -> 5\n", logfileContents)
 
         result = ts.sendall(10*'0')
         self.assertEquals(None, result)
@@ -50,5 +50,5 @@ class TransparentSocketTest(TestCase):
         self.assertEquals("sendall", method.name)
         self.assertEquals(10*'0', method.arguments[0])
         logfileContents = open(self._filename).read()
-        self.assertEquals("send(('1111111111',), {})\nsendall(('0000000000',), {})\n", logfileContents)
+        self.assertEquals("send(('1111111111',), {}) -> 5\nsendall(('0000000000',), {})\n", logfileContents)
 

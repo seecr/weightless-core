@@ -15,12 +15,14 @@ class TransparentSocket(object):
                 f.close()
 
     def recv(self, *args, **kwargs):
-        self._logString("recv(%s, %s)" % (args, kwargs))
-        return self._originalObject.recv(*args, **kwargs)
+        result = self._originalObject.recv(*args, **kwargs)
+        self._logString('recv(%s, %s) -> "%s"' % (args, kwargs, result))
+        return result
 
     def send(self, *args, **kwargs):
-        self._logString("send(%s, %s)" % (args, kwargs))
-        return self._originalObject.send(*args, **kwargs)
+        result = self._originalObject.send(*args, **kwargs)
+        self._logString("send(%s, %s) -> %s" % (args, kwargs, result))
+        return result
 
     def sendall(self, *args, **kwargs):
         self._logString("sendall(%s, %s)" % (args, kwargs))
