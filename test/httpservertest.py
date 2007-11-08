@@ -217,4 +217,24 @@ class HttpServerTest(TestCase):
         while self.requestData.get('Body', None) != 'abcdefghij':
             reactor.step()
 
+    #def testPrematureClientClose(self):
+        #self.almostDone = False
+        #self.done = False
 
+        #def handler(**kwargs):
+            #if self.almostDone == True:
+                #self.done = True
+                #raise StopIteration()
+            #if kwargs.get("Body", None) == 'abcde':
+                #self.almostDone = True
+
+        #port = randint(20000,25000)
+        #reactor = Reactor()
+        #server = HttpServer(reactor, port, handler, timeout=0.01)
+        #sok = socket()
+        #sok.connect(('localhost', port))
+        #sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nabcde\r\n0\r\n')
+
+        #reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
+        #while not self.done:
+            #reactor.step()

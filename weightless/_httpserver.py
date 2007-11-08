@@ -22,7 +22,7 @@
 ## end license ##
 from _acceptor import Acceptor
 from weightless.http import REGEXP, FORMAT, HTTP, parseHeaders
-from socket import SHUT_RDWR
+from socket import SHUT_RDWR, error as SocketError
 
 RECVSIZE = 4096
 CRLF_LEN = 2
@@ -147,4 +147,12 @@ class HttpHandler(object):
         except StopIteration:
             self._reactor.removeWriter(self._sok)
             self._sok.shutdown(SHUT_RDWR)
+            #try:
+                #self._sok.shutdown(SHUT_RDWR)
+            #except SocketError, e:
+                #code, message = e.args
+                #if code == 107:
+                    #pass # KVS: not well understood, not tested. It seems some quick (local) servers close the connection before this point is reached. It may happen more generally.
+                #else:
+                    #raise
             self._sok.close()

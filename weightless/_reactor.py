@@ -127,7 +127,8 @@ class Reactor(object):
                     self._writers[sok]()
                 except:
                     print_exc()
-                    del self._writers[sok]
+                    if sok in self._writers:
+                        del self._writers[sok]
 
     def _findAndRemoveBadFd(self):
         for sok in self._readers:
