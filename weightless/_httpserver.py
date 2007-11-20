@@ -145,14 +145,21 @@ class HttpHandler(object):
             else:
                 self._rest = None
         except StopIteration:
-            self._reactor.removeWriter(self._sok)
-            self._sok.shutdown(SHUT_RDWR)
-            #try:
-                #self._sok.shutdown(SHUT_RDWR)
-            #except SocketError, e:
-                #code, message = e.args
-                #if code == 107:
-                    #pass # KVS: not well understood, not tested. It seems some quick (local) servers close the connection before this point is reached. It may happen more generally.
-                #else:
-                    #raise
-            self._sok.close()
+            self._closeConnection()
+        except:
+            self._closeConnection()
+            raise
+
+    def _closeConnection(self):
+        self._reactor.removeWriter(self._sok)
+        self._sok.shutdown(SHUT_RDWR)
+        #try:
+            #self._sok.shutdown(SHUT_RDWR)
+        #except SocketError, e:
+            #code, message = e.args
+            #if code == 107:
+                #pass # KVS: not well understood, not tested. It seems some quick (local) servers close the connection before this point is reached. It may happen more generally.
+            #else:
+                #raise
+        self._sok.close()
+

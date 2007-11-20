@@ -22,7 +22,7 @@
 ## end license ##
 from unittest import TestCase
 from random import randint
-from socket import socket
+from socket import socket, error as SocketError
 from select import select
 from weightless import Reactor, HttpServer
 from time import sleep
@@ -217,7 +217,35 @@ class HttpServerTest(TestCase):
         while self.requestData.get('Body', None) != 'abcdefghij':
             reactor.step()
 
+    #def testUncaughtException(self):
+        #done = []
+        #def onRequest(**kwargs):
+            #yield "HTTP\1.0 200 Ok\r\n\r\nStart data"
+            #done.append('onRequest')
+            #raise Exception("This exception is printed.")
+        #port = randint(10000, 2**16)
+        #reactor = Reactor()
+        #server = HttpServer(reactor, port, onRequest)
+        #sok = socket()
+        #sok.connect(('localhost', port))
+        #sok.send('GET / HTTP/1.0\r\n\r\n')
+        #reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
+        #while not done:
+            #reactor.step()
+
+        #try:
+            #sok.recv(4000) # wie een beter plan heeft mag het zeggen
+            #self.fail('Socket not closed by server')
+        #except SocketError, e:
+            #print "asdf", type(e), str(e)
+
+        ## 1. socket closed
+        ## 2. exceptie geraised (print or whatever)
+
+
+
     #def testPrematureClientClose(self):
+        """Seen in certain phases of the moon. Kvs has not (20071101) been able to reproduce this in tests."""
         #self.almostDone = False
         #self.done = False
 
