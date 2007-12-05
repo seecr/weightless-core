@@ -72,12 +72,11 @@ class Reactor(object):
         for sok in self._writers: sok.close()
 
     def loop(self):
-        while True:
-            try:
+        try:
+            while True:
                 self.step()
-            except KeyboardInterrupt:
-                self.shutdown()
-                break
+        finally:
+            self.shutdown()
 
     def step(self):
         aTimerTimedOut = False
