@@ -25,17 +25,29 @@ from distutils.extension import Extension
 from Pyrex.Distutils import build_ext
 from platform import python_version
 
+setupArgs = {
+    'name': 'weightless',
+    'version': '%VERSION%',
+    'url': 'http://www.weightless.io',
+    'author': 'Seek You Too',
+    'author_email': 'info@cq2.nl',
+    'description': 'Weightless is a High Performance Asynchronous Networking Library.',
+    'long_description': 'Weightless is a High Performance Asynchronous Networking Library.',
+    'license': 'GNU Public License',
+    'platforms': 'all'
+}
+
 if python_version() >= '2.5':
     setup(
-        name='weightless',
         packages=['weightless', 'weightless.python2_5', 'weightless.http', 'weightless.utils'],
         ext_modules=[Extension("weightless.python2_5._compose_pyx", ["weightless/python2_5/_compose_pyx.pyx"])],
-        cmdclass = {'build_ext': build_ext}
-)
+        cmdclass = {'build_ext': build_ext},
+        **setupArgs
+    )
 
 else:
     setup(
-        name='weightless',
         packages=['weightless', 'weightless.http']
-)
+        **setupArgs
+    )
 
