@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
@@ -21,31 +20,18 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-#
-from platform import python_version
-from glob import glob
-import os, sys
+set -e
 
-for file in glob('../deps.d/*'):
-    sys.path.insert(0, file)
+rm -rf tmp build
 
-if os.environ.get('PYTHONPATH', '') == '':
-    sys.path.insert(0, '..')
+for pyversion in 2.4 2.5; do
 
-import unittest
+PYTHONPATH=`pwd`/deps.d/Pyrex-0.9.5.1a python$pyversion setup.py install --root tmp
 
-# Python >= 2.4
-from acceptortest import AcceptorTest
-from reactortest import ReactorTest
-from httpreadertest import HttpReaderTest
-from httpservertest import HttpServerTest
-from transparentsockettest import TransparentSocketTest
+(
+cd test
+PYTHONPATH=`pwd`/../tmp/usr/lib/python$pyversion/site-packages python$pyversion alltests.py
+)
 
-if python_version() >= "2.5":
-    from composetest import ComposePythonTest, ComposePyrexTest
-    from giotest import GioTest
-else:
-    print 'Skipping Python 2.5 tests.'
-
-if __name__ == '__main__':
-	unittest.main()
+rm -rf tmp build
+done

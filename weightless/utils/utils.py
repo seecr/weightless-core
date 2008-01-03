@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
@@ -21,31 +20,16 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-#
-from platform import python_version
-from glob import glob
-import os, sys
+from contextlib import contextmanager
 
-for file in glob('../deps.d/*'):
-    sys.path.insert(0, file)
+@contextmanager
+def running(function):
+    t = Thread(None, function)
+    t.start()
+    yield t
+    t.join()
 
-if os.environ.get('PYTHONPATH', '') == '':
-    sys.path.insert(0, '..')
-
-import unittest
-
-# Python >= 2.4
-from acceptortest import AcceptorTest
-from reactortest import ReactorTest
-from httpreadertest import HttpReaderTest
-from httpservertest import HttpServerTest
-from transparentsockettest import TransparentSocketTest
-
-if python_version() >= "2.5":
-    from composetest import ComposePythonTest, ComposePyrexTest
-    from giotest import GioTest
-else:
-    print 'Skipping Python 2.5 tests.'
-
-if __name__ == '__main__':
-	unittest.main()
+class Dict(object):
+	def __init__(self, dict = None):
+		if dict is not None:
+			self.__dict__ = dict
