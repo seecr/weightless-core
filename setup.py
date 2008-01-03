@@ -47,7 +47,7 @@ if python_version() >= '2.5':
 
 else:
     setup(
-        packages=['weightless', 'weightless.http']
+        packages=['weightless', 'weightless.http'],
         **setupArgs
     )
 
