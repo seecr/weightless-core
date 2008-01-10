@@ -238,3 +238,47 @@ Content-Type: text/html; charset=utf-8
         while not done:
             reactor.step()
         self.assertEquals("""<p>The document has moved <a href="/page/softwarestudio.page/show">here</a></p>""", "".join(sentData[1:]))
+
+    def testChunkedAllTheWay(self):
+        reactor = CallTrace('Reactor')
+        sokket = CallTrace('Sokket')
+        data = []
+        class Handler:
+            def send(self, chunk):
+                data.append(chunk)
+            def throw(self, exception):
+                pass
+        httpreader = HttpReader(reactor, sokket, Handler(), 'GET', 'host,nl', '/')
+        httpreader._chunked = True
+        # chunk == network message
+        httpreader._sendFragment('4\r\n1234\r\n')
+        self.assertEquals(['1234'], data)
+        httpreader._sendFragment('10\r\n0123456789abcdef\r\n')
+        self.assertEquals(['1234', '0123456789abcdef'], data)
+        data = []
+        # chunk = 2 network messages
+        httpreader._sendFragment('10\r\nfedcba')
+        self.assertEquals(['fedcba'], data)
+        httpreader._sendFragment('9876543210\r\n')
+        self.assertEquals(['9876543210'], data)
+
+    def testLastRecvContainsCompleteChunk(self):
+        reactor = CallTrace('Reactor')
+        sokket = CallTrace('Sokket')
+        data = []
+        done = []
+        class Handler:
+            def send(self, chunk):
+                data.append(chunk)
+            def throw(self, exception):
+                done.append(True)
+        httpreader = HttpReader(reactor, sokket, Handler(), 'GET', 'host,nl', '/')
+        httpreader._chunked = True
+        httpreader._sendFragment('9\r\n123456789\r\n')
+        self.assertEquals(['123456789'], data)
+        httpreader._sendFragment('8\r\n87654321\r\n')
+        self.assertEquals(['123456789', '87654321'], data)
+        data = [] # now both in one network message
+        httpreader._sendFragment('9\r\n123456789\r\n8\r\n87654321\r\n0\r\n\r\n')
+        self.assertEquals(['123456789', '87654321'], data)
+        self.assertEquals([True], done)
