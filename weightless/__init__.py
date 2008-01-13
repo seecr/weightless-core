@@ -40,5 +40,5 @@ if python_version() >= "2.5":
 
 from _acceptor import Acceptor
 from _reactor import Reactor
-from _httpreader import HttpReader
+from _httpreader import HttpReader, Connector
 from _httpserver import HttpServer
