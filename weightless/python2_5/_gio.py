@@ -21,8 +21,10 @@
 #
 ## end license ##
 from weightless import compose
+import os
 
 python_open = open
+RECV_BUFF_SIZE = 4096
 
 class Gio(object):
 
@@ -77,7 +79,7 @@ class _read(object):
 
     def _doread(self):
         self._reactor.removeReader(self._sok)
-        self._continuation(self._sok.read())
+        self._continuation(os.read(self._sok.fileno(), RECV_BUFF_SIZE))
 
 class _write(object):
 

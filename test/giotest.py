@@ -64,3 +64,27 @@ class GioTest(TestCase):
             gio.Gio('reactor', eventGenerator())
         except IOError, e:
             self.fail(e)
+
+    def testGioAsIntendedToBeUsed(self):
+        gio.RECV_BUFF_SIZE = 10
+        data = []
+        def higherLevelHandler():
+            while True:
+                received = yield
+                data.append(received)
+                yield 'send this'
+        def eventGenerator(next):
+            sok = yield gio.open('data/testdata_asc_8kb', 'r')
+            toBeSend = next.next() # start
+            while True:
+                data = yield sok.read()
+                if not data:
+                    next.stop()
+                toBeSend = next.send(data)
+                #yield sok.send(toBeSend)
+        reactor = Reactor()
+        gio.Gio(reactor, eventGenerator(higherLevelHandler()))
+        reactor.step()
+        reactor.step()
+        reactor.step()
+        self.assertEquals(['aaaaaaaaaa', 'aaaaaaaaaa'], data)
