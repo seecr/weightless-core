@@ -20,11 +20,11 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
+from socket import SOL_SOCKET, SO_RCVBUF
 from weightless import compose
 import os
 
 python_open = open
-RECV_BUFF_SIZE = 4096
 
 class Gio(object):
 
@@ -53,6 +53,8 @@ class open(object):
     def __call__(self, reactor, continuation, error):
         try:
             self._sok = python_open(self._uri, self._mode)
+            #self._recvSize = self._sok.getsockopt(SOL_SOCKET, SO_RCVBUF) / 2 # kernel reports twice the useful size
+            self._recvSize = 9000
             self.fileno = self._sok.fileno
             continuation(self)
         except IOError, e:
@@ -70,7 +72,7 @@ class open(object):
 class _read(object):
 
     def __init__(self, sok):
-        self._sok = sok._sok
+        self._sok = sok
 
     def __call__(self, reactor, continuation, error):
         self._reactor = reactor
@@ -79,7 +81,7 @@ class _read(object):
 
     def _doread(self):
         self._reactor.removeReader(self._sok)
-        self._continuation(os.read(self._sok.fileno(), RECV_BUFF_SIZE))
+        self._continuation(os.read(self._sok.fileno(), self._sok._recvSize))
 
 class _write(object):
 

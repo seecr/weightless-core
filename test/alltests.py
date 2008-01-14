@@ -44,6 +44,8 @@ from transparentsockettest import TransparentSocketTest
 if python_version() >= "2.5":
     from composetest import ComposePythonTest, ComposePyrexTest
     from giotest import GioTest
+    from snaketest import SnakeTest
+    from servertestcasetest import ServerTestCaseTest
 else:
     print 'Skipping Python 2.5 tests.'
 

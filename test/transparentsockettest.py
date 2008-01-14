@@ -86,7 +86,10 @@ class TransparentSocketTest(TestCase):
 
     def testWorksInSelect(self):
         s = socket()
-        s.connect(('localhost', 22))
         ts = TransparentSocket(s)
-        select([ts], [ts], [], 0)
+        try:
+            select([ts], [ts], [], 0)
+            self.assertTrue('Ok')
+        except:
+            self.assertFalse('Must not raise exception')
 
