@@ -22,7 +22,7 @@ from __future__ import with_statement
 #
 ## end license ##
 from unittest import TestCase
-from weightless import Reactor, gio
+from weightless import Reactor, gio2 as gio
 
 
 class GioTest(TestCase):

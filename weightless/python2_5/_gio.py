@@ -83,6 +83,10 @@ class _read(object):
         self._reactor.removeReader(self._sok)
         self._continuation(os.read(self._sok.fileno(), self._sok._recvSize))
 
+class AsyncDecorator:
+    def __init__(self, generator):
+        self._generator = generator
+
 class _write(object):
 
     def __init__(self, sok, data):

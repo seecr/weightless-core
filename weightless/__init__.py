@@ -36,6 +36,7 @@ if python_version() >= "2.5":
         system("cd %s/..; PYTHONPATH=%s python2.5 setup.py build_ext --inplace" % (dirName,x))
     from python2_5._compose_pyx import compose, RETURN
     import python2_5._gio as gio
+    import python2_5._gio2 as gio2
     from python2_5.http import sendRequest, recvRegExp, recvBytes, recvBody, sendBody, copyBody, HttpException
 
 from _acceptor import Acceptor
