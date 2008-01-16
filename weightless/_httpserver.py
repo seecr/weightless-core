@@ -152,14 +152,14 @@ class HttpHandler(object):
 
     def _closeConnection(self):
         self._reactor.removeWriter(self._sok)
-        self._sok.shutdown(SHUT_RDWR)
-        #try:
-            #self._sok.shutdown(SHUT_RDWR)
-        #except SocketError, e:
-            #code, message = e.args
-            #if code == 107:
-                #pass # KVS: not well understood, not tested. It seems some quick (local) servers close the connection before this point is reached. It may happen more generally.
-            #else:
-                #raise
+
+        try:
+            self._sok.shutdown(SHUT_RDWR)
+        except SocketError, e:
+            code, message = e.args
+            if code == 107:
+                pass # KVS: not well understood, not tested. It seems some quick (local) servers close the connection before this point is reached. It may happen more generally. In any case, it is based on a truely existing phenomomon
+            else:
+                raise
         self._sok.close()
 

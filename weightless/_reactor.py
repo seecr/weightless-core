@@ -31,8 +31,17 @@ class Timer(object):
         assert seconds >= 0, 'Timeout must be >= 0. It was %s.' % seconds
         self.time = time() + seconds
         self.callback = callback
+
     def __cmp__(self, rhs):
+        if not rhs:
+            return 1
         return cmp(self.time, rhs.time)
+
+    def __eq__(self, other):
+        return other and \
+                other.__class__ == Timer and \
+                other.time == self.time and \
+                other.callback == self.callback
 
 class Reactor(object):
     """This Reactor allows applications to be notified of read, write or time events.  The callbacks being executed can contain instructions to modify the reader, writers and timers in the reactor.  Additions of new events are effective with the next step() call, removals are effective immediately, even if the actual event was already trigger, but the handler wat not called yet."""
