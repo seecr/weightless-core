@@ -30,19 +30,20 @@ class Gio(object):
 
     def __init__(self, reactor, eventGenerator):
         self._eventGenerator = compose(eventGenerator)
-        self._reactor = reactor
-        self._continue(None)
+        self.reactor = reactor
+        self.next(None)
 
-    def _continue(self, value):
+    def next(self, value):
         try:
             event = self._eventGenerator.send(value)
-            event(self._reactor, self._continue, self._error)
+            event.initialize(self)
         except StopIteration:
             pass
 
-    def _error(self, exception):
-        event = self._eventGenerator.throw(exception)
-        event(self._reactor, self._continue, self._error)
+    def error(self, exception):
+        #event = self._eventGenerator.throw(exception)
+        #event.initialize(self)
+        pass
 
 class open(object):
 
@@ -50,15 +51,14 @@ class open(object):
         self._uri = uri
         self._mode = mode
 
-    def __call__(self, reactor, continuation, error):
+    def initialize(self, gio):
         try:
             self._sok = python_open(self._uri, self._mode)
             #self._recvSize = self._sok.getsockopt(SOL_SOCKET, SO_RCVBUF) / 2 # kernel reports twice the useful size
-            self._recvSize = 9000
-            self.fileno = self._sok.fileno
-            continuation(self)
+            self._recvSize = 4096
+            gio.next(self)
         except IOError, e:
-            error(e)
+            gio.error(e)
 
     def read(self):
         return _read(self)
@@ -74,38 +74,32 @@ class _read(object):
     def __init__(self, sok):
         self._sok = sok
 
-    def __call__(self, reactor, continuation, error):
-        self._reactor = reactor
-        self._continuation = continuation
-        reactor.addReader(self._sok, self._doread)
+    def initialize(self, gio):
+        self._gio = gio
+        self._gio.reactor.addReader(self._sok._sok, self._doread)
 
     def _doread(self):
-        self._reactor.removeReader(self._sok)
-        self._continuation(os.read(self._sok.fileno(), self._sok._recvSize))
-
-class AsyncDecorator:
-    def __init__(self, generator):
-        self._generator = generator
+        self._gio.reactor.removeReader(self._sok._sok)
+        self._gio.next(os.read(self._sok._sok.fileno(), self._sok._recvSize))
 
 class _write(object):
 
     def __init__(self, sok, data):
-        self._sok = sok._sok
+        self._sok = sok
         self._data = data
 
-    def __call__(self, reactor, continuation, error):
-        self._reactor = reactor
-        self._continuation = continuation
-        reactor.addWriter(self._sok, self._dowrite)
+    def initialize(self, gio):
+        self._gio = gio
+        self._gio.reactor.addWriter(self._sok._sok, self._dowrite)
 
     def _dowrite(self):
-        self._reactor.removeWriter(self._sok)
-        self._continuation(self._sok.write(self._data))
+        self._gio.reactor.removeWriter(self._sok._sok)
+        self._gio.next(self._sok._sok.write(self._data))
 
 class _close(object):
 
     def __init__(self, sok):
         self._sok = sok
 
-    def __call__(self, reactor, continuation, error):
-        continuation(self._sok.close())
+    def initialize(self, gio):
+        gio.next(self._sok._sok.close())
