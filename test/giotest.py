@@ -22,7 +22,7 @@ from __future__ import with_statement
 #
 ## end license ##
 from unittest import TestCase
-from weightless import Reactor, gio2 as gio
+from weightless import Reactor, gio as gio1, gio2
 
 
 class GioTest(TestCase):
@@ -30,23 +30,23 @@ class GioTest(TestCase):
     def testNonExistingFile(self):
         def eventGenerator():
             try:
-                sok = yield gio.open('nonexisting')
+                sok = yield self.gio.open('nonexisting')
             except IOError, e:
                 self.assertEquals("[Errno 2] No such file or directory: 'nonexisting'", str(e))
         try:
-            gio.Gio('reactor', eventGenerator())
+            self.gio.Gio('reactor', eventGenerator())
         except IOError, e:
             self.fail(e)
 
     def testWriteRead(self):
         reactor = Reactor()
         def eventGenerator():
-            sok = yield gio.open('data/tmp01', 'w')
+            sok = yield self.gio.open('data/tmp01', 'w')
             yield sok.write('ape')
             yield sok.close()
-            sok = yield gio.open('data/tmp01')
+            sok = yield self.gio.open('data/tmp01')
             self.data = yield sok.read()
-        gio.Gio(reactor, eventGenerator())
+        self.gio.Gio(reactor, eventGenerator())
         reactor.step()
         reactor.step()
         self.assertEquals('ape', self.data)
@@ -54,17 +54,17 @@ class GioTest(TestCase):
     def testSokRead(self):
         reactor = Reactor()
         def eventGenerator():
-            sok = yield gio.open('data/testdata5kb')
+            sok = yield self.gio.open('data/testdata5kb')
             self.data = yield sok.read()
-        gio.Gio(reactor, eventGenerator())
+        self.gio.Gio(reactor, eventGenerator())
         reactor.step()
         self.assertEquals('\xe4\xd5VHv\xa3V\x87Vi', self.data[:10])
 
     def testOpen(self):
         reactor = Reactor()
         def eventGenerator():
-            self.sok = yield gio.open('data/testdata5kb')
-        gio.Gio(reactor, eventGenerator())
+            self.sok = yield self.gio.open('data/testdata5kb')
+        self.gio.Gio(reactor, eventGenerator())
         self.assertEquals('data/testdata5kb', self.sok._sok.name)
 
     def testGioAsIntendedToBeUsed(self):
@@ -75,7 +75,7 @@ class GioTest(TestCase):
                 data.append(received)
                 yield 'send this'
         def eventGenerator(next):
-            sok = yield gio.open('data/testdata_asc_8kb', 'r')
+            sok = yield self.gio.open('data/testdata_asc_8kb', 'r')
             sok._recvSize = 10
             toBeSend = next.next() # start
             while True:
@@ -85,8 +85,20 @@ class GioTest(TestCase):
                 toBeSend = next.send(data)
                 #yield sok.send(toBeSend)
         reactor = Reactor()
-        gio.Gio(reactor, eventGenerator(higherLevelHandler()))
+        self.gio.Gio(reactor, eventGenerator(higherLevelHandler()))
         reactor.step()
         reactor.step()
         reactor.step()
         self.assertEquals(['aaaaaaaaaa', 'aaaaaaaaaa'], data)
+
+class Gio1Test(GioTest):
+
+    def setUp(self):
+        self.gio = gio1
+        GioTest.setUp(self)
+
+class Gio2Test(GioTest):
+
+    def setUp(self):
+        self.gio = gio2
+        GioTest.setUp(self)
