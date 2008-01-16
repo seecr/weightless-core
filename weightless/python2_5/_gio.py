@@ -31,16 +31,16 @@ class Gio(object):
     def __init__(self, reactor, eventGenerator):
         self._eventGenerator = compose(eventGenerator)
         self.reactor = reactor
-        self.next(None)
+        self.send(None)
 
-    def next(self, value):
+    def send(self, value):
         try:
             event = self._eventGenerator.send(value)
             event.initialize(self)
         except StopIteration:
             pass
 
-    def error(self, exception):
+    def throw(self, exception):
         #event = self._eventGenerator.throw(exception)
         #event.initialize(self)
         pass
@@ -56,9 +56,9 @@ class open(object):
             self._sok = python_open(self._uri, self._mode)
             #self._recvSize = self._sok.getsockopt(SOL_SOCKET, SO_RCVBUF) / 2 # kernel reports twice the useful size
             self._recvSize = 4096
-            gio.next(self)
+            gio.send(self)
         except IOError, e:
-            gio.error(e)
+            gio.throw(e)
 
     def read(self):
         return _read(self)
@@ -80,7 +80,7 @@ class _read(object):
 
     def _doread(self):
         self._gio.reactor.removeReader(self._sok._sok)
-        self._gio.next(os.read(self._sok._sok.fileno(), self._sok._recvSize))
+        self._gio.send(os.read(self._sok._sok.fileno(), self._sok._recvSize))
 
 class _write(object):
 
@@ -94,7 +94,7 @@ class _write(object):
 
     def _dowrite(self):
         self._gio.reactor.removeWriter(self._sok._sok)
-        self._gio.next(self._sok._sok.write(self._data))
+        self._gio.send(self._sok._sok.write(self._data))
 
 class _close(object):
 
@@ -102,4 +102,4 @@ class _close(object):
         self._sok = sok
 
     def initialize(self, gio):
-        gio.next(self._sok._sok.close())
+        gio.send(self._sok._sok.close())
