@@ -20,7 +20,7 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER
+from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_CORK, TCP_NODELAY
 from struct import pack
 
 class Acceptor(object):
@@ -30,7 +30,7 @@ class Acceptor(object):
         """The reactor is a user specified reactor for dispatching I/O events asynchronously. The sinkFactory is called with the newly created socket as its single argument. It is supposed to return a callable callback function that is called by the reactor when data is available."""
         sok = socket()
         sok.bind(('0.0.0.0', port))
-        sok.listen(1)
+        sok.listen(50)
         sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         sok.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
 
@@ -41,4 +41,6 @@ class Acceptor(object):
 
     def _accept(self):
         newConnection, address = self._sok.accept()
+        newConnection.setsockopt(SOL_TCP, TCP_CORK, 1)
+        #newConnection.setsockopt(SOL_TCP, TCP_NODELAY, 1)
         self._reactor.addReader(newConnection, self._sinkFactory(newConnection))

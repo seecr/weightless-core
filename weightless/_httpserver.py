@@ -22,7 +22,7 @@
 ## end license ##
 from _acceptor import Acceptor
 from weightless.http import REGEXP, FORMAT, HTTP, parseHeaders
-from socket import SHUT_RDWR, error as SocketError
+from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
 
 RECVSIZE = 4096
 CRLF_LEN = 2
@@ -139,7 +139,7 @@ class HttpHandler(object):
                 data = self._rest
             else:
                 data = self._handler.next()
-            sent = self._sok.send(data)
+            sent = self._sok.send(data, MSG_DONTWAIT)
             if sent < len(data):
                 self._rest = data[sent:]
             else:
