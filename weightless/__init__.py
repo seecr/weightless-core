@@ -37,6 +37,7 @@ if python_version() >= "2.5":
     from python2_5._compose_pyx import compose, RETURN
     import python2_5._gio as gio
     import python2_5._gio2 as gio2
+    import python2_5._giong as giong
     from python2_5.http import sendRequest, recvRegExp, recvBytes, recvBody, sendBody, copyBody, HttpException
 
 from _acceptor import Acceptor

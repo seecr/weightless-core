@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+from __future__ import with_statement
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
@@ -21,34 +21,26 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-#
-from platform import python_version
-from glob import glob
-import os, sys
+from unittest import TestCase
+from weightless import Reactor, giong
 
-for file in glob('../deps.d/*'):
-    sys.path.insert(0, file)
 
-if os.environ.get('PYTHONPATH', '') == '':
-    sys.path.insert(0, '..')
+class GioNgTest(TestCase):
 
-import unittest
+    def testOpenReturnsContextManager(self):
+        result = giong.open('data/testdata5kb')
+        self.assertTrue(hasattr(result, '__enter__'))
+        self.assertTrue(hasattr(result, '__exit__'))
 
-# Python >= 2.4
-from acceptortest import AcceptorTest
-from reactortest import ReactorTest
-from httpreadertest import HttpReaderTest
-from httpservertest import HttpServerTest
-from transparentsockettest import TransparentSocketTest
+    def testGioAsContext(self):
+        reactor = Reactor()
+        def myProcessor():
+            with giong.open('data/testdata_asc_5kb')as datastream:
+                self.assertTrue(isinstance(datastream, giong.open))
+                self.dataIn = yield
+                print 'DONE'
+                yield 'response'
+        giong.Gio(reactor, myProcessor())
+        reactor.step()
+        self.assertEquals('0123456789abcdefghi', self.dataIn[:19])
 
-if python_version() >= "2.5":
-    from composetest import ComposePythonTest, ComposePyrexTest
-    from giotest import Gio1Test, Gio2Test
-    from giongtest import GioNgTest
-    from snaketest import SnakeTest
-    from servertestcasetest import ServerTestCaseTest
-else:
-    print 'Skipping Python 2.5 tests.'
-
-if __name__ == '__main__':
-	unittest.main()
