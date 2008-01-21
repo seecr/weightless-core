@@ -111,11 +111,11 @@ class HttpServerTest(TestCase):
         while not reactor._writers:
             reactor.step()
         serverSok, handler = reactor._writers.items()[0]
-        orgSend = serverSok.send
-        def fckdUpSend(data):
-            orgSend(data[:3])
+        originalSend = serverSok.send
+        def sendOnlyManagesToActuallySendThreeBytesPerSendCall(data, *options):
+            originalSend(data[:3], *options)
             return 3
-        serverSok.send = fckdUpSend
+        serverSok.send = sendOnlyManagesToActuallySendThreeBytesPerSendCall
         for i in range(21):
             reactor.step()
         fragment = sok.recv(4096)
