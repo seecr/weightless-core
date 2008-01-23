@@ -20,64 +20,82 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-from weightless import compose
+from weightless import compose_py as compose
 from inspect import currentframe
 from functools import partial as curry
 import os
 from time import time
+from socket import SOL_SOCKET, SO_RCVBUF
 
-def _get__socketstack__():
+def _get__contextstack__():
     frame = currentframe().f_back
-    while frame and '__socketstack__' not in frame.f_locals:
+    while frame and '__contextstack__' not in frame.f_locals:
         frame = frame.f_back
     if frame:
-        return frame.f_locals['__socketstack__']
+        return frame.f_locals['__contextstack__']
 
 class Gio(object):
 
     def __init__(self, reactor, processor):
         self._processor = compose(processor)
         self._reactor = reactor
-        self.__socketstack__ = []
+        self.__contextstack__ = []
         self._step(None)
 
     def _step(self, message):
-        __socketstack__ = self.__socketstack__
+        __contextstack__ = self.__contextstack__
         try:
             self._response = self._processor.send(message)
         except StopIteration:
-                return
-        sok = __socketstack__[-1]
+            return
+        context = __contextstack__[-1]
         if self._response:
-            self._reactor.addWriter(sok, curry(self._write, sok))
+            self._reactor.addWriter(context, curry(self._write, context))
         else:
-            self._reactor.addReader(sok, curry(self._read, sok))
+            self._reactor.addReader(context, curry(self._read, context))
 
-    def _write(self, sok):
-        self._reactor.removeWriter(sok)
-        t0 = time()
-        written = os.write(sok, self._response) # + MSG_DONTWAIT
-        print 'Wrote %s of %s bytes in %s ms.' % (written, len(self._response), (time()-t0)*1000)
-        self._step(None)
+    def _write(self, context):
+        written = os.write(context.fileno(), self._response)
+        if written < len(self._response):
+            self._response = buffer(self._response, written)
+        else:
+            self._reactor.removeWriter(context)
+            self._step(None)
 
-    def _read(self, sok):
-        self._reactor.removeReader(sok)
-        message = os.read(sok, os.fstat(sok).st_blksize)
+    def _read(self, context):
+        self._reactor.removeReader(context)
+        message = os.read(context.fileno(), context.readBufSize)
         self._step(message)
 
-class open(object):
+class FdContext(object):
 
-    def __init__(self, uri, mode='r'):
-        flags = os.O_NONBLOCK | os.O_RDWR
-        self._sok = os.open(uri, flags)
+    def __init__(self, fd):
+        assert type(fd) == int
+        self._fd = fd
+
+    def fileno(self):
+        return self._fd
 
     def __enter__(self, *args):
-        _get__socketstack__().append(self._sok)
+        _get__contextstack__().append(self)
         return self
 
     def __exit__(self, type, value, traceback):
         if type == GeneratorExit:
             pass
-        stack = _get__socketstack__()
+        stack = _get__contextstack__()
         if stack:
             stack.pop()
+
+class zocket(FdContext):
+    def __init__(self, sok):
+        self.readBufSize = sok.getsockopt(SOL_SOCKET, SO_RCVBUF) / 2
+        sok.setblocking(0)
+        FdContext.__init__(self, sok.fileno())
+
+class open(FdContext):
+    def __init__(self, uri, mode='r'):
+        flags = 'w' in mode and os.O_RDWR or os.O_RDONLY
+        f = os.open(uri, flags | os.O_NONBLOCK)
+        self.readBufSize = os.fstat(f).st_blksize
+        FdContext.__init__(self, f)

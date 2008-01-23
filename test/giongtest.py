@@ -23,7 +23,8 @@ from __future__ import with_statement
 ## end license ##
 from cq2utils import CQ2TestCase
 from weightless import Reactor, giong
-
+from weightless.python2_5._giong import zocket
+from socket import socketpair
 
 class GioNgTest(CQ2TestCase):
 
@@ -43,7 +44,7 @@ class GioNgTest(CQ2TestCase):
         open(self.tempfile, 'w').write('read this!')
         reactor = Reactor()
         def myProcessor():
-            with giong.open(self.tempfile, 'r+') as datastream:
+            with giong.open(self.tempfile, 'rw') as datastream:
                 self.assertTrue(isinstance(datastream, giong.open))
                 self.dataIn = yield
                 yield 'write this!'
@@ -55,3 +56,76 @@ class GioNgTest(CQ2TestCase):
         self.assertEquals({}, reactor._readers)
         self.assertEquals({}, reactor._writers)
 
+    def testAlternate(self):
+        reactor = Reactor()
+        open(self.tempdir+'/1', 'w').write('1234')
+        open(self.tempdir+'/2', 'w').write('abcd')
+        def swapContents():
+            numbersStream = giong.open(self.tempdir+'/1', 'rw')
+            lettersStream = giong.open(self.tempdir+'/2', 'rw')
+            with numbersStream:
+                numbers = yield
+            with lettersStream:
+                letters = yield
+                yield numbers
+            with numbersStream:
+                yield letters
+        giong.Gio(reactor, swapContents())
+        reactor.step().step().step().step()
+        self.assertEquals('1234abcd', open(self.tempdir+'/1').read())
+        self.assertEquals('abcd1234', open(self.tempdir+'/2').read())
+
+    def testNesting(self):
+        reactor = Reactor()
+        open(self.tempdir+'/1', 'w').write('1234')
+        open(self.tempdir+'/2', 'w').write('abcd')
+        def swapContents():
+            numbersStream = giong.open(self.tempdir+'/1', 'rw')
+            lettersStream = giong.open(self.tempdir+'/2', 'rw')
+            with numbersStream:
+                numbers = yield
+                with lettersStream:
+                    letters = yield
+                    yield numbers
+                yield letters
+        giong.Gio(reactor, swapContents())
+        reactor.step().step().step().step()
+        self.assertEquals('1234abcd', open(self.tempdir+'/1').read())
+        self.assertEquals('abcd1234', open(self.tempdir+'/2').read())
+
+    def testSocketHandshake(self):
+        reactor = Reactor()
+        lhs, rhs = socketpair()
+        lhs.setblocking(0)
+        rhs.setblocking(0)
+        def peter(channel):
+            with channel:
+                message = yield
+                yield 'Hello ' + message[-4:]
+        def jack(channel):
+            with channel:
+                yield 'My name is Jack'
+                self.response = yield
+        giong.Gio(reactor, peter(zocket(rhs)))
+        giong.Gio(reactor, jack(zocket(lhs)))
+        reactor.step().step().step().step()
+        self.assertEquals('Hello Jack', self.response)
+
+    def testLargeBuffers(self):
+        reactor = Reactor()
+        lhs, rhs = socketpair()
+        messages = []
+        messageSize = 1024*128
+        def peter(channel):
+            with channel:
+                while True:
+                    messages.append((yield))
+        def jack(channel):
+            with channel:
+                yield 'X' * messageSize
+        giong.Gio(reactor, jack(zocket(lhs)))
+        giong.Gio(reactor, peter(zocket(rhs)))
+        while sum(len(message) for message in messages) < messageSize:
+            reactor.step()
+        self.assertTrue(len(messages) > 1) # test is only sensible when multiple parts are send
+        self.assertEquals(messageSize, len(''.join(messages)))

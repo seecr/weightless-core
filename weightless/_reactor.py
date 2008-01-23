@@ -116,7 +116,10 @@ class Reactor(object):
                 pass
             else:
                 raise
-            return
+            return self
+        except KeyboardInterrupt:
+            self.shutdown()
+            raise
 
         for timer in self._timers:
             if timer.time > time():
@@ -146,6 +149,8 @@ class Reactor(object):
                     print_exc()
                     if sok in self._writers:
                         del self._writers[sok]
+
+        return self
 
     def _findAndRemoveBadFd(self):
         for sok in self._readers:
