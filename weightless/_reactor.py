@@ -21,10 +21,17 @@
 #
 ## end license ##
 from traceback import print_exc
+from inspect import currentframe
 from select import select, error
 from time import time
 from errno import EBADF, EINTR
 import os
+
+def reactor():
+    frame = currentframe().f_back
+    while '__reactor__' not in frame.f_locals:
+        frame = frame.f_back
+    return frame.f_locals['__reactor__']
 
 class Timer(object):
     def __init__(self, seconds, callback):
@@ -88,6 +95,8 @@ class Reactor(object):
             self.shutdown()
 
     def step(self):
+        __reactor__ = self
+
         aTimerTimedOut = False
         if self._timers:
             timeout = max(0, self._timers[0].time - time())

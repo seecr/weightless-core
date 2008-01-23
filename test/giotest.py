@@ -27,12 +27,6 @@ from weightless import Reactor, gio as gio1, gio2
 
 class GioTest(TestCase):
 
-    def testGioConnectToGeneratorWithBuiltInEventProcessor(self):
-        def myProgram():
-            dataIn = yield
-            yield dataOut
-        self.gio.Gio(reactor, myProgram()) # how to specify the connection?
-
     def testNonExistingFile(self):
         def eventGenerator():
             try:

@@ -261,3 +261,11 @@ class ReactorTest(TestCase):
             raise Exception('step() must raise AssertionError')
         except AssertionError:
             pass
+
+    def testGlobalReactor(self):
+        from weightless import reactor
+        thereactor = Reactor()
+        def handler():
+            self.assertEquals(thereactor, reactor())
+        thereactor.addTimer(0, handler)
+        thereactor.step()

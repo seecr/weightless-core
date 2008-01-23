@@ -21,11 +21,18 @@ from __future__ import with_statement
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-from unittest import TestCase
+from cq2utils import CQ2TestCase
 from weightless import Reactor, giong
 
 
-class GioNgTest(TestCase):
+class GioNgTest(CQ2TestCase):
+
+    def testGioConnectToGeneratorWithBuiltInEventProcessor(self):
+        reactor = Reactor()
+        def myProgram():
+            dataIn = yield
+            yield 'dataOut'
+        #giong.Gio(reactor, myProgram()) # how to specify the connection?
 
     def testOpenReturnsContextManager(self):
         result = giong.open('data/testdata5kb')
@@ -33,14 +40,18 @@ class GioNgTest(TestCase):
         self.assertTrue(hasattr(result, '__exit__'))
 
     def testGioAsContext(self):
+        open(self.tempfile, 'w').write('read this!')
         reactor = Reactor()
         def myProcessor():
-            with giong.open('data/testdata_asc_5kb')as datastream:
+            with giong.open(self.tempfile, 'r+') as datastream:
                 self.assertTrue(isinstance(datastream, giong.open))
                 self.dataIn = yield
-                print 'DONE'
-                yield 'response'
+                yield 'write this!'
         giong.Gio(reactor, myProcessor())
         reactor.step()
-        self.assertEquals('0123456789abcdefghi', self.dataIn[:19])
+        self.assertEquals('read this!', self.dataIn[:19])
+        reactor.step()
+        self.assertEquals('read this!write this!', open(self.tempfile).read()[:21])
+        self.assertEquals({}, reactor._readers)
+        self.assertEquals({}, reactor._writers)
 

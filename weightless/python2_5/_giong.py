@@ -22,14 +22,16 @@
 ## end license ##
 from weightless import compose
 from inspect import currentframe
-
-python_open = open
+from functools import partial as curry
+import os
+from time import time
 
 def _get__socketstack__():
     frame = currentframe().f_back
-    while '__socketstack__' not in frame.f_locals:
+    while frame and '__socketstack__' not in frame.f_locals:
         frame = frame.f_back
-    return frame.f_locals['__socketstack__']
+    if frame:
+        return frame.f_locals['__socketstack__']
 
 class Gio(object):
 
@@ -41,28 +43,41 @@ class Gio(object):
 
     def _step(self, message):
         __socketstack__ = self.__socketstack__
-        self._response = self._processor.send(message)
+        try:
+            self._response = self._processor.send(message)
+        except StopIteration:
+                return
+        sok = __socketstack__[-1]
         if self._response:
-            self._reactor.addWriter(__socketstack__[-1], self._write)
+            self._reactor.addWriter(sok, curry(self._write, sok))
         else:
-            self._reactor.addReader(__socketstack__[-1], self._read)
+            self._reactor.addReader(sok, curry(self._read, sok))
 
-    def _write(self):
-        self.__socketstack__[-1].send(self._response) # + MSG_DONTWAIT
+    def _write(self, sok):
+        self._reactor.removeWriter(sok)
+        t0 = time()
+        written = os.write(sok, self._response) # + MSG_DONTWAIT
+        print 'Wrote %s of %s bytes in %s ms.' % (written, len(self._response), (time()-t0)*1000)
         self._step(None)
 
-    def _read(self):
-        message = self.__socketstack__[-1].read(4096)
+    def _read(self, sok):
+        self._reactor.removeReader(sok)
+        message = os.read(sok, os.fstat(sok).st_blksize)
         self._step(message)
 
 class open(object):
 
     def __init__(self, uri, mode='r'):
-        self._sok = python_open(uri, mode)  # this MUST open/connect nonblocking
+        flags = os.O_NONBLOCK | os.O_RDWR
+        self._sok = os.open(uri, flags)
 
     def __enter__(self, *args):
         _get__socketstack__().append(self._sok)
         return self
 
-    def __exit__(self, *args):
-        _get__socketstack__().pop()
+    def __exit__(self, type, value, traceback):
+        if type == GeneratorExit:
+            pass
+        stack = _get__socketstack__()
+        if stack:
+            stack.pop()
