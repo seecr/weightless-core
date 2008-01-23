@@ -96,8 +96,6 @@ class GioNgTest(CQ2TestCase):
     def testSocketHandshake(self):
         reactor = Reactor()
         lhs, rhs = socketpair()
-        lhs.setblocking(0)
-        rhs.setblocking(0)
         def peter(channel):
             with channel:
                 message = yield
