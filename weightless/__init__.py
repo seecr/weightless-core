@@ -34,11 +34,7 @@ if python_version() >= "2.5":
     if "trunk/" in dirName:
         x = ":".join(abspath(path) for path in sys.path)
         system("cd %s/..; PYTHONPATH=%s python2.5 setup.py build_ext --inplace" % (dirName,x))
-    from python2_5._compose_pyx import compose, RETURN
-    from python2_5._compose_py import compose as compose_py
-    import python2_5._gio as gio
-    import python2_5._gio2 as gio2
-    import python2_5._giong as giong
+    from python2_5._compose_py import compose, RETURN
     from python2_5.http import sendRequest, recvRegExp, recvBytes, recvBody, sendBody, copyBody, HttpException
 
 from _acceptor import Acceptor
