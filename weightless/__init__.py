@@ -21,7 +21,7 @@
 #
 ## end license ##
 
-VERSION='0.1.x'
+VERSION='VERSION' # in makeDeb.sh this is replaced by a real version number.
 
 from platform import python_version
 import sys
@@ -34,7 +34,7 @@ if python_version() >= "2.5":
     if "trunk/" in dirName:
         x = ":".join(abspath(path) for path in sys.path)
         system("cd %s/..; PYTHONPATH=%s python2.5 setup.py build_ext --inplace" % (dirName,x))
-    from python2_5._compose_py import compose, RETURN
+    from python2_5._compose_pyx import compose, RETURN
     from python2_5.http import sendRequest, recvRegExp, recvBytes, recvBody, sendBody, copyBody, HttpException
 
 from _acceptor import Acceptor
