@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
@@ -21,32 +20,24 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-#
+
+VERSION='VERSION' # in makeDeb.sh this is replaced by a real version number.
+
 from platform import python_version
-from glob import glob
-import os, sys
-
-for file in glob('../deps.d/*'):
-    sys.path.insert(0, file)
-
-if os.environ.get('PYTHONPATH', '') == '':
-    sys.path.insert(0, '..')
-
-import unittest
-
-# Python >= 2.4
-from acceptortest import AcceptorTest
-from reactortest import ReactorTest
-from httpreadertest import HttpReaderTest
-from httpservertest import HttpServerTest
-from transparentsockettest import TransparentSocketTest
+import sys
+from os import system
+from os.path import dirname, abspath
 
 if python_version() >= "2.5":
-    from composetest import ComposePythonTest, ComposePyrexTest
-    from snaketest import SnakeTest
-    from servertestcasetest import ServerTestCaseTest
-else:
-    print 'Skipping Python 2.5 tests.'
+    # development support; the simplest thing that could possibly work
+    dirName = abspath(dirname(__file__))
+    if "trunk/" in dirName:
+        x = ":".join(abspath(path) for path in sys.path)
+        system("cd %s/..; PYTHONPATH=%s python2.5 setup.py build_ext --inplace" % (dirName,x))
+    from python2_5._compose_pyx import compose, RETURN
+    from python2_5.http import sendRequest, recvRegExp, recvBytes, recvBody, sendBody, copyBody, HttpException
 
-if __name__ == '__main__':
-	unittest.main()
+from _acceptor import Acceptor
+from _reactor import Reactor, reactor
+from _httpreader import HttpReader, Connector
+from _httpserver import HttpServer
