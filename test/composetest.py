@@ -438,35 +438,31 @@ class ComposeTest(TestCase):
         except Exception, e:
             self.fail(str(e))
 
-    def testNoneProblemWithPyrexCompose(self):
+    def testAProblemWithPyrexCompose(self):
         #Test based on a similar situation in ElsevierReaderTest in Tilburg project.
-        r = []
-        voer = compose(readLines('B', collector(r)))
-        toc = StringIO("""Aline1
-Aline2""")
-        voer.next()
-        for line in toc:
-            voer.send(line)
-        voer.throw(StopIteration())
-        voer.close()
-        self.assertEquals([('A', ['line1', 'line2'])], r)
-
-def readLines(readUntil, next):
-    firstChar = yield readFirstChar()
-    currentChar = firstChar
-    lines =[]
-    try:
-        while firstChar != readUntil:
-            lines.append((yield).strip())
+        # It only appears in the pyrex compose version.'
+        def readFirstChar():
+            line = yield
+            firstChar, remainder = line[0], line[1:]
+            raise StopIteration(firstChar, remainder)
+        def readLine(next):
             firstChar = yield readFirstChar()
-    finally:
-        next.send((currentChar, lines))
-        raise StopIteration(firstChar)
+            lines =[]
+            try:
+                while True:
+                    lines.append((yield).strip())
+                    firstChar = yield readFirstChar()
+            finally:
+                next.send(lines)
+                raise StopIteration()
+        r = []
+        c = compose(readLine(collector(r)))
+        c.next()
+        c.send('ABCDEF')
+        c.throw(StopIteration())
+        c.close()
+        self.assertEquals([['BCDEF']], r)
 
-def readFirstChar():
-    line = yield
-    firstChar, remainder = line[0], line[1:]
-    raise StopIteration(firstChar, remainder)
 
 @autostart
 def collector(result):
