@@ -30,6 +30,8 @@ import sys
 from weightless.python2_5._compose_py import compose as compose_python, RETURN
 from weightless.python2_5._compose_pyx import compose as compose_pyrex
 
+from cq2utils import autostart
+
 class ComposeTest(TestCase):
 
     def setUp(self):
@@ -435,6 +437,41 @@ class ComposeTest(TestCase):
             pass
         except Exception, e:
             self.fail(str(e))
+
+    def testNoneProblemWithPyrexCompose(self):
+        #Test based on a similar situation in ElsevierReaderTest in Tilburg project.
+        r = []
+        voer = compose(readLines('B', collector(r)))
+        toc = StringIO("""Aline1
+Aline2""")
+        voer.next()
+        for line in toc:
+            voer.send(line)
+        voer.throw(StopIteration())
+        voer.close()
+        self.assertEquals([('A', ['line1', 'line2'])], r)
+
+def readLines(readUntil, next):
+    firstChar = yield readFirstChar()
+    currentChar = firstChar
+    lines =[]
+    try:
+        while firstChar != readUntil:
+            lines.append((yield).strip())
+            firstChar = yield readFirstChar()
+    finally:
+        next.send((currentChar, lines))
+        raise StopIteration(firstChar)
+
+def readFirstChar():
+    line = yield
+    firstChar, remainder = line[0], line[1:]
+    raise StopIteration(firstChar, remainder)
+
+@autostart
+def collector(result):
+    while True:
+        result.append((yield))
 
 class ComposePyrexTest(ComposeTest):
 
