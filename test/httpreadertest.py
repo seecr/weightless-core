@@ -199,7 +199,7 @@ class HttpReaderTest(TestCase):
 
         self.assertEquals(['response'], sentData[1:])
         self.assertEquals('200', sentData[0]['StatusCode'])
-        expected = 'POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nSOAPAction: blah\r\nUser-Agent: Weightless/v0.1.x\r\n\r\n' + '1\r\nA\r\n' + '1\r\nB\r\n' + '1\r\nC\r\n' + '0\r\n\r\n'
+        expected = 'POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nSOAPAction: blah\r\nUser-Agent: Weightless/v%s\r\n\r\n' % WlVersion + '1\r\nA\r\n' + '1\r\nB\r\n' + '1\r\nC\r\n' + '0\r\n\r\n'
         self.assertEquals(expected, "".join(request))
 
     def testWriteChunks(self):
