@@ -53,19 +53,27 @@ class Timer(object):
 class Reactor(object):
     """This Reactor allows applications to be notified of read, write or time events.  The callbacks being executed can contain instructions to modify the reader, writers and timers in the reactor.  Additions of new events are effective with the next step() call, removals are effective immediately, even if the actual event was already trigger, but the handler wat not called yet."""
 
+    MAXPRIO = 10
+    DEFAULTPRIO = 1
+
     def __init__(self, select_func = select):
         self._readers = {}
         self._writers = {}
         self._timers = []
         self._select = select_func
+        self._prio = 0
 
-    def addReader(self, sok, sink):
+    def addReader(self, sok, sink, prio=None):
         """Adds a socket and calls sink() when the socket becomes readable. It remains at the readers list."""
-        self._readers[sok] = sink
+        if not prio:
+            prio = Reactor.DEFAULTPRIO
+        if not 0 <= prio < Reactor.MAXPRIO:
+            raise ValueError('Invalid priority: %s' % prio)
+        self._readers[sok] = (sink, prio)
 
-    def addWriter(self, sok, source):
+    def addWriter(self, sok, source, prio=1):
         """Adds a socket and calls source() whenever the socket is writable. It remains at the writers list."""
-        self._writers[sok] = source
+        self._writers[sok] = (source, prio)
 
     def addTimer(self, seconds, callback):
         """Add a timer that calls callback() after the specified number of seconds. Afterwards, the timer is deleted.  It returns a token for removeTimer()."""
@@ -98,6 +106,7 @@ class Reactor(object):
         __reactor__ = self
 
         aTimerTimedOut = False
+        self._prio = (self._prio + 1) % Reactor.MAXPRIO
         if self._timers:
             timeout = max(0, self._timers[0].time - time())
         else:
@@ -130,27 +139,27 @@ class Reactor(object):
                 raise
             except:
                 print_exc()
-            del self._timers[0]
+            finally:
+		del self._timers[0]
 
-        for sok in rReady:
-            if sok in self._readers:
-                try:
-                    self._readers[sok]()
-                except:
-                    print_exc()
-                    if sok in self._readers:
-                        del self._readers[sok]
-
-        for sok in wReady:
-            if sok in self._writers:
-                try:
-                    self._writers[sok]()
-                except:
-                    print_exc()
-                    if sok in self._writers:
-                        del self._writers[sok]
+        self._callback(rReady, self._readers)
+        self._callback(wReady, self._writers)
 
         return self
+
+    def _callback(self, ready, soks):
+        for sok in ready:
+            if sok in soks:
+                try:
+                    __callback__, prio = soks[sok]
+                    if prio <= self._prio:
+                        __callback__()
+                except AssertionError:
+                    raise
+                except:
+                    print_exc()
+                    if sok in soks:
+                        del soks[sok]
 
     def _findAndRemoveBadFd(self):
         for sok in self._readers:
@@ -165,3 +174,4 @@ class Reactor(object):
             except:
                 del self._writers[sok]
                 return
+
