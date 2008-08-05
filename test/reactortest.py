@@ -31,6 +31,7 @@ import os, sys
 from tempfile import mkstemp
 from StringIO import StringIO
 from weightless import Reactor
+from socket import socketpair, error
 
 class ReactorTest(TestCase):
 
@@ -260,7 +261,7 @@ class ReactorTest(TestCase):
             reactor.step()
             raise Exception('step() must raise AssertionError')
         except AssertionError:
-            pass
+            self.assertEquals([], reactor._timers)
 
     def testGlobalReactor(self):
         from weightless import reactor
@@ -269,3 +270,73 @@ class ReactorTest(TestCase):
             self.assertEquals(thereactor, reactor())
         thereactor.addTimer(0, handler)
         thereactor.step()
+
+    def testReadPriorities(self):
+        reactor = Reactor()
+        local0, remote0 = socketpair()
+        local1, remote1 = socketpair()
+        data0 = []
+        def remoteHandler0():
+            data0.append(remote0.recv(999))
+        data1 = []
+        def remoteHandler1():
+            data1.append(remote1.recv(999))
+        reactor.addReader(remote0, remoteHandler0, 0)
+        reactor.addReader(remote1, remoteHandler1, 3)
+        local0.send('ape')
+        local1.send('nut')
+        reactor.step() #1
+        self.assertEquals(['ape'], data0)
+        self.assertEquals([], data1)
+        reactor.step() #2
+        self.assertEquals([], data1)
+        reactor.step() #3
+        self.assertEquals(['nut'], data1)
+
+    def testMinandMaxPrio(self):
+        reactor = Reactor()
+        try:
+            reactor.addReader('', '', -1)
+            self.fail()
+        except ValueError, e:
+            self.assertEquals('Invalid priority: -1', str(e))
+        try:
+            reactor.addReader('', '', Reactor.MAXPRIO)
+            self.fail()
+        except ValueError, e:
+            self.assertEquals('Invalid priority: 10', str(e))
+
+    def testDefaultPrio(self):
+        reactor = Reactor()
+        reactor.addReader('', '')
+        self.assertEquals(Reactor.DEFAULTPRIO, reactor._readers[''][1])
+        reactor.addWriter('', '')
+        self.assertEquals(Reactor.DEFAULTPRIO, reactor._writers[''][1])
+
+
+    def testWritePrio(self):
+        reactor = Reactor()
+        local0, remote0 = socketpair()
+        local1, remote1 = socketpair()
+        local1.setblocking(0)
+        def remoteHandler0():
+            remote0.send('ape')
+        def remoteHandler1():
+            remote1.send('nut')
+        reactor.addWriter(remote0, remoteHandler0, 0)
+        reactor.addWriter(remote1, remoteHandler1, 3)
+        reactor.step() #1
+        self.assertEquals('ape', local0.recv(999))
+        try:
+            local1.recv(999)
+            self.fail('must be no data on the socket yet')
+        except error:
+            pass
+        reactor.step() #2
+        try:
+            local1.recv(999)
+            self.fail('must be no data on the socket yet')
+        except error:
+            pass
+        reactor.step() #3
+        self.assertEquals('nut', local1.recv(999))

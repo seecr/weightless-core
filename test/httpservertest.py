@@ -116,7 +116,7 @@ class HttpServerTest(TestCase):
             originalSend(data[:3], *options)
             return 3
         serverSok.send = sendOnlyManagesToActuallySendThreeBytesPerSendCall
-        for i in range(21):
+        for i in range(22):
             reactor.step()
         fragment = sok.recv(4096)
         self.assertEquals('some text that is longer than the lenght of fragments sent', fragment)
@@ -149,7 +149,7 @@ class HttpServerTest(TestCase):
         sok.connect(('localhost', port))
         sok.send('GET / HTTP/1.0\r\n\r\n')
         sleep(0.02)
-        for i in range(10):
+        for i in range(11):
             reactor.step()
         response = sok.recv(4096)
         self.assertEquals('aaa', response)
