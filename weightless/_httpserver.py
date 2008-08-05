@@ -27,13 +27,13 @@ from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
 RECVSIZE = 4096
 CRLF_LEN = 2
 
-def HttpServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE):
+def HttpServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
-    return Acceptor(reactor, port, lambda sok: HttpHandler(reactor, sok, generatorFactory, timeout, recvSize))
+    return Acceptor(reactor, port, lambda sok: HttpHandler(reactor, sok, generatorFactory, timeout, recvSize, prio=prio), prio=prio)
 
 class HttpHandler(object):
 
-    def __init__(self, reactor, sok, generatorFactory, timeout, recvSize=RECVSIZE):
+    def __init__(self, reactor, sok, generatorFactory, timeout, recvSize=RECVSIZE, prio=None):
         self._reactor = reactor
         self._sok = sok
         self._generatorFactory = generatorFactory
@@ -44,6 +44,7 @@ class HttpHandler(object):
         self._recvSize = recvSize
         self.request = None
         self._dealWithCall = self._readHeaders
+        self._prio = prio
 
     def __call__(self):
         kwargs = {}
@@ -125,7 +126,7 @@ class HttpHandler(object):
         self.request['Client'] = self._sok.getpeername()
         self._handler = self._generatorFactory(**self.request)
         self._reactor.removeReader(self._sok)
-        self._reactor.addWriter(self._sok, self._writeResponse)
+        self._reactor.addWriter(self._sok, self._writeResponse, prio=self._prio)
 
     def _badRequest(self):
         self._sok.send('HTTP/1.0 400 Bad Request\r\n\r\n')

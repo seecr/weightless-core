@@ -305,6 +305,16 @@ class ReactorTest(TestCase):
             self.fail()
         except ValueError, e:
             self.assertEquals('Invalid priority: 10', str(e))
+        try:
+            reactor.addWriter('', '', -1)
+            self.fail()
+        except ValueError, e:
+            self.assertEquals('Invalid priority: -1', str(e))
+        try:
+            reactor.addWriter('', '', Reactor.MAXPRIO)
+            self.fail()
+        except ValueError, e:
+            self.assertEquals('Invalid priority: 10', str(e))
 
     def testDefaultPrio(self):
         reactor = Reactor()
@@ -312,7 +322,6 @@ class ReactorTest(TestCase):
         self.assertEquals(Reactor.DEFAULTPRIO, reactor._readers[''][1])
         reactor.addWriter('', '')
         self.assertEquals(Reactor.DEFAULTPRIO, reactor._writers[''][1])
-
 
     def testWritePrio(self):
         reactor = Reactor()

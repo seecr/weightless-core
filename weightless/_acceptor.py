@@ -34,16 +34,18 @@ class Acceptor(object):
         sok.bind(('0.0.0.0', port))
         sok.listen(127)
 
-        reactor.addReader(sok, self._accept, prio)
+        reactor.addReader(sok, self._accept, prio=prio)
         self._sinkFactory = sinkFactory
         self._sok = sok
         self._reactor = reactor
+        self._prio = prio
 
     def _accept(self):
         newConnection, address = self._sok.accept()
         newConnection.setsockopt(SOL_TCP, TCP_CORK, 1)
         #newConnection.setsockopt(SOL_TCP, TCP_NODELAY, 1)
-        self._reactor.addReader(newConnection, self._sinkFactory(newConnection))
+        self._reactor.addReader(newConnection,
+            self._sinkFactory(newConnection), prio=self._prio)
 
     def close(self):
         self._sok.close()

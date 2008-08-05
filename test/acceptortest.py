@@ -108,4 +108,4 @@ class AcceptorTest(TestCase):
         client = socket()
         client.connect(('127.0.0.1', port))
         acceptor._accept()
-        self.assertEquals(5, reactor.calledMethods[0].args[2])
+        self.assertEquals(5, reactor.calledMethods[0].kwargs['prio'])

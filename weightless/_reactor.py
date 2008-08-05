@@ -54,7 +54,7 @@ class Reactor(object):
     """This Reactor allows applications to be notified of read, write or time events.  The callbacks being executed can contain instructions to modify the reader, writers and timers in the reactor.  Additions of new events are effective with the next step() call, removals are effective immediately, even if the actual event was already trigger, but the handler wat not called yet."""
 
     MAXPRIO = 10
-    DEFAULTPRIO = 1
+    DEFAULTPRIO = 0
 
     def __init__(self, select_func = select):
         self._readers = {}
@@ -71,8 +71,12 @@ class Reactor(object):
             raise ValueError('Invalid priority: %s' % prio)
         self._readers[sok] = (sink, prio)
 
-    def addWriter(self, sok, source, prio=1):
+    def addWriter(self, sok, source, prio=None):
         """Adds a socket and calls source() whenever the socket is writable. It remains at the writers list."""
+        if not prio:
+            prio = Reactor.DEFAULTPRIO
+        if not 0 <= prio < Reactor.MAXPRIO:
+            raise ValueError('Invalid priority: %s' % prio)
         self._writers[sok] = (source, prio)
 
     def addTimer(self, seconds, callback):
