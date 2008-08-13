@@ -42,7 +42,7 @@ from httpservertest import HttpServerTest
 from transparentsockettest import TransparentSocketTest
 
 if python_version() >= "2.5":
-    from composetest import ComposePythonTest, ComposePyrexTest
+    from composetest import ComposePythonTest
     from snaketest import SnakeTest
     from servertestcasetest import ServerTestCaseTest
 else:

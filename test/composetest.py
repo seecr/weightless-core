@@ -28,7 +28,7 @@ from StringIO import StringIO
 import sys
 
 from weightless.python2_5._compose_py import compose as compose_python, RETURN
-from weightless.python2_5._compose_pyx import compose as compose_pyrex
+#from weightless.python2_5._compose_pyx import compose as compose_pyrex
 
 from cq2utils import autostart
 
@@ -469,12 +469,12 @@ def collector(result):
     while True:
         result.append((yield))
 
-class ComposePyrexTest(ComposeTest):
-
-    def setUp(self):
-        self.compose = compose_pyrex
-        ComposeTest.setUp(self)
-        self.assertComposeImpl(compose_pyrex)
+#class ComposePyrexTest(ComposeTest):
+#
+#    def setUp(self):
+#        self.compose = compose_pyrex
+#        ComposeTest.setUp(self)
+#        self.assertComposeImpl(compose_pyrex)
 
 class ComposePythonTest(ComposeTest):
 
