@@ -1,4 +1,5 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.5
+
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
@@ -29,8 +30,7 @@ import os, sys
 for file in glob('../deps.d/*'):
     sys.path.insert(0, file)
 
-if os.environ.get('PYTHONPATH', '') == '':
-    sys.path.insert(0, '..')
+sys.path.insert(0, '..')
 
 import unittest
 
@@ -49,4 +49,4 @@ else:
     print 'Skipping Python 2.5 tests.'
 
 if __name__ == '__main__':
-	unittest.main()
+    unittest.main()
