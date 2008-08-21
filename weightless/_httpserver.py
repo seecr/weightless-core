@@ -97,6 +97,8 @@ class HttpHandler(object):
                 self.setCallDealer(self._readChunk)
             else:
                 self.finalize()
+        else:
+            self.finalize()
 
     def _readChunk(self):
         match = REGEXP.CHUNK_SIZE_LINE.match(self._dataBuffer)
