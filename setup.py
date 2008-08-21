@@ -21,8 +21,6 @@
 #
 ## end license ##
 from distutils.core import setup
-from distutils.extension import Extension
-from Pyrex.Distutils import build_ext
 from platform import python_version
 
 setupArgs = {
@@ -40,8 +38,6 @@ setupArgs = {
 if python_version() >= '2.5':
     setup(
         packages=['weightless', 'weightless.python2_5', 'weightless.http', 'weightless.utils'],
-        ext_modules=[Extension("weightless.python2_5._compose_pyx", ["weightless/python2_5/_compose_pyx.pyx"])],
-        cmdclass = {'build_ext': build_ext},
         **setupArgs
     )
 
