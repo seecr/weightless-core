@@ -47,7 +47,10 @@ class HttpHandler(object):
 
     def __call__(self):
         kwargs = {}
-        self._dataBuffer += self._sok.recv(self._recvSize)
+        part = self._sok.recv(self._recvSize)
+        #if part == '':
+        #  raise Exception('We are done, go away')
+        self._dataBuffer += part
         self._dealWithCall()
 
     def setCallDealer(self, aMethod):
@@ -91,6 +94,10 @@ class HttpHandler(object):
                 self.finalize()
             elif 'Transfer-Encoding' in self.request['Headers'] and self.request['Headers']['Transfer-Encoding'] == 'chunked':
                 self.setCallDealer(self._readChunk)
+            else:
+                self.finalize()
+        else:
+            self.finalize()
 
     def _readChunk(self):
         match = REGEXP.CHUNK_SIZE_LINE.match(self._dataBuffer)
