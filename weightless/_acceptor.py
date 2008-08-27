@@ -29,10 +29,10 @@ class Acceptor(object):
     def __init__(self, reactor, port, sinkFactory):
         """The reactor is a user specified reactor for dispatching I/O events asynchronously. The sinkFactory is called with the newly created socket as its single argument. It is supposed to return a callable callback function that is called by the reactor when data is available."""
         sok = socket()
-        sok.bind(('0.0.0.0', port))
-        sok.listen(127)
         sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         sok.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
+        sok.bind(('0.0.0.0', port))
+        sok.listen(127)
 
         reactor.addReader(sok, self._accept)
         self._sinkFactory = sinkFactory
@@ -44,3 +44,6 @@ class Acceptor(object):
         newConnection.setsockopt(SOL_TCP, TCP_CORK, 1)
         #newConnection.setsockopt(SOL_TCP, TCP_NODELAY, 1)
         self._reactor.addReader(newConnection, self._sinkFactory(newConnection))
+
+    def close(self):
+        self._sok.close()

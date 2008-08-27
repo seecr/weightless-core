@@ -26,6 +26,8 @@ from weightless import Acceptor
 from cq2utils import CallTrace
 from random import randint
 from os import system
+from subprocess import Popen, PIPE
+
 
 class AcceptorTest(TestCase):
 
@@ -35,7 +37,8 @@ class AcceptorTest(TestCase):
         acceptor = Acceptor(reactor, port, None)
         self.assertEquals('addReader', reactor.calledMethods[0].name)
         sok = reactor.calledMethods[0].args[0]
-        self.assertEquals(0, system('netstat --ip --listening | grep "*:%d">/dev/null' % port))
+        out = Popen(['netstat', '--numeric', '--listening', '--tcp'], stdout=PIPE, stderr=PIPE).communicate()[0]
+        self.assertTrue(str(port) in out, out)
         sok.close()
         callback = reactor.calledMethods[0].args[1]
         self.assertTrue(callable(callback))
@@ -87,3 +90,22 @@ class AcceptorTest(TestCase):
         sink.next()
         self.assertTrue(self.next)
         reactor.calledMethods[0].args[0].close()
+
+    def testReuseAddress(self):
+        reactor = CallTrace()
+        port = randint(2**10, 2**16)
+        acceptor = Acceptor(reactor, port, lambda sok: None)
+        client = socket()
+        client.connect(('127.0.0.1', port))
+        acceptor._accept()
+        acceptor.close()
+        acceptor = Acceptor(reactor, port, lambda sok: None)
+
+    def testAcceptorWithPrio(self):
+        reactor = CallTrace()
+        port = randint(2**10, 2**16)
+        acceptor = Acceptor(reactor, port, lambda sok: None, prio=5)
+        client = socket()
+        client.connect(('127.0.0.1', port))
+        acceptor._accept()
+        self.assertEquals(5, reactor.calledMethods[0].args[2])
