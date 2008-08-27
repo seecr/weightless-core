@@ -101,11 +101,3 @@ class AcceptorTest(TestCase):
         acceptor.close()
         acceptor = Acceptor(reactor, port, lambda sok: None)
 
-    def testAcceptorWithPrio(self):
-        reactor = CallTrace()
-        port = randint(2**10, 2**16)
-        acceptor = Acceptor(reactor, port, lambda sok: None, prio=5)
-        client = socket()
-        client.connect(('127.0.0.1', port))
-        acceptor._accept()
-        self.assertEquals(5, reactor.calledMethods[0].args[2])
