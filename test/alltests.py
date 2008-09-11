@@ -34,6 +34,7 @@ if os.environ.get('PYTHONPATH', '') == '':
 
 import unittest
 
+print 'Testing for Python %s. Please make sure to run these tests for both Python 2.4 and Python 2.5!' % python_version()
 # Python >= 2.4
 from acceptortest import AcceptorTest
 from reactortest import ReactorTest

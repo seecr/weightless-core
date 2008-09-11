@@ -31,7 +31,6 @@ from os.path import dirname, abspath
 if python_version() >= "2.5":
     # development support; the simplest thing that could possibly work
     dirName = abspath(dirname(__file__))
-    print dirName
     if "trunk/" in dirName:
         x = ":".join(abspath(path) for path in sys.path)
         system("cd %s/..; PYTHONPATH=%s python2.5 setup.py build_ext --inplace" % (dirName,x))

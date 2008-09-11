@@ -116,12 +116,13 @@ class Reactor(object):
             if timer.time > time():
                 break
             try:
-                __callback__ = timer.callback
-                __callback__()
-            except AssertionError:
-                raise
-            except:
-                print_exc()
+                try:
+                    __callback__ = timer.callback
+                    __callback__()
+                except AssertionError:
+                    raise
+                except:
+                    print_exc()
             finally:
                 del self._timers[0]
 
