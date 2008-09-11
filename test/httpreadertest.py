@@ -34,7 +34,7 @@ from StringIO import StringIO
 from cq2utils import CallTrace
 from cq2utils.wildcard import Wildcard
 
-def server(port, response, request, delay=0):
+def server(port, response, request, delay=0, loop=1):
     isListening = Event()
     def serverProcess():
         serverSok = socket()
@@ -44,7 +44,8 @@ def server(port, response, request, delay=0):
         newSok, addr = serverSok.accept()
 
         if response:
-            request.append(newSok.recv(4096))
+            for i in xrange(loop):
+                request.append(newSok.recv(4096))
             newSok.send(response)
             sleep(delay)
             newSok.close()
@@ -177,7 +178,7 @@ class HttpReaderTest(TestCase):
         port = randint(2048, 4096)
         reactor = Reactor()
         request = []
-        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\nresponse", request)
+        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\nresponse", request, loop=5)
         sentData = []
         done = []
         def send(data):
@@ -191,9 +192,9 @@ class HttpReaderTest(TestCase):
             yield "C"
             yield None
 
-        reader = HttpReaderFacade(reactor, "http://localhost:%s" % port, send, errorHandler=throw, timeout=0.1, headers={'SOAPAction': 'blah'}, bodyHandler=next)
+        reader = HttpReaderFacade(reactor, "http://localhost:%s" % port, send, errorHandler=throw, timeout=0.5, headers={'SOAPAction': 'blah'}, bodyHandler=next)
 
-        reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
+        reactor.addTimer(2.2, lambda: self.fail("Test Stuck"))
         while not done:
             reactor.step()
 
@@ -255,12 +256,13 @@ Content-Type: text/html; charset=utf-8
         self.assertEquals(['1234'], data)
         httpreader._sendFragment('10\r\n0123456789abcdef\r\n')
         self.assertEquals(['1234', '0123456789abcdef'], data)
-        data = []
+        del data[0]
+        del data[0]
         # chunk = 2 network messages
         httpreader._sendFragment('10\r\nfedcba')
-        self.assertEquals(['fedcba'], data)
+        #self.assertEquals(['fedcba'], data)
         httpreader._sendFragment('9876543210\r\n')
-        self.assertEquals(['9876543210'], data)
+        self.assertEquals(['fedcba9876543210'], data)
 
     def testLastRecvContainsCompleteChunk(self):
         reactor = CallTrace('Reactor')
@@ -274,11 +276,17 @@ Content-Type: text/html; charset=utf-8
                 done.append(True)
         httpreader = HttpReader(reactor, sokket, Handler(), 'GET', 'host,nl', '/')
         httpreader._chunked = True
-        httpreader._sendFragment('9\r\n123456789\r\n')
+        chunkOne = '9\r\n123456789\r\n'
+        chunkTwo = '8\r\n87654321\r\n'
+        httpreader._sendFragment(chunkOne)
         self.assertEquals(['123456789'], data)
-        httpreader._sendFragment('8\r\n87654321\r\n')
+        httpreader._sendFragment(chunkTwo)
         self.assertEquals(['123456789', '87654321'], data)
-        data = [] # now both in one network message
-        httpreader._sendFragment('9\r\n123456789\r\n8\r\n87654321\r\n0\r\n\r\n')
+        while data: del data[0] # now both in one network message
+        httpreader._sendFragment(chunkOne + chunkTwo +'0\r\n\r\n')
+        # Send fragment will only read one fragment.
+        # Now feed it until all chunks are finished
+        httpreader._sendFragment('')
+        httpreader._sendFragment('')
         self.assertEquals(['123456789', '87654321'], data)
         self.assertEquals([True], done)

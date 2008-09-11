@@ -99,7 +99,7 @@ class Reactor(object):
         except TypeError:
             print_exc()
             self._findAndRemoveBadFd()
-            return
+            return self
         except error, (errno, description):
             if errno == EBADF:
                 self._findAndRemoveBadFd()
@@ -107,36 +107,41 @@ class Reactor(object):
                 pass
             else:
                 raise
-            return
+            return self
+        except KeyboardInterrupt:
+            self.shutdown()
+            raise
 
-        for timer in self._timers:
+        for timer in [t for t in self._timers]:
             if timer.time > time():
                 break
             try:
-                timer.callback()
+                __callback__ = timer.callback
+                __callback__()
             except AssertionError:
                 raise
             except:
                 print_exc()
-            del self._timers[0]
+            finally:
+                del self._timers[0]
 
-        for sok in rReady:
-            if sok in self._readers:
+        self._callback(rReady, self._readers)
+        self._callback(wReady, self._writers)
+
+        return self
+
+    def _callback(self, ready, soks):
+        for sok in ready:
+            if sok in soks:
                 try:
-                    self._readers[sok]()
+                    __callback__ = soks[sok]
+                    __callback__()
+                except AssertionError:
+                    raise
                 except:
                     print_exc()
-                    if sok in self._readers:
-                        del self._readers[sok]
-
-        for sok in wReady:
-            if sok in self._writers:
-                try:
-                    self._writers[sok]()
-                except:
-                    print_exc()
-                    if sok in self._writers:
-                        del self._writers[sok]
+                    if sok in soks:
+                        del soks[sok]
 
     def _findAndRemoveBadFd(self):
         for sok in self._readers:

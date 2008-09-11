@@ -147,6 +147,58 @@ class ReactorTest(TestCase):
         finally:
             sys.stderr = sys.__stderr__
 
+    def testSelfModifyingLoopSkipsEverySecondTimerAndDeletesTheWrongOneBUG(self):
+        done = []
+        reactor = Reactor()
+        def callback1():
+            self.assertEquals([], done)
+            done.append(1)
+            self.assertEquals([timer1, timer2, timer3], reactor._timers)
+        def callback2():
+            self.assertEquals([1], done)
+            done.append(2)
+            self.assertEquals([timer2, timer3], reactor._timers)
+        def callback3():
+            self.assertEquals([1,2], done)
+            done.append(3)
+            self.assertEquals([timer3], reactor._timers)
+        timer1 = reactor.addTimer(0.0001, callback1)
+        timer2 = reactor.addTimer(0.0002, callback2)
+        timer3 = reactor.addTimer(0.0003, callback3)
+        self.assertEquals([timer1, timer2, timer3], reactor._timers)
+        sleep(0.004)
+        reactor.step()
+        self.assertEquals([1,2,3], done)
+        self.assertEquals([], reactor._timers)
+
+    def testAssertionErrorInReadCallback(self):
+        sys.stderr = StringIO()
+        try:
+            def callback(): raise AssertionError('here is the assertion')
+            reactor = Reactor(lambda r, w, o, t: (r,w,o))
+            reactor.addReader(9, callback)
+            try:
+                reactor.step()
+                self.fail('must raise exception')
+            except AssertionError, e:
+                self.assertEquals('here is the assertion', str(e))
+        finally:
+            sys.stderr = sys.__stderr__
+
+    def testAssertionErrorInWRITECallback(self):
+        sys.stderr = StringIO()
+        try:
+            def callback(): raise AssertionError('here is the assertion')
+            reactor = Reactor(lambda r, w, o, t: (r,w,o))
+            reactor.addWriter(9, callback)
+            try:
+                reactor.step()
+                self.fail('must raise exception')
+            except AssertionError, e:
+                self.assertEquals('here is the assertion', str(e))
+        finally:
+            sys.stderr = sys.__stderr__
+
     def testWriteFollowsRead(self):
         reactor = Reactor(lambda r,w,o,t: (r,w,o))
         t = []
@@ -220,17 +272,24 @@ class ReactorTest(TestCase):
 
     def testGetRidOfBadFileDescriptors(self):
         reactor = Reactor()
+        class BadSocket(object):
+            def fileno(self): return 88
+            def close(self): raise Exception('hell breaks loose')
         self.timeout = False
         def timeout():
             self.timeout = True
         reactor.addReader(99, None) # broken
         reactor.addWriter(99, None) # broken
+        reactor.addReader(BadSocket(), None) # even more broken
         reactor.addTimer(0.01, timeout)
         for i in range(10):
             if self.timeout:
                 break
             reactor.step()
         self.assertTrue(self.timeout)
+        self.assertEquals({}, reactor._readers)
+        self.assertEquals({}, reactor._writers)
+        self.assertEquals([], reactor._timers)
 
     def testDoNotDieButLogOnProgrammingErrors(self):
         reactor = Reactor()

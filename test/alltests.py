@@ -43,7 +43,7 @@ from transparentsockettest import TransparentSocketTest
 
 if python_version() >= "2.5":
     from composetest import ComposePythonTest, ComposePyrexTest
-    from giotest import Gio1Test, Gio2Test
+    #from giotest import Gio1Test, Gio2Test
     from giongtest import GioNgTest
     from snaketest import SnakeTest
     from servertestcasetest import ServerTestCaseTest
