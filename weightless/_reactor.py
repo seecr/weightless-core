@@ -121,7 +121,7 @@ class Reactor(object):
         except TypeError:
             print_exc()
             self._findAndRemoveBadFd()
-            return
+            return self
         except error, (errno, description):
             if errno == EBADF:
                 self._findAndRemoveBadFd()
@@ -134,17 +134,18 @@ class Reactor(object):
             self.shutdown()
             raise
 
-        for timer in self._timers:
+        for timer in [t for t in self._timers]:
             if timer.time > time():
                 break
             try:
-                timer.callback()
+                __callback__ = timer.callback
+                __callback__()
             except AssertionError:
                 raise
             except:
                 print_exc()
             finally:
-		del self._timers[0]
+                del self._timers[0]
 
         self._callback(rReady, self._readers)
         self._callback(wReady, self._writers)
@@ -178,4 +179,3 @@ class Reactor(object):
             except:
                 del self._writers[sok]
                 return
-

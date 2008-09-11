@@ -34,7 +34,7 @@ from StringIO import StringIO
 from cq2utils import CallTrace
 from cq2utils.wildcard import Wildcard
 
-def server(port, response, request, delay=0):
+def server(port, response, request, delay=0, loop=1):
     isListening = Event()
     def serverProcess():
         serverSok = socket()
@@ -44,7 +44,8 @@ def server(port, response, request, delay=0):
         newSok, addr = serverSok.accept()
 
         if response:
-            request.append(newSok.recv(4096))
+            for i in xrange(loop):
+                request.append(newSok.recv(4096))
             newSok.send(response)
             sleep(delay)
             newSok.close()
@@ -177,7 +178,7 @@ class HttpReaderTest(TestCase):
         port = randint(2048, 4096)
         reactor = Reactor()
         request = []
-        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\nresponse", request)
+        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\nresponse", request, loop=5)
         sentData = []
         done = []
         def send(data):
@@ -191,9 +192,9 @@ class HttpReaderTest(TestCase):
             yield "C"
             yield None
 
-        reader = HttpReaderFacade(reactor, "http://localhost:%s" % port, send, errorHandler=throw, timeout=0.1, headers={'SOAPAction': 'blah'}, bodyHandler=next)
+        reader = HttpReaderFacade(reactor, "http://localhost:%s" % port, send, errorHandler=throw, timeout=0.5, headers={'SOAPAction': 'blah'}, bodyHandler=next)
 
-        reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
+        reactor.addTimer(2.2, lambda: self.fail("Test Stuck"))
         while not done:
             reactor.step()
 
