@@ -21,8 +21,10 @@
 #
 ## end license ##
 from _acceptor import Acceptor
-from weightless.http import REGEXP, FORMAT, HTTP, parseHeaders
+from weightless.http import REGEXP, FORMAT, HTTP, parseHeaders, parseHeader
 from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
+from tempfile import TemporaryFile
+from email import message_from_file as parse_mime_message
 
 RECVSIZE = 4096
 CRLF_LEN = 2
@@ -72,9 +74,49 @@ class HttpHandler(object):
         self.request['Headers'] = parseHeaders(self.request['_headers'])
         matchEnd = match.end()
         self._dataBuffer = self._dataBuffer[matchEnd:]
+        if 'Content-Type' in self.request['Headers']:
+            cType, pDict = parseHeader(self.request['Headers']['Content-Type'])
+            if cType[:10] == 'multipart/':
+                #self._tempfile = TemporaryFile('w+b')
+                self._tempfile = open('/tmp/mimetest', 'w+b')
+                self._tempfile.write('Content-Type: %s\r\n\r\n' % self.request['Headers']['Content-Type'])
+                self.setCallDealer(lambda: self._readMultiForm(pDict['boundary']))
+                return
         if 'Expect' in self.request['Headers']:
             self._sok.send('HTTP/1.1 100 Continue\r\n\r\n')
         self.setCallDealer(self._readBody)
+
+    def _readMultiForm(self, boundary):
+        self._tempfile.write(self._dataBuffer)
+        if self._timer:
+            self._reactor.removeTimer(self._timer)
+            self._timer = None
+        if self._dataBuffer.endswith("\r\n--%s--\r\n" % boundary):
+            self._tempfile.seek(0)
+
+            form = {}
+            for msg in parse_mime_message(self._tempfile).get_payload():
+                cType, pDict = parseHeader(msg['Content-Disposition'])
+                contentType = msg.get_content_type()
+                fieldName = pDict['name'][1:-1]
+                if not fieldName in form:
+                    form[fieldName] = []
+
+                if contentType == 'text/plain':
+                    form[fieldName].append(msg.get_payload())
+                else:
+                    filename = pDict.get('filename', '')[1:-1]
+                    form[fieldName].append((filename, contentType, msg.get_payload()))
+
+            self.request['Form'] = form
+            self._tempfile.close()
+            self.finalize()
+            return
+
+
+        self._dataBuffer= ''
+        if not self._timer:
+            self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
 
     def _readBody(self):
         if self.request['Method'] == 'GET':

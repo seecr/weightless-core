@@ -40,6 +40,7 @@ from reactortest import ReactorTest
 from httpreadertest import HttpReaderTest
 from httpservertest import HttpServerTest
 from transparentsockettest import TransparentSocketTest
+from httpspectest import HttpSpecTest
 
 if python_version() >= "2.5":
     from composetest import ComposePythonTest

@@ -217,6 +217,28 @@ class HttpServerTest(TestCase):
         while self.requestData.get('Body', None) != 'abcdefghij':
             reactor.step()
 
+    def testPostMultipartForm(self):
+        httpRequest = open('data/multipart-data-01').read()
+        self.requestData = {}
+        def handler(**kwargs):
+            self.requestData = kwargs
+
+        port = randint(20000,25000)
+        reactor = Reactor()
+        server = HttpServer(reactor, port, handler)
+        sok = socket()
+        sok.connect(('localhost', port))
+        sok.send(httpRequest)
+
+        reactor.addTimer(2, lambda: self.fail("Test Stuck"))
+        while self.requestData.get('Form', None) == None:
+            reactor.step()
+        form = self.requestData['Form']
+        self.assertEquals(4, len(form))
+        self.assertEquals(['SOME ID'], form['id'])
+
+
+
     #def testUncaughtException(self):
         #done = []
         #def onRequest(**kwargs):

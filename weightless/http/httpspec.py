@@ -34,6 +34,14 @@ def parseHeaders(headerString):
         headers[fieldname.title()] = fieldvalue.strip()
     return headers
 
+def parseHeader(headerString):
+    parts = headerString.split(';')
+    cType = parts[0]
+    pDict = {}
+    if len(parts) != 1:
+        pDict = dict(part.strip().split('=', 1) for part in (part for part in parts[1:]))
+
+    return cType, pDict
 
 class HTTP:
     #class Response:
