@@ -77,8 +77,8 @@ class HttpHandler(object):
         if 'Content-Type' in self.request['Headers']:
             cType, pDict = parseHeader(self.request['Headers']['Content-Type'])
             if cType[:10] == 'multipart/':
-                #self._tempfile = TemporaryFile('w+b')
-                self._tempfile = open('/tmp/mimetest', 'w+b')
+                self._tempfile = TemporaryFile('w+b')
+                #self._tempfile = open('/tmp/mimetest', 'w+b')
                 self._tempfile.write('Content-Type: %s\r\n\r\n' % self.request['Headers']['Content-Type'])
                 self.setCallDealer(lambda: self._readMultiForm(pDict['boundary']))
                 return
@@ -105,7 +105,7 @@ class HttpHandler(object):
                 if contentType == 'text/plain':
                     form[fieldName].append(msg.get_payload())
                 else:
-                    filename = pDict.get('filename', '')[1:-1]
+                    filename = self._processFilename(pDict.get('filename', '')[1:-1])
                     form[fieldName].append((filename, contentType, msg.get_payload()))
 
             self.request['Form'] = form
@@ -117,6 +117,12 @@ class HttpHandler(object):
         self._dataBuffer= ''
         if not self._timer:
             self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
+
+    def _processFilename(self, filename):
+        parts = filename.split('\\')
+        if len(parts) == 1:
+            return filename
+        return parts[-1]
 
     def _readBody(self):
         if self.request['Method'] == 'GET':

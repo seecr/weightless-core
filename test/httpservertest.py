@@ -237,6 +237,29 @@ class HttpServerTest(TestCase):
         self.assertEquals(4, len(form))
         self.assertEquals(['SOME ID'], form['id'])
 
+    def testWindowsPostMultipartForm(self):
+        httpRequest = open('data/multipart-data-02').read()
+        self.requestData = {}
+        def handler(**kwargs):
+            self.requestData = kwargs
+
+        port = randint(20000,25000)
+        reactor = Reactor()
+        server = HttpServer(reactor, port, handler)
+        sok = socket()
+        sok.connect(('localhost', port))
+        sok.send(httpRequest)
+
+        reactor.addTimer(2, lambda: self.fail("Test Stuck"))
+        while self.requestData.get('Form', None) == None:
+            reactor.step()
+        form = self.requestData['Form']
+        self.assertEquals(4, len(form))
+        self.assertEquals(['SOME ID'], form['id'])
+        self.assertEquals(1, len(form['somename']))
+        filename, mimetype, data = form['somename'][0]
+        self.assertEquals('Bank Gothic Medium BT.ttf', filename)
+        self.assertEquals('application/octet-stream', mimetype)
 
 
     #def testUncaughtException(self):
