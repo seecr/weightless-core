@@ -33,11 +33,17 @@ def reactor():
         frame = frame.f_back
     return frame.f_locals['__reactor__']
 
-class Timer(object):
+class Context(object):
+    def __init__(self, callback, prio):
+        self.callback = callback
+        self.prio = prio
+        self.locals = {}
+
+class Timer(Context):
     def __init__(self, seconds, callback):
+        Context.__init__(self, callback, Reactor.DEFAULTPRIO)
         assert seconds >= 0, 'Timeout must be >= 0. It was %s.' % seconds
         self.time = time() + seconds
-        self.callback = callback
 
     def __cmp__(self, rhs):
         if not rhs:
@@ -69,7 +75,7 @@ class Reactor(object):
             prio = Reactor.DEFAULTPRIO
         if not 0 <= prio < Reactor.MAXPRIO:
             raise ValueError('Invalid priority: %s' % prio)
-        self._readers[sok] = (sink, prio)
+        self._readers[sok] = Context(sink, prio)
 
     def addWriter(self, sok, source, prio=None):
         """Adds a socket and calls source() whenever the socket is writable. It remains at the writers list."""
@@ -77,7 +83,7 @@ class Reactor(object):
             prio = Reactor.DEFAULTPRIO
         if not 0 <= prio < Reactor.MAXPRIO:
             raise ValueError('Invalid priority: %s' % prio)
-        self._writers[sok] = (source, prio)
+        self._writers[sok] = Context(source, prio)
 
     def addTimer(self, seconds, callback):
         """Add a timer that calls callback() after the specified number of seconds. Afterwards, the timer is deleted.  It returns a token for removeTimer()."""
@@ -138,8 +144,8 @@ class Reactor(object):
             if timer.time > time():
                 break
             try:
-                __callback__ = timer.callback
-                __callback__()
+                self.currentcontext = timer
+                timer.callback()
             except AssertionError:
                 raise
             except:
@@ -156,9 +162,10 @@ class Reactor(object):
         for sok in ready:
             if sok in soks:
                 try:
-                    __callback__, prio = soks[sok]
-                    if prio <= self._prio:
-                        __callback__()
+                    context = soks[sok]
+                    if context.prio <= self._prio:
+                        self.currentcontext = context
+                        context.callback()
                 except AssertionError:
                     raise
                 except:

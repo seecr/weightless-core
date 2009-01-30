@@ -29,6 +29,10 @@ from time import sleep
 from weightless import _httpserver
 from cq2utils import MATCHALL
 
+from os.path import join, abspath, dirname
+def inmydir(p):
+    return join(dirname(abspath(__file__)), p)
+
 class HttpServerTest(TestCase):
 
     def setUp(self):
@@ -218,7 +222,7 @@ class HttpServerTest(TestCase):
             reactor.step()
 
     def testPostMultipartForm(self):
-        httpRequest = open('data/multipart-data-01').read()
+        httpRequest = open(inmydir('data/multipart-data-01')).read()
         self.requestData = {}
         def handler(**kwargs):
             self.requestData = kwargs
@@ -238,7 +242,7 @@ class HttpServerTest(TestCase):
         self.assertEquals(['SOME ID'], form['id'])
 
     def testWindowsPostMultipartForm(self):
-        httpRequest = open('data/multipart-data-02').read()
+        httpRequest = open(inmydir('data/multipart-data-02')).read()
         self.requestData = {}
         def handler(**kwargs):
             self.requestData = kwargs

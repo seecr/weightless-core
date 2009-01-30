@@ -44,3 +44,4 @@ from _acceptor import Acceptor
 from _reactor import Reactor, reactor
 from _httpreader import HttpReader, Connector
 from _httpserver import HttpServer
+from _local import local

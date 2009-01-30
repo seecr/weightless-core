@@ -378,9 +378,9 @@ class ReactorTest(TestCase):
     def testDefaultPrio(self):
         reactor = Reactor()
         reactor.addReader('', '')
-        self.assertEquals(Reactor.DEFAULTPRIO, reactor._readers[''][1])
+        self.assertEquals(Reactor.DEFAULTPRIO, reactor._readers[''].prio)
         reactor.addWriter('', '')
-        self.assertEquals(Reactor.DEFAULTPRIO, reactor._writers[''][1])
+        self.assertEquals(Reactor.DEFAULTPRIO, reactor._writers[''].prio)
 
 
     def testWritePrio(self):
