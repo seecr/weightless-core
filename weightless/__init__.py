@@ -28,17 +28,7 @@ import sys
 from os import system
 from os.path import dirname, abspath, isdir, join
 
-
 from python2_5._compose_py import compose
-
-#if python_version() >= "2.5":
-#    # development support; the simplest thing that could possibly work
-#    dirName = abspath(dirname(__file__))
-#    if isdir(join(dirName, '.svn')):
-#        x = ":".join(abspath(path) for path in sys.path)
-#        system("cd %s/..; PYTHONPATH=%s python2.5 setup.py build_ext --inplace" % (dirName,x))
-#    from python2_5._compose_pyx import compose, RETURN
-#    from python2_5.http import sendRequest, recvRegExp, recvBytes, recvBody, sendBody, copyBody, HttpException
 
 from _acceptor import Acceptor
 from _reactor import Reactor, reactor
