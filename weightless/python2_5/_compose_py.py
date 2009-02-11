@@ -25,8 +25,13 @@ from platform import python_version
 assert python_version() >= "2.5", "Python 2.5 required"
 
 from types import GeneratorType
-
-RETURN = 1
+from sys import exc_info
+try:
+    from tbtools import inject_traceback
+except ImportError:
+    print 'inject_traceback not available, continuing without generator-tracebacks'
+    def inject_traceback(*args, **kwargs):
+        pass
 
 def compose(initial):
     """
@@ -50,31 +55,43 @@ def compose(initial):
         generator = generators[-1]
         try:
             if exception:
-                response = generator.throw(exception)
+                response = generator.throw(exception[1])
                 exception = None
             else:
                 message = messages.pop(0)
                 response = generator.send(message)
             if type(response) == GeneratorType:
                 generators.append(response)
+                frame = response.gi_frame
+                assert frame, 'Generator is exhausted.'
+                assert frame.f_lineno == frame.f_code.co_firstlineno, 'Generator already used.'
                 messages.insert(0, None)
-            elif type(response) == tuple:
-                messages = list(response) + messages
             elif response or not messages:
                 try:
                     message = yield response
+                    assert not (message and response), 'Cannot accept data. First send None.'
                     messages.append(message)
-                except Exception, ex:
-                    exception = ex
+                    if response and messages[0] is not None:
+                        messages.insert(0, None)
+                except Exception:
+                    exType, exValue, exTraceback = exc_info()
+                    exception = exType, exValue, None
         except StopIteration, returnValue:
             exception = None
             generators.pop()
             if returnValue.args:
                 messages = list(returnValue.args) + messages
-            if not messages:
-                messages.append(None)
-        except Exception, ex:
+            else:
+                messages.insert(0, None)
+        except AssertionError:
+            raise # testing support
+        except Exception:
             generators.pop()
-            exception = ex
+            exType, exValue, exTraceback = exc_info()
+            # if this is the same exception, keep and extend the previous traceback.
+            if exception and id(exValue) == id(exception[1]) and exception[2]:
+                inject_traceback(exception[2], exTraceback.tb_next, 0)
+            else:
+                exception = exType, exValue, exTraceback
     if exception:
-        raise exception
+        raise exception[0], exception[1], exception[2].tb_next

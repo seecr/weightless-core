@@ -29,7 +29,7 @@ from os import system
 from os.path import dirname, abspath, isdir, join
 
 
-from python2_5._compose_py import compose, RETURN
+from python2_5._compose_py import compose
 
 #if python_version() >= "2.5":
 #    # development support; the simplest thing that could possibly work

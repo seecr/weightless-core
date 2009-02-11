@@ -23,20 +23,18 @@
 ## end license ##
 
 from unittest import TestCase
-from sys import stdout
-from StringIO import StringIO
-import sys
+from sys import stdout, exc_info
 
-from weightless.python2_5._compose_py import compose as compose_python, RETURN
+from weightless.python2_5._compose_py import compose
 #from weightless.python2_5._compose_pyx import compose as compose_pyrex
 
-from cq2utils import autostart
+try:
+    from tbtools import inject_traceback
+    if_tbtools = lambda method: method
+except ImportError:
+    if_tbtools = lambda method: None
 
 class ComposeTest(TestCase):
-
-    def setUp(self):
-        global compose
-        compose = self.compose
 
     def assertComposeImpl(self, impl):
         self.assertEquals(impl, compose)
@@ -90,34 +88,24 @@ class ComposeTest(TestCase):
         results = list(wlt)
         self.assertEquals(['C','A','B','D'], results)
 
-    def testPassValue(self):
-        def thread(first):
-            response = yield first
-            response = yield response
-            response = yield response
-        t = compose(thread('first'))
-        response = t.next()
-        self.assertEquals('first', response)
-        response = t.send('second')
-        self.assertEquals('second', response)
-        response = t.send('third')
-        self.assertEquals('third', response)
-
     def testPassValueToRecursivecompose(self):
         def threadA():
             r = yield threadB()     # <= C
             yield r * 3                     # <= D
         def threadB():
-            r = yield 7                     # <= A
-            yield RETURN, r * 2     # <= B
+            yield 7                     # <= A
+            r = yield
+            raise StopIteration(r * 2)     # <= B
         t = compose(threadA())
         self.assertEquals(7, t.next())              # 7 yielded at A
+        t.next() # adhere to 'send on None' protocol
         self.assertEquals(18, t.send(3))        # 3 send to A, 6 yielded at B, as return value to C, then yielded at D
 
     def testReturnOne(self):
         data = []
         def child():
-            yield RETURN, 'result'
+            raise StopIteration('result')
+            yield
         def parent():
             result = yield child()
             data.append(result)
@@ -128,7 +116,8 @@ class ComposeTest(TestCase):
     def testReturnThree(self):
         data = []
         def child():
-            yield RETURN, 'result', 'remainingData1', 'other2'
+            raise StopIteration('result', 'remainingData1', 'other2')
+            yield
         def parent():
             result = yield child()
             data.append(result)
@@ -146,25 +135,27 @@ class ComposeTest(TestCase):
         messages = []
         responses = []
         def child1():
-            messages.append((yield RETURN, 'result', 'remainingData0', 'remainingData1'))
+            raise StopIteration('result', 'remainingData0', 'remainingData1')
+            yield
         def child2():
-            messages.append((yield 'A'))                # append 'remainingData0'
-            messages.append((yield 'B'))                # append 'remainingData1'
-            messages.append((yield 'C'))                # append None
+            messages.append((yield 'A'))                # I want to 'send' and do not accept data
+            messages.append((yield))                     # now accept 'remainingData0'
+            messages.append((yield))                     # append 'remainingData1'
+            messages.append((yield 'C'))               # append None (I want to send)
         def parent():
             messages.append((yield child1()))   # append 'result'
             messages.append((yield child2()))   # what does 'yield child2()' return???
         g = compose(parent())
         responses.append(g.send(None))
         responses.append(g.send(None))
-        responses.append(g.send(None))
+        #responses.append(g.send(None))
         try:
             responses.append(g.send(None))
             self.fail()
         except StopIteration:
             pass
-        self.assertEquals([RETURN, 'result', 'remainingData0', 'remainingData1', None, None], messages)
-        self.assertEquals(['A', 'B', 'C'], responses)
+        self.assertEquals(['result', None, 'remainingData0', 'remainingData1', None, None], messages)
+        self.assertEquals(['A', 'C'], responses)
 
     def testStopIterationWithReturnValue(self):
         def f():
@@ -179,19 +170,23 @@ class ComposeTest(TestCase):
         r = []
         def ding1():
             dataIn = yield None     # receive 'dataIn'
-            yield RETURN, 'ding1retval', 'rest('+dataIn+')'
+            self.assertEquals('dataIn', dataIn)
+            raise StopIteration('ding1retval', 'rest('+dataIn+')')
         def ding2():
             dataIn = yield None     # receive 'rest(dataIn)'
-            retval = RETURN, 'ding2retval', 'rest('+dataIn+')'
-            yield retval
+            #retval = RETURN, 'ding2retval', 'rest('+dataIn+')'
+            raise StopIteration('ding2retval', 'rest('+dataIn+')')
         def child():
             ding1retval = yield ding1()
             r.append('child-1:' + str(ding1retval))
             ding2retval = yield ding2()
             r.append('child-2:' + str(ding2retval))
+            raise StopIteration('childretval')
         def parent():
             childRetVal = yield child()
-            r.append('parent:'+str(childRetVal))
+            self.assertEquals('childretval', childRetVal)
+            rest = yield
+            r.append('parent:'+rest)
         g = compose(parent())
         g.next()
         try:
@@ -200,6 +195,39 @@ class ComposeTest(TestCase):
         except StopIteration:
             pass
         self.assertEquals(['child-1:ding1retval', 'child-2:ding2retval', 'parent:rest(rest(dataIn))'], r)
+
+    def testCheckForFreshGenerator(self):
+        def sub():
+            yield
+            yield
+        def main():
+            s = sub()
+            s.next() # start it already
+            yield s
+        c = compose(main())
+        try:
+            c.next()
+            self.fail()
+        except Exception, e:
+            self.assertEquals('Generator already used.', str(e))
+
+    def testForExhaustedGenerator(self):
+        def sub():
+            yield
+        def main():
+            s = sub()
+            s.next()
+            try:
+                s.next()
+                self.fail('must raise StopIteration')
+            except StopIteration: pass
+            yield s
+        c = compose(main())
+        try:
+            c.next()
+            self.fail('must not come here')
+        except Exception, e:
+            self.assertEquals('Generator is exhausted.', str(e))
 
     def testPassThrowCorrectly(self):
         class MyException(Exception): pass
@@ -217,10 +245,9 @@ class ComposeTest(TestCase):
     def testHandleAllDataAndDoAvoidSuperfluousSendCalls(self):
         data = []
         def f():
-            x = yield None
+            x = yield
             data.append(x)
-            r = yield tuple([RETURN] + list(x))
-            data.append(r)
+            raise StopIteration(*tuple(x))
         def g():
             r = yield f()
             data.append(r)
@@ -233,11 +260,10 @@ class ComposeTest(TestCase):
         #program.next()
         #program.next()
         self.assertEquals('mies', data[0])
-        self.assertEquals(1, data[1])
-        self.assertEquals('m', data[2])
-        self.assertEquals('i', data[3])
-        self.assertEquals('e', data[4])
-        self.assertEquals('s', data[5])
+        self.assertEquals('m', data[1])
+        self.assertEquals('i', data[2])
+        self.assertEquals('e', data[3])
+        self.assertEquals('s', data[4])
         program.close()
 
     def testHandleClose(self):
@@ -269,6 +295,24 @@ class ComposeTest(TestCase):
             pass
         self.assertEquals(StopIteration, type(r[0]))
 
+    def testDoNotMaskAssertionError(self):
+        def f():
+            assert False
+            yield
+        def g():
+            try:
+                yield f()
+            except:
+                pass
+        g = compose(g())
+        try:
+            g.next()
+            self.fail()
+        except AssertionError:
+            pass
+        except:
+            self.fail()
+
     def testPassException1(self):
         class MyException(Exception): pass
         class WrappedException(Exception): pass
@@ -296,7 +340,7 @@ class ComposeTest(TestCase):
             yield 'D'
         g = compose(f())
         g.next()
-        g.send('aap')
+        g.next()
         del g
 
     def testPassException2(self):
@@ -322,7 +366,7 @@ class ComposeTest(TestCase):
         def f1(arg):
             r = yield None
             yield arg
-            yield RETURN, 'aap', 'rest'
+            raise StopIteration('aap', 'rest')
         def f2(arg):
             r1 = yield f1('noot')
             r2 = yield f1('mies')
@@ -361,7 +405,7 @@ class ComposeTest(TestCase):
 
     def testMemLeaks(self):
         def f1(arg):
-            r = yield arg                       # 'B'
+            r = yield arg                       # None
             raise Exception()
         def f2(arg):
             r1 = yield None                 # 'A'
@@ -370,7 +414,7 @@ class ComposeTest(TestCase):
             except GeneratorExit:
                 raise
             except Exception, e:
-                yield RETURN, e, 'more'
+                raise StopIteration(e, 'more')
         def f3(arg):
             e = yield f2('aa')
             more = yield None
@@ -383,7 +427,7 @@ class ComposeTest(TestCase):
             g = compose(f3('noot'))
             g.next()
             g.send('A')
-            g.send('B')
+            g.send(None)
             try:
                 g.throw(Exception('X'))
             except:
@@ -438,47 +482,137 @@ class ComposeTest(TestCase):
         except Exception, e:
             self.fail(str(e))
 
-    def testAProblemWithPyrexCompose(self):
-        #Test based on a similar situation in ElsevierReaderTest in Tilburg project.
-        # It only appears in the pyrex compose version.'
-        def readFirstChar():
-            line = yield
-            firstChar, remainder = line[0], line[1:]
-            raise StopIteration(firstChar, remainder)
-        def readLine(next):
-            firstChar = yield readFirstChar()
-            lines =[]
+    def testThrowWithExceptionCaughtDoesNotDitchResponse(self):
+        def f():
             try:
-                while True:
-                    lines.append((yield).strip())
-                    firstChar = yield readFirstChar()
-            finally:
-                next.send(lines)
-                raise StopIteration()
-        r = []
-        c = compose(readLine(collector(r)))
+                yield 'response'
+            except StopIteration:
+                pass
+            yield 'is this ditched?'
+        c = compose(f())
+        response = c.next()
+        self.assertEquals('response', response)
+        response = c.throw(StopIteration())
+        self.assertEquals('is this ditched?', response)
+
+    def testThrowWithExceptionCaughtDoesNotDitchResponseWhileInSubGenerator(self):
+        def sub():
+            try:
+                yield 'response'
+            except StopIteration:
+                raise StopIteration('return')
+        def f():
+            ret = yield sub()
+            self.assertEquals('return', ret)
+            yield 'is this ditched?'
+        c = compose(f())
+        response = c.next()
+        self.assertEquals('response', response)
+        response = c.throw(StopIteration())
+        self.assertEquals('is this ditched?', response)
+
+    def testAdhereToYieldNoneMeansReadAndYieldValueMeansWriteWhenMessagesAreBuffered(self):
+        done = []
+        def bufferSome():
+            raise StopIteration('retval', 'rest1', 'rest2')
+            yield
+        def writeSome():
+            yield 'write this'
+        def g():
+            yield bufferSome()
+            yield writeSome()
+            data = yield 'write'
+            self.assertEquals(None, data)
+            data = yield
+            self.assertEquals('rest1', data)
+            done.append(True)
+        g = compose(g())
+        results = list(g)
+        self.assertEquals([True], done)
+        self.assertEquals(['write this', 'write'], results)
+
+    def testAdhereToYieldNoneMeansReadAndYieldValueMeansWriteWhenMessagesAreBuffered2(self):
+        done = []
+        def bufferSome():
+            raise StopIteration('retval', 'rest1', 'rest2')
+            yield
+        def writeSome():
+            data = yield 'write this'
+            self.assertEquals(None, data)
+        def g():
+            yield bufferSome()
+            yield writeSome()
+            data = yield
+            self.assertEquals('rest1', data)
+            done.append(True)
+        g = compose(g())
+        results = list(g)
+        self.assertEquals([True], done)
+        self.assertEquals(['write this'], results)
+
+    def testDoNotSendSuperfluousNonesOrAdhereToNoneProtocol(self):
+        def sub():
+            jack = yield None
+            none = yield 'hello ' + jack
+            peter = yield None
+            none = yield 'hello ' + peter
+        c = compose(sub())
+        self.assertEquals(None, c.send(None))           # 1 init with None, oh, it accepts data
+        self.assertEquals('hello jack', c.send('jack')) # 2 send data, oh it has data
+        self.assertEquals(None, c.send(None))           # 3 it had data, so send None to see what it wants next, oh, it accepts data
+        self.assertEquals('hello peter', c.send('peter')) # 4 send data, oh, it has data
+
+    def testUserAdheresToProtocol(self):
+        def sub():
+            yield 'response'
+            yield 'response'
+        c = compose(sub())
+        self.assertEquals('response', c.next())
+        try:
+            c.send('message')
+            self.fail('must raise exception')
+        except AssertionError, e:
+            self.assertEquals('Cannot accept data. First send None.', str(e))
+
+    @if_tbtools
+    def testExceptionsHaveGeneratorCallStackAsBackTrace(self):
+        def f():
+            yield
+        def g():
+            yield f()
+        c = compose(g())
         c.next()
-        c.send('ABCDEF')
-        c.throw(StopIteration())
-        c.close()
-        self.assertEquals([['BCDEF']], r)
+        try:
+            c.throw(Exception('ABC'))
+            self.fail()
+        except Exception:
+            exType, exValue, exTraceback = exc_info()
+            self.assertEquals('testExceptionsHaveGeneratorCallStackAsBackTrace', exTraceback.tb_frame.f_code.co_name)
+            self.assertEquals('g', exTraceback.tb_next.tb_frame.f_code.co_name)
+            self.assertEquals('f', exTraceback.tb_next.tb_next.tb_frame.f_code.co_name)
 
+    @if_tbtools
+    def testToStringGivesStackOfGeneratorsAKAcallStack(self):
+        def f1():
+            yield
+        def f2():
+            yield f1()
+        c = compose(f2())
+        result = """  File "%s", line 598, in f2
+    yield f1()
+  File "%s", line 596, in f1
+    yield""" % (2*(__file__.replace('pyc', 'py'),))
+        c.next()
+        self.assertEquals(result, tostring(c))
 
-@autostart
-def collector(result):
-    while True:
-        result.append((yield))
+    @if_tbtools
+    def testToStringForUnstartedGenerator(self):
+        def f1():
+            yield
+        def f2():
+            yield f1()
+        c = compose(f2())
+        result = """  File "%s", line 611, in f2
+    def f2():""" % __file__.replace('pyc', 'py')
+        self.assertEquals(result, tostring(c))
 
-#class ComposePyrexTest(ComposeTest):
-#
-#    def setUp(self):
-#        self.compose = compose_pyrex
-#        ComposeTest.setUp(self)
-#        self.assertComposeImpl(compose_pyrex)
-
-class ComposePythonTest(ComposeTest):
-
-    def setUp(self):
-        self.compose = compose_python
-        ComposeTest.setUp(self)
-        self.assertComposeImpl(compose_python)

@@ -44,7 +44,7 @@ from httpspectest import HttpSpecTest
 from localtest import LocalTest
 
 if python_version() >= "2.5":
-    from composetest import ComposePythonTest
+    from composetest import ComposeTest
     from snaketest import SnakeTest
     from servertestcasetest import ServerTestCaseTest
 else:
