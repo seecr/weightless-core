@@ -1,2 +1,2 @@
-python-cq2utils (>=5.3)
-python-cq2utils (<<5.4)
+python-cq2utils (>=5.4)
+python-cq2utils (<<5.5)
