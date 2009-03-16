@@ -32,7 +32,7 @@ from weightless._httpreader import HttpReaderFacade, Connector, HandlerFacade, _
 import sys
 from StringIO import StringIO
 from cq2utils import CallTrace
-from cq2utils.wildcard import Wildcard
+from cq2utils.cq2testcase import MatchAll
 
 def server(port, response, request, delay=0, loop=1):
     isListening = Event()
@@ -79,7 +79,7 @@ class HttpReaderTest(TestCase):
             reactor.step()
         self.assertEquals('GET /aap/noot/mies HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n' % WlVersion, request[0])
         serverThread.join()
-        self.assertEquals({'HTTPVersion': '1.1', 'StatusCode': '200', 'ReasonPhrase': 'OK', 'Headers': {'Content-Type': 'text/html'}, 'Client': ('127.0.0.1', Wildcard())}, dataReceived[0])
+        self.assertEquals({'HTTPVersion': '1.1', 'StatusCode': '200', 'ReasonPhrase': 'OK', 'Headers': {'Content-Type': 'text/html'}, 'Client': ('127.0.0.1', MatchAll())}, dataReceived[0])
 
     def testHttpUrlParse(self):
         host, port, path = _httpParseUrl('http://www.cq2.org')
