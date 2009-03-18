@@ -29,7 +29,8 @@ from sys import exc_info
 try:
     from tbtools import inject_traceback
 except ImportError:
-    print 'inject_traceback not available, continuing without generator-tracebacks'
+    from warnings import warn
+    warn('inject_traceback not available, continuing without generator-tracebacks')
     def inject_traceback(*args, **kwargs):
         pass
 
