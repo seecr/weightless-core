@@ -39,6 +39,7 @@ from acceptortest import AcceptorTest
 from reactortest import ReactorTest
 from httpreadertest import HttpReaderTest
 from httpservertest import HttpServerTest
+from httpsservertest import HttpsServerTest
 from transparentsockettest import TransparentSocketTest
 from httpspectest import HttpSpecTest
 from localtest import LocalTest

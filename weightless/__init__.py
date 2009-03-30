@@ -33,5 +33,5 @@ from python2_5._compose_py import compose
 from _acceptor import Acceptor
 from _reactor import Reactor, reactor
 from _httpreader import HttpReader, Connector
-from _httpserver import HttpServer
+from _httpserver import HttpServer, HttpsServer
 from _local import local

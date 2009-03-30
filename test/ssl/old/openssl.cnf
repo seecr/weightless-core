@@ -1,0 +1,6 @@
+distinguished_name      = req_distinguished_name
+[ req_distinguished_name ]
+organizationName                = O
+organizationName_default        = CQ2
+commonName                      = CN
+commonName_default              = localhost

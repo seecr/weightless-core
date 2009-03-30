@@ -26,19 +26,26 @@ from struct import pack
 class Acceptor(object):
     """Listens on a port for incoming internet (TCP/IP) connections and calls a factory to create a handler for the new connection.  It does not use threads but a asynchronous reactor instead."""
 
-    def __init__(self, reactor, port, sinkFactory, prio=None):
+    def __init__(self, reactor, port, sinkFactory, prio=None, sok=None):
         """The reactor is a user specified reactor for dispatching I/O events asynchronously. The sinkFactory is called with the newly created socket as its single argument. It is supposed to return a callable callback function that is called by the reactor when data is available."""
-        sok = socket()
-        sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-        sok.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
-        sok.bind(('0.0.0.0', port))
-        sok.listen(127)
+
+        if sok == None:
+            sok = self._createSocket(port)
+        print "SOK", sok
 
         reactor.addReader(sok, self._accept, prio=prio)
         self._sinkFactory = sinkFactory
         self._sok = sok
         self._reactor = reactor
         self._prio = prio
+
+    def _createSocket(self, port):
+        sok = socket()
+        sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+        sok.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
+        sok.bind(('0.0.0.0', port))
+        sok.listen(127)
+        return sok
 
     def _accept(self):
         newConnection, address = self._sok.accept()
