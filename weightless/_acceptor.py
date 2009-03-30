@@ -31,7 +31,6 @@ class Acceptor(object):
 
         if sok == None:
             sok = self._createSocket(port)
-        print "SOK", sok
 
         reactor.addReader(sok, self._accept, prio=prio)
         self._sinkFactory = sinkFactory
