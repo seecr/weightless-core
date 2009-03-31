@@ -51,14 +51,12 @@ def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, p
     ctx.set_verify(SSL.VERIFY_PEER, verify_cb) # Demand a certificate
     ctx.use_privatekey_file (keyfile)
     ctx.use_certificate_file(certfile)
-    ctx.load_verify_locations('ssl/CA.cert')
 
     # Set up server
     secureSok = SSL.Connection(ctx, socket())
     secureSok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
     secureSok.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
     secureSok.bind(('0.0.0.0', port))
-    #secureSok.setblocking(0)
     secureSok.listen(127)
 
     return Acceptor(reactor, port, lambda s: HttpsHandler(reactor, s, generatorFactory, timeout, recvSize, prio=prio), prio=prio, sok=secureSok)
