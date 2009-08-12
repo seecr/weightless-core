@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
@@ -44,7 +45,7 @@ class HttpsServerTest(TestCase):
         def onRequest(**kwargs):
             yield 'HTTP/1.0 200 OK\r\n\r\n' + serverResponse
             self.req = True
-            
+
         port = randint(15000, 16000)
         reactor = Reactor()
         server = HttpsServer(reactor, port, onRequest, keyfile='ssl/server.pkey', certfile='ssl/server.cert')
@@ -55,7 +56,7 @@ class HttpsServerTest(TestCase):
         def readPopenStdout():
             popenStdout.append(p.stdout.read())
         reactor.addReader(p.stdout, readPopenStdout)
-        
+
         while not self.req:
            reactor.step()
 

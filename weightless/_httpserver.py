@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
@@ -47,6 +48,7 @@ def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, p
 
     # Initialize context
     ctx = SSL.Context(SSL.SSLv23_METHOD)
+    ctx.set_session_id('weightless')
     ctx.set_options(SSL.OP_NO_SSLv2)
     ctx.set_verify(SSL.VERIFY_PEER, verify_cb) # Demand a certificate
     ctx.use_privatekey_file (keyfile)
@@ -250,8 +252,10 @@ class HttpsHandler(HttpHandler):
         try:
             part = self._sok.recv(self._recvSize)
         except (SSL.WantReadError, SSL.WantWriteError, SSL.WantX509LookupError):
+            print "exception in read"
             pass
-        except:
+        except Exception, e:
+            print "EXCEPTION", str(e)
             self._closeDuringRead()
         else:
             self._dataBuffer += part
@@ -261,7 +265,6 @@ class HttpsHandler(HttpHandler):
         self._reactor.removeReader(self._sok)
         self._sok.shutdown()
         self._sok.close()
-
 
     def _closeConnection(self):
         self._reactor.removeWriter(self._sok)
