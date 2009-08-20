@@ -28,6 +28,8 @@ from tempfile import TemporaryFile
 from email import message_from_file as parse_mime_message
 
 from OpenSSL import SSL
+from random import randint
+from time import time
 from socket import socket, ssl,  SOL_SOCKET, SO_REUSEADDR, SO_LINGER
 from struct import pack
 
@@ -48,7 +50,7 @@ def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, p
 
     # Initialize context
     ctx = SSL.Context(SSL.SSLv23_METHOD)
-    ctx.set_session_id('weightless')
+    ctx.set_session_id('weightless:%s:%s' % (time(), randint(1024,4096)))
     ctx.set_options(SSL.OP_NO_SSLv2)
     ctx.set_verify(SSL.VERIFY_PEER, verify_cb) # Demand a certificate
     ctx.use_privatekey_file (keyfile)
