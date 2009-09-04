@@ -26,6 +26,7 @@ from unittest import TestCase
 from sys import stdout, exc_info
 
 from weightless.python2_5._compose_py import compose
+from weightless import tostring
 #from weightless.python2_5._compose_pyx import compose as compose_pyrex
 
 try:
@@ -598,9 +599,9 @@ class ComposeTest(TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 598, in f2
+        result = """  File "%s", line 600, in f2
     yield f1()
-  File "%s", line 596, in f1
+  File "%s", line 598, in f1
     yield""" % (2*(__file__.replace('pyc', 'py'),))
         c.next()
         self.assertEquals(result, tostring(c))
@@ -612,7 +613,7 @@ class ComposeTest(TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 611, in f2
+        result = """  File "%s", line 613, in f2
     def f2():""" % __file__.replace('pyc', 'py')
         self.assertEquals(result, tostring(c))
 
