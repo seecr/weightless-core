@@ -35,3 +35,5 @@ from _reactor import Reactor, reactor
 from _httpreader import HttpReader, Connector
 from _httpserver import HttpServer, HttpsServer
 from _local import local
+
+from _gutils import tostring
