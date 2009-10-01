@@ -37,11 +37,11 @@ from struct import pack
 RECVSIZE = 4096
 CRLF_LEN = 2
 
-def HttpServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None):
+def HttpServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
-    return Acceptor(reactor, port, lambda sok: HttpHandler(reactor, sok, generatorFactory, timeout, recvSize, prio=prio), prio=prio)
+    return Acceptor(reactor, port, lambda sok: HttpHandler(reactor, sok, generatorFactory, timeout, recvSize, prio=prio), prio=prio, sok=sok)
 
-def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, certfile='', keyfile=''):
+def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, certfile='', keyfile=''):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
     def verify_cb(conn, cert, errnum, depth, ok):
         # This obviously has to be updated
@@ -57,7 +57,7 @@ def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, p
     ctx.use_certificate_file(certfile)
 
     # Set up server
-    secureSok = SSL.Connection(ctx, socket())
+    secureSok = SSL.Connection(ctx, sok if sok else socket())
     secureSok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
     secureSok.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
     secureSok.bind(('0.0.0.0', port))
