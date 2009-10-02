@@ -43,27 +43,28 @@ def HttpServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, pr
 
 def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, certfile='', keyfile=''):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
-    def verify_cb(conn, cert, errnum, depth, ok):
-        # This obviously has to be updated
-        print 'Got certificate: %s' % cert.get_subject()
-        return ok
+    if sok == None:
+        def verify_cb(conn, cert, errnum, depth, ok):
+            # This obviously has to be updated
+            print 'Got certificate: %s' % cert.get_subject()
+            return ok
 
-    # Initialize context
-    ctx = SSL.Context(SSL.SSLv23_METHOD)
-    ctx.set_session_id('weightless:%s:%s' % (time(), randint(1024,4096)))
-    ctx.set_options(SSL.OP_NO_SSLv2)
-    ctx.set_verify(SSL.VERIFY_PEER, verify_cb) # Demand a certificate
-    ctx.use_privatekey_file (keyfile)
-    ctx.use_certificate_file(certfile)
+        # Initialize context
+        ctx = SSL.Context(SSL.SSLv23_METHOD)
+        ctx.set_session_id('weightless:%s:%s' % (time(), randint(1024,4096)))
+        ctx.set_options(SSL.OP_NO_SSLv2)
+        ctx.set_verify(SSL.VERIFY_PEER, verify_cb) # Demand a certificate
+        ctx.use_privatekey_file (keyfile)
+        ctx.use_certificate_file(certfile)
 
-    # Set up server
-    secureSok = SSL.Connection(ctx, sok if sok else socket())
-    secureSok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-    secureSok.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
-    secureSok.bind(('0.0.0.0', port))
-    secureSok.listen(127)
+        # Set up server
+        sok = SSL.Connection(ctx, sok if sok else socket())
+        sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+        sok.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
+        sok.bind(('0.0.0.0', port))
+        sok.listen(127)
 
-    return Acceptor(reactor, port, lambda s: HttpsHandler(reactor, s, generatorFactory, timeout, recvSize, prio=prio), prio=prio, sok=secureSok)
+    return Acceptor(reactor, port, lambda s: HttpsHandler(reactor, s, generatorFactory, timeout, recvSize, prio=prio), prio=prio, sok=sok)
 
 from sys import stdout
 
