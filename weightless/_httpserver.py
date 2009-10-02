@@ -58,7 +58,7 @@ def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, p
         ctx.use_certificate_file(certfile)
 
         # Set up server
-        sok = SSL.Connection(ctx, sok if sok else socket())
+        sok = SSL.Connection(ctx, socket())
         sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         sok.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
         sok.bind(('0.0.0.0', port))
