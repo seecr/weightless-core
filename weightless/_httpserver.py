@@ -107,7 +107,7 @@ class HttpHandler(object):
         self._dataBuffer = self._dataBuffer[matchEnd:]
         if 'Content-Type' in self.request['Headers']:
             cType, pDict = parseHeader(self.request['Headers']['Content-Type'])
-            if cType[:10] == 'multipart/':
+            if cType.startswith('multipart/form-data'):
                 self._tempfile = TemporaryFile('w+b')
                 #self._tempfile = open('/tmp/mimetest', 'w+b')
                 self._tempfile.write('Content-Type: %s\r\n\r\n' % self.request['Headers']['Content-Type'])
@@ -133,11 +133,11 @@ class HttpHandler(object):
                 if not fieldName in form:
                     form[fieldName] = []
 
-                if contentType == 'text/plain':
-                    form[fieldName].append(msg.get_payload())
-                else:
-                    filename = self._processFilename(pDict.get('filename', '')[1:-1])
+                if 'filename' in pDict:
+                    filename = self._processFilename(pDict['filename'][1:-1])
                     form[fieldName].append((filename, contentType, msg.get_payload()))
+                else:
+                    form[fieldName].append(msg.get_payload())
 
             self.request['Form'] = form
             self._tempfile.close()

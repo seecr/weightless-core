@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
@@ -264,6 +265,30 @@ class HttpServerTest(TestCase):
         filename, mimetype, data = form['somename'][0]
         self.assertEquals('Bank Gothic Medium BT.ttf', filename)
         self.assertEquals('application/octet-stream', mimetype)
+
+    def testTextFileSeenAsFile(self):
+        httpRequest = open(inmydir('data/multipart-data-03')).read()
+        self.requestData = {}
+        def handler(**kwargs):
+            self.requestData = kwargs
+
+        port = randint(20000,25000)
+        reactor = Reactor()
+        server = HttpServer(reactor, port, handler)
+        sok = socket()
+        sok.connect(('localhost', port))
+        sok.send(httpRequest)
+
+        reactor.addTimer(2, lambda: self.fail("Test Stuck"))
+        while self.requestData.get('Form', None) == None:
+            reactor.step()
+        form = self.requestData['Form']
+        self.assertEquals(4, len(form))
+        self.assertEquals(['SOME ID'], form['id'])
+        self.assertEquals(1, len(form['somename']))
+        filename, mimetype, data = form['somename'][0]
+        self.assertEquals('hello.bas', filename)
+        self.assertEquals('text/plain', mimetype)
 
 
     #def testUncaughtException(self):
