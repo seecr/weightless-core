@@ -169,7 +169,7 @@ class HttpServerTest(TestCase):
         server = HttpServer(reactor, port, handler, timeout=0.01)
         sok = socket()
         sok.connect(('localhost', port))
-        sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\nbodydata')
+        sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\nbodydata\r\n')
 
         while not self.requestData:
             reactor.step()

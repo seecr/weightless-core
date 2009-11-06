@@ -170,7 +170,7 @@ class HttpHandler(object):
                     self._reactor.removeTimer(self._timer)
                     self._timer = None
 
-                self.request['Body'] = self._dataBuffer
+                self.request['Body'] = self._dataBuffer.rstrip('\r\n')
                 self.finalize()
             elif 'Transfer-Encoding' in self.request['Headers'] and self.request['Headers']['Transfer-Encoding'] == 'chunked':
                 self.setCallDealer(self._readChunk)
