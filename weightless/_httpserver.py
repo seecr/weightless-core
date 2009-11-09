@@ -32,6 +32,7 @@ from random import randint
 from time import time
 from socket import socket, ssl,  SOL_SOCKET, SO_REUSEADDR, SO_LINGER
 from struct import pack
+from sys import stdout
 
 
 RECVSIZE = 4096
@@ -81,6 +82,7 @@ class HttpHandler(object):
         self.request = None
         self._dealWithCall = self._readHeaders
         self._prio = prio
+        self._window = ''
 
     def __call__(self):
         part = self._sok.recv(self._recvSize)
@@ -118,11 +120,15 @@ class HttpHandler(object):
         self.setCallDealer(self._readBody)
 
     def _readMultiForm(self, boundary):
-        self._tempfile.write(self._dataBuffer)
         if self._timer:
             self._reactor.removeTimer(self._timer)
             self._timer = None
-        if self._dataBuffer.endswith("\r\n--%s--\r\n" % boundary):
+        self._tempfile.write(self._dataBuffer)
+
+        self._window += self._dataBuffer
+        self._window = self._window[-2*self._recvSize:]
+
+        if self._window.endswith("\r\n--%s--\r\n" % boundary):
             self._tempfile.seek(0)
 
             form = {}
@@ -143,7 +149,6 @@ class HttpHandler(object):
             self._tempfile.close()
             self.finalize()
             return
-
 
         self._dataBuffer= ''
         if not self._timer:
@@ -170,7 +175,7 @@ class HttpHandler(object):
                     self._reactor.removeTimer(self._timer)
                     self._timer = None
 
-                self.request['Body'] = self._dataBuffer.rstrip('\r\n')
+                self.request['Body'] = self._dataBuffer
                 self.finalize()
             elif 'Transfer-Encoding' in self.request['Headers'] and self.request['Headers']['Transfer-Encoding'] == 'chunked':
                 self.setCallDealer(self._readChunk)

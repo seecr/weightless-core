@@ -38,6 +38,7 @@ class HttpServerTest(TestCase):
 
     def setUp(self):
         self.reactor = Reactor()
+        self._portNumber = randint(2048, 62000)
 
     def tearDown(self):
         self.reactor.shutdown()
@@ -48,10 +49,9 @@ class HttpServerTest(TestCase):
         def response(**kwargs):
             yield 'The Response'
             self.responseCalled = True
-        port = randint(2**10, 2**16)
-        server = HttpServer(self.reactor, port, response, recvSize=recvSize)
+        server = HttpServer(self.reactor, self._portNumber, response, recvSize=recvSize)
         sok = socket()
-        sok.connect(('localhost', port))
+        sok.connect(('localhost', self._portNumber))
         sok.send(request)
         while not self.responseCalled:
             self.reactor.step()
@@ -62,11 +62,10 @@ class HttpServerTest(TestCase):
         def onRequest(**kwargs):
             self.req = True
             yield 'nosens'
-        port = randint(2**10, 2**16)
         reactor = Reactor()
-        server = HttpServer(reactor, port, onRequest)
+        server = HttpServer(reactor, self._portNumber, onRequest)
         sok = socket()
-        sok.connect(('localhost', port))
+        sok.connect(('localhost', self._portNumber))
         sok.send('GET / HTTP/1.0\r\n\r\n')
         reactor.step() # connect/accept
         reactor.step() # read GET request
@@ -78,11 +77,10 @@ class HttpServerTest(TestCase):
         def response(**kwargs):
             self.kwargs = kwargs
             yield 'nosense'
-        port = randint(2**10, 2**16)
         reactor = Reactor()
-        server = HttpServer(reactor, port, response)
+        server = HttpServer(reactor, self._portNumber, response)
         sok = socket()
-        sok.connect(('localhost', port))
+        sok.connect(('localhost', self._portNumber))
         sok.send('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
         while not self.kwargs:
             reactor.step()
@@ -107,11 +105,10 @@ class HttpServerTest(TestCase):
         def response(**kwargs):
             yield 'some text that is longer than '
             yield 'the lenght of fragments sent'
-        port = randint(2**10, 2**16)
         reactor = Reactor()
-        server = HttpServer(reactor, port, response, recvSize=3)
+        server = HttpServer(reactor, self._portNumber, response, recvSize=3)
         sok = socket()
-        sok.connect(('localhost', port))
+        sok.connect(('localhost', self._portNumber))
         sok.send('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
         while not reactor._writers:
             reactor.step()
@@ -128,7 +125,6 @@ class HttpServerTest(TestCase):
 
     def testInvalidRequestStartsOnlyOneTimer(self):
         _httpserver.RECVSIZE = 3
-        port = randint(2**10, 2**16)
         reactor = Reactor()
         timers = []
         orgAddTimer = reactor.addTimer
@@ -136,9 +132,9 @@ class HttpServerTest(TestCase):
             timers.append(timer)
             return orgAddTimer(*timer)
         reactor.addTimer = addTimerInterceptor
-        server = HttpServer(reactor, port, None, timeout=0.01)
+        server = HttpServer(reactor, self._portNumber, None, timeout=0.01)
         sok = socket()
-        sok.connect(('localhost', port))
+        sok.connect(('localhost', self._portNumber))
         sok.send('GET HTTP/1.0\r\n\r\n') # no path
         while select([sok],[], [], 0) != ([sok], [], []):
             reactor.step()
@@ -147,11 +143,10 @@ class HttpServerTest(TestCase):
         self.assertEquals(1, len(timers))
 
     def testValidRequestResetsTimer(self):
-        port = randint(2**10, 2**16)
         reactor = Reactor()
-        server = HttpServer(reactor, port, lambda **kwargs: ('a' for a in range(3)), timeout=0.01, recvSize=3)
+        server = HttpServer(reactor, self._portNumber, lambda **kwargs: ('a' for a in range(3)), timeout=0.01, recvSize=3)
         sok = socket()
-        sok.connect(('localhost', port))
+        sok.connect(('localhost', self._portNumber))
         sok.send('GET / HTTP/1.0\r\n\r\n')
         sleep(0.02)
         for i in range(11):
@@ -164,12 +159,11 @@ class HttpServerTest(TestCase):
         def handler(**kwargs):
             self.requestData = kwargs
 
-        port = randint(20000,25000)
         reactor = Reactor()
-        server = HttpServer(reactor, port, handler, timeout=0.01)
+        server = HttpServer(reactor, self._portNumber, handler, timeout=0.01)
         sok = socket()
-        sok.connect(('localhost', port))
-        sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\nbodydata\r\n')
+        sok.connect(('localhost', self._portNumber))
+        sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\nbodydata')
 
         while not self.requestData:
             reactor.step()
@@ -194,12 +188,11 @@ class HttpServerTest(TestCase):
             self.assertTrue('HTTP/1.0 400 Bad Request' in fromServer)
             done.append(True)
 
-        port = randint(20000,25000)
         reactor = Reactor()
-        server = HttpServer(reactor, port, handler, timeout=0.01)
+        server = HttpServer(reactor, self._portNumber, handler, timeout=0.01)
         reactor.addTimer(0.02, onDone)
         sok = socket()
-        sok.connect(('localhost', port))
+        sok.connect(('localhost', self._portNumber))
         sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\n')
 
         while not done:
@@ -211,11 +204,10 @@ class HttpServerTest(TestCase):
         def handler(**kwargs):
             self.requestData = kwargs
 
-        port = randint(20000,25000)
         reactor = Reactor()
-        server = HttpServer(reactor, port, handler, timeout=0.01, recvSize=3)
+        server = HttpServer(reactor, self._portNumber, handler, timeout=0.01, recvSize=3)
         sok = socket()
-        sok.connect(('localhost', port))
+        sok.connect(('localhost', self._portNumber))
         sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nabcde\r\n5\r\nfghij\r\n0\r\n')
 
         reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
@@ -228,11 +220,10 @@ class HttpServerTest(TestCase):
         def handler(**kwargs):
             self.requestData = kwargs
 
-        port = randint(20000,25000)
         reactor = Reactor()
-        server = HttpServer(reactor, port, handler)
+        server = HttpServer(reactor, self._portNumber, handler)
         sok = socket()
-        sok.connect(('localhost', port))
+        sok.connect(('localhost', self._portNumber))
         sok.send(httpRequest)
 
         reactor.addTimer(2, lambda: self.fail("Test Stuck"))
@@ -248,11 +239,10 @@ class HttpServerTest(TestCase):
         def handler(**kwargs):
             self.requestData = kwargs
 
-        port = randint(20000,25000)
         reactor = Reactor()
-        server = HttpServer(reactor, port, handler)
+        server = HttpServer(reactor, self._portNumber, handler)
         sok = socket()
-        sok.connect(('localhost', port))
+        sok.connect(('localhost', self._portNumber))
         sok.send(httpRequest)
 
         reactor.addTimer(2, lambda: self.fail("Test Stuck"))
@@ -272,11 +262,10 @@ class HttpServerTest(TestCase):
         def handler(**kwargs):
             self.requestData = kwargs
 
-        port = randint(20000,25000)
         reactor = Reactor()
-        server = HttpServer(reactor, port, handler)
+        server = HttpServer(reactor, self._portNumber, handler)
         sok = socket()
-        sok.connect(('localhost', port))
+        sok.connect(('localhost', self._portNumber))
         sok.send(httpRequest)
 
         reactor.addTimer(2, lambda: self.fail("Test Stuck"))
@@ -289,6 +278,26 @@ class HttpServerTest(TestCase):
         filename, mimetype, data = form['somename'][0]
         self.assertEquals('hello.bas', filename)
         self.assertEquals('text/plain', mimetype)
+
+    def testReadMultipartFormEndBoundary(self):
+        httpRequest = open(inmydir('data/multipart-data-04')).read()
+        self.requestData = {}
+        def handler(**kwargs):
+            self.requestData = kwargs
+
+        reactor = Reactor()
+        server = HttpServer(reactor, self._portNumber, handler)
+        sok = socket()
+        sok.connect(('localhost', self._portNumber))
+        sok.send(httpRequest)
+
+        reactor.addTimer(2, lambda: self.fail("Test Stuck"))
+        while self.requestData.get('Form', None) == None:
+            reactor.step()
+        form = self.requestData['Form']
+        self.assertEquals(1, len(form))
+        self.assertEquals(3521*'X', form['id'][0])
+
 
 
     #def testUncaughtException(self):
