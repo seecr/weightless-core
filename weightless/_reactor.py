@@ -159,6 +159,9 @@ class Reactor(object):
 
         return self
 
+    def getOpenConnections(self):
+        return len(self._readers) + len(self._writers)
+
     def _callback(self, ready, soks):
         for sok in ready:
             if sok in soks:

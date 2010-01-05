@@ -409,3 +409,20 @@ class ReactorTest(TestCase):
             pass
         reactor.step() #3
         self.assertEquals('nut', local1.recv(999))
+
+    def testGetOpenConnections(self):
+        reactor = Reactor()
+        self.assertEquals(0, reactor.getOpenConnections())
+        reactor.addReader('', '')
+        self.assertEquals(1, reactor.getOpenConnections())
+        reactor.addWriter('', '')
+        self.assertEquals(2, reactor.getOpenConnections())
+
+        reactor.removeReader('')
+        self.assertEquals(1, reactor.getOpenConnections())
+        reactor.removeWriter('')
+        self.assertEquals(0, reactor.getOpenConnections())
+
+
+
+
