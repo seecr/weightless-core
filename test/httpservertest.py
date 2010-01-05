@@ -28,7 +28,7 @@ from select import select
 from weightless import Reactor, HttpServer
 from time import sleep
 from weightless import _httpserver
-from cq2utils import MATCHALL
+from cq2utils import MATCHALL, CallTrace
 
 from os.path import join, abspath, dirname
 def inmydir(p):
@@ -298,6 +298,62 @@ class HttpServerTest(TestCase):
         self.assertEquals(1, len(form))
         self.assertEquals(3521*'X', form['id'][0])
 
+    def testOnlyHandleAMaximumNrOfRequests(self):
+        def handler(**kwargs):
+            yield "OK"
+
+        def error_handler(**kwargs):
+            yield "FAIL"
+
+        server = HttpServer(self.reactor, self._portNumber, handler, errorHandler=error_handler, maxConnections=5)
+
+        self.reactor.getOpenConnections = lambda: 10
+
+        sock = socket()
+        sock.connect(('localhost', self._portNumber))
+        self.reactor.step()
+        sock.send("GET / HTTP/1.0\r\n\r\n")
+        self.reactor.step()
+        self.reactor.step()
+
+        self.assertEquals('FAIL', sock.recv(1024))
+
+    def testOnlyHandleAMaximumNrOfRequestsBelowBoundary(self):
+        def handler(**kwargs):
+            yield "OK"
+
+        def error_handler(**kwargs):
+            yield "FAIL"
+
+        server = HttpServer(self.reactor, self._portNumber, handler, errorHandler=error_handler, maxConnections=10)
+
+        self.reactor.getOpenConnections = lambda: 5
+
+        sock = socket()
+        sock.connect(('localhost', self._portNumber))
+        self.reactor.step()
+        sock.send("GET / HTTP/1.0\r\n\r\n")
+        self.reactor.step()
+        self.reactor.step()
+
+        self.assertEquals('OK', sock.recv(1024))
+
+    def testDefaultErrorHandler(self):
+        def handler(**kwargs):
+            yield "OK"
+
+        server = HttpServer(self.reactor, self._portNumber, handler, maxConnections=5)
+
+        self.reactor.getOpenConnections = lambda: 10
+
+        sock = socket()
+        sock.connect(('localhost', self._portNumber))
+        self.reactor.step()
+        sock.send("GET / HTTP/1.0\r\n\r\n")
+        self.reactor.step()
+        self.reactor.step()
+
+        self.assertEquals('HTTP/1.0 503 Service Unavailable\r\n\r\n<html><head></head><body><h1>Service Unavailable</h1></body></html>', sock.recv(1024))
 
 
     #def testUncaughtException(self):

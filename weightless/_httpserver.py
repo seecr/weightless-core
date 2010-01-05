@@ -22,7 +22,7 @@
 #
 ## end license ##
 from _acceptor import Acceptor
-from weightless.http import REGEXP, FORMAT, HTTP, parseHeaders, parseHeader
+from weightless.http import REGEXP, FORMAT, parseHeaders, parseHeader
 from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
 from tempfile import TemporaryFile
 from email import message_from_file as parse_mime_message
@@ -38,11 +38,11 @@ from sys import stdout
 RECVSIZE = 4096
 CRLF_LEN = 2
 
-def HttpServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None):
+def HttpServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
-    return Acceptor(reactor, port, lambda sok: HttpHandler(reactor, sok, generatorFactory, timeout, recvSize, prio=prio), prio=prio, sok=sok)
+    return Acceptor(reactor, port, lambda sok: HttpHandler(reactor, sok, generatorFactory, timeout, recvSize, prio=prio, maxConnections=maxConnections, errorHandler=errorHandler), prio=prio, sok=sok)
 
-def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, certfile='', keyfile=''):
+def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, certfile='', keyfile=''):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
     if sok == None:
         def verify_cb(conn, cert, errnum, depth, ok):
@@ -65,12 +65,20 @@ def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, p
         sok.bind(('0.0.0.0', port))
         sok.listen(127)
 
-    return Acceptor(reactor, port, lambda s: HttpsHandler(reactor, s, generatorFactory, timeout, recvSize, prio=prio), prio=prio, sok=sok)
+    return Acceptor(reactor, port, lambda s: HttpsHandler(reactor, s, generatorFactory, timeout, recvSize, prio=prio, maxConnections=maxConnections, errorHandler=errorHandler), prio=prio, sok=sok)
 
 from sys import stdout
+from resource import getrlimit, RLIMIT_NOFILE
+
+def maxFileDescriptors():
+    softLimit, hardLimit = getrlimit(RLIMIT_NOFILE)
+    return softLimit
+
+def defaultErrorHandler(**kwargs):
+    yield 'HTTP/1.0 503 Service Unavailable\r\n\r\n<html><head></head><body><h1>Service Unavailable</h1></body></html>'
 
 class HttpHandler(object):
-    def __init__(self, reactor, sok, generatorFactory, timeout, recvSize=RECVSIZE, prio=None):
+    def __init__(self, reactor, sok, generatorFactory, timeout, recvSize=RECVSIZE, prio=None, maxConnections=None, errorHandler=None):
         self._reactor = reactor
         self._sok = sok
         self._generatorFactory = generatorFactory
@@ -83,6 +91,8 @@ class HttpHandler(object):
         self._dealWithCall = self._readHeaders
         self._prio = prio
         self._window = ''
+        self._maxConnections = maxConnections if maxConnections else maxFileDescriptors()
+        self._errorHandler = errorHandler if errorHandler else defaultErrorHandler
 
     def __call__(self):
         part = self._sok.recv(self._recvSize)
@@ -117,7 +127,10 @@ class HttpHandler(object):
                 return
         if 'Expect' in self.request['Headers']:
             self._sok.send('HTTP/1.1 100 Continue\r\n\r\n')
-        self.setCallDealer(self._readBody)
+        if self._reactor.getOpenConnections() > self._maxConnections:
+            self._finalize(self._errorHandler)
+        else:
+            self.setCallDealer(self._readBody)
 
     def _readMultiForm(self, boundary):
         if self._timer:
@@ -212,12 +225,15 @@ class HttpHandler(object):
             self._dataBuffer = self._dataBuffer[self._chunkSize + CRLF_LEN:]
             self.setCallDealer(self._readChunk)
 
-    def finalize(self):
+    def _finalize(self, finalizeMethod):
         del self.request['_headers']
         self.request['Client'] = self._sok.getpeername()
-        self._handler = self._generatorFactory(**self.request)
+        self._handler = finalizeMethod(**self.request)
         self._reactor.removeReader(self._sok)
         self._reactor.addWriter(self._sok, self._writeResponse, prio=self._prio)
+
+    def finalize(self):
+        self._finalize(self._generatorFactory)
 
     def _badRequest(self):
         self._sok.send('HTTP/1.0 400 Bad Request\r\n\r\n')
