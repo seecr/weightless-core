@@ -299,10 +299,12 @@ class HttpServerTest(TestCase):
         self.assertEquals(3521*'X', form['id'][0])
 
     def testOnlyHandleAMaximumNrOfRequests(self):
+        codes = []
         def handler(**kwargs):
             yield "OK"
 
         def error_handler(**kwargs):
+            codes.append(kwargs['ResponseCode'])
             yield "FAIL"
 
         server = HttpServer(self.reactor, self._portNumber, handler, errorHandler=error_handler, maxConnections=5)
@@ -317,6 +319,7 @@ class HttpServerTest(TestCase):
         self.reactor.step()
 
         self.assertEquals('FAIL', sock.recv(1024))
+        self.assertEquals([503], codes)
 
     def testOnlyHandleAMaximumNrOfRequestsBelowBoundary(self):
         def handler(**kwargs):

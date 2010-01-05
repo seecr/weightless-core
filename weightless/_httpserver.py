@@ -128,6 +128,7 @@ class HttpHandler(object):
         if 'Expect' in self.request['Headers']:
             self._sok.send('HTTP/1.1 100 Continue\r\n\r\n')
         if self._reactor.getOpenConnections() > self._maxConnections:
+            self.request['ResponseCode'] = 503
             self._finalize(self._errorHandler)
         else:
             self.setCallDealer(self._readBody)
