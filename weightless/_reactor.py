@@ -141,7 +141,7 @@ class Reactor(object):
             self.shutdown()
             raise
 
-        for timer in [t for t in self._timers]:
+        for timer in self._timers[:]:
             if timer.time > time():
                 break
             try:
