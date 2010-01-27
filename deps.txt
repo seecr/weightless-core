@@ -2,5 +2,5 @@ python-cq2utils (>=5.4)
 python-cq2utils (<<5.5)
 python-tbtools (>=0.1)
 python-tbtools (<<0.2)
-python-pyopenssl | pyOpenSSL
+python-openssl
 
