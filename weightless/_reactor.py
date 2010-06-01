@@ -66,6 +66,7 @@ class Reactor(object):
     def __init__(self, select_func = select):
         self._readers = {}
         self._writers = {}
+        self._suspended = {}
         self._timers = []
         self._select = select_func
         self._prio = 0
@@ -76,6 +77,8 @@ class Reactor(object):
             prio = Reactor.DEFAULTPRIO
         if not 0 <= prio < Reactor.MAXPRIO:
             raise ValueError('Invalid priority: %s' % prio)
+        if sok in self._suspended:
+            raise ValueError('Socket is suspended')
         self._readers[sok] = Context(sink, prio)
 
     def addWriter(self, sok, source, prio=None):
@@ -84,6 +87,8 @@ class Reactor(object):
             prio = Reactor.DEFAULTPRIO
         if not 0 <= prio < Reactor.MAXPRIO:
             raise ValueError('Invalid priority: %s' % prio)
+        if sok in self._suspended:
+            raise ValueError('Socket is suspended')
         self._writers[sok] = Context(source, prio)
 
     def addTimer(self, seconds, callback):
@@ -102,9 +107,27 @@ class Reactor(object):
     def removeTimer(self, token):
         self._timers.remove(token)
 
+    def suspend(self):
+        if self.currentsok in self._readers:
+            del self._readers[self.currentsok]
+        if self.currentsok in self._writers:
+            del self._writers[self.currentsok]
+
+        self._suspended[self.currentsok] = self.currentcontext
+        return self.currentsok
+
+    def resumeReader(self, handle):
+        self._readers[handle] = self._suspended[handle]
+        del self._suspended[handle]
+
+    def resumeWriter(self, handle):
+        self._writers[handle] = self._suspended[handle]
+        del self._suspended[handle]
+
     def shutdown(self):
         for sok in self._readers: sok.close()
         for sok in self._writers: sok.close()
+        for sok in self._suspended: sok.close()
 
     def loop(self):
         try:
@@ -163,10 +186,10 @@ class Reactor(object):
         return len(self._readers) + len(self._writers)
 
     def _callback(self, ready, soks):
-        for sok in ready:
-            if sok in soks:
+        for self.currentsok in ready:
+            if self.currentsok in soks:
                 try:
-                    context = soks[sok]
+                    context = soks[self.currentsok]
                     if context.prio <= self._prio:
                         self.currentcontext = context
                         context.callback()
@@ -174,8 +197,8 @@ class Reactor(object):
                     raise
                 except:
                     print_exc()
-                    if sok in soks:
-                        del soks[sok]
+                    if self.currentsok in soks:
+                        del soks[self.currentsok]
 
     def _findAndRemoveBadFd(self):
         for sok in self._readers:
