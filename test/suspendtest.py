@@ -153,6 +153,7 @@ class SuspendTest(TestCase):
                 pass
             def send(self, chunk, options):
                 data.append(chunk)
+                return len(chunk)
         reactor = Reactor(select_func=mockselect)
         def handler(**httpvars):
             print 'doe jij wat?'
@@ -160,7 +161,9 @@ class SuspendTest(TestCase):
             s = Suspend()
             yield s
             yield 'after suspend'
-        httpserver = HttpServer(reactor, 9, handler, sok=MyMockSocket())
+        listener = MyMockSocket()
+        httpserver = HttpServer(reactor, 9, handler, sok=listener)
+        reactor.removeReader(listener) # avoid new connections
         httpserver._accept()
         reactor.step()
         reactor.step()
