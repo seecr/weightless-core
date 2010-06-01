@@ -23,7 +23,7 @@
 from unittest import TestCase
 from cq2utils import CallTrace
 
-from weightless import Reactor
+from weightless import Reactor, Suspend, HttpServer
 
 class MockSocket(object):
     def close(self):
@@ -137,10 +137,35 @@ class SuspendTest(TestCase):
             d[identifier].resume()
 
     def testSuspendProtocol(self):
-        reactor = CallTrace('reactor')
-        sok = CallTrace('socket')
+        data = []
+        class MyMockSocket(object):
+            def accept(self):
+                return MyMockSocket(), None
+            def setsockopt(self, *args):
+                pass
+            def recv(selfl, *args):
+                return 'GET / HTTP/1.0\r\n\r\n'
+            def getpeername(self):
+                return 'itsme'
+            def shutdown(self, *args):
+                pass
+            def close(self):
+                pass
+            def send(self, chunk, options):
+                data.append(chunk)
+        reactor = Reactor(select_func=mockselect)
+        def handler(**httpvars):
+            print 'doe jij wat?'
+            yield 'before suspend'
+            s = Suspend()
+            yield s
+            yield 'after suspend'
+        httpserver = HttpServer(reactor, 9, handler, sok=MyMockSocket())
+        httpserver._accept()
+        reactor.step()
+        reactor.step()
+        reactor.step()
+        self.assertEquals(['before suspend', 'after suspend'], data)
+        # httpserver does: s(reactor)
 
-        s = Suspend()
-        s(reactor)
-        #h = reactor.suspend()
-        #reactor.resume(h)
+
