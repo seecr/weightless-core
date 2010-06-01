@@ -1,4 +1,3 @@
-#!/usr/bin/env python2.5
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
@@ -21,7 +20,7 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-#
+
 from unittest import TestCase
 from cq2utils.calltrace import CallTrace
 from time import time, sleep

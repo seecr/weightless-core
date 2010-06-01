@@ -1,4 +1,3 @@
-#!/usr/bin/env python2.5
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
@@ -599,9 +598,9 @@ class ComposeTest(TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 600, in f2
+        result = """  File "%s", line 599, in f2
     yield f1()
-  File "%s", line 598, in f1
+  File "%s", line 597, in f1
     yield""" % (2*(__file__.replace('pyc', 'py'),))
         c.next()
         self.assertEquals(result, tostring(c))
@@ -613,7 +612,7 @@ class ComposeTest(TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 613, in f2
+        result = """  File "%s", line 612, in f2
     def f2():""" % __file__.replace('pyc', 'py')
         self.assertEquals(result, tostring(c))
 

@@ -1,9 +1,8 @@
 #!/usr/bin/env python2.5
-
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
-#    Copyright (C) 2006-2009 Seek You Too (CQ2) http://www.cq2.nl
+#    Copyright (C) 2006-2010 Seek You Too (CQ2) http://www.cq2.nl
 #
 #    This file is part of Weightless
 #
@@ -22,8 +21,6 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-#
-from platform import python_version
 from glob import glob
 import os, sys
 
@@ -32,24 +29,20 @@ for file in glob('../deps.d/*'):
 
 sys.path.insert(0, '..')
 
-import unittest
+from unittest import main
 
-# Python >= 2.4
 from acceptortest import AcceptorTest
-from reactortest import ReactorTest
+from composetest import ComposeTest
 from httpreadertest import HttpReaderTest
 from httpservertest import HttpServerTest
-from httpsservertest import HttpsServerTest
-from transparentsockettest import TransparentSocketTest
 from httpspectest import HttpSpecTest
+from httpsservertest import HttpsServerTest
 from localtest import LocalTest
-
-if python_version() >= "2.5":
-    from composetest import ComposeTest
-    from snaketest import SnakeTest
-    from servertestcasetest import ServerTestCaseTest
-else:
-    print 'Skipping Python 2.5 tests.'
+from reactortest import ReactorTest
+from servertestcasetest import ServerTestCaseTest
+from snaketest import SnakeTest
+from suspendtest import SuspendTest
+from transparentsockettest import TransparentSocketTest
 
 if __name__ == '__main__':
-    unittest.main()
+    main()
