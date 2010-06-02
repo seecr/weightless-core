@@ -173,6 +173,19 @@ class SuspendTest(TestCase):
         suspend.resumeWriter()
         reactor.step()
         self.assertEquals(['before suspend', 'after suspend'], data)
-        # httpserver does: s(reactor)
 
+    def testResumeReader(self):
+        class MockReactor(object):
+            def suspend(inner):
+                return "handle"
+            def resumeReader(inner, handle):
+                inner.resumeReaderArgs = handle
+        suspend = Suspend()
+       
+        reactor = MockReactor()
+
+        suspend(reactor)
+        suspend.resumeReader()
+
+        self.assertEquals("handle", reactor.resumeReaderArgs)
 
