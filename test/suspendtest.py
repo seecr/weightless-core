@@ -155,11 +155,10 @@ class SuspendTest(TestCase):
                 data.append(chunk)
                 return len(chunk)
         reactor = Reactor(select_func=mockselect)
+        suspend = Suspend()
         def handler(**httpvars):
-            print 'doe jij wat?'
             yield 'before suspend'
-            s = Suspend()
-            yield s
+            yield suspend
             yield 'after suspend'
         listener = MyMockSocket()
         httpserver = HttpServer(reactor, 9, handler, sok=listener)
@@ -167,6 +166,11 @@ class SuspendTest(TestCase):
         httpserver._accept()
         reactor.step()
         reactor.step()
+        self.assertEquals(1, len(reactor._writers))
+        reactor.step()
+        self.assertEquals(reactor, suspend._reactor)
+        self.assertEquals(0, len(reactor._writers))
+        suspend.resumeWriter()
         reactor.step()
         self.assertEquals(['before suspend', 'after suspend'], data)
         # httpserver does: s(reactor)

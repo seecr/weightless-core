@@ -248,6 +248,9 @@ class HttpHandler(object):
                 data = self._rest
             else:
                 data = self._handler.next()
+            if callable(data):
+                data(self._reactor)
+                return
             sent = self._sok.send(data, MSG_DONTWAIT)
             if sent < len(data):
                 self._rest = data[sent:]

@@ -108,21 +108,16 @@ class Reactor(object):
         self._timers.remove(token)
 
     def suspend(self):
-        if self.currentsok in self._readers:
-            del self._readers[self.currentsok]
-        if self.currentsok in self._writers:
-            del self._writers[self.currentsok]
-
+        self._readers.pop(self.currentsok, None)
+        self._writers.pop(self.currentsok, None)
         self._suspended[self.currentsok] = self.currentcontext
         return self.currentsok
 
     def resumeReader(self, handle):
-        self._readers[handle] = self._suspended[handle]
-        del self._suspended[handle]
+        self._readers[handle] = self._suspended.pop(handle)
 
     def resumeWriter(self, handle):
-        self._writers[handle] = self._suspended[handle]
-        del self._suspended[handle]
+        self._writers[handle] = self._suspended.pop(handle)
 
     def shutdown(self):
         for sok in self._readers: sok.close()
