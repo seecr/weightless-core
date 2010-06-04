@@ -174,6 +174,34 @@ class SuspendTest(TestCase):
         reactor.step()
         self.assertEquals(['before suspend', 'after suspend'], data)
 
+    def testStateWriter(self):
+        reactor = CallTrace('reactor')
+        s = Suspend()
+        s(reactor)
+        s.resumeReader(state='state')
+        self.assertEquals('state', s.state)
+
+    def testStateWriter(self):
+        reactor = CallTrace('reactor')
+        s = Suspend()
+        s(reactor)
+        s.resumeWriter(state='state')
+        self.assertEquals('state', s.state)
+
+    def testNoStateReader(self):
+        reactor = CallTrace('reactor')
+        s = Suspend()
+        s(reactor)
+        s.resumeReader()
+        self.assertEquals(None, s.state)
+
+    def testNoStateWriter(self):
+        reactor = CallTrace('reactor')
+        s = Suspend()
+        s(reactor)
+        s.resumeWriter()
+        self.assertEquals(None, s.state)
+
     def testResumeReader(self):
         class MockReactor(object):
             def suspend(inner):

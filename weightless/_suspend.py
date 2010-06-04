@@ -26,8 +26,10 @@ class Suspend(object):
         self._handle = reactor.suspend()
         self._reactor = reactor
 
-    def resumeWriter(self):
+    def resumeWriter(self, state=None):
+        self.state = state
         self._reactor.resumeWriter(self._handle)
 
-    def resumeReader(self):
+    def resumeReader(self, state=None):
+        self.state = state
         self._reactor.resumeReader(self._handle)
