@@ -38,3 +38,5 @@ from _local import local
 from _suspend import Suspend
 
 from _gutils import tostring
+
+from _httpget import httpget

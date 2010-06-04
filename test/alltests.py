@@ -43,6 +43,7 @@ from servertestcasetest import ServerTestCaseTest
 from snaketest import SnakeTest
 from suspendtest import SuspendTest
 from transparentsockettest import TransparentSocketTest
+from asyncreadertest import AsyncReaderTest
 
 if __name__ == '__main__':
     main()
