@@ -1,0 +1,63 @@
+Changeset created on Fri Jun  4 14:51:20 CEST 2010 by Seek You Too
+
+Description: Suspend object now carries state.
+
+    When a suspend object is resumed, it can be given some state
+    information to be used in the resumed generator.
+
+Baseline version: weightless/tags/version_0.4.10
+
+diff --unidirectional-new-file --exclude='*.so' --exclude='*.o' --exclude=.svn --exclude='*.pyc' --exclude=deps.d --exclude=applied --recursive --unified version_0.4.10/test/suspendtest.py version_0.4.11/test/suspendtest.py
+--- version_0.4.10/test/suspendtest.py	2010-06-03 12:20:18.000000000 +0200
++++ version_0.4.11/test/suspendtest.py	2010-06-04 14:50:04.000000000 +0200
+@@ -174,6 +174,34 @@
+         reactor.step()
+         self.assertEquals(['before suspend', 'after suspend'], data)
+ 
++    def testStateWriter(self):
++        reactor = CallTrace('reactor')
++        s = Suspend()
++        s(reactor)
++        s.resumeReader(state='state')
++        self.assertEquals('state', s.state)
++
++    def testStateWriter(self):
++        reactor = CallTrace('reactor')
++        s = Suspend()
++        s(reactor)
++        s.resumeWriter(state='state')
++        self.assertEquals('state', s.state)
++
++    def testNoStateReader(self):
++        reactor = CallTrace('reactor')
++        s = Suspend()
++        s(reactor)
++        s.resumeReader()
++        self.assertEquals(None, s.state)
++
++    def testNoStateWriter(self):
++        reactor = CallTrace('reactor')
++        s = Suspend()
++        s(reactor)
++        s.resumeWriter()
++        self.assertEquals(None, s.state)
++
+     def testResumeReader(self):
+         class MockReactor(object):
+             def suspend(inner):
+diff --unidirectional-new-file --exclude='*.so' --exclude='*.o' --exclude=.svn --exclude='*.pyc' --exclude=deps.d --exclude=applied --recursive --unified version_0.4.10/weightless/_suspend.py version_0.4.11/weightless/_suspend.py
+--- version_0.4.10/weightless/_suspend.py	2010-06-03 12:20:18.000000000 +0200
++++ version_0.4.11/weightless/_suspend.py	2010-06-04 14:50:04.000000000 +0200
+@@ -26,8 +26,10 @@
+         self._handle = reactor.suspend()
+         self._reactor = reactor
+ 
+-    def resumeWriter(self):
++    def resumeWriter(self, state=None):
++        self.state = state
+         self._reactor.resumeWriter(self._handle)
+ 
+-    def resumeReader(self):
++    def resumeReader(self, state=None):
++        self.state = state
+         self._reactor.resumeReader(self._handle)
