@@ -1,5 +1,5 @@
 from weightless import Suspend, identify
-from socket import socket
+from socket import socket, error
 
 class MySuspend(Suspend):
     def __init__(self, doNext):
@@ -19,8 +19,14 @@ def doGet(host, port):
     reactor = yield # reactor, from MySuspend.__call__
     resume = yield # resume callback, from MySuspend.__call__
     sok = socket()
-    sok.connect((host, port)) # must become asynchronous, since DNS can block!
+    sok.setblocking(0)
+    try:
+        sok.connect((host, port))
+    except error, errno:
+        print errno # should be (115, 'Operation now in progress')
     reactor.addWriter(sok, this.next)
+    yield
+    print 'connected'
     yield
     reactor.removeWriter(sok)
     sok.send('GET / HTTP/1.1\r\n\r\n')
