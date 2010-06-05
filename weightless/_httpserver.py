@@ -263,7 +263,7 @@ class HttpHandler(object):
             raise
 
     def _closeConnection(self):
-        self._reactor.removeWriter(self._sok)
+        self._reactor.cleanup(self._sok)
 
         try:
             self._sok.shutdown(SHUT_RDWR)

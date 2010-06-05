@@ -217,3 +217,22 @@ class SuspendTest(TestCase):
 
         self.assertEquals("handle", reactor.resumeReaderArgs)
 
+    def testCleanUp(self):
+        reactor = Reactor(select_func=mockselect)
+        def handler():
+            reactor.suspend()
+            yield
+        reactor.addWriter(1, lambda: None)
+        reactor.addReader(2, lambda: None)
+        reactor.addReader(3, handler().next)
+        reactor.step()
+        self.assertTrue(1 in reactor._writers)
+        reactor.cleanup(1)
+        self.assertFalse(1 in reactor._writers)
+        self.assertTrue(2 in reactor._readers)
+        reactor.cleanup(2)
+        self.assertFalse(2 in reactor._readers)
+        self.assertTrue(3 in reactor._suspended)
+        reactor.cleanup(3)
+        self.assertFalse(3 in reactor._suspended)
+

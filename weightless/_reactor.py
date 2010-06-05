@@ -107,6 +107,11 @@ class Reactor(object):
     def removeTimer(self, token):
         self._timers.remove(token)
 
+    def cleanup(self, sok):
+        self._writers.pop(sok, None)
+        self._readers.pop(sok, None)
+        self._suspended.pop(sok, None)
+
     def suspend(self):
         self._readers.pop(self.currentsok, None)
         self._writers.pop(self.currentsok, None)
