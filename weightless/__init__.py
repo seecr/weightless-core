@@ -37,6 +37,6 @@ from _httpserver import HttpServer, HttpsServer
 from _local import local
 from _suspend import Suspend
 
-from _gutils import tostring
+from _gutils import tostring, identify
 
 from _httpget import httpget

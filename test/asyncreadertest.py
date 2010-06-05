@@ -1,5 +1,6 @@
 from unittest import TestCase
 from socket import socket
+from random import randint
 from httpreadertest import server as testserver
 from weightless import HttpServer, httpget, Reactor, compose
 
@@ -8,11 +9,11 @@ class AsyncReaderTest(TestCase):
     def testOne(self):
         done = [False]
         reactor = Reactor()
-        backofficeport = 98765
-        passthruport = 98766
+        backofficeport = randint(1024, 65000)
+        passthruport = backofficeport + 1
         def passthruhandler(*args, **kwargs):
             request = kwargs['RequestURI']
-            response = yield httpget('http://localhost:%d/%s' % (backofficeport, request))
+            response = yield httpget('localhost', backofficeport, request)
             yield response
             done[0] = True
         passthruserver = HttpServer(reactor, passthruport, 
