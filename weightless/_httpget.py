@@ -1,5 +1,6 @@
 from weightless import Suspend, identify
-from socket import socket, error
+from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR
+from errno import EINPROGRESS
 
 class MySuspend(Suspend):
     def __init__(self, doNext):
@@ -18,24 +19,30 @@ def doGet(host, port):
     this = yield # this generator, from @identify
     reactor = yield # reactor, from MySuspend.__call__
     resume = yield # resume callback, from MySuspend.__call__
-    sok = socket()
-    sok.setblocking(0)
     try:
-        sok.connect((host, port))
-    except error, errno:
-        print errno # should be (115, 'Operation now in progress')
-    reactor.addWriter(sok, this.next)
-    yield
-    print 'connected'
-    yield
-    reactor.removeWriter(sok)
-    sok.send('GET / HTTP/1.1\r\n\r\n')
-    reactor.addReader(sok, this.next)
-    yield
-    response = sok.recv(999)
-    reactor.removeReader(sok)
-    sok.close()
-    resume(response)
+        sok = socket()
+        sok.setblocking(0)
+        try:
+            sok.connect((host, port))
+        except SocketError, (errno, msg):
+            if errno != EINPROGRESS:
+                raise
+        reactor.addWriter(sok, this.next)
+        yield
+        err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
+        if err != 0:    # connection created succesfully?
+            raise IOError(err)
+        yield
+        reactor.removeWriter(sok)
+        sok.send('GET / HTTP/1.1\r\n\r\n')
+        reactor.addReader(sok, this.next)
+        yield
+        response = sok.recv(999)
+        reactor.removeReader(sok)
+        sok.close()
+        resume(response)
+    except Exception, e:
+        resume(str(e)) # do something else here: raise it at client somehow
     yield
 
 
