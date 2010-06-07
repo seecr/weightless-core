@@ -5,20 +5,27 @@ from errno import EINPROGRESS
 class MySuspend(Suspend):
     def __init__(self, doNext):
         self._doNext = doNext
+        self._exception = None
     def __call__(self, reactor):
         super(MySuspend, self).__call__(reactor)
-        self._doNext(reactor)
-        self._doNext(self.resume)
+        self._doNext(self)
     def resume(self, response):
-        self.response = response
+        self._response = response
         self.resumeWriter()
+    def throw(self, exception):
+        self._exception = exception
+        self.resumeWriter()
+    def done(self):
+        if self._exception:
+            raise self._exception
+        raise StopIteration(self._response)
+
 
 
 @identify
 def doGet(host, port):
     this = yield # this generator, from @identify
-    reactor = yield # reactor, from MySuspend.__call__
-    resume = yield # resume callback, from MySuspend.__call__
+    suspend = yield
     try:
         sok = socket()
         sok.setblocking(0)
@@ -27,26 +34,26 @@ def doGet(host, port):
         except SocketError, (errno, msg):
             if errno != EINPROGRESS:
                 raise
-        reactor.addWriter(sok, this.next)
+        suspend._reactor.addWriter(sok, this.next)
         yield
         err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
         if err != 0:    # connection created succesfully?
             raise IOError(err)
         yield
-        reactor.removeWriter(sok)
+        suspend._reactor.removeWriter(sok)
         sok.send('GET / HTTP/1.1\r\n\r\n')
-        reactor.addReader(sok, this.next)
+        suspend._reactor.addReader(sok, this.next)
         yield
         response = sok.recv(999)
-        reactor.removeReader(sok)
+        suspend._reactor.removeReader(sok)
         sok.close()
-        resume(response)
+        suspend.resume(response)
     except Exception, e:
-        resume(str(e)) # do something else here: raise it at client somehow
+        suspend.throw(e)
     yield
 
 
 def httpget(host, port, *args):
     s = MySuspend(doGet(host, port).send)
-    yield s 
-    raise StopIteration(s.response)
+    yield s
+    s.done()
