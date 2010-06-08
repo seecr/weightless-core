@@ -22,6 +22,7 @@
 #
 ## end license ##
 from _acceptor import Acceptor
+from _gutils import identify
 from weightless.http import REGEXP, FORMAT, parseHeaders, parseHeader
 from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
 from tempfile import TemporaryFile
@@ -231,7 +232,7 @@ class HttpHandler(object):
         self.request['Client'] = self._sok.getpeername()
         self._handler = finalizeMethod(**self.request)
         self._reactor.removeReader(self._sok)
-        self._reactor.addWriter(self._sok, self._writeResponse, prio=self._prio)
+        self._reactor.addWriter(self._sok, self._writeResponse().next, prio=self._prio)
 
     def finalize(self):
         self._finalize(self._generatorFactory)
@@ -242,25 +243,32 @@ class HttpHandler(object):
         self._sok.shutdown(SHUT_RDWR)
         self._sok.close()
 
+    @identify
     def _writeResponse(self):
-        try:
-            if self._rest:
-                data = self._rest
-            else:
-                data = self._handler.next()
-            if callable(data):
-                data(self._reactor)
-                return
-            sent = self._sok.send(data, MSG_DONTWAIT)
-            if sent < len(data):
-                self._rest = data[sent:]
-            else:
-                self._rest = None
-        except StopIteration:
-            self._closeConnection()
-        except:
-            self._closeConnection()
-            raise
+        this = yield
+        while True:
+            yield
+            try:
+                if self._rest:
+                    data = self._rest
+                else:
+                    data = self._handler.next()
+                    if callable(data):
+                        data(self._reactor, this.next)
+                        yield
+                        data.resumeWriter()
+                        continue
+                sent = self._sok.send(data, MSG_DONTWAIT)
+                if sent < len(data):
+                    self._rest = data[sent:]
+                else:
+                    self._rest = None
+            except StopIteration:
+                self._closeConnection()
+                yield
+            except:
+                self._closeConnection()
+                raise
 
     def _closeConnection(self):
         self._reactor.cleanup(self._sok)

@@ -170,7 +170,9 @@ class SuspendTest(TestCase):
         reactor.step()
         self.assertEquals(reactor, suspend._reactor)
         self.assertEquals(0, len(reactor._writers))
-        suspend.resumeWriter()
+        suspend.resume()
+        reactor.step()
+        reactor.step()
         reactor.step()
         self.assertEquals(['before suspend', 'after suspend'], data)
 

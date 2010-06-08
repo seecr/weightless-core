@@ -22,9 +22,10 @@
 ## end license ##
 
 class Suspend(object):
-    def __call__(self, reactor):
+    def __call__(self, reactor, whenDone = None):
         self._handle = reactor.suspend()
         self._reactor = reactor
+        self._whenDone = whenDone
 
     def resumeWriter(self, state=None):
         self.state = state
@@ -33,3 +34,6 @@ class Suspend(object):
     def resumeReader(self, state=None):
         self.state = state
         self._reactor.resumeReader(self._handle)
+
+    def resume(self):
+        self._whenDone()

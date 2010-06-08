@@ -46,7 +46,11 @@ def server(port, response, request, delay=0, loop=1):
         if response:
             for i in xrange(loop):
                 request.append(newSok.recv(4096))
-            newSok.send(response)
+            if hasattr(response, 'next'):
+                for r in response:
+                    newSok.send(r)
+            else:
+                newSok.send(response)
             sleep(delay)
             newSok.close()
         else:
