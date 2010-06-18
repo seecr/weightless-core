@@ -52,16 +52,20 @@ def doGet(host, port, request):
             raise IOError(err)
         yield
         suspend._reactor.removeWriter(sok)
-        sok.send('GET %s HTTP/1.1\r\n\r\n' % request)
+        # sendall() of loop gebruiken
+        # error checking
+        sok.send('GET %s HTTP/1.1\r\n\r\n' % request) # + Host of HTTP 1.0
+        #sok.shutdown(WRITER)
         suspend._reactor.addReader(sok, this.next)
         responses = []
         while True:
             yield
-            response = sok.recv(4096)
+            response = sok.recv(4096) # error checking
             if response == '':
                 break
             responses.append(response)
         suspend._reactor.removeReader(sok)
+        #sok.shutdown(READER)
         sok.close()
         suspend.resume(''.join(responses))
     except Exception, e:
