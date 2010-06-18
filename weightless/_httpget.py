@@ -39,6 +39,7 @@ def doGet(host, port, request):
     suspend = yield # suspend object, from Suspend.__call__
     sok = socket()
     sok.setblocking(0)
+    #sok.settimeout(1.0)
     try:
         sok.connect((host, port))
     except SocketError, (errno, msg):

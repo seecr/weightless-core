@@ -61,10 +61,18 @@ class AsyncReaderTest(TestCase):
             self.reactor.step()
         self.assertEquals(IOError, type(exceptions[0]))
 
-        target = ('localhosta.xyz', 80, '/') # invalid host
+        target = ('UEYR^$*FD(#>NDJ.khfd9.(*njnd', 9876, '/') # invalid host
         clientget('localhost', self.port, '/')
         exceptions = []
         while not exceptions:
             self.reactor.step()
         self.assertEquals(SocketGaiError, type(exceptions[0]))
+
+        target = ('127.0.0.255', 9876, '/')
+        clientget('localhost', self.port, '/')
+        exceptions = []
+        while not exceptions:
+            self.reactor.step()
+        self.assertEquals(IOError, type(exceptions[0]))
+        self.assertEquals(111, exceptions[0].message)
 

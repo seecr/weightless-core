@@ -288,10 +288,8 @@ class HttpsHandler(HttpHandler):
         try:
             part = self._sok.recv(self._recvSize)
         except (SSL.WantReadError, SSL.WantWriteError, SSL.WantX509LookupError):
-            print "exception in read"
             pass
         except Exception, e:
-            print "EXCEPTION", str(e)
             self._closeDuringRead()
         else:
             self._dataBuffer += part
