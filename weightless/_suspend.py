@@ -20,20 +20,38 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
+from traceback import print_exc
 
 class Suspend(object):
-    def __call__(self, reactor, whenDone = None):
-        self._handle = reactor.suspend()
+    def __init__(self, doNext=lambda this: None):
+        self._doNext = doNext
+        self._exception = None
+
+    def __call__(self, reactor, whenDone):
         self._reactor = reactor
-        self._whenDone = whenDone
+        try:
+            self._doNext(self)
+        except Exception, e:
+            self._exception = e
+            print_exc()
+        else:
+            self._whenDone = whenDone
+            self._handle = reactor.suspend()
 
-    def resumeWriter(self, state=None):
-        self.state = state
-        self._reactor.resumeWriter(self._handle)
-
-    def resumeReader(self, state=None):
-        self.state = state
-        self._reactor.resumeReader(self._handle)
-
-    def resume(self):
+    def resume(self, response=None):
+        self._response = response
         self._whenDone()
+
+    def throw(self, exception):
+        self._exception = exception
+        self._whenDone()
+
+    def resumeWriter(self):
+        if hasattr(self, "_handle"):
+            self._reactor.resumeWriter(self._handle)
+
+    def getResult(self):
+        if self._exception:
+            raise self._exception
+        return self._response
+

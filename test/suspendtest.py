@@ -53,24 +53,6 @@ class SuspendTest(TestCase):
         self.assertTrue(handle[0] != None)
         self.assertTrue(handle[0] != 'initial value')
 
-    def testReactorResumeReader(self):
-        handle = ['initial value']
-        reactor = Reactor(select_func=mockselect)
-        def callback():
-            handle[0] = reactor.suspend()
-            yield
-            handle.append('resumed')
-            yield
-        sok = MockSocket()
-        reactor.addReader(sok, callback().next)
-        reactor.step()
-        reactor.resumeReader(handle[0])
-        reactor.step()
-        self.assertEquals('resumed', handle[1])
-        self.assertTrue(sok not in reactor._writers)
-        self.assertTrue(sok in reactor._readers)
-        self.assertRaises(KeyError, reactor.resumeReader, handle[0])
-
     def testReactorResumeWriter(self):
         handle = ['initial value']
         reactor = Reactor(select_func=mockselect)
@@ -85,7 +67,6 @@ class SuspendTest(TestCase):
         reactor.step()
         self.assertTrue(sok in reactor._writers)
         self.assertTrue(sok not in reactor._readers)
-        self.assertRaises(KeyError, reactor.resumeReader, handle[0])
         self.assertRaises(KeyError, reactor.resumeWriter, handle[0])
 
     def testWrongUseAfterSuspending(self):
@@ -117,51 +98,26 @@ class SuspendTest(TestCase):
             reactor.suspend()
         reactor.addReader(sok1, lambda: None)
         reactor.addWriter(sok2, lambda: None)
-        reactor.addReader(sok3, callback)
+        reactor.addWriter(sok3, callback)
         reactor.step()
+        self.assertFalse(sok3 in reactor._readers)
+        self.assertFalse(sok3 in reactor._writers)
         reactor.shutdown() 
         self.assertTrue(sok1.closed)
         self.assertTrue(sok2.closed)
         self.assertTrue(sok3.closed)
 
-    def XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXxtestIntegration(self):
-        d = {}
-        def someAction(identifier):
-            yield 'a'
-            # triggerAsynchronousProccesing()
-            s = Suspend()
-            d[identifier] = s
-            yield s # wait for asynchronous proccess to finish
-            yield 'b'
-        def asynchronousProcessFinished(identifier):
-            d[identifier].resume()
-
     def testSuspendProtocol(self):
-        data = []
-        class MyMockSocket(object):
-            def accept(self):
-                return MyMockSocket(), None
-            def setsockopt(self, *args):
-                pass
-            def recv(selfl, *args):
-                return 'GET / HTTP/1.0\r\n\r\n'
-            def getpeername(self):
-                return 'itsme'
-            def shutdown(self, *args):
-                pass
-            def close(self):
-                pass
-            def send(self, chunk, options):
-                data.append(chunk)
-                return len(chunk)
         reactor = Reactor(select_func=mockselect)
         suspend = Suspend()
         def handler(**httpvars):
             yield 'before suspend'
             yield suspend
+            yield "result = %s" % suspend.getResult()
             yield 'after suspend'
         listener = MyMockSocket()
-        httpserver = HttpServer(reactor, 9, handler, sok=listener)
+        port = 9
+        httpserver = HttpServer(reactor, port, handler, sok=listener)
         reactor.removeReader(listener) # avoid new connections
         httpserver._accept()
         reactor.step()
@@ -170,54 +126,61 @@ class SuspendTest(TestCase):
         reactor.step()
         self.assertEquals(reactor, suspend._reactor)
         self.assertEquals(0, len(reactor._writers))
-        suspend.resume()
+        suspend.resume('RESPONSE')
         reactor.step()
         reactor.step()
         reactor.step()
-        self.assertEquals(['before suspend', 'after suspend'], data)
+        self.assertEquals(['before suspend', 'result = RESPONSE', 'after suspend'], listener.data)
 
-    def testStateWriter(self):
-        reactor = CallTrace('reactor')
-        s = Suspend()
-        s(reactor)
-        s.resumeReader(state='state')
-        self.assertEquals('state', s.state)
-
-    def testStateWriter(self):
-        reactor = CallTrace('reactor')
-        s = Suspend()
-        s(reactor)
-        s.resumeWriter(state='state')
-        self.assertEquals('state', s.state)
-
-    def testNoStateReader(self):
-        reactor = CallTrace('reactor')
-        s = Suspend()
-        s(reactor)
-        s.resumeReader()
-        self.assertEquals(None, s.state)
-
-    def testNoStateWriter(self):
-        reactor = CallTrace('reactor')
-        s = Suspend()
-        s(reactor)
-        s.resumeWriter()
-        self.assertEquals(None, s.state)
-
-    def testResumeReader(self):
-        class MockReactor(object):
-            def suspend(inner):
-                return "handle"
-            def resumeReader(inner, handle):
-                inner.resumeReaderArgs = handle
+    def testSuspendProtocolWithThrow(self):
+        reactor = Reactor(select_func=mockselect)
         suspend = Suspend()
-       
-        reactor = MockReactor()
+        def handler(**httpvars):
+            yield 'before suspend'
+            yield suspend
+            try:
+                suspend.getResult()
+                self.fail()
+            except ValueError, e:
+                yield "result = %s" % repr(e)
+            yield 'after suspend'
+        listener = MyMockSocket()
+        port = 9
+        httpserver = HttpServer(reactor, port, handler, sok=listener)
+        reactor.removeReader(listener) # avoid new connections
+        httpserver._accept()
+        reactor.step()
+        reactor.step()
+        self.assertEquals(1, len(reactor._writers))
+        reactor.step()
+        self.assertEquals(reactor, suspend._reactor)
+        self.assertEquals(0, len(reactor._writers))
+        suspend.throw(ValueError('BAD VALUE'))
+        reactor.step()
+        reactor.step()
+        reactor.step()
+        self.assertEquals(['before suspend', "result = ValueError('BAD VALUE',)", 'after suspend'], listener.data)
 
-        suspend(reactor)
-        suspend.resumeReader()
+    def testGetResult(self):
+        reactor = CallTrace('reactor')
+        s = Suspend()
+        s(reactor, whenDone=lambda:None)
+        s.resume('state')
+        self.assertEquals('state', s.getResult())
 
-        self.assertEquals("handle", reactor.resumeReaderArgs)
+    def testGetNoneResult(self):
+        reactor = CallTrace('reactor')
+        s = Suspend()
+        s(reactor, whenDone=lambda:None)
+        s.resume()
+        self.assertEquals(None, s.getResult())
+
+    def testGetResultRaisesException(self):
+        reactor = CallTrace('reactor')
+        s = Suspend()
+        s(reactor, whenDone=lambda:None)
+        s.throw(ValueError('bad value'))
+        self.assertRaises(ValueError, s.getResult)
 
     def testCleanUp(self):
         reactor = Reactor(select_func=mockselect)
@@ -238,3 +201,21 @@ class SuspendTest(TestCase):
         reactor.cleanup(3)
         self.assertFalse(3 in reactor._suspended)
 
+class MyMockSocket(object):
+    def __init__(self, data=None):
+        self.data = [] if data is None else data
+    def accept(self):
+        return MyMockSocket(self.data), None
+    def setsockopt(self, *args):
+        pass
+    def recv(self, *args):
+        return 'GET / HTTP/1.0\r\n\r\n'
+    def getpeername(self):
+        return 'itsme'
+    def shutdown(self, *args):
+        pass
+    def close(self):
+        pass
+    def send(self, chunk, options):
+        self.data.append(chunk)
+        return len(chunk)

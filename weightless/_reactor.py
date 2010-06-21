@@ -118,9 +118,6 @@ class Reactor(object):
         self._suspended[self.currentsok] = self.currentcontext
         return self.currentsok
 
-    def resumeReader(self, handle):
-        self._readers[handle] = self._suspended.pop(handle)
-
     def resumeWriter(self, handle):
         self._writers[handle] = self._suspended.pop(handle)
 

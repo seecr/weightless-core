@@ -1,37 +1,6 @@
 from weightless import Suspend, identify
 from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR
 from errno import EINPROGRESS
-from traceback import print_exc
-
-class MySuspend(Suspend):
-    def __init__(self, doNext):
-        self._doNext = doNext
-        self._exception = None
-    def __call__(self, reactor, whenDone):
-        #super(MySuspend, self).__call__(reactor)
-        self._reactor = reactor
-        try:
-            self._doNext(self)
-        except Exception, e:
-            self._exception = e
-            print_exc()
-        else:
-            self._whenDone = whenDone
-            self._handle = reactor.suspend()
-    def resume(self, response):
-        self._response = response
-        self._whenDone()
-    def throw(self, exception):
-        self._exception = exception
-        self._whenDone()
-    def resumeWriter(self):
-        if hasattr(self, "_handle"):
-            self._reactor.resumeWriter(self._handle)
-    def getResult(self):
-        if self._exception:
-            raise self._exception
-        return self._response
-
 
 @identify
 def doGet(host, port, request):
@@ -75,7 +44,7 @@ def doGet(host, port, request):
 
 
 def httpget(host, port, request):
-    s = MySuspend(doGet(host, port, request).send)
+    s = Suspend(doGet(host, port, request).send)
     data = yield s
     result = s.getResult()
     raise StopIteration(result)
