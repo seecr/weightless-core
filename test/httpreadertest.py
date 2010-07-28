@@ -44,8 +44,12 @@ def server(port, response, request, delay=0, loop=1):
         newSok, addr = serverSok.accept()
 
         if response:
-            for i in xrange(loop):
-                request.append(newSok.recv(4096))
+            for i in range(loop):
+                msg = newSok.recv(4096)
+                print msg
+                if msg == '':
+                    break;
+                request.append(msg)
             if hasattr(response, 'next'):
                 for r in response:
                     newSok.send(r)
@@ -108,6 +112,7 @@ class HttpReaderTest(TestCase):
         request = []
         serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\n", request)
         reader = HttpReaderFacade(reactor, "http://localhost:%s" % port, lambda data: 'a')
+        reactor.step()
         reactor.step()
         serverThread.join()
         self.assertTrue(request[0].startswith('GET / HTTP/1.1\r\n'), request[0])
@@ -182,7 +187,7 @@ class HttpReaderTest(TestCase):
         port = randint(2048, 4096)
         reactor = Reactor()
         request = []
-        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\nresponse", request, loop=1)
+        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\nresponse", request, loop=100000)
         sentData = []
         done = []
         def send(data):
@@ -198,7 +203,7 @@ class HttpReaderTest(TestCase):
 
         reader = HttpReaderFacade(reactor, "http://localhost:%s" % port, send, errorHandler=throw, timeout=0.5, headers={'SOAPAction': 'blah'}, bodyHandler=next)
 
-        reactor.addTimer(2.2, lambda: self.fail("Test Stuck"))
+        reactor.addTimer(3.0, lambda: self.fail("Test Stuck"))
         while not done:
             reactor.step()
 

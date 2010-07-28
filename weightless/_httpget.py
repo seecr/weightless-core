@@ -21,7 +21,7 @@
 #
 ## end license ##
 from weightless import Suspend, identify
-from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR
+from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_WR, SHUT_RD
 from errno import EINPROGRESS
 
 @identify
@@ -47,6 +47,7 @@ def doGet(host, port, request):
         # sendall() of loop gebruiken
         # error checking
         sok.send('GET %s HTTP/1.1\r\n\r\n' % request) # + Host of HTTP 1.0
+        sok.shutdown(SHUT_WR)
         #sok.shutdown(WRITER)
         suspend._reactor.addReader(sok, this.next)
         responses = []
