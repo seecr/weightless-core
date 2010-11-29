@@ -26,6 +26,8 @@ from random import randint
 from httpreadertest import server as testserver
 from weightless import HttpServer, httpget, Reactor, compose
 
+from weightless._httpget import _httpRequest
+
 def clientget(host, port, path):
     client = socket()
     client.connect((host,  port))
@@ -41,6 +43,11 @@ class AsyncReaderTest(TestCase):
         self.reactor = Reactor()
         self.port = randint(2**10, 2**16)
         self.httpserver = HttpServer(self.reactor, self.port, self.dispatch)
+    
+    def testHttpRequest(self):
+        self.assertEquals('GET / HTTP/1.0\r\n', _httpRequest('/'))
+        self.assertEquals('GET / HTTP/1.1\r\nHost: weightless.io\r\n', _httpRequest('/', vhost="weightless.io"))
+
 
     def testPassRequestThruToBackOfficeServer(self):
         done = [False]
@@ -59,7 +66,7 @@ class AsyncReaderTest(TestCase):
             self.reactor.step()
         response = client.recv(99)
         self.assertEquals('hello!', response)
-        self.assertEquals('GET /depot?arg=1&arg=2 HTTP/1.1\r\n\r\n', requests[0])
+        self.assertEquals('GET /depot?arg=1&arg=2 HTTP/1.0\r\n\r\n', requests[0])
 
     def testConnectFails(self):
         exceptions = []

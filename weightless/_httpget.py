@@ -25,7 +25,7 @@ from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_WR, 
 from errno import EINPROGRESS
 
 @identify
-def doGet(host, port, request):
+def doGet(host, port, request, vhost=""):
     this = yield # this generator, from @identify
     suspend = yield # suspend object, from Suspend.__call__
     sok = socket()
@@ -46,7 +46,7 @@ def doGet(host, port, request):
         suspend._reactor.removeWriter(sok)
         # sendall() of loop gebruiken
         # error checking
-        sok.send('GET %s HTTP/1.1\r\n\r\n' % request) # + Host of HTTP 1.0
+        sok.send('%s\r\n' % _httpRequest(request, vhost=vhost))
         sok.shutdown(SHUT_WR)
         #sok.shutdown(WRITER)
         suspend._reactor.addReader(sok, this.next)
@@ -65,9 +65,15 @@ def doGet(host, port, request):
         suspend.throw(e)
     yield
 
+def _httpRequest(request, vhost=""):
+    httpRequest = "GET %s HTTP/1.0\r\n" % request
+    if vhost != "":
+        httpRequest = "GET %s HTTP/1.1\r\nHost: %s\r\n" % (request, vhost)
+    return httpRequest
 
-def httpget(host, port, request):
-    s = Suspend(doGet(host, port, request).send)
+
+def httpget(host, port, request, vhost=""):
+    s = Suspend(doGet(host, port, request, vhost=vhost).send)
     data = yield s
     result = s.getResult()
     raise StopIteration(result)
