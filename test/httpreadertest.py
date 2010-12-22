@@ -46,7 +46,6 @@ def server(port, response, request, delay=0, loop=1):
         if response:
             for i in range(loop):
                 msg = newSok.recv(4096)
-                print msg
                 if msg == '':
                     break;
                 request.append(msg)

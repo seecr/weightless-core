@@ -54,7 +54,9 @@ def compose(initial):
         generator = generators[-1]
         try:
             if exception:
-                response = generator.throw(exception[1])
+                traceback = exception[2]
+                traceback = traceback.tb_next if traceback else None
+                response = generator.throw(exception[0], exception[1], traceback)
                 exception = None
             else:
                 message = messages.pop(0)

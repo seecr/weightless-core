@@ -616,3 +616,27 @@ class ComposeTest(TestCase):
     def f2():""" % __file__.replace('pyc', 'py')
         self.assertEquals(result, tostring(c))
 
+    @if_tbtools
+    def testHaveUsefulTracebacksWithCatchingExceptionsInAnEnclosedGenerator(self):
+        import traceback
+        tb = []
+        def f1():
+            yield
+            raise Exception("aap")
+        def f2():
+            try:
+                yield compose(f1())
+            except:
+                ex_type, ex_val, ex_tb = exc_info()
+                tb.append(ex_tb)
+                raise
+        def f3():
+            yield compose(f2())
+        c = compose(f3())
+        c.next()
+        try:
+            c.next()
+        except Exception, e:
+            pass
+        self.assertEquals('f2', tb[0].tb_frame.f_code.co_name)
+        self.assertEquals('f1', tb[0].tb_next.tb_frame.f_code.co_name)
