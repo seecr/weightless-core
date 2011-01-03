@@ -26,11 +26,6 @@ assert python_version() >= "2.5", "Python 2.5 required"
 
 from types import GeneratorType
 from sys import exc_info
-try:
-    from tbtools import inject_traceback
-except ImportError:
-    def inject_traceback(*args, **kwargs):
-        pass
 
 def compose(initial):
     """
@@ -54,9 +49,7 @@ def compose(initial):
         generator = generators[-1]
         try:
             if exception:
-                traceback = exception[2]
-                traceback = traceback.tb_next if traceback else None
-                response = generator.throw(exception[0], exception[1], traceback)
+                response = generator.throw(*exception)
                 exception = None
             else:
                 message = messages.pop(0)
@@ -75,8 +68,7 @@ def compose(initial):
                     if response and messages[0] is not None:
                         messages.insert(0, None)
                 except Exception:
-                    exType, exValue, exTraceback = exc_info()
-                    exception = exType, exValue, None
+                    exception = exc_info()
         except StopIteration, returnValue:
             exception = None
             generators.pop()
@@ -88,11 +80,7 @@ def compose(initial):
             raise # testing support
         except Exception:
             generators.pop()
-            exType, exValue, exTraceback = exc_info()
-            # if this is the same exception, keep and extend the previous traceback.
-            if exception and id(exValue) == id(exception[1]) and exception[2]:
-                inject_traceback(exception[2], exTraceback.tb_next, 0)
-            else:
-                exception = exType, exValue, exTraceback
+            exType, exVal, exTb = exc_info()
+            exception = (exType, exVal, exTb.tb_next)
     if exception:
-        raise exception[0], exception[1], exception[2].tb_next
+        raise exception[0], exception[1], exception[2]
