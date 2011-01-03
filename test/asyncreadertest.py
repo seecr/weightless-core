@@ -21,6 +21,7 @@
 #
 ## end license ##
 from unittest import TestCase
+from sys import exc_info
 from socket import socket, gaierror as SocketGaiError
 from random import randint
 from httpreadertest import server as testserver
@@ -74,34 +75,34 @@ class AsyncReaderTest(TestCase):
             try:
                 response = yield httpget(*target)
             except Exception, e:
-                exceptions.append(e)
+                exceptions.append(exc_info())
         self.handler = failingserver
 
         clientget('localhost', self.port, '/')
         target = ('localhost', 'port', '/') # non-numeric port
         while not exceptions:
             self.reactor.step()
-        self.assertEquals(TypeError, type(exceptions[0]))
+        self.assertEquals(TypeError, exceptions[0][0])
 
         target = ('localhost', 87, '/') # invalid port
         clientget('localhost', self.port, '/')
         exceptions = []
         while not exceptions:
             self.reactor.step()
-        self.assertEquals(IOError, type(exceptions[0]))
+        self.assertEquals(IOError, exceptions[0][0])
 
         target = ('UEYR^$*FD(#>NDJ.khfd9.(*njnd', 9876, '/') # invalid host
         clientget('localhost', self.port, '/')
         exceptions = []
         while not exceptions:
             self.reactor.step()
-        self.assertEquals(SocketGaiError, type(exceptions[0]))
+        self.assertEquals(SocketGaiError, exceptions[0][0])
 
         target = ('127.0.0.255', 9876, '/')
         clientget('localhost', self.port, '/')
         exceptions = []
         while not exceptions:
             self.reactor.step()
-        self.assertEquals(IOError, type(exceptions[0]))
-        self.assertEquals(111, exceptions[0].message)
+        self.assertEquals(IOError, exceptions[0][0])
+        self.assertEquals(111, exceptions[0][1].message)
 
