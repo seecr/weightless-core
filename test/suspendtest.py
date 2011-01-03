@@ -20,8 +20,13 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
+
+from sys import exc_info
 from unittest import TestCase
-from cq2utils import CallTrace
+from re import sub
+from traceback import format_exc
+
+from cq2utils import CallTrace, CQ2TestCase
 
 from weightless import Reactor, Suspend, HttpServer
 
@@ -32,7 +37,13 @@ class MockSocket(object):
 def mockselect(readers, writers, x, timeout):
     return readers, writers, x
 
-class SuspendTest(TestCase):
+fileDict = {
+    '__file__': mockselect.func_code.co_filename, # Hacky, but sys.modules[aModuleName].__file__ is inconsistent with traceback-filenames
+    'suspend.py': Suspend.__call__.func_code.co_filename,
+}
+
+
+class SuspendTest(CQ2TestCase):
 
     def testReactorSuspend(self):
         handle = ['initial value']
@@ -142,7 +153,8 @@ class SuspendTest(TestCase):
                 suspend.getResult()
                 self.fail()
             except ValueError, e:
-                yield "result = %s" % repr(e)
+                tbstring = format_exc()
+                yield "result = %s" % tbstring
             yield 'after suspend'
         listener = MyMockSocket()
         port = 9
@@ -155,11 +167,75 @@ class SuspendTest(TestCase):
         reactor.step()
         self.assertEquals(reactor, suspend._reactor)
         self.assertEquals(0, len(reactor._writers))
-        suspend.throw(ValueError('BAD VALUE'))
+        def raiser():
+            raise ValueError("BAD VALUE")
+        try:
+            raiser()
+        except ValueError, e:
+            exc_type, exc_value, exc_traceback = exc_info()
+            suspend.throw(exc_type, exc_value, exc_traceback)
         reactor.step()
         reactor.step()
         reactor.step()
-        self.assertEquals(['before suspend', "result = ValueError('BAD VALUE',)", 'after suspend'], listener.data)
+        expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+  File "%(__file__)s", line 152, in handler
+    suspend.getResult()
+  File "%(__file__)s", line 172, in testSuspendProtocolWithThrow
+    raiser()
+  File "%(__file__)s", line 170, in raiser
+    raise ValueError("BAD VALUE")
+ValueError: BAD VALUE
+        """ % fileDict)
+        self.assertEquals(3, len(listener.data))
+        self.assertEquals('before suspend', listener.data[0])
+        self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
+        self.assertEquals('after suspend', listener.data[2])
+
+    def testSuspendThrowBackwardsCompatibleWithInstanceOnlyThrow_YouWillMissTracebackHistory(self):
+        reactor = Reactor(select_func=mockselect)
+        suspend = Suspend()
+        def handler(**httpvars):
+            yield 'before suspend'
+            yield suspend
+            try:
+                suspend.getResult()
+                self.fail()
+            except ValueError, e:
+                tbstring = format_exc()
+                yield "result = %s" % tbstring
+            yield 'after suspend'
+        listener = MyMockSocket()
+        port = 9
+        httpserver = HttpServer(reactor, port, handler, sok=listener)
+        reactor.removeReader(listener) # avoid new connections
+        httpserver._accept()
+        reactor.step()
+        reactor.step()
+        self.assertEquals(1, len(reactor._writers))
+        reactor.step()
+        self.assertEquals(reactor, suspend._reactor)
+        self.assertEquals(0, len(reactor._writers))
+        def raiser():
+            raise ValueError("BAD VALUE")
+        try:
+            raiser()
+        except:
+            exc_value = exc_info()[1]
+            suspend.throw(exc_value)
+        reactor.step()
+        reactor.step()
+        reactor.step()
+        expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+  File "%(__file__)s", line 201, in handler
+    suspend.getResult()
+  File "%(suspend.py)s", line 62, in getResult
+    raise exc_tuple[0], exc_tuple[1], exc_tuple[2]
+ValueError: BAD VALUE
+        """ % fileDict)
+        self.assertEquals(3, len(listener.data))
+        self.assertEquals('before suspend', listener.data[0])
+        self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
+        self.assertEquals('after suspend', listener.data[2])
 
     def testGetResult(self):
         reactor = CallTrace('reactor')
@@ -219,3 +295,7 @@ class MyMockSocket(object):
     def send(self, chunk, options):
         self.data.append(chunk)
         return len(chunk)
+
+def ignoreLineNumbers(s):
+    return sub("line \d+,", "line [#],", s)
+
