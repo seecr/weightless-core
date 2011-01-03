@@ -21,6 +21,7 @@
 #
 ## end license ##
 from traceback import print_exc
+from sys import exc_info
 
 def extractValueForbackwardsCompatability(exc_type, exc_value, exc_traceback):
     if exc_value is None and exc_traceback is None:
@@ -37,8 +38,8 @@ class Suspend(object):
         self._reactor = reactor
         try:
             self._doNext(self)
-        except Exception, e:
-            self._exception = e
+        except Exception:
+            self._exception = exc_info()
             print_exc()
         else:
             self._whenDone = whenDone

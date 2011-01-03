@@ -191,6 +191,28 @@ ValueError: BAD VALUE
         self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
         self.assertEquals('after suspend', listener.data[2])
 
+    def testDoNextErrorReRaisedOnGetResult(self):
+        def razor(ignored):
+            1/0  # Division by zero exception
+        suspend = Suspend(doNext=razor)
+        suspend(reactor=CallTrace(), whenDone="not called")
+        try:
+            suspend.getResult()
+        except:
+            exc_type, exc_value, exc_traceback = exc_info()
+
+        expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+  File "%(__file__)s", line 200, in testDoNextErrorReRaisedOnGetResult
+    suspend.getResult()
+  File "%(suspend.py)s", line 40, in __call__
+    self._doNext(self)
+  File "%(__file__)s", line 196, in razor
+    1/0  # Division by zero exception
+ZeroDivisionError: integer division or modulo by zero
+        """ % fileDict)
+        self.assertEquals(ZeroDivisionError, exc_type)
+        self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(format_exc(exc_traceback)))
+
     def testSuspendThrowBackwardsCompatibleWithInstanceOnlyThrow_YouWillMissTracebackHistory(self):
         reactor = Reactor(select_func=mockselect)
         suspend = Suspend()
