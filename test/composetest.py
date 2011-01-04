@@ -21,20 +21,16 @@
 #
 ## end license ##
 
-from unittest import TestCase
+from cq2utils import CQ2TestCase
 from sys import stdout, exc_info
+from re import sub
 
 from weightless.python2_5._compose_py import compose
 from weightless import tostring
 #from weightless.python2_5._compose_pyx import compose as compose_pyrex
 
-try:
-    from tbtools import inject_traceback
-    if_tbtools = lambda method: method
-except ImportError:
-    if_tbtools = lambda method: None
 
-class ComposeTest(TestCase):
+class ComposeTest(CQ2TestCase):
 
     def assertComposeImpl(self, impl):
         self.assertEquals(impl, compose)
@@ -574,7 +570,6 @@ class ComposeTest(TestCase):
         except AssertionError, e:
             self.assertEquals('Cannot accept data. First send None.', str(e))
 
-    @if_tbtools
     def testExceptionsHaveGeneratorCallStackAsBackTrace(self):
         def f():
             yield
@@ -591,32 +586,29 @@ class ComposeTest(TestCase):
             self.assertEquals('g', exTraceback.tb_next.tb_frame.f_code.co_name)
             self.assertEquals('f', exTraceback.tb_next.tb_next.tb_frame.f_code.co_name)
 
-    @if_tbtools
     def testToStringGivesStackOfGeneratorsAKAcallStack(self):
         def f1():
             yield
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 599, in f2
+        result = ignoreLineNumbers("""  File "%s", line 599, in f2
     yield f1()
   File "%s", line 597, in f1
-    yield""" % (2*(__file__.replace('pyc', 'py'),))
+    yield""" % (2*(__file__.replace('pyc', 'py'),)))
         c.next()
-        self.assertEquals(result, tostring(c))
+        self.assertEqualsWS(result, ignoreLineNumbers(tostring(c)))
 
-    @if_tbtools
     def testToStringForUnstartedGenerator(self):
         def f1():
             yield
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 612, in f2
-    def f2():""" % __file__.replace('pyc', 'py')
-        self.assertEquals(result, tostring(c))
+        result = ignoreLineNumbers("""  File "%s", line 612, in f2
+    def f2():""" % __file__.replace('pyc', 'py'))
+        self.assertEqualsWS(result, ignoreLineNumbers(tostring(c)))
 
-    @if_tbtools
     def testHaveUsefulTracebacksWithCatchingExceptionsInAnEnclosedGenerator(self):
         import traceback
         tb = []
@@ -640,3 +632,8 @@ class ComposeTest(TestCase):
             pass
         self.assertEquals('f2', tb[0].tb_frame.f_code.co_name)
         self.assertEquals('f1', tb[0].tb_next.tb_frame.f_code.co_name)
+
+
+def ignoreLineNumbers(s):
+    return sub("line \d+,", "line [#],", s)
+
