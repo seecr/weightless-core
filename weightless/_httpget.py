@@ -20,6 +20,8 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
+
+from sys import exc_info
 from weightless import Suspend, identify
 from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_WR, SHUT_RD
 from errno import EINPROGRESS
@@ -62,7 +64,7 @@ def doGet(host, port, request, vhost=""):
         sok.close()
         suspend.resume(''.join(responses))
     except Exception, e:
-        suspend.throw(e)
+        suspend.throw(*exc_info())
     yield
 
 def _httpRequest(request, vhost=""):
@@ -74,6 +76,6 @@ def _httpRequest(request, vhost=""):
 
 def httpget(host, port, request, vhost=""):
     s = Suspend(doGet(host, port, request, vhost=vhost).send)
-    data = yield s
+    yield s
     result = s.getResult()
     raise StopIteration(result)
