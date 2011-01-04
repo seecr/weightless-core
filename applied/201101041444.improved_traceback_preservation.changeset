@@ -1,0 +1,600 @@
+Changeset created on Tue Jan  4 14:44:56 CET 2011 by Seek You Too
+
+Description: Traceback is preserved more completely than before.
+
+    Tracebacks from the point where an exception originated are now fully preserved across 'compose', 'Suspend' and 'httpget'.
+
+Baseline version: http://weightless.svn.sourceforge.net/svnroot/weightless/tags/version_0.4.13
+
+diff --unidirectional-new-file --exclude='*.so' --exclude='*.o' --exclude=.svn --exclude='*.pyc' --exclude=deps.d --exclude=applied --recursive --unified version_0.4.13/deps.txt version_0.4.14/deps.txt
+--- version_0.4.13/deps.txt	2010-12-21 16:23:19.000000000 +0100
++++ version_0.4.14/deps.txt	2011-01-04 14:42:07.000000000 +0100
+@@ -1,6 +1,4 @@
+ python-cq2utils (>=5.4)
+ python-cq2utils (<<5.5)
+-python-tbtools (>=0.1)
+-python-tbtools (<<0.2)
+ python-openssl
+ 
+diff --unidirectional-new-file --exclude='*.so' --exclude='*.o' --exclude=.svn --exclude='*.pyc' --exclude=deps.d --exclude=applied --recursive --unified version_0.4.13/test/asyncreadertest.py version_0.4.14/test/asyncreadertest.py
+--- version_0.4.13/test/asyncreadertest.py	2010-12-21 16:23:19.000000000 +0100
++++ version_0.4.14/test/asyncreadertest.py	2011-01-04 14:42:07.000000000 +0100
+@@ -1,7 +1,7 @@
+ ## begin license ##
+ #
+ #    Weightless is a High Performance Asynchronous Networking Library
+-#    Copyright (C) 2010 Seek You Too (CQ2) http://www.cq2.nl
++#    Copyright (C) 2010-2011 Seek You Too (CQ2) http://www.cq2.nl
+ #
+ #    This file is part of Weightless
+ #
+@@ -20,26 +20,40 @@
+ #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ #
+ ## end license ##
+-from unittest import TestCase
++
++from cq2utils import CQ2TestCase
++
++from re import sub
++from sys import exc_info
++from traceback import format_exception
+ from socket import socket, gaierror as SocketGaiError
+ from random import randint
+ from httpreadertest import server as testserver
+ from weightless import HttpServer, httpget, Reactor, compose
++from weightless import Suspend
+ 
+ from weightless._httpget import _httpRequest
++import weightless._httpget as httpGetModule
+ 
+ def clientget(host, port, path):
+     client = socket()
+     client.connect((host,  port))
+     client.send('GET %s HTTP/1.1\r\n\r\n' % path)
+     return client
++
++fileDict = {
++    '__file__': clientget.func_code.co_filename,
++    'suspend.py': Suspend.__call__.func_code.co_filename,
++    'httpget.py': httpget.func_code.co_filename,
++}
+  
+-class AsyncReaderTest(TestCase):
++class AsyncReaderTest(CQ2TestCase):
+ 
+     def dispatch(self, *args, **kwargs):
+         return compose(self.handler(*args, **kwargs))
+ 
+     def setUp(self):
++        CQ2TestCase.setUp(self)
+         self.reactor = Reactor()
+         self.port = randint(2**10, 2**16)
+         self.httpserver = HttpServer(self.reactor, self.port, self.dispatch)
+@@ -74,34 +88,92 @@
+             try:
+                 response = yield httpget(*target)
+             except Exception, e:
+-                exceptions.append(e)
++                exceptions.append(exc_info())
+         self.handler = failingserver
+ 
+         clientget('localhost', self.port, '/')
+         target = ('localhost', 'port', '/') # non-numeric port
+         while not exceptions:
+             self.reactor.step()
+-        self.assertEquals(TypeError, type(exceptions[0]))
++
++        expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
++  File "%(__file__)s", line 85, in failingserver
++    response = yield httpget(*target)
++  File "../weightless/_httpget.py", line 78, in httpget
++    result = s.getResult()
++  File "%(suspend.py)s", line 34, in __call__
++    self._doNext(self)
++  File "%(httpget.py)s", line 35, in doGet
++    sok.connect((host, port))
++  File "<string>", line 1, in connect
++TypeError: an integer is required
++       """ % fileDict)
++        self.assertEquals(TypeError, exceptions[0][0])
++        self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(''.join(format_exception(*exceptions[0]))))
+ 
+         target = ('localhost', 87, '/') # invalid port
+         clientget('localhost', self.port, '/')
+         exceptions = []
+         while not exceptions:
+             self.reactor.step()
+-        self.assertEquals(IOError, type(exceptions[0]))
++        self.assertEquals(IOError, exceptions[0][0])
+ 
+         target = ('UEYR^$*FD(#>NDJ.khfd9.(*njnd', 9876, '/') # invalid host
+         clientget('localhost', self.port, '/')
+         exceptions = []
+         while not exceptions:
+             self.reactor.step()
+-        self.assertEquals(SocketGaiError, type(exceptions[0]))
++        self.assertEquals(SocketGaiError, exceptions[0][0])
+ 
+         target = ('127.0.0.255', 9876, '/')
+         clientget('localhost', self.port, '/')
+         exceptions = []
+         while not exceptions:
+             self.reactor.step()
+-        self.assertEquals(IOError, type(exceptions[0]))
+-        self.assertEquals(111, exceptions[0].message)
++        self.assertEquals(IOError, exceptions[0][0])
++        self.assertEquals(111, exceptions[0][1].message)
++
++    def testTracebackPreservedAcrossSuspend(self):
++        backofficeport = self.port + 1
++        testserver(backofficeport, [], [])
++        target = ('localhost', backofficeport, '/')
++
++        exceptions = []
++        def failingserver(*args, **kwarg):
++            try:
++                response = yield httpget(*target)
++            except Exception, e:
++                exceptions.append(exc_info())
++        self.handler = failingserver
++
++        def httpRequest(self, *args, **kwargs):
++            raise RuntimeError("Boom!")
++
++        try:
++            originalHttpRequest = httpGetModule._httpRequest
++            httpGetModule._httpRequest = httpRequest
++
++            clientget('localhost', self.port, '/')
++            while not exceptions:
++                self.reactor.step()
++
++            expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
++  File "%(__file__)s", line 144, in failingserver
++    response = yield httpget(*target)
++  File "%(httpget.py)s", line 80, in httpget
++    result = s.getResult()
++  File "%(httpget.py)s", line 51, in doGet
++    sok.send('%%s\\r\\n' %% _httpRequest(request, vhost=vhost))
++  File "%(__file__)s", line 150, in httpRequest
++    raise RuntimeError("Boom!")
++RuntimeError: Boom!""" % fileDict)
++            resultingTraceback = ''.join(format_exception(*exceptions[0]))
++            self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(resultingTraceback))
++
++        finally:
++            httpGetModule._httpRequest = originalHttpRequest
++
++
++def ignoreLineNumbers(s):
++    return sub("line \d+,", "line [#],", s)
+ 
+diff --unidirectional-new-file --exclude='*.so' --exclude='*.o' --exclude=.svn --exclude='*.pyc' --exclude=deps.d --exclude=applied --recursive --unified version_0.4.13/test/composetest.py version_0.4.14/test/composetest.py
+--- version_0.4.13/test/composetest.py	2010-12-21 16:23:19.000000000 +0100
++++ version_0.4.14/test/composetest.py	2011-01-04 14:42:07.000000000 +0100
+@@ -1,7 +1,7 @@
+ ## begin license ##
+ #
+ #    Weightless is a High Performance Asynchronous Networking Library
+-#    Copyright (C) 2006-2009 Seek You Too (CQ2) http://www.cq2.nl
++#    Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
+ #
+ #    This file is part of Weightless
+ #
+@@ -21,20 +21,16 @@
+ #
+ ## end license ##
+ 
+-from unittest import TestCase
++from cq2utils import CQ2TestCase
+ from sys import stdout, exc_info
++from re import sub
+ 
+ from weightless.python2_5._compose_py import compose
+ from weightless import tostring
+ #from weightless.python2_5._compose_pyx import compose as compose_pyrex
+ 
+-try:
+-    from tbtools import inject_traceback
+-    if_tbtools = lambda method: method
+-except ImportError:
+-    if_tbtools = lambda method: None
+ 
+-class ComposeTest(TestCase):
++class ComposeTest(CQ2TestCase):
+ 
+     def assertComposeImpl(self, impl):
+         self.assertEquals(impl, compose)
+@@ -574,7 +570,6 @@
+         except AssertionError, e:
+             self.assertEquals('Cannot accept data. First send None.', str(e))
+ 
+-    @if_tbtools
+     def testExceptionsHaveGeneratorCallStackAsBackTrace(self):
+         def f():
+             yield
+@@ -591,28 +586,54 @@
+             self.assertEquals('g', exTraceback.tb_next.tb_frame.f_code.co_name)
+             self.assertEquals('f', exTraceback.tb_next.tb_next.tb_frame.f_code.co_name)
+ 
+-    @if_tbtools
+     def testToStringGivesStackOfGeneratorsAKAcallStack(self):
+         def f1():
+             yield
+         def f2():
+             yield f1()
+         c = compose(f2())
+-        result = """  File "%s", line 599, in f2
++        result = ignoreLineNumbers("""  File "%s", line 599, in f2
+     yield f1()
+   File "%s", line 597, in f1
+-    yield""" % (2*(__file__.replace('pyc', 'py'),))
++    yield""" % (2*(__file__.replace('pyc', 'py'),)))
+         c.next()
+-        self.assertEquals(result, tostring(c))
++        self.assertEqualsWS(result, ignoreLineNumbers(tostring(c)))
+ 
+-    @if_tbtools
+     def testToStringForUnstartedGenerator(self):
+         def f1():
+             yield
+         def f2():
+             yield f1()
+         c = compose(f2())
+-        result = """  File "%s", line 612, in f2
+-    def f2():""" % __file__.replace('pyc', 'py')
+-        self.assertEquals(result, tostring(c))
++        result = ignoreLineNumbers("""  File "%s", line 612, in f2
++    def f2():""" % __file__.replace('pyc', 'py'))
++        self.assertEqualsWS(result, ignoreLineNumbers(tostring(c)))
++
++    def testHaveUsefulTracebacksWithCatchingExceptionsInAnEnclosedGenerator(self):
++        import traceback
++        tb = []
++        def f1():
++            yield
++            raise Exception("aap")
++        def f2():
++            try:
++                yield compose(f1())
++            except:
++                ex_type, ex_val, ex_tb = exc_info()
++                tb.append(ex_tb)
++                raise
++        def f3():
++            yield compose(f2())
++        c = compose(f3())
++        c.next()
++        try:
++            c.next()
++        except Exception, e:
++            pass
++        self.assertEquals('f2', tb[0].tb_frame.f_code.co_name)
++        self.assertEquals('f1', tb[0].tb_next.tb_frame.f_code.co_name)
++
++
++def ignoreLineNumbers(s):
++    return sub("line \d+,", "line [#],", s)
+ 
+diff --unidirectional-new-file --exclude='*.so' --exclude='*.o' --exclude=.svn --exclude='*.pyc' --exclude=deps.d --exclude=applied --recursive --unified version_0.4.13/test/httpreadertest.py version_0.4.14/test/httpreadertest.py
+--- version_0.4.13/test/httpreadertest.py	2011-01-03 10:15:51.000000000 +0100
++++ version_0.4.14/test/httpreadertest.py	2011-01-04 14:42:07.000000000 +0100
+@@ -46,7 +46,6 @@
+         if response:
+             for i in range(loop):
+                 msg = newSok.recv(4096)
+-                print msg
+                 if msg == '':
+                     break;
+                 request.append(msg)
+diff --unidirectional-new-file --exclude='*.so' --exclude='*.o' --exclude=.svn --exclude='*.pyc' --exclude=deps.d --exclude=applied --recursive --unified version_0.4.13/test/suspendtest.py version_0.4.14/test/suspendtest.py
+--- version_0.4.13/test/suspendtest.py	2010-12-21 16:23:19.000000000 +0100
++++ version_0.4.14/test/suspendtest.py	2011-01-04 14:42:07.000000000 +0100
+@@ -1,7 +1,7 @@
+ ## begin license ##
+ #
+ #    Weightless is a High Performance Asynchronous Networking Library
+-#    Copyright (C) 2010 Seek You Too (CQ2) http://www.cq2.nl
++#    Copyright (C) 2010-2011 Seek You Too (CQ2) http://www.cq2.nl
+ #
+ #    This file is part of Weightless
+ #
+@@ -20,8 +20,13 @@
+ #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ #
+ ## end license ##
++
++from sys import exc_info
+ from unittest import TestCase
+-from cq2utils import CallTrace
++from re import sub
++from traceback import format_exc
++
++from cq2utils import CallTrace, CQ2TestCase
+ 
+ from weightless import Reactor, Suspend, HttpServer
+ 
+@@ -32,7 +37,13 @@
+ def mockselect(readers, writers, x, timeout):
+     return readers, writers, x
+ 
+-class SuspendTest(TestCase):
++fileDict = {
++    '__file__': mockselect.func_code.co_filename, # Hacky, but sys.modules[aModuleName].__file__ is inconsistent with traceback-filenames
++    'suspend.py': Suspend.__call__.func_code.co_filename,
++}
++
++
++class SuspendTest(CQ2TestCase):
+ 
+     def testReactorSuspend(self):
+         handle = ['initial value']
+@@ -142,7 +153,8 @@
+                 suspend.getResult()
+                 self.fail()
+             except ValueError, e:
+-                yield "result = %s" % repr(e)
++                tbstring = format_exc()
++                yield "result = %s" % tbstring
+             yield 'after suspend'
+         listener = MyMockSocket()
+         port = 9
+@@ -155,11 +167,97 @@
+         reactor.step()
+         self.assertEquals(reactor, suspend._reactor)
+         self.assertEquals(0, len(reactor._writers))
+-        suspend.throw(ValueError('BAD VALUE'))
++        def raiser():
++            raise ValueError("BAD VALUE")
++        try:
++            raiser()
++        except ValueError, e:
++            exc_type, exc_value, exc_traceback = exc_info()
++            suspend.throw(exc_type, exc_value, exc_traceback)
+         reactor.step()
+         reactor.step()
+         reactor.step()
+-        self.assertEquals(['before suspend', "result = ValueError('BAD VALUE',)", 'after suspend'], listener.data)
++        expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
++  File "%(__file__)s", line 152, in handler
++    suspend.getResult()
++  File "%(__file__)s", line 172, in testSuspendProtocolWithThrow
++    raiser()
++  File "%(__file__)s", line 170, in raiser
++    raise ValueError("BAD VALUE")
++ValueError: BAD VALUE
++        """ % fileDict)
++        self.assertEquals(3, len(listener.data))
++        self.assertEquals('before suspend', listener.data[0])
++        self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
++        self.assertEquals('after suspend', listener.data[2])
++
++    def testDoNextErrorReRaisedOnGetResult(self):
++        def razor(ignored):
++            1/0  # Division by zero exception
++        suspend = Suspend(doNext=razor)
++        suspend(reactor=CallTrace(), whenDone="not called")
++        try:
++            suspend.getResult()
++        except:
++            exc_type, exc_value, exc_traceback = exc_info()
++
++        expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
++  File "%(__file__)s", line 200, in testDoNextErrorReRaisedOnGetResult
++    suspend.getResult()
++  File "%(suspend.py)s", line 40, in __call__
++    self._doNext(self)
++  File "%(__file__)s", line 196, in razor
++    1/0  # Division by zero exception
++ZeroDivisionError: integer division or modulo by zero
++        """ % fileDict)
++        self.assertEquals(ZeroDivisionError, exc_type)
++        self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(format_exc(exc_traceback)))
++
++    def testSuspendThrowBackwardsCompatibleWithInstanceOnlyThrow_YouWillMissTracebackHistory(self):
++        reactor = Reactor(select_func=mockselect)
++        suspend = Suspend()
++        def handler(**httpvars):
++            yield 'before suspend'
++            yield suspend
++            try:
++                suspend.getResult()
++                self.fail()
++            except ValueError, e:
++                tbstring = format_exc()
++                yield "result = %s" % tbstring
++            yield 'after suspend'
++        listener = MyMockSocket()
++        port = 9
++        httpserver = HttpServer(reactor, port, handler, sok=listener)
++        reactor.removeReader(listener) # avoid new connections
++        httpserver._accept()
++        reactor.step()
++        reactor.step()
++        self.assertEquals(1, len(reactor._writers))
++        reactor.step()
++        self.assertEquals(reactor, suspend._reactor)
++        self.assertEquals(0, len(reactor._writers))
++        def raiser():
++            raise ValueError("BAD VALUE")
++        try:
++            raiser()
++        except:
++            exc_value = exc_info()[1]
++            suspend.throw(exc_value)
++        reactor.step()
++        reactor.step()
++        reactor.step()
++        expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
++  File "%(__file__)s", line 201, in handler
++    suspend.getResult()
++  File "%(suspend.py)s", line 62, in getResult
++    raise self._exception[0], self._exception[1], self._exception[2] 
++ValueError: BAD VALUE
++        """ % fileDict)
++        self.assertEquals(3, len(listener.data))
++        self.assertEquals('before suspend', listener.data[0])
++        self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
++        self.assertEquals('after suspend', listener.data[2])
+ 
+     def testGetResult(self):
+         reactor = CallTrace('reactor')
+@@ -219,3 +317,7 @@
+     def send(self, chunk, options):
+         self.data.append(chunk)
+         return len(chunk)
++
++def ignoreLineNumbers(s):
++    return sub("line \d+,", "line [#],", s)
++
+diff --unidirectional-new-file --exclude='*.so' --exclude='*.o' --exclude=.svn --exclude='*.pyc' --exclude=deps.d --exclude=applied --recursive --unified version_0.4.13/weightless/_httpget.py version_0.4.14/weightless/_httpget.py
+--- version_0.4.13/weightless/_httpget.py	2010-12-21 16:23:19.000000000 +0100
++++ version_0.4.14/weightless/_httpget.py	2011-01-04 14:42:07.000000000 +0100
+@@ -1,7 +1,7 @@
+ ## begin license ##
+ #
+ #    Weightless is a High Performance Asynchronous Networking Library
+-#    Copyright (C) 2010 Seek You Too (CQ2) http://www.cq2.nl
++#    Copyright (C) 2010-2011 Seek You Too (CQ2) http://www.cq2.nl
+ #
+ #    This file is part of Weightless
+ #
+@@ -20,6 +20,8 @@
+ #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ #
+ ## end license ##
++
++from sys import exc_info
+ from weightless import Suspend, identify
+ from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_WR, SHUT_RD
+ from errno import EINPROGRESS
+@@ -62,7 +64,7 @@
+         sok.close()
+         suspend.resume(''.join(responses))
+     except Exception, e:
+-        suspend.throw(e)
++        suspend.throw(*exc_info())
+     yield
+ 
+ def _httpRequest(request, vhost=""):
+@@ -74,6 +76,6 @@
+ 
+ def httpget(host, port, request, vhost=""):
+     s = Suspend(doGet(host, port, request, vhost=vhost).send)
+-    data = yield s
++    yield s
+     result = s.getResult()
+     raise StopIteration(result)
+diff --unidirectional-new-file --exclude='*.so' --exclude='*.o' --exclude=.svn --exclude='*.pyc' --exclude=deps.d --exclude=applied --recursive --unified version_0.4.13/weightless/python2_5/_compose_py.py version_0.4.14/weightless/python2_5/_compose_py.py
+--- version_0.4.13/weightless/python2_5/_compose_py.py	2010-12-21 16:23:19.000000000 +0100
++++ version_0.4.14/weightless/python2_5/_compose_py.py	2011-01-04 14:42:07.000000000 +0100
+@@ -1,7 +1,7 @@
+ ## begin license ##
+ #
+ #    Weightless is a High Performance Asynchronous Networking Library
+-#    Copyright (C) 2006-2009 Seek You Too (CQ2) http://www.cq2.nl
++#    Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
+ #
+ #    This file is part of Weightless
+ #
+@@ -26,11 +26,6 @@
+ 
+ from types import GeneratorType
+ from sys import exc_info
+-try:
+-    from tbtools import inject_traceback
+-except ImportError:
+-    def inject_traceback(*args, **kwargs):
+-        pass
+ 
+ def compose(initial):
+     """
+@@ -54,7 +49,7 @@
+         generator = generators[-1]
+         try:
+             if exception:
+-                response = generator.throw(exception[1])
++                response = generator.throw(*exception)
+                 exception = None
+             else:
+                 message = messages.pop(0)
+@@ -73,8 +68,7 @@
+                     if response and messages[0] is not None:
+                         messages.insert(0, None)
+                 except Exception:
+-                    exType, exValue, exTraceback = exc_info()
+-                    exception = exType, exValue, None
++                    exception = exc_info()
+         except StopIteration, returnValue:
+             exception = None
+             generators.pop()
+@@ -86,11 +80,7 @@
+             raise # testing support
+         except Exception:
+             generators.pop()
+-            exType, exValue, exTraceback = exc_info()
+-            # if this is the same exception, keep and extend the previous traceback.
+-            if exception and id(exValue) == id(exception[1]) and exception[2]:
+-                inject_traceback(exception[2], exTraceback.tb_next, 0)
+-            else:
+-                exception = exType, exValue, exTraceback
++            exType, exVal, exTb = exc_info()
++            exception = (exType, exVal, exTb.tb_next)
+     if exception:
+-        raise exception[0], exception[1], exception[2].tb_next
++        raise exception[0], exception[1], exception[2]
+diff --unidirectional-new-file --exclude='*.so' --exclude='*.o' --exclude=.svn --exclude='*.pyc' --exclude=deps.d --exclude=applied --recursive --unified version_0.4.13/weightless/_suspend.py version_0.4.14/weightless/_suspend.py
+--- version_0.4.13/weightless/_suspend.py	2010-12-21 16:23:19.000000000 +0100
++++ version_0.4.14/weightless/_suspend.py	2011-01-04 14:42:07.000000000 +0100
+@@ -1,7 +1,7 @@
+ ## begin license ##
+ #
+ #    Weightless is a High Performance Asynchronous Networking Library
+-#    Copyright (C) 2010 Seek You Too (CQ2) http://www.cq2.nl
++#    Copyright (C) 2010-2011 Seek You Too (CQ2) http://www.cq2.nl
+ #
+ #    This file is part of Weightless
+ #
+@@ -21,6 +21,7 @@
+ #
+ ## end license ##
+ from traceback import print_exc
++from sys import exc_info
+ 
+ class Suspend(object):
+     def __init__(self, doNext=lambda this: None):
+@@ -31,8 +32,8 @@
+         self._reactor = reactor
+         try:
+             self._doNext(self)
+-        except Exception, e:
+-            self._exception = e
++        except Exception:
++            self._exception = exc_info()
+             print_exc()
+         else:
+             self._whenDone = whenDone
+@@ -42,8 +43,12 @@
+         self._response = response
+         self._whenDone()
+ 
+-    def throw(self, exception):
+-        self._exception = exception
++    def throw(self, exc_type, exc_value=None, exc_traceback=None):
++        """Accepts either a full exception triple or only a single exception instance (not encouraged as it loses traceback information)."""
++        if exc_value is None and exc_traceback is None:
++            self._exception = type(exc_type), exc_type, None
++        else:
++            self._exception = (exc_type, exc_value, exc_traceback)
+         self._whenDone()
+ 
+     def resumeWriter(self):
+@@ -52,6 +57,6 @@
+ 
+     def getResult(self):
+         if self._exception:
+-            raise self._exception
++            raise self._exception[0], self._exception[1], self._exception[2]
+         return self._response
+ 
