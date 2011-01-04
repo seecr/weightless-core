@@ -251,7 +251,7 @@ ZeroDivisionError: integer division or modulo by zero
   File "%(__file__)s", line 201, in handler
     suspend.getResult()
   File "%(suspend.py)s", line 62, in getResult
-    raise exc_tuple[0], exc_tuple[1], exc_tuple[2]
+    raise self._exception[0], self._exception[1], self._exception[2] 
 ValueError: BAD VALUE
         """ % fileDict)
         self.assertEquals(3, len(listener.data))

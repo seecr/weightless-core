@@ -23,12 +23,6 @@
 from traceback import print_exc
 from sys import exc_info
 
-def extractValueForbackwardsCompatability(exc_type, exc_value, exc_traceback):
-    if exc_value is None and exc_traceback is None:
-        # exc_type is a exception class *instance* (old-style behaviour)
-        return type(exc_type), exc_type, None
-    return None
-
 class Suspend(object):
     def __init__(self, doNext=lambda this: None):
         self._doNext = doNext
@@ -50,7 +44,11 @@ class Suspend(object):
         self._whenDone()
 
     def throw(self, exc_type, exc_value=None, exc_traceback=None):
-        self._exception = (exc_type, exc_value, exc_traceback)
+        """Accepts either a full exception triple or only a single exception instance (not encouraged as it loses traceback information)."""
+        if exc_value is None and exc_traceback is None:
+            self._exception = type(exc_type), exc_type, None
+        else:
+            self._exception = (exc_type, exc_value, exc_traceback)
         self._whenDone()
 
     def resumeWriter(self):
@@ -59,7 +57,6 @@ class Suspend(object):
 
     def getResult(self):
         if self._exception:
-            exc_tuple = extractValueForbackwardsCompatability(*self._exception) or self._exception
-            raise exc_tuple[0], exc_tuple[1], exc_tuple[2]
+            raise self._exception[0], self._exception[1], self._exception[2]
         return self._response
 
