@@ -39,9 +39,29 @@ from sys import stdout
 RECVSIZE = 4096
 CRLF_LEN = 2
 
-def HttpServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None):
+class HttpServer:
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
-    return Acceptor(reactor, port, lambda sok: HttpHandler(reactor, sok, generatorFactory, timeout, recvSize, prio=prio, maxConnections=maxConnections, errorHandler=errorHandler), prio=prio, sok=sok)
+    def __init__(self, reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None):
+        self._reactor = reactor
+        self._port = port
+        self._generatorFactory = generatorFactory
+        self._timeout = timeout
+        self._recvSize = recvSize
+        self._prio = prio
+        self._sok = sok
+        self._maxConnections = maxConnections
+        self._errorHandler = errorHandler
+
+    def listen(self):
+        self._acceptor = Acceptor(self._reactor, self._port, 
+                lambda sok: HttpHandler(self._reactor, sok, self._generatorFactory, self._timeout, 
+                    self._recvSize, prio=self._prio, maxConnections=self._maxConnections, 
+                    errorHandler=self._errorHandler),
+                prio=self._prio, sok=self._sok)
+
+
+    def setMaxConnections(self, m):
+        self._maxConnections = m
 
 def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, certfile='', keyfile=''):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
