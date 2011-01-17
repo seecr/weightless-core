@@ -129,8 +129,9 @@ class SuspendTest(CQ2TestCase):
         listener = MyMockSocket()
         port = 9
         httpserver = HttpServer(reactor, port, handler, sok=listener)
+        httpserver.listen()
         reactor.removeReader(listener) # avoid new connections
-        httpserver._accept()
+        httpserver._acceptor._accept()
         reactor.step()
         reactor.step()
         self.assertEquals(1, len(reactor._writers))
@@ -159,8 +160,9 @@ class SuspendTest(CQ2TestCase):
         listener = MyMockSocket()
         port = 9
         httpserver = HttpServer(reactor, port, handler, sok=listener)
+        httpserver.listen()
         reactor.removeReader(listener) # avoid new connections
-        httpserver._accept()
+        httpserver._acceptor._accept()
         reactor.step()
         reactor.step()
         self.assertEquals(1, len(reactor._writers))
@@ -229,8 +231,9 @@ ZeroDivisionError: integer division or modulo by zero
         listener = MyMockSocket()
         port = 9
         httpserver = HttpServer(reactor, port, handler, sok=listener)
+        httpserver.listen()
         reactor.removeReader(listener) # avoid new connections
-        httpserver._accept()
+        httpserver._acceptor._accept()
         reactor.step()
         reactor.step()
         self.assertEquals(1, len(reactor._writers))

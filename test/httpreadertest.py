@@ -186,7 +186,7 @@ class HttpReaderTest(TestCase):
         port = randint(2048, 4096)
         reactor = Reactor()
         request = []
-        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\nresponse", request, loop=100000)
+        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\nresponse", request, loop=9)
         sentData = []
         done = []
         def send(data):

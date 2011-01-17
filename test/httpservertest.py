@@ -50,6 +50,7 @@ class HttpServerTest(TestCase):
             yield 'The Response'
             self.responseCalled = True
         server = HttpServer(self.reactor, self._portNumber, response, recvSize=recvSize)
+        server.listen()
         sok = socket()
         sok.connect(('localhost', self._portNumber))
         sok.send(request)
@@ -64,6 +65,7 @@ class HttpServerTest(TestCase):
             yield 'nosens'
         reactor = Reactor()
         server = HttpServer(reactor, self._portNumber, onRequest)
+        server.listen()
         sok = socket()
         sok.connect(('localhost', self._portNumber))
         sok.send('GET / HTTP/1.0\r\n\r\n')
@@ -79,6 +81,7 @@ class HttpServerTest(TestCase):
             yield 'nosense'
         reactor = Reactor()
         server = HttpServer(reactor, self._portNumber, response)
+        server.listen()
         sok = socket()
         sok.connect(('localhost', self._portNumber))
         sok.send('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
@@ -107,6 +110,7 @@ class HttpServerTest(TestCase):
             yield 'the lenght of fragments sent'
         reactor = Reactor()
         server = HttpServer(reactor, self._portNumber, response, recvSize=3)
+        server.listen()
         sok = socket()
         sok.connect(('localhost', self._portNumber))
         sok.send('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
@@ -133,6 +137,7 @@ class HttpServerTest(TestCase):
             return orgAddTimer(*timer)
         reactor.addTimer = addTimerInterceptor
         server = HttpServer(reactor, self._portNumber, None, timeout=0.01)
+        server.listen()
         sok = socket()
         sok.connect(('localhost', self._portNumber))
         sok.send('GET HTTP/1.0\r\n\r\n') # no path
@@ -145,6 +150,7 @@ class HttpServerTest(TestCase):
     def testValidRequestResetsTimer(self):
         reactor = Reactor()
         server = HttpServer(reactor, self._portNumber, lambda **kwargs: ('a' for a in range(3)), timeout=0.01, recvSize=3)
+        server.listen()
         sok = socket()
         sok.connect(('localhost', self._portNumber))
         sok.send('GET / HTTP/1.0\r\n\r\n')
@@ -161,6 +167,7 @@ class HttpServerTest(TestCase):
 
         reactor = Reactor()
         server = HttpServer(reactor, self._portNumber, handler, timeout=0.01)
+        server.listen()
         sok = socket()
         sok.connect(('localhost', self._portNumber))
         sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\nbodydata')
@@ -190,6 +197,7 @@ class HttpServerTest(TestCase):
 
         reactor = Reactor()
         server = HttpServer(reactor, self._portNumber, handler, timeout=0.01)
+        server.listen()
         reactor.addTimer(0.02, onDone)
         sok = socket()
         sok.connect(('localhost', self._portNumber))
@@ -206,6 +214,7 @@ class HttpServerTest(TestCase):
 
         reactor = Reactor()
         server = HttpServer(reactor, self._portNumber, handler, timeout=0.01, recvSize=3)
+        server.listen()
         sok = socket()
         sok.connect(('localhost', self._portNumber))
         sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nabcde\r\n5\r\nfghij\r\n0\r\n')
@@ -222,6 +231,7 @@ class HttpServerTest(TestCase):
 
         reactor = Reactor()
         server = HttpServer(reactor, self._portNumber, handler)
+        server.listen()
         sok = socket()
         sok.connect(('localhost', self._portNumber))
         sok.send(httpRequest)
@@ -241,6 +251,7 @@ class HttpServerTest(TestCase):
 
         reactor = Reactor()
         server = HttpServer(reactor, self._portNumber, handler)
+        server.listen()
         sok = socket()
         sok.connect(('localhost', self._portNumber))
         sok.send(httpRequest)
@@ -264,6 +275,7 @@ class HttpServerTest(TestCase):
 
         reactor = Reactor()
         server = HttpServer(reactor, self._portNumber, handler)
+        server.listen()
         sok = socket()
         sok.connect(('localhost', self._portNumber))
         sok.send(httpRequest)
@@ -287,6 +299,7 @@ class HttpServerTest(TestCase):
 
         reactor = Reactor()
         server = HttpServer(reactor, self._portNumber, handler)
+        server.listen()
         sok = socket()
         sok.connect(('localhost', self._portNumber))
         sok.send(httpRequest)
@@ -308,6 +321,7 @@ class HttpServerTest(TestCase):
             yield "FAIL"
 
         server = HttpServer(self.reactor, self._portNumber, handler, errorHandler=error_handler, maxConnections=5)
+        server.listen()
 
         self.reactor.getOpenConnections = lambda: 10
 
@@ -329,6 +343,7 @@ class HttpServerTest(TestCase):
             yield "FAIL"
 
         server = HttpServer(self.reactor, self._portNumber, handler, errorHandler=error_handler, maxConnections=10)
+        server.listen()
 
         self.reactor.getOpenConnections = lambda: 5
 
@@ -346,6 +361,7 @@ class HttpServerTest(TestCase):
             yield "OK"
 
         server = HttpServer(self.reactor, self._portNumber, handler, maxConnections=5)
+        server.listen()
 
         self.reactor.getOpenConnections = lambda: 10
 

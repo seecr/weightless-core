@@ -57,6 +57,7 @@ class AsyncReaderTest(CQ2TestCase):
         self.reactor = Reactor()
         self.port = randint(2**10, 2**16)
         self.httpserver = HttpServer(self.reactor, self.port, self.dispatch)
+        self.httpserver.listen()
     
     def testHttpRequest(self):
         self.assertEquals('GET / HTTP/1.0\r\n', _httpRequest('/'))

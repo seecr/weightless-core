@@ -20,7 +20,7 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-from socket import socket, SHUT_RDWR
+from socket import socket, SHUT_RDWR, SHUT_WR
 from urlparse import urlsplit
 from weightless.http import REGEXP, FORMAT, HTTP, parseHeaders
 from weightless.bufferedhandler import BufferedHandler
@@ -84,6 +84,7 @@ class HttpReader(object):
         self._timer = self._reactor.addTimer(self._timeOuttime, self._timeOut)
         self._recvSize = recvSize
         self._buffer = ''
+        self._peername = self._sok.getpeername()
 
     def _sendPostRequest(self, path, host, headers):
         headers['Transfer-Encoding'] = 'chunked'
@@ -99,7 +100,7 @@ class HttpReader(object):
             item = self._handler.next()
 
         self._sendChunk('')
-
+        self._sok.shutdown(SHUT_WR)
         self._reactor.removeWriter(self._sok)
         self._reactor.addReader(self._sok, self._headerFragment)
 
@@ -120,7 +121,6 @@ class HttpReader(object):
 
     def _headerFragment(self):
         self._responseBuffer += self._sok.recv(self._recvSize)
-
         match = REGEXP.RESPONSE.match(self._responseBuffer)
         if not match:
             if not self._timer:
@@ -135,7 +135,7 @@ class HttpReader(object):
         response['Headers'] = parseHeaders(response['_headers'])
         self._chunked = 'Transfer-Encoding' in response['Headers'] and response['Headers']['Transfer-Encoding'] == 'chunked'
         del response['_headers']
-        response['Client'] = self._sok.getpeername()
+        response['Client'] = self._peername
         self._handler.send(response)
         if restData:
             self._sendFragment(restData)
