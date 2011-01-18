@@ -33,6 +33,7 @@ from unittest import main
 
 from acceptortest import AcceptorTest
 from composetest import ComposeTest
+from composecallabletest import ComposeCallableTest
 from httpreadertest import HttpReaderTest
 from httpservertest import HttpServerTest
 from httpspectest import HttpSpecTest

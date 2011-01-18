@@ -27,7 +27,7 @@ assert python_version() >= "2.5", "Python 2.5 required"
 from types import GeneratorType
 from sys import exc_info
 
-def compose(initial):
+def compose(initial, sidekick = None):
     """
     The method compose() allows program (de)composition with generators.  It enables calls like:
         retvat = yield otherGenerator(args)
@@ -54,7 +54,11 @@ def compose(initial):
             else:
                 message = messages.pop(0)
                 response = generator.send(message)
-            if type(response) == GeneratorType:
+            if sidekick and callable(response):
+                messages.insert(0, message)
+                response(sidekick)
+                pass
+            elif type(response) == GeneratorType:
                 generators.append(response)
                 frame = response.gi_frame
                 assert frame, 'Generator is exhausted.'
