@@ -22,6 +22,8 @@
 ## end license ##
 
 from sys import exc_info
+import sys
+from StringIO import StringIO
 from unittest import TestCase
 from re import sub
 from traceback import format_exc
@@ -197,11 +199,17 @@ ValueError: BAD VALUE
         def razor(ignored):
             1/0  # Division by zero exception
         suspend = Suspend(doNext=razor)
-        suspend(reactor=CallTrace(), whenDone="not called")
+        olderr = sys.stderr
+        sys.stderr = StringIO()
+        try:
+            suspend(reactor=CallTrace(), whenDone="not called")
+        finally:
+            sys.stderr = olderr
         try:
             suspend.getResult()
         except:
             exc_type, exc_value, exc_traceback = exc_info()
+
 
         expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
   File "%(__file__)s", line 200, in testDoNextErrorReRaisedOnGetResult

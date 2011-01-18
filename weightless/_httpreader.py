@@ -100,7 +100,6 @@ class HttpReader(object):
             item = self._handler.next()
 
         self._sendChunk('')
-        self._sok.shutdown(SHUT_WR)
         self._reactor.removeWriter(self._sok)
         self._reactor.addReader(self._sok, self._headerFragment)
 

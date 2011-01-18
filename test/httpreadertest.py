@@ -23,7 +23,7 @@
 from unittest import TestCase
 from random import randint
 from time import sleep
-from socket import socket
+from socket import socket, timeout
 from threading import Thread, Event
 
 
@@ -34,7 +34,7 @@ from StringIO import StringIO
 from cq2utils import CallTrace
 from cq2utils.cq2testcase import MatchAll
 
-def server(port, response, request, delay=0, loop=1):
+def server(port, response, expectedrequest, delay=0, loop=50):
     isListening = Event()
     def serverProcess():
         serverSok = socket()
@@ -42,13 +42,23 @@ def server(port, response, request, delay=0, loop=1):
         serverSok.listen(1)
         isListening.set()
         newSok, addr = serverSok.accept()
+        newSok.settimeout(1)
 
+        msg = ''
+        for i in xrange(loop):
+            if expectedrequest:
+                try:
+                    msg += newSok.recv(4096)
+                    if msg == expectedrequest:
+                        break
+                    if len(msg) >= len(expectedrequest):
+                        print "hihi"
+                        raise timeout
+                except timeout:
+                    print "Received:", repr(msg)
+                    print "expected:", repr(expectedrequest)
+                    return
         if response:
-            for i in range(loop):
-                msg = newSok.recv(4096)
-                if msg == '':
-                    break;
-                request.append(msg)
             if hasattr(response, 'next'):
                 for r in response:
                     newSok.send(r)
@@ -69,9 +79,9 @@ class HttpReaderTest(TestCase):
 
     def testRequestAndHeaders(self):
         port = randint(2**10, 2**16)
-        request = []
+        expectedrequest = "GET /aap/noot/mies HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v0.4.x\r\n\r\n"
         dataReceived = []
-        serverThread = server(port, "HTTP/1.1 200 OK\r\ncOnteNt-type: text/html\r\n\r\nHello World!", request)
+        serverThread = server(port, "HTTP/1.1 200 OK\r\ncOnteNt-type: text/html\r\n\r\nHello World!", expectedrequest)
         class Generator(object):
             def __init__(self):
                 self.throw = None
@@ -84,7 +94,6 @@ class HttpReaderTest(TestCase):
         reactor.addTimer(0.1, lambda: self.fail("Test Stuck"))
         while 'Hello World!' != "".join((x for x in dataReceived[1:] if x)):
             reactor.step()
-        self.assertEquals('GET /aap/noot/mies HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n' % WlVersion, request[0])
         serverThread.join()
         self.assertEquals({'HTTPVersion': '1.1', 'StatusCode': '200', 'ReasonPhrase': 'OK', 'Headers': {'Content-Type': 'text/html'}, 'Client': ('127.0.0.1', MatchAll())}, dataReceived[0])
 
@@ -108,18 +117,19 @@ class HttpReaderTest(TestCase):
     def testEmptyPath(self):
         port = randint(2**10, 2**16)
         reactor = Reactor()
-        request = []
+        request = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v0.4.x\r\n\r\n"
         serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\n", request)
         reader = HttpReaderFacade(reactor, "http://localhost:%s" % port, lambda data: 'a')
         reactor.step()
         reactor.step()
         serverThread.join()
-        self.assertTrue(request[0].startswith('GET / HTTP/1.1\r\n'), request[0])
+        #self.assertTrue(request[0].startswith('GET / HTTP/1.1\r\n'), request[0])
 
     def testTimeoutOnInvalidRequest(self):
         port = randint(2**10, 2**16)
         reactor = Reactor()
-        serverThread = server(port, "HTTP/1.1 *invalid reponse* 200 OK\r\n\r\n", [])
+        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v0.4.x\r\n\r\n"
+        serverThread = server(port, "HTTP/1.1 *invalid reponse* 200 OK\r\n\r\n", expectedrequest)
         errorArgs = []
         def error(exception):
             errorArgs.append(exception)
@@ -132,7 +142,8 @@ class HttpReaderTest(TestCase):
     def testTimeoutOnSilentServer(self):
         port = randint(2**10, 2**16)
         reactor = Reactor()
-        serverThread = server(port, "", [])
+        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v0.4.x\r\n\r\n"
+        serverThread = server(port, "", expectedrequest)
         errorArgs = []
         class Handler:
             def throw(self, exception):
@@ -149,7 +160,8 @@ class HttpReaderTest(TestCase):
     def testTimeoutOnServerGoingSilentAfterHeaders(self):
         port = randint(2**10, 2**16)
         reactor = Reactor()
-        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\n", [], delay=1)
+        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v0.4.x\r\n\r\n"
+        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\n", expectedrequest, delay=1)
         errorArgs = []
         class Handler:
             def send(self, data):
@@ -168,7 +180,8 @@ class HttpReaderTest(TestCase):
     def testClearTimer(self):
         port = randint(2**10, 2**16)
         reactor = Reactor()
-        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\nresponse", [])
+        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v0.4.x\r\n\r\n"
+        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\nresponse", expectedrequest)
         self.exception = None
         sentData = []
         def send(data):
@@ -185,7 +198,7 @@ class HttpReaderTest(TestCase):
     def testPost(self):
         port = randint(2048, 4096)
         reactor = Reactor()
-        request = []
+        request = "POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nSOAPAction: blah\r\nUser-Agent: Weightless/v0.4.x\r\n\r\n1\r\nA\r\n1\r\nB\r\n1\r\nC\r\n0\r\n\r\n"
         serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\nresponse", request, loop=9)
         sentData = []
         done = []
@@ -221,6 +234,7 @@ class HttpReaderTest(TestCase):
         reactor = Reactor()
         sentData = []
         done = []
+        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v0.4.x\r\n\r\n"
         serverThread = server(port, "\r\n".join("""HTTP/1.1 302 Found
 Date: Fri, 26 Oct 2007 07:23:26 GMT
 Server: Apache/2.2.3 (Debian) mod_python/3.2.10 Python/2.4.4 mod_ssl/2.2.3 OpenSSL/0.9.8c
@@ -234,7 +248,7 @@ Content-Type: text/html; charset=utf-8
 0
 
 
-""".split("\n")), [])
+""".split("\n")), expectedrequest)
         class Handler:
             def send(self, data):
                 sentData.append(data)

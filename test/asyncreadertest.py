@@ -25,6 +25,8 @@ from cq2utils import CQ2TestCase
 
 from re import sub
 from sys import exc_info
+import sys
+from StringIO import StringIO
 from traceback import format_exception
 from socket import socket, gaierror as SocketGaiError
 from random import randint
@@ -73,15 +75,14 @@ class AsyncReaderTest(CQ2TestCase):
             yield response
             done[0] = True
         self.handler = passthruhandler
-        requests = []
+        expectedrequest = "GET /depot?arg=1&arg=2 HTTP/1.0\r\n\r\n"
         responses = (i for i in ['hel', 'lo!'])
-        backofficeserver = testserver(backofficeport, responses, requests)
+        backofficeserver = testserver(backofficeport, responses, expectedrequest)
         client = clientget('localhost', self.port, '/depot?arg=1&arg=2')
         while not done[0]:
             self.reactor.step()
         response = client.recv(99)
         self.assertEquals('hello!', response)
-        self.assertEquals('GET /depot?arg=1&arg=2 HTTP/1.0\r\n\r\n', requests[0])
 
     def testConnectFails(self):
         exceptions = []
@@ -95,7 +96,12 @@ class AsyncReaderTest(CQ2TestCase):
         clientget('localhost', self.port, '/')
         target = ('localhost', 'port', '/') # non-numeric port
         while not exceptions:
-            self.reactor.step()
+            orgout = sys.stderr
+            sys.stderr = StringIO()
+            try:
+                self.reactor.step()
+            finally:
+                sys.stderr = orgout
 
         expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
   File "%(__file__)s", line 85, in failingserver
@@ -116,27 +122,43 @@ TypeError: an integer is required
         clientget('localhost', self.port, '/')
         exceptions = []
         while not exceptions:
-            self.reactor.step()
+            orgout = sys.stderr
+            sys.stderr = StringIO()
+            try:
+                self.reactor.step()
+            finally:
+                sys.stderr = orgout
         self.assertEquals(IOError, exceptions[0][0])
 
         target = ('UEYR^$*FD(#>NDJ.khfd9.(*njnd', 9876, '/') # invalid host
         clientget('localhost', self.port, '/')
         exceptions = []
         while not exceptions:
-            self.reactor.step()
+            orgout = sys.stderr
+            sys.stderr = StringIO()
+            try:
+                self.reactor.step()
+            finally:
+                sys.stderr = orgout
         self.assertEquals(SocketGaiError, exceptions[0][0])
 
         target = ('127.0.0.255', 9876, '/')
         clientget('localhost', self.port, '/')
         exceptions = []
         while not exceptions:
-            self.reactor.step()
+            orgout = sys.stderr
+            sys.stderr = StringIO()
+            try:
+                self.reactor.step()
+            finally:
+                sys.stderr = orgout
         self.assertEquals(IOError, exceptions[0][0])
         self.assertEquals(111, exceptions[0][1].message)
 
     def testTracebackPreservedAcrossSuspend(self):
         backofficeport = self.port + 1
-        testserver(backofficeport, [], [])
+        expectedrequest = ''
+        testserver(backofficeport, [], expectedrequest)
         target = ('localhost', backofficeport, '/')
 
         exceptions = []

@@ -21,7 +21,7 @@
 #
 ## end license ##
 
-VERSION='0.3.x' # in makeDeb.sh this is replaced by a real version number.
+VERSION='0.4.x' # in makeDeb.sh this is replaced by a real version number.
 
 from platform import python_version
 import sys
