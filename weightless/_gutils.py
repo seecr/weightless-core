@@ -23,8 +23,11 @@
 from linecache import getline
 from http.httpspec import REGEXP, FORMAT, HTTP
 from re import compile
+from types import GeneratorType
 
 def tostring(generator):
+    if type(generator) != GeneratorType:
+        raise TypeError("tostring() expects generator")
     frame = generator.gi_frame
     glocals = frame.f_locals
     lineno = frame.f_lineno

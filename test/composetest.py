@@ -22,14 +22,30 @@
 ## end license ##
 
 from unittest import TestCase
-from sys import stdout, exc_info
+from sys import stdout, exc_info, getrecursionlimit
 
 from weightless import autostart
 from weightless import local
 from weightless import compose
 from weightless import tostring
+from gc import collect
 
 class ComposeTest(TestCase):
+
+    def testCallCompose(self):
+        try:
+            compose()
+            self.fail()
+        except TypeError, e:
+            self.assertEquals('compose() takes at least 1 argument (0 given)', str(e))
+        self.assertRaises(TypeError, compose('s').next)
+        self.assertRaises(TypeError, compose(0).next)
+
+    def testGC(self):
+        c = compose((x for x in []))
+        collect()
+        del c
+        collect()
 
     def assertComposeImpl(self, impl):
         self.assertEquals(impl, compose)
@@ -202,7 +218,7 @@ class ComposeTest(TestCase):
         c = compose(main())
         try:
             c.next()
-            self.fail()
+            self.fail('must raise')
         except Exception, e:
             self.assertEquals('Generator already used.', str(e))
 
@@ -566,6 +582,19 @@ class ComposeTest(TestCase):
             self.assertEquals('testExceptionsHaveGeneratorCallStackAsBackTrace', exTraceback.tb_frame.f_code.co_name)
             self.assertEquals('g', exTraceback.tb_next.tb_frame.f_code.co_name)
             self.assertEquals('f', exTraceback.tb_next.tb_next.tb_frame.f_code.co_name)
+    
+    def testToStringForSimpleGenerator(self):
+        def f():
+            yield
+        g = f()
+        soll = """  File "%s", line 587, in f
+    def f():""" % __file__.replace('pyc', 'py')
+        self.assertEquals(soll, tostring(g))
+        g.next()
+        soll = """  File "%s", line 588, in f
+    yield""" % __file__.replace('pyc', 'py')
+        self.assertEquals(soll, tostring(g))
+
 
     def testToStringGivesStackOfGeneratorsAKAcallStack(self):
         def f1():
@@ -573,9 +602,9 @@ class ComposeTest(TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 574, in f2
+        result = """  File "%s", line 603, in f2
     yield f1()
-  File "%s", line 572, in f1
+  File "%s", line 601, in f1
     yield""" % (2*(__file__.replace('pyc', 'py'),))
         c.next()
         self.assertEquals(result, tostring(c), "\n%s\n!=\n%s\n" % (result, tostring(c)))
@@ -586,9 +615,16 @@ class ComposeTest(TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 586, in f2
+        result = """  File "%s", line 615, in f2
     def f2():""" % __file__.replace('pyc', 'py')
         self.assertEquals(result, tostring(c))
+
+    def testWrongArgToToString(self):
+        try:
+            tostring('x')
+            self.fail('must raise TypeError')
+        except TypeError, e:
+            self.assertEquals("tostring() expects generator", str(e))
 
     def testFindLocalNotThere(self):
         def f1():
@@ -600,7 +636,7 @@ class ComposeTest(TestCase):
                 yield e
         f = compose(f1())
         result = f.next()
-        self.assertEquals("stack has no local 'doesnotexist'", str(result))
+        self.assertEquals('doesnotexist', str(result))
 
     def testFindLocal(self):
         def f1():
@@ -627,7 +663,7 @@ class ComposeTest(TestCase):
         result = f.next()
         self.assertEquals('f2', str(result))
 
-    def xtestOneFromPEP380(self):
+    def testOneFromPEP380(self):
         """
         Exceptions other than GeneratorExit thrown into the delegating
      generator are passed to the ``throw()`` method of the iterator.
@@ -799,3 +835,4 @@ class ComposeTest(TestCase):
         except StopIteration:
             pass
         self.assertEquals(['GeneratorExit turned into ValueError', 'stop here'], msg)
+

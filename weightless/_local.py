@@ -31,11 +31,11 @@ def findInLocals(f_locals, localName):
                 return findInLocals(generator.gi_frame.f_locals, localName)
             except AttributeError:
                 pass
-    raise AttributeError('stack has no local ' + repr(localName))
+    raise AttributeError(localName)
 
 def findLocalInFrame(frame, localName):
     if not frame:
-        raise AttributeError('stack has no local ' + repr(localName))
+        raise AttributeError(localName)
     try:
         return findInLocals(frame.f_locals, localName)
     except AttributeError:

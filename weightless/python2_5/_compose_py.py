@@ -69,6 +69,8 @@ def compose(initial, sidekick = None):
             pass
     This will work as expected: it catches an exception thrown by otherGenerator.
     """
+    if type(initial) != GeneratorType:
+        raise TypeError("compose() expects generator")
     generators = [initial]
     __callstack__ = generators # make these visible to 'local()'
     messages = [None]
