@@ -43,6 +43,7 @@ def compose(initial, sidekick = None):
     This will work as expected: it catches an exception thrown by otherGenerator.
     """
     generators = [initial]
+    __pseudo_callstack__ = generators
     messages = [None]
     exception = None
     while generators:

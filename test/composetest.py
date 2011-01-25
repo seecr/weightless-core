@@ -21,16 +21,13 @@
 #
 ## end license ##
 
-from cq2utils import CQ2TestCase
+from unittest import TestCase
 from sys import stdout, exc_info
-from re import sub
 
 from weightless.python2_5._compose_py import compose
 from weightless import tostring
-#from weightless.python2_5._compose_pyx import compose as compose_pyrex
 
-
-class ComposeTest(CQ2TestCase):
+class ComposeTest(TestCase):
 
     def assertComposeImpl(self, impl):
         self.assertEquals(impl, compose)
@@ -290,24 +287,6 @@ class ComposeTest(CQ2TestCase):
         except:
             pass
         self.assertEquals(StopIteration, type(r[0]))
-
-    def testDoNotMaskAssertionError(self):
-        def f():
-            assert False
-            yield
-        def g():
-            try:
-                yield f()
-            except:
-                pass
-        g = compose(g())
-        try:
-            g.next()
-            self.fail()
-        except AssertionError:
-            pass
-        except:
-            self.fail()
 
     def testPassException1(self):
         class MyException(Exception): pass
@@ -592,12 +571,12 @@ class ComposeTest(CQ2TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = ignoreLineNumbers("""  File "%s", line 599, in f2
+        result = """  File "%s", line 580, in f2
     yield f1()
-  File "%s", line 597, in f1
-    yield""" % (2*(__file__.replace('pyc', 'py'),)))
+  File "%s", line 578, in f1
+    yield""" % (2*(__file__.replace('pyc', 'py'),))
         c.next()
-        self.assertEqualsWS(result, ignoreLineNumbers(tostring(c)))
+        self.assertEquals(result, tostring(c), "\n%s\n!=\n%s\n" % (result, tostring(c)))
 
     def testToStringForUnstartedGenerator(self):
         def f1():
@@ -605,35 +584,216 @@ class ComposeTest(CQ2TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = ignoreLineNumbers("""  File "%s", line 612, in f2
-    def f2():""" % __file__.replace('pyc', 'py'))
-        self.assertEqualsWS(result, ignoreLineNumbers(tostring(c)))
+        result = """  File "%s", line 593, in f2
+    def f2():""" % __file__.replace('pyc', 'py')
+        self.assertEquals(result, tostring(c))
 
-    def testHaveUsefulTracebacksWithCatchingExceptionsInAnEnclosedGenerator(self):
-        import traceback
-        tb = []
+    def testFindLocalNotThere(self):
         def f1():
-            yield
-            raise Exception("aap")
+            yield f2()
         def f2():
             try:
-                yield compose(f1())
-            except:
-                ex_type, ex_val, ex_tb = exc_info()
-                tb.append(ex_tb)
-                raise
+                l = local('doesnotexist')
+            except AttributeError, e:
+                yield e
+        f = compose(f1())
+        result = f.next()
+        self.assertEquals("stack has no local 'doesnotexist'", str(result))
+
+    def testFindLocal(self):
+        def f1():
+            f1local = 'f1'
+            yield f2()
+        def f2():
+            l = local('f1local')
+            yield l
+        f = compose(f1())
+        result = f.next()
+        self.assertEquals('f1', str(result))
+
+    def testFindClosesedLocal(self):
+        def f1():
+            myLocal = 'f1'
+            yield f2()
+        def f2():
+            myLocal = 'f2'
+            yield f3()
         def f3():
-            yield compose(f2())
-        c = compose(f3())
+            l = local('myLocal')
+            yield l
+        f = compose(f1())
+        result = f.next()
+        self.assertEquals('f2', str(result))
+
+    def testOneFromPEP380(self):
+        """
+        Exceptions other than GeneratorExit thrown into the delegating
+     generator are passed to the ``throw()`` method of the iterator.
+     If the call raises StopIteration, the delegating generator is resumed.
+     Any other exception is propagated to the delegating generator.
+     (EG: rationale is that normally SystemExit is not catched, but it must
+     trigger finally's to clean up.)
+        """
+        msg = []
+        def f():
+            try:
+                yield g()
+            except SystemExit, e:
+                msg.append('see me')
+            yield
+        def g():
+            try:
+                yield
+            except KeyboardInterrupt:
+                msg.append('KeyboardInterrupt')
+            try:
+                yield
+            except SystemExit:
+                msg.append('SystemExit')
+            try:
+                yield
+            except BaseException:
+                msg.append('BaseException')
+                raise SystemExit('see me')
+            yield
+        c = compose(f())
         c.next()
+        c.throw(KeyboardInterrupt())
+        self.assertEquals(['KeyboardInterrupt'], msg)
+        c.throw(SystemExit())
+        self.assertEquals(['KeyboardInterrupt', 'SystemExit'], msg)
+        c.throw(SystemExit()) # second time
+        self.assertEquals(['KeyboardInterrupt', 'SystemExit', 'BaseException', 'see me'], msg)
+
+    def testTwoFromPEP380(self):
+        """
+        If a GeneratorExit exception is thrown into the delegating generator,
+     or the ``close()`` method of the delegating generator is called, then
+     the ``close()`` method of the iterator is called if it has one. If this
+     call results in an exception, it is propagated to the delegating generator.
+     Otherwise, GeneratorExit is raised in the delegating generator.
+        """
+
+        # First test some assumptions about close()
+
+        @autostart
+        def f1():
+            try:
+                yield
+            except GeneratorExit:
+                raise ValueError('1')
+            yield
+        g1 = f1()
         try:
-            c.next()
-        except Exception, e:
+            g1.close()
+            self.fail('must raise ValueError')
+        except ValueError, e:
+            self.assertEquals('1', str(e))
+
+        @autostart
+        def f2():
+            try:
+                yield
+            except GeneratorExit:
+                pass
+            # implicit raise StopIteration here
+
+        g2 = f2()
+        try:
+            g2.close()
+        except BaseException:
+            self.fail('must not raise an exception')
+
+        @autostart
+        def f3():
+            try:
+                yield
+            except GeneratorExit:
+                pass
+            yield  # does not raise an exception but yields None
+
+        g3 = f3()
+        try:
+            g3.close()
+            self.fail('must not raise an exception')
+        except RuntimeError, e:
+            self.assertEquals('generator ignored GeneratorExit', str(e))
+
+
+        @autostart
+        def f4():
+            yield
+            yield
+
+        g4 = f4()
+        try:
+            g4.close()
+        except BaseException, e:
+            self.fail('must not raise an exception')
+
+        # This is test one
+
+        msg = []
+        def f5():
+            yield f6()
+        def f6():
+            try:
+                yield
+            except GeneratorExit:
+                msg.append('GeneratorExit turned into StopIteration')
+                raise StopIteration()  # <= this is the clue, see next test
+        g5 = compose(f5())
+        g5.next()
+        try:
+            g5.throw(GeneratorExit())
+            self.fail('must reraise GeneratorExit if no exception by g1()')
+        except GeneratorExit:
             pass
-        self.assertEquals('f2', tb[0].tb_frame.f_code.co_name)
-        self.assertEquals('f1', tb[0].tb_next.tb_frame.f_code.co_name)
+        self.assertEquals(['GeneratorExit turned into StopIteration'], msg)
+
+        msg = []
+        def f7():
+            yield f8()
+        def f8():
+            try:
+                yield
+            except GeneratorExit:
+                msg.append('GeneratorExit ignored')
+            yield # <= this is the clue, see previous test
+        g7 = compose(f7())
+        g7.next()
+        try:
+            g7.throw(GeneratorExit())
+            self.fail('must reraise RuntimeError(generator ignored GeneratorExit)')
+        except RuntimeError:
+            pass
+        self.assertEquals(['GeneratorExit ignored'], msg)
 
 
-def ignoreLineNumbers(s):
-    return sub("line \d+,", "line [#],", s)
+        # Second case
 
+        msg = []
+        def f8():
+            try:
+                yield f9()
+            #except RuntimeError, e:
+            except ValueError, e:
+                msg.append(str(e))
+                raise StopIteration()
+        def f9():
+            try:
+                yield
+            except GeneratorExit:
+                msg.append('GeneratorExit turned into ValueError')
+                #raise RuntimeError('stop here')
+                raise ValueError('stop here')
+            yield
+
+        g8 = compose(f8())
+        g8.next()
+        try:
+            g8.throw(GeneratorExit())
+            self.fail('must raise StopIteration')
+        except StopIteration:
+            pass
+        self.assertEquals(['GeneratorExit turned into ValueError', 'stop here'], msg)
