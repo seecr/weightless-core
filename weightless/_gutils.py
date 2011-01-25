@@ -1,7 +1,7 @@
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
-#    Copyright (C) 2006-2009 Seek You Too (CQ2) http://www.cq2.nl
+#    Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
 #
 #    This file is part of Weightless
 #
@@ -33,7 +33,7 @@ def tostring(generator):
     lineno = frame.f_lineno
     code = frame.f_code
     name = code.co_name
-    if name == 'compose':
+    if name == "_compose":
         if 'generators' in glocals:
             return '\n'.join(tostring(g) for g in glocals['generators'])
         else:
@@ -89,9 +89,9 @@ def copyBytes(tosend, target):
         response = target.send(head)
         tosend -= len(head)
     #try:
-        #response = target.throw(StopIteration())
+    #    response = target.throw(StopIteration())
     #except StopIteration:
-        #pass
+    #    pass
     if response:
         message = yield response
         if message and tail:

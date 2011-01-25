@@ -38,8 +38,8 @@ class ComposeTest(TestCase):
             self.fail()
         except TypeError, e:
             self.assertEquals('compose() takes at least 1 argument (0 given)', str(e))
-        self.assertRaises(TypeError, compose('s').next)
-        self.assertRaises(TypeError, compose(0).next)
+        self.assertRaises(TypeError, compose, 's')
+        self.assertRaises(TypeError, compose, 0)
 
     def testGC(self):
         c = compose((x for x in []))

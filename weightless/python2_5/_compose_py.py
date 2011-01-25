@@ -55,6 +55,11 @@ BaseException
 """
 
 def compose(initial, sidekick = None):
+    if type(initial) != GeneratorType:
+        raise TypeError("compose() expects generator")
+    return _compose(initial, sidekick)
+
+def _compose(initial, sidekick):
     """
     The method compose() allows program (de)composition with generators.  It enables calls like:
         retvat = yield otherGenerator(args)
@@ -69,8 +74,6 @@ def compose(initial, sidekick = None):
             pass
     This will work as expected: it catches an exception thrown by otherGenerator.
     """
-    if type(initial) != GeneratorType:
-        raise TypeError("compose() expects generator")
     generators = [initial]
     __callstack__ = generators # make these visible to 'local()'
     messages = [None]
