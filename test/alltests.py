@@ -2,7 +2,7 @@
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
-#    Copyright (C) 2006-2010 Seek You Too (CQ2) http://www.cq2.nl
+#    Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
 #
 #    This file is part of Weightless
 #
@@ -38,7 +38,6 @@ from httpreadertest import HttpReaderTest
 from httpservertest import HttpServerTest
 from httpspectest import HttpSpecTest
 from httpsservertest import HttpsServerTest
-from localtest import LocalTest
 from reactortest import ReactorTest
 from servertestcasetest import ServerTestCaseTest
 from snaketest import SnakeTest

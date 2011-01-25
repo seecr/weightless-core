@@ -1,7 +1,7 @@
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
-#    Copyright (C) 2006-2009 Seek You Too (CQ2) http://www.cq2.nl
+#    Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
 #
 #    This file is part of Weightless
 #
@@ -20,23 +20,29 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-from weightless import reactor
+from inspect import currentframe
 
-class local(object):
+def findInLocals(f_locals, localName):
+    if localName in f_locals:
+        return f_locals[localName]
+    if '__callstack__' in f_locals:
+        for generator in reversed(f_locals['__callstack__']):
+            try:
+                return findInLocals(generator.gi_frame.f_locals, localName)
+            except AttributeError:
+                pass
+    raise AttributeError('stack has no local ' + repr(localName))
 
-    def __init__(self):
-        object.__setattr__(self, '_reactor', None)
+def findLocalInFrame(frame, localName):
+    if not frame:
+        raise AttributeError('stack has no local ' + repr(localName))
+    try:
+        return findInLocals(frame.f_locals, localName)
+    except AttributeError:
+        pass
+    return findLocalInFrame(frame.f_back, localName)
 
-    def _getReactor(self):
-        if self._reactor == None:
-            object.__setattr__(self, '_reactor', reactor())
-        return self._reactor
-
-    def __getattr__(self, name):
-        context = self._getReactor().currentcontext
-        return context.locals[name]
-
-    def __setattr__(self, name, attr):
-        context = self._getReactor().currentcontext
-        context.locals[name] = attr
+def local(localName):
+    frame = currentframe().f_back
+    return findLocalInFrame(frame, localName)
 

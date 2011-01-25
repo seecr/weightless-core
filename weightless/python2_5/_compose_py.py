@@ -20,19 +20,46 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-
-from platform import python_version
-assert python_version() >= "2.5", "Python 2.5 required"
-
 from types import GeneratorType
 from sys import exc_info
+
+"""
+Wrt exceptions, see http://www.python.org/doc/2.5.4/lib/module-exceptions.html for Python 2.5:
+
+BaseException
+ +-- SystemExit                 sys.exit(), must exit, not an error, triggers finally's
+ +-- KeyboardInterrupt          ctrl-c, must exit, not an error, triggers finally's
+ +-- Exception                  built-in, non-system-exiting + user-defined exceptions
+      +-- GeneratorExit         when close() called, not an error ==> will move
+      +-- StopIteration         next() when no more values, not an error
+      +-- StandardError
+      |    +-- AssertionError   when assert statement fails ==> will move
+      |    +-- ...
+      +-- Warning
+           +-- RuntimeWarning
+           +-- ...
+
+and http://docs.python.org/3.0/library/exceptions.html for Python 3.0:
+
+BaseException
+ +-- SystemExit             sys.exit(), must exit, not an error, triggers finally's
+ +-- KeyboardInterrupt      ctrl-c, must exit
+ +-- GeneratorExit          when close() called, not an error <== moved
+ +-- Exception
+      +-- StopIteration
+      +-- AssertionError    when assert statement fails <== moved
+      +-- Warning
+           +-- RuntimeWarning
+           +-- ...
+
+"""
 
 def compose(initial, sidekick = None):
     """
     The method compose() allows program (de)composition with generators.  It enables calls like:
         retvat = yield otherGenerator(args)
     The otherGenerator may return values by:
-        yield RETURN, retvat, remaining data
+        raise StopIteration(retvat, remaining data)
     Remaining data might be present if the otherGenerator consumes less than it get gets.  It must
     make this remaining data available to the calling generator by yielding it as shown.
     Most notably, compose enables catching exceptions:
@@ -43,13 +70,16 @@ def compose(initial, sidekick = None):
     This will work as expected: it catches an exception thrown by otherGenerator.
     """
     generators = [initial]
-    __pseudo_callstack__ = generators
+    __callstack__ = generators # make these visible to 'local()'
     messages = [None]
     exception = None
     while generators:
         generator = generators[-1]
         try:
             if exception:
+                if exception[0] == GeneratorExit:
+                    generator.close()
+                    raise exception
                 response = generator.throw(*exception)
                 exception = None
             else:
@@ -72,7 +102,7 @@ def compose(initial, sidekick = None):
                     messages.append(message)
                     if response and messages[0] is not None:
                         messages.insert(0, None)
-                except Exception:
+                except BaseException:
                     exception = exc_info()
         except StopIteration, returnValue:
             exception = None
@@ -81,11 +111,9 @@ def compose(initial, sidekick = None):
                 messages = list(returnValue.args) + messages
             else:
                 messages.insert(0, None)
-        except AssertionError:
-            raise # testing support
-        except Exception:
+        except BaseException:
             generators.pop()
-            exType, exVal, exTb = exc_info()
-            exception = (exType, exVal, exTb.tb_next)
+            exType, exValue, exTraceback = exc_info()
+            exception = (exType, exValue, exTraceback.tb_next)
     if exception:
         raise exception[0], exception[1], exception[2]
