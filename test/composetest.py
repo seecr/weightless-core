@@ -24,7 +24,9 @@
 from unittest import TestCase
 from sys import stdout, exc_info
 
-from weightless.python2_5._compose_py import compose
+from weightless import autostart
+from weightless import local
+from weightless import compose
 from weightless import tostring
 
 class ComposeTest(TestCase):
@@ -571,9 +573,9 @@ class ComposeTest(TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 580, in f2
+        result = """  File "%s", line 574, in f2
     yield f1()
-  File "%s", line 578, in f1
+  File "%s", line 572, in f1
     yield""" % (2*(__file__.replace('pyc', 'py'),))
         c.next()
         self.assertEquals(result, tostring(c), "\n%s\n!=\n%s\n" % (result, tostring(c)))
@@ -584,7 +586,7 @@ class ComposeTest(TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 593, in f2
+        result = """  File "%s", line 586, in f2
     def f2():""" % __file__.replace('pyc', 'py')
         self.assertEquals(result, tostring(c))
 
@@ -625,7 +627,7 @@ class ComposeTest(TestCase):
         result = f.next()
         self.assertEquals('f2', str(result))
 
-    def testOneFromPEP380(self):
+    def xtestOneFromPEP380(self):
         """
         Exceptions other than GeneratorExit thrown into the delegating
      generator are passed to the ``throw()`` method of the iterator.
