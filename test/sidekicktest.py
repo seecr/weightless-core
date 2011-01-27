@@ -2,7 +2,7 @@ from unittest import TestCase
 from weightless import compose
 
 
-class ComposeCallableTest(TestCase):
+class SidekickTest(TestCase):
 
     def testCallCallableWithSidekick(self):
         called = []
