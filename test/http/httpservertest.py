@@ -25,7 +25,7 @@ from unittest import TestCase
 from random import randint
 from socket import socket, error as SocketError
 from select import select
-from weightless import Reactor
+from weightless.io import Reactor
 from time import sleep
 from cq2utils import MATCHALL, CallTrace
 from os.path import join, abspath, dirname

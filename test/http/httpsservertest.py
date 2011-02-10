@@ -25,7 +25,7 @@
 from unittest import TestCase
 from random import randint
 
-from weightless import Reactor
+from weightless.io import Reactor
 from weightless.http import HttpsServer
 
 from OpenSSL import SSL

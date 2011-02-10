@@ -29,7 +29,7 @@ from select import error as ioerror
 import os, sys
 from tempfile import mkstemp
 from StringIO import StringIO
-from weightless import Reactor
+from weightless.io import Reactor
 from socket import socketpair, error
 
 class ReactorTest(TestCase):
@@ -322,7 +322,7 @@ class ReactorTest(TestCase):
             self.assertEquals([], reactor._timers)
 
     def testGlobalReactor(self):
-        from weightless import reactor
+        from weightless.io import reactor
         thereactor = Reactor()
         def handler():
             self.assertEquals(thereactor, reactor())

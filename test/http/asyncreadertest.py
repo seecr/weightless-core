@@ -32,7 +32,7 @@ from socket import socket, gaierror as SocketGaiError
 from random import randint
 from httpreadertest import server as testserver
 from weightless.http import HttpServer, httpget, Suspend
-from weightless import Reactor
+from weightless.io import Reactor
 from weightless.core import compose
 
 from weightless.http._httpget import _httpRequest

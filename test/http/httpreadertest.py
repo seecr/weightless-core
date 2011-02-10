@@ -27,7 +27,7 @@ from socket import socket, timeout
 from threading import Thread, Event
 
 
-from weightless import Reactor
+from weightless.io import Reactor
 from weightless.http import HttpReader
 from weightless.core import VERSION as WlVersion
 from weightless.http._httpreader import HttpReaderFacade, Connector, HandlerFacade, _httpParseUrl

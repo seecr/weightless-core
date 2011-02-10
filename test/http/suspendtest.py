@@ -30,7 +30,7 @@ from traceback import format_exc
 
 from cq2utils import CallTrace, CQ2TestCase
 
-from weightless import Reactor
+from weightless.io import Reactor
 from weightless.http import Suspend, HttpServer
 
 class MockSocket(object):

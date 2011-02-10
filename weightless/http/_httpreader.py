@@ -23,7 +23,7 @@
 from socket import socket, SHUT_RDWR, SHUT_WR
 from urlparse import urlsplit
 from weightless.http import REGEXP, FORMAT, HTTP, parseHeaders
-from weightless.bufferedhandler import BufferedHandler
+from _bufferedhandler import BufferedHandler
 
 import sys
 

@@ -41,7 +41,6 @@ from sidekicktest import SidekickTest
 from reactortest import ReactorTest
 from servertestcasetest import ServerTestCaseTest
 from snaketest import SnakeTest
-from transparentsockettest import TransparentSocketTest
 
 from http.acceptortest import AcceptorTest
 from http.httpreadertest import HttpReaderTest
