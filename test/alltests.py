@@ -36,19 +36,20 @@ sysPath.insert(0,'..')                            #DO_NOT_DISTRIBUTE
 
 from unittest import main
 
-from acceptortest import AcceptorTest
 from composetest import ComposeTest
 from sidekicktest import SidekickTest
-from httpreadertest import HttpReaderTest
-from httpservertest import HttpServerTest
-from httpspectest import HttpSpecTest
-from httpsservertest import HttpsServerTest
 from reactortest import ReactorTest
 from servertestcasetest import ServerTestCaseTest
 from snaketest import SnakeTest
-from suspendtest import SuspendTest
 from transparentsockettest import TransparentSocketTest
-from asyncreadertest import AsyncReaderTest
+
+from http.acceptortest import AcceptorTest
+from http.httpreadertest import HttpReaderTest
+from http.httpservertest import HttpServerTest
+from http.httpspectest import HttpSpecTest
+from http.httpsservertest import HttpsServerTest
+from http.suspendtest import SuspendTest
+from http.asyncreadertest import AsyncReaderTest
 
 if __name__ == '__main__':
     main()
