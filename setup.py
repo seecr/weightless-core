@@ -23,27 +23,16 @@
 from distutils.core import setup
 from platform import python_version
 
-setupArgs = {
-    'name': 'weightless',
-    'version': '%VERSION%',
-    'url': 'http://www.weightless.io',
-    'author': 'Seek You Too',
-    'author_email': 'info@cq2.nl',
-    'description': 'Weightless is a High Performance Asynchronous Networking Library.',
-    'long_description': 'Weightless is a High Performance Asynchronous Networking Library.',
-    'license': 'GNU Public License',
-    'platforms': 'all'
-}
-
-if python_version() >= '2.5':
-    setup(
-        packages=['weightless', 'weightless.python2_5', 'weightless.http', 'weightless.utils'],
-        **setupArgs
-    )
-
-else:
-    setup(
-        packages=['weightless', 'weightless.http'],
-        **setupArgs
-    )
+setup(
+    name='weightless-core',
+    version='%VERSION%',
+    packages=['weightless', 'weightless.python2_5', 'weightless.http', 'weightless.utils'],
+    url='http://www.weightless.io',
+    author='Seek You Too',
+    author_email='info@cq2.nl',
+    description='Weightless is a High Performance Asynchronous Networking Library.',
+    long_description='Weightless is a High Performance Asynchronous Networking Library.',
+    license='GNU Public License',
+    platforms='all'
+)
 

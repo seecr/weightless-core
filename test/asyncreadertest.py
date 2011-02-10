@@ -106,7 +106,7 @@ class AsyncReaderTest(CQ2TestCase):
         expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
   File "%(__file__)s", line 85, in failingserver
     response = yield httpget(*target)
-  File "../weightless/_httpget.py", line 78, in httpget
+  File "%(httpget.py)s", line 78, in httpget
     result = s.getResult()
   File "%(suspend.py)s", line 34, in __call__
     self._doNext(self)

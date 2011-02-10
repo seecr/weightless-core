@@ -24,14 +24,13 @@ set -e
 
 rm -rf tmp build
 
-for pyversion in 2.4 2.5; do
+python2.5 setup.py install --root tmp
 
-PYTHONPATH=`pwd`/deps.d/Pyrex-0.9.5.1a python$pyversion setup.py install --root tmp
+export PYTHONPATH=`pwd`/tmp/usr/lib/python2.5/site-packages
+cp -r test tmp/test
 
 (
-cd test
-PYTHONPATH=`pwd`/../tmp/usr/lib/python$pyversion/site-packages python$pyversion alltests.py
+cd tmp/test
+./alltests.py
 )
 
-rm -rf tmp build
-done
