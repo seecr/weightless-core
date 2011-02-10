@@ -21,4 +21,4 @@
 #
 ## end license ##
 
-from python2_5._compose_py import compose
+from compose import compose
