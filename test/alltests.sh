@@ -1,7 +1,8 @@
+#!/bin/bash
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
-#    Copyright (C) 2006-2009 Seek You Too (CQ2) http://www.cq2.nl
+#    Copyright (C) 2011 Seek You Too (CQ2) http://www.cq2.nl
 #
 #    This file is part of Weightless
 #
@@ -20,18 +21,8 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-set -e
 
-rm -rf tmp build
+export LANG=en_US.UTF-8
+export PYTHONPATH=.:"$PYTHONPATH"
+python2.5 _alltests.py "$@"
 
-python2.5 setup.py install --root tmp
-
-export PYTHONPATH=`pwd`/tmp/usr/lib/python2.5/site-packages
-cp -r test tmp/test
-
-(
-cd tmp/test
-./alltests.sh
-)
-
-rm -rf tmp build

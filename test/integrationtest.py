@@ -33,7 +33,8 @@ if os.environ.get('PYTHONPATH', '') == '':
 
 from unittest import TestCase, main
 
-from weightless import Reactor, HttpServer
+from weightless.io import Reactor
+from weightless.http import HttpServer
 from socket import socket
 from time import sleep
 

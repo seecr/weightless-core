@@ -26,7 +26,14 @@ from platform import python_version
 setup(
     name='weightless-core',
     version='%VERSION%',
-    packages=['weightless', 'weightless.python2_5', 'weightless.http', 'weightless.utils'],
+    packages=[
+        'weightless', 
+        'weightless.core', 
+        'weightless.core.compose', 
+        'weightless.core.utils',
+        'weightless.http', 
+        'weightless.io',
+    ],
     url='http://www.weightless.io',
     author='Seek You Too',
     author_email='info@cq2.nl',
