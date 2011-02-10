@@ -21,13 +21,18 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-from glob import glob
-import os, sys
 
-for file in glob('../deps.d/*'):
-    sys.path.insert(0, file)
+from os import getuid
+assert getuid() != 0, "Do not run tests as 'root'"
 
-sys.path.insert(0, '..')
+from os import system                             #DO_NOT_DISTRIBUTE
+from sys import path as sysPath                   #DO_NOT_DISTRIBUTE
+system('find .. -name "*.pyc" | xargs rm -f')     #DO_NOT_DISTRIBUTE
+                                                  #DO_NOT_DISTRIBUTE
+from glob import glob                             #DO_NOT_DISTRIBUTE
+for path in glob('../deps.d/*'):                  #DO_NOT_DISTRIBUTE
+    sysPath.insert(0, path)                       #DO_NOT_DISTRIBUTE
+sysPath.insert(0,'..')                            #DO_NOT_DISTRIBUTE
 
 from unittest import main
 

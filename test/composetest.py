@@ -24,10 +24,10 @@
 from unittest import TestCase
 from sys import stdout, exc_info, getrecursionlimit
 
-from weightless import autostart
-from weightless import local
+from weightless.core import autostart
+from weightless.core import local
 from weightless.core import compose
-from weightless import tostring
+from weightless.core import tostring
 from gc import collect
 
 class ComposeTest(TestCase):

@@ -31,12 +31,12 @@ from traceback import format_exception
 from socket import socket, gaierror as SocketGaiError
 from random import randint
 from httpreadertest import server as testserver
-from weightless import HttpServer, httpget, Reactor
-from weightless import Suspend
+from weightless.http import HttpServer, httpget, Suspend
+from weightless import Reactor
 from weightless.core import compose
 
-from weightless._httpget import _httpRequest
-import weightless._httpget as httpGetModule
+from weightless.http._httpget import _httpRequest
+from weightless.http import _httpget as httpGetModule
 
 def clientget(host, port, path):
     client = socket()

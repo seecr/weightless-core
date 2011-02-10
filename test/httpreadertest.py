@@ -1,7 +1,7 @@
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
-#    Copyright (C) 2006-2009 Seek You Too (CQ2) http://www.cq2.nl
+#    Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
 #
 #    This file is part of Weightless
 #
@@ -27,8 +27,10 @@ from socket import socket, timeout
 from threading import Thread, Event
 
 
-from weightless import HttpReader, Reactor, VERSION as WlVersion
-from weightless._httpreader import HttpReaderFacade, Connector, HandlerFacade, _httpParseUrl
+from weightless import Reactor
+from weightless.http import HttpReader
+from weightless.core import VERSION as WlVersion
+from weightless.http._httpreader import HttpReaderFacade, Connector, HandlerFacade, _httpParseUrl
 import sys
 from StringIO import StringIO
 from cq2utils import CallTrace

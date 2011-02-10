@@ -21,5 +21,7 @@
 #
 ## end license ##
 
+VERSION='$Version: 0.4.x$'[9:-1].strip() # Modified by package scripts
+
 from compose import compose, local, tostring
 from utils import identify, autostart

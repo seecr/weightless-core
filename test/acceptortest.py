@@ -1,7 +1,7 @@
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
-#    Copyright (C) 2006-2009 Seek You Too (CQ2) http://www.cq2.nl
+#    Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
 #
 #    This file is part of Weightless
 #
@@ -22,12 +22,12 @@
 ## end license ##
 from unittest import TestCase
 from socket import socket
-from weightless import Acceptor
 from cq2utils import CallTrace
 from random import randint
 from os import system
 from subprocess import Popen, PIPE
 
+from weightless.http import Acceptor
 
 class AcceptorTest(TestCase):
 

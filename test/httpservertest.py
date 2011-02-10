@@ -2,7 +2,7 @@
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
-#    Copyright (C) 2006-2009 Seek You Too (CQ2) http://www.cq2.nl
+#    Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
 #
 #    This file is part of Weightless
 #
@@ -25,12 +25,13 @@ from unittest import TestCase
 from random import randint
 from socket import socket, error as SocketError
 from select import select
-from weightless import Reactor, HttpServer
+from weightless import Reactor
 from time import sleep
-from weightless import _httpserver
 from cq2utils import MATCHALL, CallTrace
-
 from os.path import join, abspath, dirname
+
+from weightless.http import HttpServer, _httpserver
+
 def inmydir(p):
     return join(dirname(abspath(__file__)), p)
 

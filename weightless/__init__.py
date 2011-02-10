@@ -21,12 +21,6 @@
 #
 ## end license ##
 
-VERSION='$Version: 0.4.x$'[9:-1].strip() # in makeDeb.sh this is replaced by a real version number.
 
-from _acceptor import Acceptor
 from _reactor import Reactor, reactor
-from _httpreader import HttpReader, Connector
-from _httpserver import HttpServer, HttpsServer
-from _suspend import Suspend
 
-from _httpget import httpget
