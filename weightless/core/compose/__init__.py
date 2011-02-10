@@ -22,3 +22,5 @@
 ## end license ##
 
 from _compose_py import compose
+from _local import local
+from _tostring_py import tostring

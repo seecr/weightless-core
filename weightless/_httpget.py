@@ -22,7 +22,8 @@
 ## end license ##
 
 from sys import exc_info
-from weightless import Suspend, identify
+from weightless import Suspend
+from weightless.core import identify
 from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_WR, SHUT_RD
 from errno import EINPROGRESS
 

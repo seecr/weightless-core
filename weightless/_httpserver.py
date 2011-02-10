@@ -22,7 +22,7 @@
 #
 ## end license ##
 from _acceptor import Acceptor
-from _gutils import identify
+from weightless.core import identify
 from weightless.http import REGEXP, FORMAT, parseHeaders, parseHeader
 from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
 from tempfile import TemporaryFile

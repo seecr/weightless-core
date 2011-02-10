@@ -21,4 +21,5 @@
 #
 ## end license ##
 
-from compose import compose
+from compose import compose, local, tostring
+from utils import identify, autostart

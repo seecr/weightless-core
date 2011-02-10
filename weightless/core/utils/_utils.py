@@ -20,27 +20,7 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-from linecache import getline
-from http.httpspec import REGEXP, FORMAT, HTTP
 from re import compile
-from types import GeneratorType
-
-def tostring(generator):
-    if type(generator) != GeneratorType:
-        raise TypeError("tostring() expects generator")
-    frame = generator.gi_frame
-    glocals = frame.f_locals
-    lineno = frame.f_lineno
-    code = frame.f_code
-    name = code.co_name
-    if name == "_compose":
-        if 'generators' in glocals:
-            return '\n'.join(tostring(g) for g in glocals['generators'])
-        else:
-            return tostring(glocals['initial'])
-    filename = code.co_filename
-    codeline = getline(filename, lineno).strip()
-    return '  File "%(filename)s", line %(lineno)d, in %(name)s\n    %(codeline)s' % locals()
 
 def identify(generator):
     def helper(*args, **kwargs):

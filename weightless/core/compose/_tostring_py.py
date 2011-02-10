@@ -1,7 +1,7 @@
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
-#    Copyright (C) 2006-2009 Seek You Too (CQ2) http://www.cq2.nl
+#    Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
 #
 #    This file is part of Weightless
 #
@@ -20,16 +20,23 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-from contextlib import contextmanager
 
-@contextmanager
-def running(function):
-    t = Thread(None, function)
-    t.start()
-    yield t
-    t.join()
+from linecache import getline
+from types import GeneratorType
 
-class Dict(object):
-	def __init__(self, dict = None):
-		if dict is not None:
-			self.__dict__ = dict
+def tostring(generator):
+    if type(generator) != GeneratorType:
+        raise TypeError("tostring() expects generator")
+    frame = generator.gi_frame
+    glocals = frame.f_locals
+    lineno = frame.f_lineno
+    code = frame.f_code
+    name = code.co_name
+    if name == "_compose":
+        if 'generators' in glocals:
+            return '\n'.join(tostring(g) for g in glocals['generators'])
+        else:
+            return tostring(glocals['initial'])
+    filename = code.co_filename
+    codeline = getline(filename, lineno).strip()
+    return '  File "%(filename)s", line %(lineno)d, in %(name)s\n    %(codeline)s' % locals()

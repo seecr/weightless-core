@@ -1,8 +1,7 @@
-from utils import *
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
-#    Copyright (C) 2006-2009 Seek You Too (CQ2) http://www.cq2.nl
+#    Copyright (C) 2011 Seek You Too (CQ2) http://www.cq2.nl
 #
 #    This file is part of Weightless
 #
@@ -21,3 +20,5 @@ from utils import *
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
+
+from _utils import identify, autostart
