@@ -26,7 +26,7 @@ from sys import stdout, exc_info, getrecursionlimit
 
 from weightless import autostart
 from weightless import local
-from weightless import compose
+from weightless.core import compose
 from weightless import tostring
 from gc import collect
 

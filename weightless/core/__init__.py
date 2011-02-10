@@ -1,7 +1,7 @@
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
-#    Copyright (C) 2006-2009 Seek You Too (CQ2) http://www.cq2.nl
+#    Copyright (C) 2011 Seek You Too (CQ2) http://www.cq2.nl
 #
 #    This file is part of Weightless
 #
@@ -21,16 +21,4 @@
 #
 ## end license ##
 
-VERSION='$Version: 0.4.x$'[9:-1].strip() # in makeDeb.sh this is replaced by a real version number.
-
-from _acceptor import Acceptor
-from _reactor import Reactor, reactor
-from _httpreader import HttpReader, Connector
-from _httpserver import HttpServer, HttpsServer
-from _local import local
-from _suspend import Suspend
-
-from _gutils import tostring, identify, autostart
-from _local import local
-
-from _httpget import httpget
+from python2_5._compose_py import compose

@@ -25,7 +25,7 @@ from cq2utils import CQ2TestCase
 from imp import load_source
 from os import listdir
 from os.path import join
-from weightless import compose
+from weightless.core import compose
 import sys
 
 class MySimpleModule:

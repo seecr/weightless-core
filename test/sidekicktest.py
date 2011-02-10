@@ -1,5 +1,5 @@
 from unittest import TestCase
-from weightless import compose
+from weightless.core import compose
 
 
 class SidekickTest(TestCase):

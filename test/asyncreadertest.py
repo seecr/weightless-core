@@ -31,8 +31,9 @@ from traceback import format_exception
 from socket import socket, gaierror as SocketGaiError
 from random import randint
 from httpreadertest import server as testserver
-from weightless import HttpServer, httpget, Reactor, compose
+from weightless import HttpServer, httpget, Reactor
 from weightless import Suspend
+from weightless.core import compose
 
 from weightless._httpget import _httpRequest
 import weightless._httpget as httpGetModule
