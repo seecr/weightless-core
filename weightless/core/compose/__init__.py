@@ -21,6 +21,14 @@
 #
 ## end license ##
 
+from os.path import dirname, abspath, isdir, join            #DO_NOT_DISTRIBUTE
+if isdir(join(abspath(dirname(__file__)), '.svn')):          #DO_NOT_DISTRIBUTE
+    from os import system                                    #DO_NOT_DISTRIBUTE
+    status = system("cd %s/../../..; ./setup.py build_ext --inplace"  % abspath(dirname(__file__)))  #DO_NOT_DISTRIBUTE
+    if status > 0:                                           #DO_NOT_DISTRIBUTE
+        import sys                                           #DO_NOT_DISTRIBUTE
+        sys.exit(status)                                     #DO_NOT_DISTRIBUTE
+
 from _compose_py import compose
 from _local import local
 from _tostring_py import tostring

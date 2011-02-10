@@ -1,3 +1,4 @@
+#!/usr/bin/env python2.5
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
@@ -21,7 +22,7 @@
 #
 ## end license ##
 from distutils.core import setup
-from platform import python_version
+from distutils.extension import Extension
 
 setup(
     name='weightless-core',
@@ -40,6 +41,12 @@ setup(
     description='Weightless is a High Performance Asynchronous Networking Library.',
     long_description='Weightless is a High Performance Asynchronous Networking Library.',
     license='GNU Public License',
-    platforms='all'
+    platforms=['linux'],
+    ext_modules=[
+        Extension("weightless.core.compose._compose_c", [
+            "weightless/core/compose/_compose.c"
+            ]
+        )
+    ]
 )
 
