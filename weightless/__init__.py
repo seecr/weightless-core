@@ -21,12 +21,7 @@
 #
 ## end license ##
 
-VERSION='0.4.x' # in makeDeb.sh this is replaced by a real version number.
-
-from platform import python_version
-import sys
-from os import system
-from os.path import dirname, abspath, isdir, join
+VERSION='$Version: 0.4.x$'[9:-1].strip() # in makeDeb.sh this is replaced by a real version number.
 
 from python2_5._compose_py import compose
 
