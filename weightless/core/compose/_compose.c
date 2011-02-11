@@ -43,9 +43,6 @@ typedef struct {
     PyObject** messages_base;
     PyObject** messages_start;
     PyObject** messages_end;
-    PyObject*  exc_type;
-    PyObject*  exc_value;
-    PyObject*  exc_tb;
     PyObject*  sidekick;
     PyObject*  weakreflist;
 } PyComposeObject;
@@ -163,9 +160,6 @@ static int compose_traverse(PyComposeObject* self, visitproc visit, void* arg) {
         Py_VISIT(*p);
     }
 
-    Py_VISIT(self->exc_type);
-    Py_VISIT(self->exc_value);
-    Py_VISIT(self->exc_tb);
     Py_VISIT(self->sidekick);
     return 0;
 }
@@ -185,9 +179,6 @@ static int compose_clear(PyComposeObject* self) {
 
     free(self->messages_base);
     self->messages_base = NULL;
-    Py_CLEAR(self->exc_type);
-    Py_CLEAR(self->exc_value);
-    Py_CLEAR(self->exc_tb);
     Py_CLEAR(self->sidekick);
     return 0;
 }
@@ -221,9 +212,6 @@ static void _compose_initialize(PyComposeObject* cmps) {
     cmps->messages_base = (PyObject**) calloc(QUEUE_SIZE, sizeof(PyObject*));
     cmps->messages_start = cmps->messages_base;
     cmps->messages_end = cmps->messages_base;
-    cmps->exc_type = NULL;
-    cmps->exc_value = NULL;
-    cmps->exc_tb = NULL;
     cmps->sidekick = NULL;
     cmps->weakreflist = NULL;
 }
@@ -260,24 +248,7 @@ static PyObject* compose_new(PyObject* type, PyObject* args, PyObject* kwargs) {
 }
 
 
-static void _compose_handle_stopiteration(PyComposeObject* self);
-
-
-static void _compose_handle_exc(PyComposeObject* self) {
-    Py_CLEAR(self->exc_type);
-    Py_CLEAR(self->exc_value);
-    Py_CLEAR(self->exc_tb);
-
-    if(PyErr_ExceptionMatches(PyExc_StopIteration)) {
-        _compose_handle_stopiteration(self);
-
-    } else {
-        PyErr_Fetch(&self->exc_type, &self->exc_value, &self->exc_tb);
-    }
-}
-
-
-static void _compose_handle_stopiteration(PyComposeObject* self) {
+static int _compose_handle_stopiteration(PyComposeObject* self) {
     PyObject* error_type, *error_value, *error_traceback;
     PyErr_Fetch(&error_type, &error_value, &error_traceback); // clears exc, new refs or NULLs
     PyObject* args = error_value
@@ -293,7 +264,7 @@ static void _compose_handle_stopiteration(PyComposeObject* self) {
         for(i = PyTuple_Size(args) - 1; i >= 0; i--) {
             if(!messages_insert(self, PyTuple_GET_ITEM(args, i))) {
                 Py_DECREF(args);
-                return _compose_handle_exc(self);
+                return 0;
             }
         }
 
@@ -302,10 +273,11 @@ static void _compose_handle_stopiteration(PyComposeObject* self) {
     } else {
         messages_insert(self, Py_None);
     }
+    return 1;
 }
 
 
-int generator_invalid(PyObject* gen) {
+static int generator_invalid(PyObject* gen) {
     PyFrameObject* frame = ((PyGenObject*)gen)->gi_frame;
 
     if(!frame) {
@@ -322,27 +294,31 @@ int generator_invalid(PyObject* gen) {
 }
 
 
-static PyObject* _compose_go(PyComposeObject* self) {
+static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject* exc_value, PyObject* exc_tb) {
     while(self->generators_top > self->generators_base) {
         PyObject* generator = *(self->generators_top - 1); // take over ownership from stack
         PyObject* response = NULL;
         PyObject* message = NULL;
 
-        if(self->exc_type) {
-            if(PyErr_GivenExceptionMatches(self->exc_type, PyExc_GeneratorExit)) {
+        if(exc_type) {
+            if(PyErr_GivenExceptionMatches(exc_type, PyExc_GeneratorExit)) {
                 PyObject* result = PyObject_CallMethod(generator, "close", NULL); // new ref
 
                 if(result) {
                     Py_DECREF(result);
-                    PyErr_Restore(self->exc_type, self->exc_value, self->exc_tb); //steals refs
-                    self->exc_type = self->exc_value = self->exc_tb = NULL;
+                    Py_XINCREF(exc_type);
+                    Py_XINCREF(exc_value);
+                    Py_XINCREF(exc_tb);
+                    PyErr_Restore(exc_type, exc_value, exc_tb); //steals refs
+                    exc_type = exc_value = exc_tb = NULL;
                 }
 
             } else {
                 response =
                     PyObject_CallMethod(generator, "throw", "OOO",
-                                        self->exc_type, self->exc_value ? self->exc_value : Py_None,
-                                        self->exc_tb ? self->exc_tb : Py_None); // new ref
+                                        exc_type,
+                                        exc_value ? exc_value : Py_None,
+                                        exc_tb ? exc_tb : Py_None); // new ref
             }
 
         } else {
@@ -364,10 +340,7 @@ static PyObject* _compose_go(PyComposeObject* self) {
                 PyObject* r = PyObject_CallFunctionObjArgs(response, self->sidekick, NULL);
 
                 if(!r) {
-                    Py_CLEAR(self->exc_type);
-                    Py_CLEAR(self->exc_value);
-                    Py_CLEAR(self->exc_tb);
-                    PyErr_Fetch(&self->exc_type, &self->exc_value, &self->exc_tb);
+                    PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
 
                 } else
                     Py_XDECREF(r);
@@ -378,15 +351,26 @@ static PyObject* _compose_go(PyComposeObject* self) {
                 return response;
             }
         } else {
-            _compose_handle_exc(self);
+            if(PyErr_ExceptionMatches(PyExc_StopIteration)) {
+                if(!_compose_handle_stopiteration(self)) {
+                    PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
+                } else {
+                    exc_type = exc_value = exc_tb = NULL;
+                }
+            } else {
+                PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
+            }
             Py_DECREF(generator);
-            self->generators_top--;
+            *self->generators_top-- = NULL;
         }
     }
 
-    if(self->exc_type) {
-        PyErr_Restore(self->exc_type, self->exc_value, self->exc_tb); // steals refs
-        self->exc_type = self->exc_value = self->exc_tb = NULL;
+    if(exc_type) {
+        Py_XINCREF(exc_type);
+        Py_XINCREF(exc_value);
+        Py_XINCREF(exc_tb);
+        PyErr_Restore(exc_type, exc_value, exc_tb); // steals refs
+        exc_type = exc_value = exc_tb = NULL;
         return NULL;
     }
 
@@ -406,36 +390,29 @@ static PyObject* compose_send(PyComposeObject* self, PyObject* message) {
     if(!self->expect_data && self->messages_start[0] != Py_None)
         messages_insert(self, Py_None);
 
-    return _compose_go(self);
+    return _compose_go(self, NULL, NULL, NULL);
 }
 
 
 static PyObject* compose_throw(PyComposeObject* self, PyObject* arg) {
-    Py_CLEAR(self->exc_type);
-    Py_CLEAR(self->exc_value);
-    Py_CLEAR(self->exc_tb);
+    PyObject *exc_type = NULL, *exc_value = NULL, *exc_tb = NULL;
 
     // borrowed refs
-    if(!PyArg_ParseTuple(arg, "O|OO", &self->exc_type, &self->exc_value, &self->exc_tb)) {
+    if(!PyArg_ParseTuple(arg, "O|OO", &exc_type, &exc_value, &exc_tb)) {
         return NULL;
     }
 
-    if(PyExceptionInstance_Check(self->exc_type)) {
-        self->exc_value = self->exc_type;
-        self->exc_type = PyExceptionInstance_Class(self->exc_type); // borrowed ref
+    if(PyExceptionInstance_Check(exc_type)) {
+        exc_value = exc_type;
+        exc_type = PyExceptionInstance_Class(exc_type); // borrowed ref
     }
 
-    Py_XINCREF(self->exc_type);
-    Py_XINCREF(self->exc_value);
-    Py_XINCREF(self->exc_tb);
-    return _compose_go(self);
+    return _compose_go(self, exc_type, exc_value, exc_tb);
 }
 
 
 static PyObject* compose_close(PyComposeObject* self) {
-    self->exc_type = PyExc_GeneratorExit;
-    Py_INCREF(PyExc_GeneratorExit);
-    _compose_go(self);
+    _compose_go(self, PyExc_GeneratorExit, NULL, NULL);
 
     if(PyErr_ExceptionMatches(PyExc_StopIteration) || PyErr_ExceptionMatches(PyExc_GeneratorExit)) {
         PyErr_Clear();	/* ignore these errors */
