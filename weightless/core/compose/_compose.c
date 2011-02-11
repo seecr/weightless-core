@@ -234,8 +234,13 @@ static PyObject* compose_new(PyObject* type, PyObject* args, PyObject* kwargs) {
     PyObject* initial = NULL;
     PyObject* sidekick = NULL;
 
-    if(!PyArg_ParseTupleAndKeywords(args, kwargs, "O!|O:compose", argnames,
-                                    &PyGen_Type, &initial, &sidekick)) return NULL;
+    if(!PyArg_ParseTupleAndKeywords(args, kwargs, "O|O:compose", argnames,
+                                    &initial, &sidekick)) return NULL;
+
+    if(!PyGen_Check(initial) && !PyCompose_Check(initial)) {
+        PyErr_SetString(PyExc_TypeError, "compose() argument 1 must be generator");
+        return NULL;
+    }
 
     PyComposeObject* cmps = PyObject_GC_New(PyComposeObject, &PyCompose_Type);
 

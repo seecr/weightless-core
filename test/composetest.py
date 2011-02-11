@@ -840,6 +840,33 @@ class _ComposeTest(TestCase):
             pass
         self.assertEquals(['GeneratorExit turned into ValueError', 'stop here'], msg)
 
+    def testYieldCompose(self):
+        def f():
+            yield "f"
+        def g():
+            yield compose(f())
+        c = compose(g())
+        self.assertEquals(['f'], list(c))
+
+    def testComposeCompose(self):
+        def f():
+            yield
+        c = compose(compose(f()))
+        self.assertTrue(c)
+
+    def testYieldComposeCloseAndThrow(self):
+        def f():
+            try:
+                yield 42
+            except Exception, e:
+                yield 84
+
+        c = compose(f())
+        self.assertEquals(42, c.send(None))
+        self.assertEquals(84, c.throw(Exception()))
+        self.assertEquals(None, c.close())
+
+
 class ComposePyTest(_ComposeTest):
     def setUp(self):
         _ComposeTest.setUp(self)
@@ -898,26 +925,6 @@ class ComposeCTest(_ComposeTest):
             self.fail('must raise runtimeerror')
         except RuntimeError, e:
             self.assertEquals('maximum recursion depth exceeded (compose)', e.message)
-
-    def testYieldCompose(self):
-        def f():
-            yield "f"
-        def g():
-            yield compose(f())
-        c = compose(g())
-        self.assertEquals(['f'], list(c))
-
-    def testYieldComposeCloseAndThrow(self):
-        def f():
-            try:
-                yield 42
-            except Exception, e:
-                yield 84
-
-        c = compose(f())
-        self.assertEquals(42, c.send(None))
-        self.assertEquals(84, c.throw(Exception()))
-        self.assertEquals(None, c.close())
 
     def testSelftest(self):
         from weightless.core.compose._compose_c import _selftest
