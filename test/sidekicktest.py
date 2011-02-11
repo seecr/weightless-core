@@ -1,7 +1,6 @@
 from unittest import TestCase
 from weightless.core import compose
 
-
 class SidekickTest(TestCase):
 
     def testCallCallableWithSidekick(self):
@@ -41,3 +40,27 @@ class SidekickTest(TestCase):
         self.assertEquals(None, none)
         self.assertEquals(['a', 'b'], data)
         self.assertEquals(['sidekick'], called)
+
+    def testCallableRaisesException(self):
+        def command(sidekick):
+            raise RuntimeError("runtimeError")
+        def f():
+            yield command
+        c = compose(f(), sidekick=0)
+        try:
+            c.next()
+            self.fail()
+        except RuntimeError, e:
+            self.assertEquals("runtimeError", str(e))
+
+    def testCallableRaisesExceptionWhichIsCatchableByGenerators(self):
+        def command(sidekick):
+            raise RuntimeError("runtimeError")
+        def f():
+            try:
+                yield command
+            except RuntimeError, e:
+                yield str(e)
+        c = compose(f(), sidekick=0)
+        self.assertEquals("runtimeError", c.next())
+

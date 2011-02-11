@@ -38,6 +38,7 @@ from unittest import main
 
 from composetest import ComposeTest
 from compose_c_test import ComposeTest
+from localtest import LocalTest
 from sidekicktest import SidekickTest
 from reactortest import ReactorTest
 from servertestcasetest import ServerTestCaseTest
