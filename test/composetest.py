@@ -26,12 +26,15 @@ from unittest import TestCase
 from sys import stdout, exc_info, getrecursionlimit
 
 from weightless.core import autostart
-from weightless.core import local
-from weightless.core import compose
-from weightless.core import tostring
+from weightless.core.compose._local_py import local as pyLocal
+from weightless.core.compose._compose_py import compose as pyCompose
+from weightless.core.compose._tostring_py import tostring as pyTostring
+from weightless.core.compose._compose_c import local as cLocal
+from weightless.core.compose._compose_c import compose as cCompose
+from weightless.core.compose._compose_c import tostring as cTostring
 from gc import collect
 
-class ComposeTest(TestCase):
+class _ComposeTest(TestCase):
 
     def testCallCompose(self):
         try:
@@ -588,11 +591,11 @@ class ComposeTest(TestCase):
         def f():
             yield
         g = f()
-        soll = """  File "%s", line 587, in f
+        soll = """  File "%s", line 591, in f
     def f():""" % __file__.replace('pyc', 'py')
         self.assertEquals(soll, tostring(g))
         g.next()
-        soll = """  File "%s", line 588, in f
+        soll = """  File "%s", line 592, in f
     yield""" % __file__.replace('pyc', 'py')
         self.assertEquals(soll, tostring(g))
 
@@ -603,9 +606,9 @@ class ComposeTest(TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 603, in f2
+        result = """  File "%s", line 607, in f2
     yield f1()
-  File "%s", line 601, in f1
+  File "%s", line 605, in f1
     yield""" % (2*(__file__.replace('pyc', 'py'),))
         c.next()
         self.assertEquals(result, tostring(c), "\n%s\n!=\n%s\n" % (result, tostring(c)))
@@ -616,7 +619,7 @@ class ComposeTest(TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 615, in f2
+        result = """  File "%s", line 619, in f2
     def f2():""" % __file__.replace('pyc', 'py')
         self.assertEquals(result, tostring(c))
 
@@ -837,3 +840,85 @@ class ComposeTest(TestCase):
             pass
         self.assertEquals(['GeneratorExit turned into ValueError', 'stop here'], msg)
 
+class ComposePyTest(_ComposeTest):
+    def setUp(self):
+        _ComposeTest.setUp(self)
+        global local, tostring, compose
+        local = pyLocal
+        tostring = pyTostring
+        compose = pyCompose
+
+class ComposeCTest(_ComposeTest):
+    def setUp(self):
+        _ComposeTest.setUp(self)
+        global local, tostring, compose
+        local = cLocal
+        tostring = cTostring
+        compose = cCompose
+
+    def testQueueSize(self):
+        testrange = 9 #QUEUE SIZE = 10
+        def f():
+            raise StopIteration(*xrange(testrange))
+            yield 'f done'
+        def g():
+            results = []
+            x = yield f()
+            results.append(x)
+            for i in xrange(testrange-1):
+                results.append((yield))
+            yield results
+        c = compose(g())
+        self.assertEquals([range(testrange)], list(c))
+
+    def testQueueSizeExceeded(self):
+        testrange = 10 #QUEUE SIZE = 10
+        def f():
+            raise StopIteration(*xrange(testrange))
+            yield
+        def g():
+            x = yield f()
+        self.assertRaises(RuntimeError, compose(g()).next)
+
+    def testStackOverflow(self):
+        max_recursion_depth = getrecursionlimit()
+        def f(recursion_depth=1):
+            if recursion_depth < max_recursion_depth:
+                yield f(recursion_depth + 1)
+        c = compose(f())
+        try:
+            list(c)
+        except RuntimeError, e:
+            self.fail('must not raise %s' % e)
+
+        max_recursion_depth += 1 # <== 
+        c = compose(f())
+        try:
+            list(c)
+            self.fail('must raise runtimeerror')
+        except RuntimeError, e:
+            self.assertEquals('maximum recursion depth exceeded (compose)', e.message)
+
+    def testYieldCompose(self):
+        def f():
+            yield "f"
+        def g():
+            yield compose(f())
+        c = compose(g())
+        self.assertEquals(['f'], list(c))
+
+    def testYieldComposeCloseAndThrow(self):
+        def f():
+            try:
+                yield 42
+            except Exception, e:
+                yield 84
+
+        c = compose(f())
+        self.assertEquals(42, c.send(None))
+        self.assertEquals(84, c.throw(Exception()))
+        self.assertEquals(None, c.close())
+
+    def testSelftest(self):
+        from weightless.core.compose._compose_c import _selftest
+        _selftest()

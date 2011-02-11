@@ -38,6 +38,6 @@ try:
 except ImportError:
     from warnings import warn
     warn("You're now using the suboptimal python version of compose(), local(), tostring()")
-    from _compose import compose
-    from _local import local
-    from _tostring import tostring
+    from _compose_py import compose
+    from _local_py import local
+    from _tostring_py import tostring

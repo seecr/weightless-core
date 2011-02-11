@@ -37,8 +37,8 @@ sysPath.insert(0,'..')                            #DO_NOT_DISTRIBUTE
 
 from unittest import main
 
-from composetest import ComposeTest
-from compose_c_test import ComposeTest
+from composetest import ComposePyTest
+from composetest import ComposeCTest
 from localtest import LocalTest
 from sidekicktest import SidekickTest
 from reactortest import ReactorTest
