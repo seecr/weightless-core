@@ -24,5 +24,14 @@
 
 export LANG=en_US.UTF-8
 export PYTHONPATH=.:"$PYTHONPATH"
+option=$1                                                  #DO_NOT_DISTRIBUTE
+if [ "$option" == "--python" ]; then                       #DO_NOT_DISTRIBUTE
+    shift                                                  #DO_NOT_DISTRIBUTE
+WEIGHTLESS_COMPOSE_TEST=PYTHON python2.5 _alltests.py "$@" #DO_NOT_DISTRIBUTE
+elif [ "$option" == "--c" ]; then                          #DO_NOT_DISTRIBUTE
+    shift                                                  #DO_NOT_DISTRIBUTE
+python2.5 _alltests.py "$@"                                #DO_NOT_DISTRIBUTE
+else                                                       #DO_NOT_DISTRIBUTE
+WEIGHTLESS_COMPOSE_TEST=PYTHON python2.5 _alltests.py "$@" #DO_NOT_DISTRIBUTE
 python2.5 _alltests.py "$@"
-
+fi                                                         #DO_NOT_DISTRIBUTE

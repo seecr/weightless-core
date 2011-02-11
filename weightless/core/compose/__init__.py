@@ -29,6 +29,14 @@ if isdir(join(abspath(dirname(__file__)), '.svn')):          #DO_NOT_DISTRIBUTE
         import sys                                           #DO_NOT_DISTRIBUTE
         sys.exit(status)                                     #DO_NOT_DISTRIBUTE
 
-from _compose_py import compose
-from _local import local
-from _tostring_py import tostring
+try:
+    from os import getenv                                        #DO_NOT_DISTRIBUTE
+    if getenv('WEIGHTLESS_COMPOSE_TEST') == 'PYTHON':            #DO_NOT_DISTRIBUTE
+        raise ImportError('Python compose for testing purposes') #DO_NOT_DISTRIBUTE
+    from _compose_c import compose, local, tostring
+except ImportError:
+    from warnings import warn
+    warn("You're now using the suboptimal python version of compose(), local(), tostring()")
+    from _compose import compose
+    from _local import local
+    from _tostring import tostring
