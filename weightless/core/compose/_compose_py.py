@@ -93,8 +93,12 @@ def _compose(initial, sidekick):
                 response = generator.send(message)
             if sidekick and callable(response):
                 messages.insert(0, message)
-                response(sidekick)
-                pass
+                try:
+                    response(sidekick)
+                except BaseException:
+                    exType, exValue, exTraceback = exc_info()
+                    exception = (exType, exValue, exTraceback.tb_next)
+                    continue
             elif type(response) == GeneratorType:
                 generators.append(response)
                 frame = response.gi_frame

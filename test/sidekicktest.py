@@ -23,6 +23,7 @@
 ## end license ##
 from unittest import TestCase
 from weightless.core import compose
+from sys import exc_info
 
 class SidekickTest(TestCase):
 
@@ -69,7 +70,7 @@ class SidekickTest(TestCase):
             raise RuntimeError("runtimeError")
         def f():
             yield command
-        c = compose(f(), sidekick=0)
+        c = compose(f(), sidekick="sidekick")
         try:
             c.next()
             self.fail()
@@ -84,6 +85,20 @@ class SidekickTest(TestCase):
                 yield command
             except RuntimeError, e:
                 yield str(e)
-        c = compose(f(), sidekick=0)
+        c = compose(f(), sidekick="sidekick")
         self.assertEquals("runtimeError", c.next())
 
+    def testProperTracebackForCallable(self):
+        def command(sidekick):
+            raise RuntimeError("runtimeError")
+        def f():
+            yield command
+        c = compose(f(), sidekick="sidekick")
+        try:
+            c.next()
+            self.fail()
+        except RuntimeError, e:
+            exType, exValue, exTraceback = exc_info()
+            self.assertEquals('testProperTracebackForCallable', exTraceback.tb_frame.f_code.co_name)
+            self.assertEquals('f', exTraceback.tb_next.tb_frame.f_code.co_name)
+            self.assertEquals('command', exTraceback.tb_next.tb_next.tb_frame.f_code.co_name)
