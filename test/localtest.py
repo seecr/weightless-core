@@ -1,17 +1,17 @@
 ## begin license ##
 #
-#    ComposeExt is a C implementation of PEP380 plus some additional features.
-#	 See http://weightless.io
+#    Weightless is a High Performance Asynchronous Networking Library
+#    See http://weightless.io
 #    Copyright (C) 2009-2011 Seek You Too (CQ2) http://www.cq2.nl
 #
-#    This file is part of ComposeExt
+#    This file is part of Weightless
 #
-#    ComposeExt is free software; you can redistribute it and/or modify
+#    Weightless is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
 #    the Free Software Foundation; either version 2 of the License, or
 #    (at your option) any later version.
 #
-#    ComposeExt is distributed in the hope that it will be useful,
+#    Weightless is distributed in the hope that it will be useful,
 #    but WITHOUT ANY WARRANTY; without even the implied warranty of
 #    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #    GNU General Public License for more details.

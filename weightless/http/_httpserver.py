@@ -2,6 +2,7 @@
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
+#    See http://weightless.io
 #    Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
 #
 #    This file is part of Weightless
