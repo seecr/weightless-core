@@ -866,6 +866,12 @@ class _ComposeTest(TestCase):
         self.assertEquals(84, c.throw(Exception()))
         self.assertEquals(None, c.close())
 
+    def testDecorator(self):
+        from weightless.core import compose
+        @compose
+        def f():
+            yield "a"
+        self.assertEquals(["a"], list(f()))
 
 class ComposePyTest(_ComposeTest):
     def setUp(self):

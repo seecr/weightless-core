@@ -335,7 +335,7 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
 
                 messages_insert(self, Py_None);
 
-            } else if(self->sidekick && PyCallable_Check(response)) {
+            } else if(self->sidekick && self->sidekick != Py_None && PyCallable_Check(response)) {
                 messages_insert(self, message);
                 PyObject* r = PyObject_CallFunctionObjArgs(response, self->sidekick, NULL);
 
