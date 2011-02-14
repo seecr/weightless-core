@@ -1,4 +1,3 @@
-#!/usr/bin/env python2.5
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library

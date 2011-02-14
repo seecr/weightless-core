@@ -23,11 +23,13 @@
 ## end license ##
 
 from os.path import dirname, abspath, isdir, join            #DO_NOT_DISTRIBUTE
+from sys import version_info                                 #DO_NOT_DISTRIBUTE
+pycmd = "python%s.%s" % version_info[:2]                     #DO_NOT_DISTRIBUTE
 if isdir(join(abspath(dirname(__file__)), '.svn')):          #DO_NOT_DISTRIBUTE
     from os import system                                    #DO_NOT_DISTRIBUTE
     status = system(                                         #DO_NOT_DISTRIBUTE
-        "cd %s/../../..; ./setup.py build_ext --inplace"     #DO_NOT_DISTRIBUTE
-        % abspath(dirname(__file__)))                        #DO_NOT_DISTRIBUTE
+        "cd %s/../../..; %s setup.py build_ext --inplace"    #DO_NOT_DISTRIBUTE
+        % (abspath(dirname(__file__))), pycmd)               #DO_NOT_DISTRIBUTE
     if status > 0:                                           #DO_NOT_DISTRIBUTE
         import sys                                           #DO_NOT_DISTRIBUTE
         sys.exit(status)                                     #DO_NOT_DISTRIBUTE
