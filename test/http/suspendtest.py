@@ -29,7 +29,8 @@ from unittest import TestCase
 from re import sub
 from traceback import format_exc
 
-from cq2utils import CallTrace, CQ2TestCase
+from basetestcase import BaseTestCase
+from calltrace import CallTrace
 
 from weightless.io import Reactor
 from weightless.http import Suspend, HttpServer
@@ -47,7 +48,7 @@ fileDict = {
 }
 
 
-class SuspendTest(CQ2TestCase):
+class SuspendTest(BaseTestCase):
 
     def testReactorSuspend(self):
         handle = ['initial value']

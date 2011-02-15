@@ -42,7 +42,6 @@ from localtest import LocalTest
 from sidekicktest import SidekickTest
 from reactortest import ReactorTest
 from servertestcasetest import ServerTestCaseTest
-from snaketest import SnakeTest
 
 from http.acceptortest import AcceptorTest
 from http.httpreadertest import HttpReaderTest

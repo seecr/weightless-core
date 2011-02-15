@@ -29,7 +29,7 @@ if isdir(join(abspath(dirname(__file__)), '.svn')):          #DO_NOT_DISTRIBUTE
     from os import system                                    #DO_NOT_DISTRIBUTE
     status = system(                                         #DO_NOT_DISTRIBUTE
         "cd %s/../../..; %s setup.py build_ext --inplace"    #DO_NOT_DISTRIBUTE
-        % (abspath(dirname(__file__))), pycmd)               #DO_NOT_DISTRIBUTE
+        % (abspath(dirname(__file__)), pycmd))               #DO_NOT_DISTRIBUTE
     if status > 0:                                           #DO_NOT_DISTRIBUTE
         import sys                                           #DO_NOT_DISTRIBUTE
         sys.exit(status)                                     #DO_NOT_DISTRIBUTE

@@ -273,6 +273,7 @@ static int _compose_handle_stopiteration(PyComposeObject* self) {
     } else {
         messages_insert(self, Py_None);
     }
+
     return 1;
 }
 
@@ -336,13 +337,13 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
                 messages_insert(self, Py_None);
 
             } else if(self->sidekick && self->sidekick != Py_None && PyCallable_Check(response)) {
-                messages_insert(self, message);
+                messages_insert(self, Py_None);
                 PyObject* r = PyObject_CallFunctionObjArgs(response, self->sidekick, NULL);
 
-                if(!r) {
+                if(!r)
                     PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
 
-                } else
+                else
                     Py_XDECREF(r);
 
             } else if(response != Py_None || messages_empty(self)) {
@@ -350,16 +351,18 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
                 Py_INCREF(response);
                 return response;
             }
+
         } else {
-            if(PyErr_ExceptionMatches(PyExc_StopIteration)) {
-                if(!_compose_handle_stopiteration(self)) {
+            if(PyErr_ExceptionMatches(PyExc_StopIteration))
+                if(!_compose_handle_stopiteration(self))
                     PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
-                } else {
+
+                else
                     exc_type = exc_value = exc_tb = NULL;
-                }
-            } else {
+
+            else
                 PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
-            }
+
             Py_DECREF(generator);
             *self->generators_top-- = NULL;
         }
@@ -395,7 +398,7 @@ static PyObject* compose_send(PyComposeObject* self, PyObject* message) {
 
 
 static PyObject* compose_throw(PyComposeObject* self, PyObject* arg) {
-    PyObject *exc_type = NULL, *exc_value = NULL, *exc_tb = NULL;
+    PyObject* exc_type = NULL, *exc_value = NULL, *exc_tb = NULL;
 
     // borrowed refs
     if(!PyArg_ParseTuple(arg, "O|OO", &exc_type, &exc_value, &exc_tb)) {

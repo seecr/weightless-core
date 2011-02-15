@@ -23,7 +23,6 @@
 ## end license ##
 
 from unittest import TestCase
-from cq2utils.calltrace import CallTrace
 from time import time, sleep
 from signal import signal, SIGALRM, alarm, pause
 from select import error as ioerror

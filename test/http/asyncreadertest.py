@@ -22,8 +22,7 @@
 #
 ## end license ##
 
-from cq2utils import CQ2TestCase
-
+from basetestcase import BaseTestCase
 from re import sub
 from sys import exc_info
 import sys
@@ -51,13 +50,13 @@ fileDict = {
     'httpget.py': httpget.func_code.co_filename,
 }
  
-class AsyncReaderTest(CQ2TestCase):
+class AsyncReaderTest(BaseTestCase):
 
     def dispatch(self, *args, **kwargs):
         return compose(self.handler(*args, **kwargs))
 
     def setUp(self):
-        CQ2TestCase.setUp(self)
+        BaseTestCase.setUp(self)
         self.reactor = Reactor()
         self.port = randint(2**10, 2**16)
         self.httpserver = HttpServer(self.reactor, self.port, self.dispatch)
@@ -155,7 +154,7 @@ TypeError: an integer is required
             finally:
                 sys.stderr = orgout
         self.assertEquals(IOError, exceptions[0][0])
-        self.assertEquals(111, exceptions[0][1].message)
+        self.assertEquals('111', str(exceptions[0][1]))
 
     def testTracebackPreservedAcrossSuspend(self):
         backofficeport = self.port + 1

@@ -23,7 +23,7 @@
 ## end license ##
 
 from unittest import TestCase
-from sys import stdout, exc_info, getrecursionlimit
+from sys import stdout, exc_info, getrecursionlimit, version_info
 
 from weightless.core import autostart
 from weightless.core.compose._local_py import local as pyLocal
@@ -41,7 +41,10 @@ class _ComposeTest(TestCase):
             compose()
             self.fail()
         except TypeError, e:
-            self.assertEquals('compose() takes at least 1 argument (0 given)', str(e))
+            self.assertTrue(
+                    "compose() takes at least 1 argument (0 given)" in str(e)
+                    or # (python 2.5/2.6 C-API differences)
+                    "Required argument 'initial' (pos 1) not found" in str(e))
         self.assertRaises(TypeError, compose, 's')
         self.assertRaises(TypeError, compose, 0)
 
@@ -286,7 +289,7 @@ class _ComposeTest(TestCase):
         def f():
             try:
                 yield None
-            except Exception, e:
+            except BaseException, e:
                 r.append(e)
                 raise
         g = compose(f())
@@ -453,7 +456,7 @@ class _ComposeTest(TestCase):
         def g():
             try:
                 yield f()
-            except Exception, e:
+            except BaseException, e:
                 raise Exception(e)
         c = compose(g())
         r = c.next()
@@ -591,11 +594,11 @@ class _ComposeTest(TestCase):
         def f():
             yield
         g = f()
-        soll = """  File "%s", line 591, in f
+        soll = """  File "%s", line 594, in f
     def f():""" % __file__.replace('pyc', 'py')
         self.assertEquals(soll, tostring(g))
         g.next()
-        soll = """  File "%s", line 592, in f
+        soll = """  File "%s", line 595, in f
     yield""" % __file__.replace('pyc', 'py')
         self.assertEquals(soll, tostring(g))
 
@@ -606,9 +609,9 @@ class _ComposeTest(TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 607, in f2
+        result = """  File "%s", line 610, in f2
     yield f1()
-  File "%s", line 605, in f1
+  File "%s", line 608, in f1
     yield""" % (2*(__file__.replace('pyc', 'py'),))
         c.next()
         self.assertEquals(result, tostring(c), "\n%s\n!=\n%s\n" % (result, tostring(c)))
@@ -619,7 +622,7 @@ class _ComposeTest(TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 619, in f2
+        result = """  File "%s", line 622, in f2
     def f2():""" % __file__.replace('pyc', 'py')
         self.assertEquals(result, tostring(c))
 
@@ -930,8 +933,17 @@ class ComposeCTest(_ComposeTest):
             list(c)
             self.fail('must raise runtimeerror')
         except RuntimeError, e:
-            self.assertEquals('maximum recursion depth exceeded (compose)', e.message)
+            self.assertEquals('maximum recursion depth exceeded (compose)', str(e))
 
     def testSelftest(self):
         from weightless.core.compose._compose_c import _selftest
         _selftest()
+
+
+def gettypeerrormsg():
+    def compose(initial, arg1 = None): pass
+    try:
+        compose()
+    except TypeError, e:
+        return str(e)
+ 

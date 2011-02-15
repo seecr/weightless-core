@@ -34,8 +34,8 @@ from weightless.core import VERSION as WlVersion
 from weightless.http._httpreader import HttpReaderFacade, Connector, HandlerFacade, _httpParseUrl
 import sys
 from StringIO import StringIO
-from cq2utils import CallTrace
-from cq2utils.cq2testcase import MatchAll
+from calltrace import CallTrace
+from basetestcase import MATCHALL
 
 def server(port, response, expectedrequest, delay=0, loop=50):
     isListening = Event()
@@ -98,7 +98,7 @@ class HttpReaderTest(TestCase):
         while 'Hello World!' != "".join((x for x in dataReceived[1:] if x)):
             reactor.step()
         serverThread.join()
-        self.assertEquals({'HTTPVersion': '1.1', 'StatusCode': '200', 'ReasonPhrase': 'OK', 'Headers': {'Content-Type': 'text/html'}, 'Client': ('127.0.0.1', MatchAll())}, dataReceived[0])
+        self.assertEquals({'HTTPVersion': '1.1', 'StatusCode': '200', 'ReasonPhrase': 'OK', 'Headers': {'Content-Type': 'text/html'}, 'Client': ('127.0.0.1', MATCHALL)}, dataReceived[0])
 
     def testHttpUrlParse(self):
         host, port, path = _httpParseUrl('http://www.cq2.org')

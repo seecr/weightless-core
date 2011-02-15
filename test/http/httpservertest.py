@@ -28,7 +28,8 @@ from socket import socket, error as SocketError
 from select import select
 from weightless.io import Reactor
 from time import sleep
-from cq2utils import MATCHALL, CallTrace
+from calltrace import CallTrace
+from basetestcase import MATCHALL
 from os.path import join, abspath, dirname
 
 from weightless.http import HttpServer, _httpserver

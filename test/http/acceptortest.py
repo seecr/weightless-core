@@ -23,7 +23,7 @@
 ## end license ##
 from unittest import TestCase
 from socket import socket
-from cq2utils import CallTrace
+from calltrace import CallTrace
 from random import randint
 from os import system
 from subprocess import Popen, PIPE
