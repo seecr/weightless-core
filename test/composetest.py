@@ -24,15 +24,15 @@
 
 from unittest import TestCase
 from sys import stdout, exc_info, getrecursionlimit, version_info
-
+import gc
+from weakref import ref
+from types import GeneratorType
 from weightless.core import autostart
 from weightless.core.compose._local_py import local as pyLocal
 from weightless.core.compose._compose_py import compose as pyCompose
 from weightless.core.compose._tostring_py import tostring as pyTostring
-from weightless.core.compose._compose_c import local as cLocal
-from weightless.core.compose._compose_c import compose as cCompose
+from weightless.core.compose._compose_c import local as cLocal, compose as cCompose
 from weightless.core.compose._compose_c import tostring as cTostring
-from gc import collect
 
 class _ComposeTest(TestCase):
 
@@ -50,9 +50,9 @@ class _ComposeTest(TestCase):
 
     def testGC(self):
         c = compose((x for x in []))
-        collect()
+        gc.collect()
         del c
-        collect()
+        gc.collect()
 
     def assertComposeImpl(self, impl):
         self.assertEquals(impl, compose)
@@ -875,6 +875,16 @@ class _ComposeTest(TestCase):
         def f():
             yield "a"
         self.assertEquals(["a"], list(f()))
+
+    def setUp(self):
+        gc.collect()
+
+    def tearDown(self):
+        gc.collect()
+        tracked_objs = [o for o in gc.get_objects() if type(o) in (compose, GeneratorType)] 
+        self.assertEquals([], tracked_objs, tracked_objs[:5])
+        del tracked_objs
+        gc.collect()
 
 class ComposePyTest(_ComposeTest):
     def setUp(self):
