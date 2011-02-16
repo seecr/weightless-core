@@ -46,7 +46,9 @@ setup(
     ext_modules=[
         Extension("weightless.core.compose._compose_c", [
             "weightless/core/compose/_compose.c"
-            ]
+            ],
+        extra_compile_args = ['-O0'],
+        extra_link_args = ['-O0']
         )
     ]
 )
