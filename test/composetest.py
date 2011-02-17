@@ -403,7 +403,7 @@ class _ComposeTest(TestCase):
             tb = tb + t2 - t1
         print 'Overhead compose compared to list(): %2.2f %%' % ((tg/tb - 1) * 100.0)
 
-    def XXXtestMemLeaks(self):
+    def testMemLeaks(self):
         def f1(arg):
             r = yield arg                       # None
             raise Exception()
@@ -450,7 +450,7 @@ class _ComposeTest(TestCase):
         except Exception, e:
             self.assertEquals("Exception(Exception('wrong',),)", repr(e))
 
-    def XXXtestNestedClose(self):
+    def testNestedClose(self):
         def f():
             yield 'A'
         def g():
@@ -467,7 +467,7 @@ class _ComposeTest(TestCase):
         except Exception, e:
             self.assertEquals("Exception(GeneratorExit(),)", repr(e))
 
-    def XXXtestMaskException(self):
+    def testMaskException(self):
         def f():
             try:
                 yield 'a'
@@ -574,7 +574,7 @@ class _ComposeTest(TestCase):
         except AssertionError, e:
             self.assertEquals('Cannot accept data. First send None.', str(e))
 
-    def XXXtestExceptionsHaveGeneratorCallStackAsBackTrace(self):
+    def testExceptionsHaveGeneratorCallStackAsBackTrace(self):
         def f():
             yield
         def g():
@@ -927,7 +927,7 @@ class ComposeCTest(_ComposeTest):
         c = compose(g())
         self.assertEquals([range(testrange)], list(c))
 
-    def XXXtestQueueSizeExceeded(self):
+    def testQueueSizeExceeded(self):
         testrange = 10 #QUEUE SIZE = 10
         def f():
             raise StopIteration(*xrange(testrange))

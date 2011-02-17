@@ -107,9 +107,8 @@ static PyObject* messages_next(PyComposeObject* self) {
     PyObject* result = *self->messages_start;
     *self->messages_start++ = NULL;
 
-    if(self->messages_start == self->messages_base + QUEUE_SIZE) {
+    if(self->messages_start == self->messages_base + QUEUE_SIZE)
         self->messages_start = self->messages_base;
-    }
 
     return result;
 }
@@ -124,9 +123,8 @@ static int messages_append(PyComposeObject* self, PyObject* message) {
     *self->messages_end++ = message;
     Py_INCREF(message);
 
-    if(self->messages_end == self->messages_base + QUEUE_SIZE) {
+    if(self->messages_end == self->messages_base + QUEUE_SIZE)
         self->messages_end = self->messages_base;
-    }
 
     return 1;
 }
@@ -138,27 +136,26 @@ static int messages_insert(PyComposeObject* self, PyObject* message) {
         return 0;
     }
 
-    if(self->messages_start == self->messages_base) {
+    if(self->messages_start == self->messages_base)
         self->messages_start = self->messages_base + QUEUE_SIZE;
-    }
 
     *--self->messages_start = message;
     Py_INCREF(message);
     return 1;
 }
 
+
+
 ////////// Garbage Collector Support //////////
 
 static int compose_traverse(PyComposeObject* self, visitproc visit, void* arg) {
     PyObject** p;
 
-    for(p = self->generators_base; p < self->generators_top; p++) {
+    for(p = self->generators_base; p < self->generators_top; p++)
         Py_VISIT(*p);
-    }
 
-    for(p = self->messages_base; p < self->messages_base + QUEUE_SIZE; p++) {
+    for(p = self->messages_base; p < self->messages_base + QUEUE_SIZE; p++)
         Py_VISIT(*p);
-    }
 
     Py_VISIT(self->sidekick);
     return 0;
@@ -166,16 +163,14 @@ static int compose_traverse(PyComposeObject* self, visitproc visit, void* arg) {
 
 
 static int compose_clear(PyComposeObject* self) {
-    while(self->generators_base && --self->generators_top >= self->generators_base) {
+    while(self->generators_base && --self->generators_top >= self->generators_base)
         Py_CLEAR(*self->generators_top);
-    }
 
     free(self->generators_base);
     self->generators_base = NULL;
 
-    while(self->messages_base && !messages_empty(self)) {
+    while(self->messages_base && !messages_empty(self))
         Py_DECREF(messages_next(self));
-    }
 
     free(self->messages_base);
     self->messages_base = NULL;
@@ -187,9 +182,8 @@ static int compose_clear(PyComposeObject* self) {
 static void compose_dealloc(PyComposeObject* self) {
     PyObject_GC_UnTrack(self);
 
-    if(self->weakreflist != NULL) {
+    if(self->weakreflist != NULL)
         PyObject_ClearWeakRefs((PyObject*)self);
-    }
 
     compose_clear(self);
     PyObject_GC_Del(self);
@@ -233,7 +227,8 @@ static PyObject* compose_new(PyObject* type, PyObject* args, PyObject* kwargs) {
 
     PyComposeObject* cmps = PyObject_GC_New(PyComposeObject, &PyCompose_Type);
 
-    if(cmps == NULL) return NULL;
+    if(cmps == NULL)
+        return NULL;
 
     _compose_initialize((PyComposeObject*) cmps);
 
@@ -253,21 +248,20 @@ static int _compose_handle_stopiteration(PyComposeObject* self, PyObject* exc_va
     PyObject* args = exc_value
                      ? PyObject_GetAttrString(exc_value, "args") // new ref
                      : NULL;
+
     if(args && PyTuple_CheckExact(args)) {
         int i;
 
-        for(i = PyTuple_Size(args) - 1; i >= 0; i--) {
+        for(i = PyTuple_Size(args) - 1; i >= 0; i--)
             if(!messages_insert(self, PyTuple_GET_ITEM(args, i))) {
                 Py_DECREF(args);
                 return 0;
             }
-        }
 
         Py_DECREF(args);
 
-    } else {
+    } else
         messages_insert(self, Py_None);
-    }
 
     return 1;
 }
@@ -294,6 +288,7 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
     Py_XINCREF(exc_type);
     Py_XINCREF(exc_value);
     Py_XINCREF(exc_tb);
+
     while(self->generators_top > self->generators_base) {
         PyObject* generator = *(self->generators_top - 1); // take over ownership from stack
         PyObject* response = NULL;
@@ -309,13 +304,12 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
                     exc_type = exc_value = exc_tb = NULL;
                 }
 
-            } else {
+            } else
                 response =
                     PyObject_CallMethod(generator, "throw", "OOO",
                                         exc_type,
                                         exc_value ? exc_value : Py_None,
                                         exc_tb ? exc_tb : Py_None); // new ref
-            }
 
         } else {
             message = messages_next(self); // new ref
@@ -346,9 +340,8 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
                     Py_CLEAR(exc_value);
                     Py_CLEAR(exc_tb);
                     PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
-                }
 
-                else
+                } else
                     Py_XDECREF(r);
 
             } else if(response != Py_None || messages_empty(self)) {
@@ -356,18 +349,26 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
                 Py_CLEAR(exc_type);
                 Py_CLEAR(exc_value);
                 Py_CLEAR(exc_tb);
-                Py_INCREF(response);
+                //Py_INCREF(response);
                 return response;
             }
+
             Py_XDECREF(response);
+
         } else {
             Py_CLEAR(exc_type);
             Py_CLEAR(exc_value);
             Py_CLEAR(exc_tb);
             PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
+
             if(PyErr_GivenExceptionMatches(exc_type, PyExc_StopIteration)) {
-                _compose_handle_stopiteration(self, exc_value);
-                Py_CLEAR(exc_type); Py_CLEAR(exc_value); Py_CLEAR(exc_tb);
+                int ok = _compose_handle_stopiteration(self, exc_value);
+                Py_CLEAR(exc_type);
+                Py_CLEAR(exc_value);
+                Py_CLEAR(exc_tb);
+
+                if(!ok)
+                    PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
             }
 
             Py_DECREF(generator);
@@ -404,9 +405,8 @@ static PyObject* compose_send(PyComposeObject* self, PyObject* message) {
 static PyObject* compose_throw(PyComposeObject* self, PyObject* arg) {
     PyObject* exc_type = NULL, *exc_value = NULL, *exc_tb = NULL;
 
-    if(!PyArg_ParseTuple(arg, "O|OO", &exc_type, &exc_value, &exc_tb)) { //borrowed refs
+    if(!PyArg_ParseTuple(arg, "O|OO", &exc_type, &exc_value, &exc_tb)) //borrowed refs
         return NULL;
-    }
 
     if(PyExceptionInstance_Check(exc_type)) { // e.g. throw(Exception())
         exc_value = exc_type;
@@ -431,9 +431,8 @@ static PyObject* compose_close(PyComposeObject* self) {
 
 
 static void compose_del(PyObject* self) {
-    if(!compose_close((PyComposeObject*) self)) {
+    if(!compose_close((PyComposeObject*) self))
         PyErr_WriteUnraisable(self);
-    }
 }
 
 
@@ -455,16 +454,14 @@ PyObject* find_local_in_compose(PyComposeObject* cmps, PyObject* name) {
         if(PyGen_Check(*generator)) {
             PyObject* result = find_local_in_locals(((PyGenObject*) * generator)->gi_frame, name);
 
-            if(result != NULL) {
+            if(result != NULL)
                 return result;
-            }
 
         } else {
             PyObject* result = find_local_in_compose((PyComposeObject*) * generator, name);
 
-            if(result != NULL) {
+            if(result != NULL)
                 return result;
-            }
         }
     }
 
@@ -486,9 +483,8 @@ PyObject* find_local_in_locals(PyFrameObject* frame, PyObject* name) {
                 return localVar;
             }
 
-            if(localVar->ob_type == &PyCompose_Type) {
+            if(localVar->ob_type == &PyCompose_Type)
                 return find_local_in_compose((PyComposeObject*)localVar, name);
-            }
         }
     }
 
@@ -501,9 +497,8 @@ PyObject* find_local_in_frame(PyFrameObject* frame, PyObject* name) {
 
     PyObject* result = find_local_in_locals(frame, name);
 
-    if(result) {
+    if(result)
         return result;
-    }
 
     return find_local_in_frame(frame->f_back, name);
 }
@@ -530,8 +525,10 @@ PyObject* py_getline;
 PyObject* tostring(PyObject* self, PyObject* gen) {
     if(PyGen_Check(gen)) {
         PyFrameObject* frame = ((PyGenObject*)gen)->gi_frame;
+
         if(!frame)
             return PyString_FromString("<no frame>");
+
         int ilineno = PyCode_Addr2Line(frame->f_code, frame->f_lasti);
         PyObject* lineno = PyInt_FromLong(ilineno); // new ref
         PyObject* codeline = PyObject_CallFunctionObjArgs(py_getline,
@@ -561,10 +558,10 @@ PyObject* tostring(PyObject* self, PyObject* gen) {
         while(generator < cmps->generators_top) {
             PyObject* s = tostring(NULL, *generator++);
 
-            if(!result) {
+            if(!result)
                 result = s;
 
-            } else {
+            else {
                 PyString_ConcatAndDel(&result, PyString_FromString("\n"));
                 PyString_ConcatAndDel(&result, s);
             }
