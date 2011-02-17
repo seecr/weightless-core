@@ -877,7 +877,8 @@ class _ComposeTest(TestCase):
         self.assertEquals(["a"], list(f()))
 
     def get_tracked_objects(self):
-        return [ref(o) for o in gc.get_objects() if type(o) in (compose, GeneratorType, Exception)]
+        return [o for o in gc.get_objects() if type(o) in 
+                (compose, GeneratorType, Exception, int, str)]
 
     def setUp(self):
         gc.collect()
@@ -890,10 +891,9 @@ class _ComposeTest(TestCase):
             except:
                 return repr(o)
         gc.collect()
-        tracked_objs = self.get_tracked_objects()
-        diff = set(self._baseline).difference(set(tracked_objs))
-        self.assertEquals(diff, set(tostr(o.value) for o in diff))
-        del diff
+        for obj in self.get_tracked_objects():
+            self.assertTrue(obj in self._baseline, obj) #tostr(obj))
+        del self._baseline
         gc.collect()
 
 class ComposePyTest(_ComposeTest):

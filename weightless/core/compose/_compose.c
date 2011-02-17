@@ -349,7 +349,6 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
                 Py_CLEAR(exc_type);
                 Py_CLEAR(exc_value);
                 Py_CLEAR(exc_tb);
-                //Py_INCREF(response);
                 return response;
             }
 
