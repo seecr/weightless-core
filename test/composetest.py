@@ -34,6 +34,10 @@ from weightless.core.compose._tostring_py import tostring as pyTostring
 from weightless.core.compose._compose_c import local as cLocal, compose as cCompose
 from weightless.core.compose._compose_c import tostring as cTostring
 
+class ATrackedObj(object):
+    def __init__(self):
+        self.l = []
+        
 class _ComposeTest(TestCase):
 
     def testCallCompose(self):
@@ -594,11 +598,11 @@ class _ComposeTest(TestCase):
         def f():
             yield
         g = f()
-        soll = """  File "%s", line 594, in f
+        soll = """  File "%s", line 598, in f
     def f():""" % __file__.replace('pyc', 'py')
         self.assertEquals(soll, tostring(g))
         g.next()
-        soll = """  File "%s", line 595, in f
+        soll = """  File "%s", line 599, in f
     yield""" % __file__.replace('pyc', 'py')
         self.assertEquals(soll, tostring(g))
 
@@ -609,9 +613,9 @@ class _ComposeTest(TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 610, in f2
+        result = """  File "%s", line 614, in f2
     yield f1()
-  File "%s", line 608, in f1
+  File "%s", line 612, in f1
     yield""" % (2*(__file__.replace('pyc', 'py'),))
         c.next()
         self.assertEquals(result, tostring(c), "\n%s\n!=\n%s\n" % (result, tostring(c)))
@@ -622,7 +626,7 @@ class _ComposeTest(TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 622, in f2
+        result = """  File "%s", line 626, in f2
     def f2():""" % __file__.replace('pyc', 'py')
         self.assertEquals(result, tostring(c))
 
@@ -869,6 +873,11 @@ class _ComposeTest(TestCase):
         self.assertEquals(84, c.throw(Exception()))
         self.assertEquals(None, c.close())
 
+    def testMessagesAndResponseAreFreed(self):
+        def f():
+            v = yield ATrackedObj() # some that is tracked
+        self.assertTrue('ATrackedObj' in str(compose(f()).next()))
+
     def testDecorator(self):
         from weightless.core import compose
         @compose
@@ -878,7 +887,7 @@ class _ComposeTest(TestCase):
 
     def get_tracked_objects(self):
         return [o for o in gc.get_objects() if type(o) in 
-                (compose, GeneratorType, Exception, int, str)]
+                (compose, GeneratorType, Exception, ATrackedObj)]
 
     def setUp(self):
         gc.collect()
