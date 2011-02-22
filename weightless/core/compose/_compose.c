@@ -249,16 +249,16 @@ static int _compose_handle_stopiteration(PyComposeObject* self, PyObject* exc_va
                      ? PyObject_GetAttrString(exc_value, "args") // new ref
                      : NULL;
 
-    if(args && PyTuple_CheckExact(args)) {
+    if(args && PyTuple_CheckExact(args) && PyObject_IsTrue(args)) {
         int i;
 
         for(i = PyTuple_Size(args) - 1; i >= 0; i--)
             if(!messages_insert(self, PyTuple_GET_ITEM(args, i))) {
-                Py_DECREF(args);
+                Py_CLEAR(args);
                 return 0;
             }
 
-        Py_DECREF(args);
+        Py_CLEAR(args);
 
     } else
         messages_insert(self, Py_None);
@@ -294,12 +294,12 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
         PyObject* response = NULL;
         PyObject* message = NULL;
 
-        if(exc_type) {
+        if(exc_type) { // exception
             if(PyErr_GivenExceptionMatches(exc_type, PyExc_GeneratorExit)) {
                 PyObject* result = PyObject_CallMethod(generator, "close", NULL); // new ref
 
                 if(result) {
-                    Py_DECREF(result);
+                    Py_CLEAR(result);
                     PyErr_Restore(exc_type, exc_value, exc_tb); //steals refs
                     exc_type = exc_value = exc_tb = NULL;
                 }
@@ -311,21 +311,25 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
                                         exc_value ? exc_value : Py_None,
                                         exc_tb ? exc_tb : Py_None); // new ref
 
-        } else {
+            Py_CLEAR(exc_type);
+            Py_CLEAR(exc_value);
+            Py_CLEAR(exc_tb);
+
+        } else { // normal message
             message = messages_next(self); // new ref
             response = PyObject_CallMethod(generator, "send", "O", message); // new ref
-            Py_DECREF(message);
+            Py_CLEAR(message);
         }
 
-        if(response) {
+        if(response) { // normal response
             if(PyGen_Check(response) || PyCompose_Check(response)) {
                 if(!generators_push(self, response)) {
-                    Py_XDECREF(response);
+                    Py_CLEAR(response);
                     return NULL;
                 }
 
                 if(PyGen_Check(response) && generator_invalid(response)) {
-                    Py_XDECREF(response);
+                    Py_CLEAR(response);
                     return NULL;
                 }
 
@@ -335,42 +339,32 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
                 messages_insert(self, Py_None);
                 PyObject* r = PyObject_CallFunctionObjArgs(response, self->sidekick, NULL);
 
-                if(!r) {
-                    Py_CLEAR(exc_type);
-                    Py_CLEAR(exc_value);
-                    Py_CLEAR(exc_tb);
+                if(!r)
                     PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
 
-                } else
-                    Py_XDECREF(r);
+                Py_CLEAR(r);
 
             } else if(response != Py_None || messages_empty(self)) {
                 self->expect_data = response == Py_None;
-                Py_CLEAR(exc_type);
-                Py_CLEAR(exc_value);
-                Py_CLEAR(exc_tb);
                 return response;
             }
 
-            Py_XDECREF(response);
+            Py_CLEAR(response);
 
-        } else {
-            Py_CLEAR(exc_type);
-            Py_CLEAR(exc_value);
-            Py_CLEAR(exc_tb);
+        } else { // exception thrown
             PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
 
             if(PyErr_GivenExceptionMatches(exc_type, PyExc_StopIteration)) {
-                int ok = _compose_handle_stopiteration(self, exc_value);
-                Py_CLEAR(exc_type);
-                Py_CLEAR(exc_value);
                 Py_CLEAR(exc_tb);
+                Py_CLEAR(exc_type);
+                int ok = _compose_handle_stopiteration(self, exc_value);
+                Py_CLEAR(exc_value);
 
                 if(!ok)
                     PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
             }
 
-            Py_DECREF(generator);
+            Py_CLEAR(generator);
             *self->generators_top-- = NULL;
         }
     }
@@ -532,12 +526,12 @@ PyObject* tostring(PyObject* self, PyObject* gen) {
         PyObject* lineno = PyInt_FromLong(ilineno); // new ref
         PyObject* codeline = PyObject_CallFunctionObjArgs(py_getline,
                              frame->f_code->co_filename, lineno, NULL); // new ref
-        Py_DECREF(lineno);
+        Py_CLEAR(lineno);
 
         if(!codeline) return NULL;
 
         PyObject* codeline_stripped = PyObject_CallMethod(codeline, "strip", NULL); // new ref
-        Py_DECREF(codeline);
+        Py_CLEAR(codeline);
 
         if(!codeline_stripped) return NULL;
 
@@ -546,7 +540,7 @@ PyObject* tostring(PyObject* self, PyObject* gen) {
                                 PyString_AsString(frame->f_code->co_filename),
                                 ilineno, PyString_AsString(frame->f_code->co_name),
                                 PyString_AsString(codeline_stripped)); // new ref
-        Py_DECREF(codeline_stripped);
+        Py_CLEAR(codeline_stripped);
         return result;
 
     } else if(gen->ob_type == &PyCompose_Type) {
@@ -662,7 +656,7 @@ PyMODINIT_FUNC init_compose_c(void) {
     PyObject* dict = PyModule_GetDict(linecache); // borrowed ref
 
     if(!dict) {
-        Py_DECREF(linecache);
+        Py_CLEAR(linecache);
         PyErr_Print();
         return;
     }
@@ -670,14 +664,14 @@ PyMODINIT_FUNC init_compose_c(void) {
     py_getline = PyMapping_GetItemString(dict, "getline"); // new ref
 
     if(!py_getline) {
-        Py_DECREF(linecache);
+        Py_CLEAR(linecache);
         PyErr_Print();
         return;
     }
 
     if(PyType_Ready(&PyCompose_Type) < 0) {
-        Py_DECREF(linecache);
-        Py_DECREF(py_getline);
+        Py_CLEAR(linecache);
+        Py_CLEAR(py_getline);
         PyErr_Print();
         return;
     }
@@ -685,8 +679,8 @@ PyMODINIT_FUNC init_compose_c(void) {
     PyObject* module = Py_InitModule3("_compose_c", compose_functionslist, "fast compose");
 
     if(!module) {
-        Py_DECREF(linecache);
-        Py_DECREF(py_getline);
+        Py_CLEAR(linecache);
+        Py_CLEAR(py_getline);
         PyErr_Print();
         return;
     }
@@ -701,7 +695,7 @@ PyMODINIT_FUNC init_compose_c(void) {
 
 void assertTrue(const int condition, const char* msg) {
     if(!condition) {
-        printf("FAIL: ");
+        printf("Self-test (%s) FAIL: ", __FILE__);
         printf(msg);
         printf("\n");
     }
@@ -709,7 +703,6 @@ void assertTrue(const int condition, const char* msg) {
 
 
 static PyObject* _selftest(PyObject* self, PyObject* null) {
-    printf("\nRunning self test in " __FILE__ "\n");
     PyComposeObject c;
     _compose_initialize(&c);
     // test initial state of generator stack
@@ -800,7 +793,6 @@ static PyObject* _selftest(PyObject* self, PyObject* null) {
     assertTrue(NULL == o, "error condition on next: empty");
     assertTrue(PyExc_RuntimeError == PyErr_Occurred(), "no runtime exception no next on empty queue");
     PyErr_Clear();
-    printf("Done with self test\n");
     compose_clear(&c);
     Py_RETURN_NONE;
 }

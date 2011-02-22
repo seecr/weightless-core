@@ -1,40 +1,51 @@
-Changeset created on Fri Feb 18 10:06:53 CET 2011 by Seek You Too
+Changeset created on Tue Feb 22 14:19:28 CET 2011 by Seek You Too
 
-Description: Finalizes the C-extension
+Description: Refactored and well-tested C-extension for compose() ready for production.
 
-    This adds tests for Python 2.5/2.6 and runs ComposeTest for both C and Python version of compose.  Also contains self-tests in the compose C-extension to run low-level self-tests. Contains structural checking for memory leaks and several fixes for leaks.  Release candidate.
+    This changeset add many tests for making sure compose doesn't leak memory.  It is made independent of CQ2-utils and the setup and alltests are refactored for better Python 2.6 support.  This version passes all tests, and also passes all tests in Meresco Components that depend on compose.
 
 Baseline version: https://weightless.svn.sourceforge.net/svnroot/weightless/weightless-core/workingsets/0.5-CQ2/version_1
 
 diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' --recursive --unified version_1/setup.py version_1-sidekick/setup.py
 --- version_1/setup.py	2011-02-15 08:48:32.000000000 +0100
-+++ version_1-sidekick/setup.py	2011-02-16 20:35:47.000000000 +0100
++++ version_1-sidekick/setup.py	2011-02-21 11:12:39.000000000 +0100
 @@ -1,4 +1,4 @@
 -#!/usr/bin/env python2.5
 +#!/usr/bin/env python
  ## begin license ##
  #
  #    Weightless is a High Performance Asynchronous Networking Library
-@@ -46,7 +46,9 @@
+@@ -46,7 +46,7 @@
      ext_modules=[
          Extension("weightless.core.compose._compose_c", [
              "weightless/core/compose/_compose.c"
 -            ]
 +            ],
-+        extra_compile_args = ['-O0'],
-+        extra_link_args = ['-O0']
          )
      ]
  )
 diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' --recursive --unified version_1/test/_alltests.py version_1-sidekick/test/_alltests.py
 --- version_1/test/_alltests.py	2011-02-15 08:48:29.000000000 +0100
-+++ version_1-sidekick/test/_alltests.py	2011-02-15 14:06:57.000000000 +0100
++++ version_1-sidekick/test/_alltests.py	2011-02-21 11:07:12.000000000 +0100
 @@ -1,4 +1,3 @@
 -#!/usr/bin/env python2.5
  ## begin license ##
  #
  #    Weightless is a High Performance Asynchronous Networking Library
-@@ -43,7 +42,6 @@
+@@ -36,14 +35,16 @@
+ sysPath.insert(0,'..')                            #DO_NOT_DISTRIBUTE
+ 
+ from unittest import main
+-
+-from composetest import ComposePyTest
+-from composetest import ComposeCTest
++from types import GeneratorType
++from weightless.core.compose import ComposeType
++if ComposeType == GeneratorType:
++    from composetest import ComposePyTest
++else:
++    from composetest import ComposeCTest
+ from localtest import LocalTest
  from sidekicktest import SidekickTest
  from reactortest import ReactorTest
  from servertestcasetest import ServerTestCaseTest
@@ -44,38 +55,44 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
  from http.httpreadertest import HttpReaderTest
 diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' --recursive --unified version_1/test/alltests.sh version_1-sidekick/test/alltests.sh
 --- version_1/test/alltests.sh	2011-02-15 08:48:29.000000000 +0100
-+++ version_1-sidekick/test/alltests.sh	2011-02-15 08:48:36.000000000 +0100
-@@ -25,14 +25,23 @@
++++ version_1-sidekick/test/alltests.sh	2011-02-21 11:09:30.000000000 +0100
+@@ -25,14 +25,22 @@
  
  export LANG=en_US.UTF-8
  export PYTHONPATH=.:"$PYTHONPATH"
+-option=$1                                                  #DO_NOT_DISTRIBUTE
+-if [ "$option" == "--python" ]; then                       #DO_NOT_DISTRIBUTE
+-    shift                                                  #DO_NOT_DISTRIBUTE
+-WEIGHTLESS_COMPOSE_TEST=PYTHON python2.5 _alltests.py "$@" #DO_NOT_DISTRIBUTE
+-elif [ "$option" == "--c" ]; then                          #DO_NOT_DISTRIBUTE
+-    shift                                                  #DO_NOT_DISTRIBUTE
+-python2.5 _alltests.py "$@"                                #DO_NOT_DISTRIBUTE
+-else                                                       #DO_NOT_DISTRIBUTE
+-WEIGHTLESS_COMPOSE_TEST=PYTHON python2.5 _alltests.py "$@" #DO_NOT_DISTRIBUTE
+-python2.5 _alltests.py "$@"
+-fi                                                         #DO_NOT_DISTRIBUTE
 +option=$1
 +pyversions="$(pyversions --installed)"
-+if [ "${option:0:8}" == "--python" ]; then
++if [ "${option:0:10}" == "--python2." ]; then
 +    shift
 +    pyversions="${option:2}"
 +fi
++test=
++option=$1
++if [ "$option" == "--python" ]; then
++        shift
++        test=PYTHON
++elif [ "$option" == "--c" ]; then
++        shift
++        test=C
++fi
 +for pycmd in $pyversions; do
-+    echo "RUNNING $pycmd tests"
- option=$1                                                  #DO_NOT_DISTRIBUTE
- if [ "$option" == "--python" ]; then                       #DO_NOT_DISTRIBUTE
-     shift                                                  #DO_NOT_DISTRIBUTE
--WEIGHTLESS_COMPOSE_TEST=PYTHON python2.5 _alltests.py "$@" #DO_NOT_DISTRIBUTE
-+WEIGHTLESS_COMPOSE_TEST=PYTHON $pycmd _alltests.py "$@"    #DO_NOT_DISTRIBUTE
- elif [ "$option" == "--c" ]; then                          #DO_NOT_DISTRIBUTE
-     shift                                                  #DO_NOT_DISTRIBUTE
--python2.5 _alltests.py "$@"                                #DO_NOT_DISTRIBUTE
-+$pycmd _alltests.py "$@"                                   #DO_NOT_DISTRIBUTE
- else                                                       #DO_NOT_DISTRIBUTE
--WEIGHTLESS_COMPOSE_TEST=PYTHON python2.5 _alltests.py "$@" #DO_NOT_DISTRIBUTE
--python2.5 _alltests.py "$@"
-+WEIGHTLESS_COMPOSE_TEST=PYTHON $pycmd _alltests.py "$@"    #DO_NOT_DISTRIBUTE
-+$pycmd _alltests.py "$@"
- fi                                                         #DO_NOT_DISTRIBUTE
++    echo "================ $pycmd _alltests.py $@ ================"
++    WEIGHTLESS_COMPOSE_TEST=$test $pycmd _alltests.py "$@"
 +done
 diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' --recursive --unified version_1/test/basetestcase.py version_1-sidekick/test/basetestcase.py
 --- version_1/test/basetestcase.py	1970-01-01 01:00:00.000000000 +0100
-+++ version_1-sidekick/test/basetestcase.py	2011-02-15 14:18:20.000000000 +0100
++++ version_1-sidekick/test/basetestcase.py	2011-02-20 18:59:55.000000000 +0100
 @@ -0,0 +1,71 @@
 +## begin license ##
 +#
@@ -150,7 +167,7 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
 +MATCHALL = MatchAll()
 diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' --recursive --unified version_1/test/calltrace.py version_1-sidekick/test/calltrace.py
 --- version_1/test/calltrace.py	1970-01-01 01:00:00.000000000 +0100
-+++ version_1-sidekick/test/calltrace.py	2011-02-15 14:18:59.000000000 +0100
++++ version_1-sidekick/test/calltrace.py	2011-02-20 18:59:55.000000000 +0100
 @@ -0,0 +1,114 @@
 +## begin license ##
 +#
@@ -268,7 +285,7 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
 +
 diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' --recursive --unified version_1/test/composetest.py version_1-sidekick/test/composetest.py
 --- version_1/test/composetest.py	2011-02-15 08:48:29.000000000 +0100
-+++ version_1-sidekick/test/composetest.py	2011-02-17 17:19:10.000000000 +0100
++++ version_1-sidekick/test/composetest.py	2011-02-21 14:21:47.000000000 +0100
 @@ -23,17 +23,21 @@
  ## end license ##
  
@@ -380,7 +397,25 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
      def f2():""" % __file__.replace('pyc', 'py')
          self.assertEquals(result, tostring(c))
  
-@@ -866,22 +873,53 @@
+@@ -783,7 +790,7 @@
+                 yield
+             except GeneratorExit:
+                 msg.append('GeneratorExit turned into StopIteration')
+-                raise StopIteration()  # <= this is the clue, see next test
++                raise StopIteration  # <= this is the clue, see next test
+         g5 = compose(f5())
+         g5.next()
+         try:
+@@ -805,7 +812,7 @@
+         g7 = compose(f7())
+         g7.next()
+         try:
+-            g7.throw(GeneratorExit())
++            g7.throw(GeneratorExit)
+             self.fail('must reraise RuntimeError(generator ignored GeneratorExit)')
+         except RuntimeError:
+             pass
+@@ -866,22 +873,84 @@
          self.assertEquals(84, c.throw(Exception()))
          self.assertEquals(None, c.close())
  
@@ -396,9 +431,40 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
 +            yield "a"
 +        self.assertEquals(["a"], list(f()))
 +
++    def testEmptyArgsInStopIteration(self):
++        def f1():
++            si = StopIteration()
++            si.args = () # empty tuple
++            raise si
++            yield
++        def f2():
++            x = yield f1()
++            yield x
++        g = compose(f2())
++        self.assertEquals([None], list(g))
++
++    def testArgsIsNoIterable(self):
++        # because the Python VM checks this, we test the assumtion only
++        si = StopIteration()
++        try:
++            si.args = 9 # not a tuple. Actually checked by StopIteration itself!
++        except TypeError, e:
++            self.assertEquals("'int' object is not iterable", str(e))
++
++    def testArgsIsNoTuple(self):
++        # because the Python VM turns the args into a tuple, we only test this
++        si = StopIteration()
++        si.args = [2] # not a tuple. VM turns this into tuple
++        self.assertEquals((2,), si.args)
++
 +    def get_tracked_objects(self):
 +        return [o for o in gc.get_objects() if type(o) in 
 +                (compose, GeneratorType, Exception, ATrackedObj)]
++
++    def testComposeType(self):
++        from weightless.core.compose import ComposeType
++        self.assertEquals(type, type(ComposeType))
++        self.assertEquals(ComposeType, type(compose((n for n in []))))
 +
 +    def setUp(self):
 +        gc.collect()
@@ -436,7 +502,7 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
  
      def testQueueSize(self):
          testrange = 9 #QUEUE SIZE = 10
-@@ -924,8 +962,17 @@
+@@ -924,8 +993,17 @@
              list(c)
              self.fail('must raise runtimeerror')
          except RuntimeError, e:
@@ -455,10 +521,9 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
 +    except TypeError, e:
 +        return str(e)
 + 
-Binary files version_1/test/core and version_1-sidekick/test/core differ
 diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' --recursive --unified version_1/test/http/acceptortest.py version_1-sidekick/test/http/acceptortest.py
 --- version_1/test/http/acceptortest.py	2011-02-15 08:48:27.000000000 +0100
-+++ version_1-sidekick/test/http/acceptortest.py	2011-02-15 14:11:19.000000000 +0100
++++ version_1-sidekick/test/http/acceptortest.py	2011-02-20 18:59:54.000000000 +0100
 @@ -23,7 +23,7 @@
  ## end license ##
  from unittest import TestCase
@@ -470,7 +535,7 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
  from subprocess import Popen, PIPE
 diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' --recursive --unified version_1/test/http/asyncreadertest.py version_1-sidekick/test/http/asyncreadertest.py
 --- version_1/test/http/asyncreadertest.py	2011-02-15 08:48:27.000000000 +0100
-+++ version_1-sidekick/test/http/asyncreadertest.py	2011-02-15 14:25:47.000000000 +0100
++++ version_1-sidekick/test/http/asyncreadertest.py	2011-02-20 18:59:54.000000000 +0100
 @@ -22,8 +22,7 @@
  #
  ## end license ##
@@ -508,7 +573,7 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
          backofficeport = self.port + 1
 diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' --recursive --unified version_1/test/http/httpreadertest.py version_1-sidekick/test/http/httpreadertest.py
 --- version_1/test/http/httpreadertest.py	2011-02-15 08:48:27.000000000 +0100
-+++ version_1-sidekick/test/http/httpreadertest.py	2011-02-15 14:22:21.000000000 +0100
++++ version_1-sidekick/test/http/httpreadertest.py	2011-02-20 18:59:55.000000000 +0100
 @@ -34,8 +34,8 @@
  from weightless.http._httpreader import HttpReaderFacade, Connector, HandlerFacade, _httpParseUrl
  import sys
@@ -531,7 +596,7 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
          host, port, path = _httpParseUrl('http://www.cq2.org')
 diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' --recursive --unified version_1/test/http/httpservertest.py version_1-sidekick/test/http/httpservertest.py
 --- version_1/test/http/httpservertest.py	2011-02-15 08:48:27.000000000 +0100
-+++ version_1-sidekick/test/http/httpservertest.py	2011-02-15 14:23:05.000000000 +0100
++++ version_1-sidekick/test/http/httpservertest.py	2011-02-20 18:59:55.000000000 +0100
 @@ -28,7 +28,8 @@
  from select import select
  from weightless.io import Reactor
@@ -544,7 +609,7 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
  from weightless.http import HttpServer, _httpserver
 diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' --recursive --unified version_1/test/http/suspendtest.py version_1-sidekick/test/http/suspendtest.py
 --- version_1/test/http/suspendtest.py	2011-02-15 08:48:27.000000000 +0100
-+++ version_1-sidekick/test/http/suspendtest.py	2011-02-15 14:21:30.000000000 +0100
++++ version_1-sidekick/test/http/suspendtest.py	2011-02-20 18:59:54.000000000 +0100
 @@ -29,7 +29,8 @@
  from re import sub
  from traceback import format_exc
@@ -566,7 +631,7 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
          handle = ['initial value']
 diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' --recursive --unified version_1/test/reactortest.py version_1-sidekick/test/reactortest.py
 --- version_1/test/reactortest.py	2011-02-15 08:48:29.000000000 +0100
-+++ version_1-sidekick/test/reactortest.py	2011-02-15 14:05:18.000000000 +0100
++++ version_1-sidekick/test/reactortest.py	2011-02-20 18:59:55.000000000 +0100
 @@ -23,7 +23,6 @@
  ## end license ##
  
@@ -578,7 +643,7 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
 Only in version_1/test: snaketest.py
 diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' --recursive --unified version_1/testsetup.sh version_1-sidekick/testsetup.sh
 --- version_1/testsetup.sh	2011-02-15 08:48:32.000000000 +0100
-+++ version_1-sidekick/testsetup.sh	2011-02-15 08:48:39.000000000 +0100
++++ version_1-sidekick/testsetup.sh	2011-02-20 18:59:55.000000000 +0100
 @@ -24,15 +24,21 @@
  set -e
  
@@ -606,7 +671,7 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
 +done
 diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' --recursive --unified version_1/weightless/core/compose/_compose.c version_1-sidekick/weightless/core/compose/_compose.c
 --- version_1/weightless/core/compose/_compose.c	2011-02-15 08:48:32.000000000 +0100
-+++ version_1-sidekick/weightless/core/compose/_compose.c	2011-02-17 17:19:51.000000000 +0100
++++ version_1-sidekick/weightless/core/compose/_compose.c	2011-02-21 10:48:57.000000000 +0100
 @@ -107,9 +107,8 @@
      PyObject* result = *self->messages_start;
      *self->messages_start++ = NULL;
@@ -736,18 +801,21 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
 -    Py_XDECREF(error_value);
 -    Py_XDECREF(error_traceback);
  
-     if(args && PyTuple_CheckExact(args)) {
+-    if(args && PyTuple_CheckExact(args)) {
++    if(args && PyTuple_CheckExact(args) && PyObject_IsTrue(args)) {
          int i;
  
 -        for(i = PyTuple_Size(args) - 1; i >= 0; i--) {
 +        for(i = PyTuple_Size(args) - 1; i >= 0; i--)
              if(!messages_insert(self, PyTuple_GET_ITEM(args, i))) {
-                 Py_DECREF(args);
+-                Py_DECREF(args);
++                Py_CLEAR(args);
                  return 0;
              }
 -        }
  
-         Py_DECREF(args);
+-        Py_DECREF(args);
++        Py_CLEAR(args);
  
 -    } else {
 +    } else
@@ -757,7 +825,7 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
      return 1;
  }
  
-@@ -295,6 +285,10 @@
+@@ -295,80 +285,91 @@
  
  
  static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject* exc_value, PyObject* exc_tb) {
@@ -768,13 +836,19 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
      while(self->generators_top > self->generators_base) {
          PyObject* generator = *(self->generators_top - 1); // take over ownership from stack
          PyObject* response = NULL;
-@@ -306,20 +300,16 @@
+         PyObject* message = NULL;
+ 
+-        if(exc_type) {
++        if(exc_type) { // exception
+             if(PyErr_GivenExceptionMatches(exc_type, PyExc_GeneratorExit)) {
+                 PyObject* result = PyObject_CallMethod(generator, "close", NULL); // new ref
  
                  if(result) {
-                     Py_DECREF(result);
+-                    Py_DECREF(result);
 -                    Py_XINCREF(exc_type);
 -                    Py_XINCREF(exc_value);
 -                    Py_XINCREF(exc_tb);
++                    Py_CLEAR(result);
                      PyErr_Restore(exc_type, exc_value, exc_tb); //steals refs
                      exc_type = exc_value = exc_tb = NULL;
                  }
@@ -788,21 +862,30 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
                                          exc_tb ? exc_tb : Py_None); // new ref
 -            }
  
-         } else {
+-        } else {
++            Py_CLEAR(exc_type);
++            Py_CLEAR(exc_value);
++            Py_CLEAR(exc_tb);
++
++        } else { // normal message
              message = messages_next(self); // new ref
-@@ -329,17 +319,26 @@
+             response = PyObject_CallMethod(generator, "send", "O", message); // new ref
+-            Py_DECREF(message);
++            Py_CLEAR(message);
+         }
  
-         if(response) {
+-        if(response) {
++        if(response) { // normal response
              if(PyGen_Check(response) || PyCompose_Check(response)) {
 -                if(!generators_push(self, response)) return NULL;
 +                if(!generators_push(self, response)) {
-+                    Py_XDECREF(response);
++                    Py_CLEAR(response);
 +                    return NULL;
 +                }
  
 -                if(PyGen_Check(response) && generator_invalid(response)) return NULL;
 +                if(PyGen_Check(response) && generator_invalid(response)) {
-+                    Py_XDECREF(response);
++                    Py_CLEAR(response);
 +                    return NULL;
 +                }
  
@@ -814,39 +897,33 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
 +                messages_insert(self, Py_None);
                  PyObject* r = PyObject_CallFunctionObjArgs(response, self->sidekick, NULL);
  
-                 if(!r) {
-+                    Py_CLEAR(exc_type);
-+                    Py_CLEAR(exc_value);
-+                    Py_CLEAR(exc_tb);
+-                if(!r) {
++                if(!r)
                      PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
  
-                 } else
-@@ -347,28 +346,36 @@
+-                } else
+-                    Py_XDECREF(r);
++                Py_CLEAR(r);
  
              } else if(response != Py_None || messages_empty(self)) {
                  self->expect_data = response == Py_None;
 -                Py_INCREF(response);
-+                Py_CLEAR(exc_type);
-+                Py_CLEAR(exc_value);
-+                Py_CLEAR(exc_tb);
                  return response;
              }
-+
-+            Py_XDECREF(response);
-+
-         } else {
+-        } else {
 -            if(PyErr_ExceptionMatches(PyExc_StopIteration)) {
 -                if(!_compose_handle_stopiteration(self)) {
-+            Py_CLEAR(exc_type);
-+            Py_CLEAR(exc_value);
-+            Py_CLEAR(exc_tb);
++
++            Py_CLEAR(response);
++
++        } else { // exception thrown
 +            PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
 +
 +            if(PyErr_GivenExceptionMatches(exc_type, PyExc_StopIteration)) {
-+                int ok = _compose_handle_stopiteration(self, exc_value);
-+                Py_CLEAR(exc_type);
-+                Py_CLEAR(exc_value);
 +                Py_CLEAR(exc_tb);
++                Py_CLEAR(exc_type);
++                int ok = _compose_handle_stopiteration(self, exc_value);
++                Py_CLEAR(exc_value);
 +
 +                if(!ok)
                      PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
@@ -856,8 +933,9 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
 -            } else {
 -                PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
              }
+-            Py_DECREF(generator);
 +
-             Py_DECREF(generator);
++            Py_CLEAR(generator);
              *self->generators_top-- = NULL;
          }
      }
@@ -869,7 +947,7 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
          PyErr_Restore(exc_type, exc_value, exc_tb); // steals refs
          exc_type = exc_value = exc_tb = NULL;
          return NULL;
-@@ -395,19 +402,18 @@
+@@ -395,19 +396,18 @@
  
  
  static PyObject* compose_throw(PyComposeObject* self, PyObject* arg) {
@@ -894,7 +972,7 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
  }
  
  
-@@ -424,17 +430,13 @@
+@@ -424,17 +424,13 @@
  
  
  static void compose_del(PyObject* self) {
@@ -914,7 +992,7 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
  }
  
  
-@@ -451,16 +453,14 @@
+@@ -451,16 +447,14 @@
          if(PyGen_Check(*generator)) {
              PyObject* result = find_local_in_locals(((PyGenObject*) * generator)->gi_frame, name);
  
@@ -933,7 +1011,7 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
          }
      }
  
-@@ -482,9 +482,8 @@
+@@ -482,9 +476,8 @@
                  return localVar;
              }
  
@@ -944,7 +1022,7 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
          }
      }
  
-@@ -497,9 +496,8 @@
+@@ -497,9 +490,8 @@
  
      PyObject* result = find_local_in_locals(frame, name);
  
@@ -955,7 +1033,7 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
  
      return find_local_in_frame(frame->f_back, name);
  }
-@@ -526,6 +524,10 @@
+@@ -526,16 +518,20 @@
  PyObject* tostring(PyObject* self, PyObject* gen) {
      if(PyGen_Check(gen)) {
          PyFrameObject* frame = ((PyGenObject*)gen)->gi_frame;
@@ -966,7 +1044,28 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
          int ilineno = PyCode_Addr2Line(frame->f_code, frame->f_lasti);
          PyObject* lineno = PyInt_FromLong(ilineno); // new ref
          PyObject* codeline = PyObject_CallFunctionObjArgs(py_getline,
-@@ -555,10 +557,10 @@
+                              frame->f_code->co_filename, lineno, NULL); // new ref
+-        Py_DECREF(lineno);
++        Py_CLEAR(lineno);
+ 
+         if(!codeline) return NULL;
+ 
+         PyObject* codeline_stripped = PyObject_CallMethod(codeline, "strip", NULL); // new ref
+-        Py_DECREF(codeline);
++        Py_CLEAR(codeline);
+ 
+         if(!codeline_stripped) return NULL;
+ 
+@@ -544,7 +540,7 @@
+                                 PyString_AsString(frame->f_code->co_filename),
+                                 ilineno, PyString_AsString(frame->f_code->co_name),
+                                 PyString_AsString(codeline_stripped)); // new ref
+-        Py_DECREF(codeline_stripped);
++        Py_CLEAR(codeline_stripped);
+         return result;
+ 
+     } else if(gen->ob_type == &PyCompose_Type) {
+@@ -555,10 +551,10 @@
          while(generator < cmps->generators_top) {
              PyObject* s = tostring(NULL, *generator++);
  
@@ -979,813 +1078,78 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
                  PyString_ConcatAndDel(&result, PyString_FromString("\n"));
                  PyString_ConcatAndDel(&result, s);
              }
-diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' --recursive --unified version_1/weightless/core/compose/_compose.c.orig version_1-sidekick/weightless/core/compose/_compose.c.orig
---- version_1/weightless/core/compose/_compose.c.orig	1970-01-01 01:00:00.000000000 +0100
-+++ version_1-sidekick/weightless/core/compose/_compose.c.orig	2011-02-17 07:16:23.000000000 +0100
-@@ -0,0 +1,797 @@
-+/* begin license *
-+ *
-+ *     Weightless is a High Performance Asynchronous Networking Library
-+ *     See http://weightless.io
-+ *     Copyright (C) 2009-2011 Seek You Too (CQ2) http://www.cq2.nl
-+ *
-+ *     This file is part of Weightless
-+ *
-+ *     Weightless is free software; you can redistribute it and/or modify
-+ *     it under the terms of the GNU General Public License as published by
-+ *     the Free Software Foundation; either version 2 of the License, or
-+ *     (at your option) any later version.
-+ *
-+ *     Weightless is distributed in the hope that it will be useful,
-+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ *     GNU General Public License for more details.
-+ *
-+ *     You should have received a copy of the GNU General Public License
-+ *     along with Weightless; if not, write to the Free Software
-+ *     Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-+ *
-+ * end license */
-+
-+/* This code is formatted with:
-+ * astyle --style=java --indent-namespaces --break-blocks=all --pad-oper --unpad-paren --delete-empty-lines --align-pointer=type
-+ */
-+
-+#include <Python.h>
-+#include <frameobject.h>
-+#include <structmember.h>
-+
-+
-+
-+////////// Python Object and Type structures //////////
-+
-+typedef struct {
-+    PyObject_HEAD
-+    int        expect_data;
-+    PyObject** generators_base;
-+    PyObject** generators_top;
-+    int        generators_allocated;
-+    PyObject** messages_base;
-+    PyObject** messages_start;
-+    PyObject** messages_end;
-+    PyObject*  sidekick;
-+    PyObject*  weakreflist;
-+} PyComposeObject;
-+
-+PyAPI_DATA(PyTypeObject) PyCompose_Type;
-+
-+
-+
-+////////// Generator Stack //////////
-+
-+#define INITIAL_STACK_SIZE 10
-+#define MAX_STACK_SIZE 1000
-+
-+static int generators_push(PyComposeObject* self, PyObject* generator) {
-+    int current_stack_use = self->generators_top - self->generators_base;
-+
-+    if(current_stack_use >= self->generators_allocated) {
-+        if(self->generators_allocated >= MAX_STACK_SIZE) {
-+            PyErr_SetString(PyExc_RuntimeError, "maximum recursion depth exceeded (compose)");
-+            return 0;
-+        }
-+
-+        self->generators_allocated *= 2;
-+
-+        if(self->generators_allocated > MAX_STACK_SIZE)
-+            self->generators_allocated = MAX_STACK_SIZE;
-+
-+        PyObject** newstack = realloc(self->generators_base, self->generators_allocated * sizeof(PyObject*));
-+        self->generators_base = newstack;
-+        self->generators_top = newstack + current_stack_use;
-+    }
-+
-+    *self->generators_top++ = generator;
-+    Py_INCREF(generator);
-+    return 1;
-+}
-+
-+
-+
-+////////// Messages Queue //////////
-+
-+#define QUEUE_SIZE 10
-+
-+static int messages_empty(PyComposeObject* self) {
-+    return self->messages_start == self->messages_end;
-+}
-+
-+
-+static int _messages_size(PyComposeObject* self) {
-+    // only reliable if and when the queue is NOT full !!
-+    int size = self->messages_end - self->messages_start;
-+    return size < 0 ? size + QUEUE_SIZE : size;
-+}
-+
-+
-+static PyObject* messages_next(PyComposeObject* self) {
-+    if(messages_empty(self)) {
-+        PyErr_SetString(PyExc_RuntimeError, "internal error: empty messages queue (compose)");
-+        return NULL;
-+    }
-+
-+    PyObject* result = *self->messages_start;
-+    *self->messages_start++ = NULL;
-+
-+    if(self->messages_start == self->messages_base + QUEUE_SIZE)
-+        self->messages_start = self->messages_base;
-+
-+    return result;
-+}
-+
-+
-+static int messages_append(PyComposeObject* self, PyObject* message) {
-+    if(_messages_size(self) >= QUEUE_SIZE - 1) {   // keep on entry free at all times
-+        PyErr_SetString(PyExc_RuntimeError, "maximum return values exceeded (compose)");
-+        return 0;
-+    }
-+
-+    *self->messages_end++ = message;
-+    Py_INCREF(message);
-+
-+    if(self->messages_end == self->messages_base + QUEUE_SIZE)
-+        self->messages_end = self->messages_base;
-+
-+    return 1;
-+}
-+
-+
-+static int messages_insert(PyComposeObject* self, PyObject* message) {
-+    if(_messages_size(self) >= QUEUE_SIZE - 1) {
-+        PyErr_SetString(PyExc_RuntimeError, "maximum return values exceeded (compose)");
-+        return 0;
-+    }
-+
-+    if(self->messages_start == self->messages_base)
-+        self->messages_start = self->messages_base + QUEUE_SIZE;
-+
-+    *--self->messages_start = message;
-+    Py_INCREF(message);
-+    return 1;
-+}
-+
-+////////// Garbage Collector Support //////////
-+
-+static int compose_traverse(PyComposeObject* self, visitproc visit, void* arg) {
-+    PyObject** p;
-+
-+    for(p = self->generators_base; p < self->generators_top; p++)
-+        Py_VISIT(*p);
-+
-+    for(p = self->messages_base; p < self->messages_base + QUEUE_SIZE; p++)
-+        Py_VISIT(*p);
-+
-+    Py_VISIT(self->sidekick);
-+    return 0;
-+}
-+
-+
-+static int compose_clear(PyComposeObject* self) {
-+    while(self->generators_base && --self->generators_top >= self->generators_base) 
-+        Py_CLEAR(*self->generators_top);
-+
-+    free(self->generators_base);
-+    self->generators_base = NULL;
-+
-+    while(self->messages_base && !messages_empty(self))
-+        Py_DECREF(messages_next(self));
-+
-+    free(self->messages_base);
-+    self->messages_base = NULL;
-+    Py_CLEAR(self->sidekick);
-+    return 0;
-+}
-+
-+
-+static void compose_dealloc(PyComposeObject* self) {
-+    PyObject_GC_UnTrack(self);
-+
-+    if(self->weakreflist != NULL)
-+        PyObject_ClearWeakRefs((PyObject*)self);
-+
-+    compose_clear(self);
-+    PyObject_GC_Del(self);
-+}
-+
-+
-+
-+////////// Compose Methods //////////
-+
-+static int PyCompose_Check(PyObject* obj) {
-+    return PyObject_Type(obj) == (PyObject*) &PyCompose_Type;
-+}
-+
-+
-+static void _compose_initialize(PyComposeObject* cmps) {
-+    cmps->expect_data = 0;
-+    cmps->generators_allocated = INITIAL_STACK_SIZE;
-+    cmps->generators_base = (PyObject**) malloc(cmps->generators_allocated * sizeof(PyObject*));
-+    cmps->generators_top = cmps->generators_base;
-+    cmps->messages_base = (PyObject**) calloc(QUEUE_SIZE, sizeof(PyObject*));
-+    cmps->messages_start = cmps->messages_base;
-+    cmps->messages_end = cmps->messages_base;
-+    cmps->sidekick = NULL;
-+    cmps->weakreflist = NULL;
-+}
-+
-+
-+static PyObject* compose_new(PyObject* type, PyObject* args, PyObject* kwargs) {
-+    static char* argnames[] = {"initial", "sidekick"};
-+    PyObject* initial = NULL;
-+    PyObject* sidekick = NULL;
-+
-+    if(!PyArg_ParseTupleAndKeywords(                            // borrowed refs
-+                args, kwargs, "O|O:compose", argnames,
-+                &initial, &sidekick)) return NULL;
-+
-+    if(!PyGen_Check(initial) && !PyCompose_Check(initial)) {
-+        PyErr_SetString(PyExc_TypeError, "compose() argument 1 must be generator");
-+        return NULL;
-+    }
-+
-+    PyComposeObject* cmps = PyObject_GC_New(PyComposeObject, &PyCompose_Type);
-+
-+    if(cmps == NULL)
-+        return NULL;
-+
-+    _compose_initialize((PyComposeObject*) cmps);
-+
-+    if(!generators_push(cmps, initial)) return NULL;
-+
-+    if(sidekick) {
-+        Py_INCREF(sidekick);
-+        cmps->sidekick = sidekick;
-+    }
-+
-+    PyObject_GC_Track(cmps);
-+    return (PyObject*) cmps;
-+}
-+
-+
-+static int _compose_handle_stopiteration(PyComposeObject* self, PyObject* exc_value) {
-+    PyObject* args = exc_value
-+                     ? PyObject_GetAttrString(exc_value, "args") // new ref
-+                     : NULL;
-+    if(args && PyTuple_CheckExact(args)) {
-+        int i;
-+
-+        for(i = PyTuple_Size(args) - 1; i >= 0; i--)
-+            if(!messages_insert(self, PyTuple_GET_ITEM(args, i))) {
-+                Py_DECREF(args);
-+                return 0;
-+            }
-+
-+        Py_DECREF(args);
-+
-+    } else
-+        messages_insert(self, Py_None);
-+
-+    return 1;
-+}
-+
-+
-+static int generator_invalid(PyObject* gen) {
-+    PyFrameObject* frame = ((PyGenObject*)gen)->gi_frame;
-+
-+    if(!frame) {
-+        PyErr_SetString(PyExc_AssertionError, "Generator is exhausted.");
-+        return 1;
-+    }
-+
-+    if(frame->f_lasti != -1) {  // fresh generator, see genobject.c
-+        PyErr_SetString(PyExc_AssertionError, "Generator already used.");
-+        return 1;
-+    }
-+
-+    return 0;
-+}
-+
-+
-+static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject* exc_value, PyObject* exc_tb) {
-+    Py_XINCREF(exc_type);
-+    Py_XINCREF(exc_value);
-+    Py_XINCREF(exc_tb);
-+    while(self->generators_top > self->generators_base) {
-+        PyObject* generator = *(self->generators_top - 1); // take over ownership from stack
-+        PyObject* response = NULL;
-+        PyObject* message = NULL;
-+
-+        if(exc_type) {
-+            if(PyErr_GivenExceptionMatches(exc_type, PyExc_GeneratorExit)) {
-+                PyObject* result = PyObject_CallMethod(generator, "close", NULL); // new ref
-+
-+                if(result) {
-+                    Py_DECREF(result);
-+                    PyErr_Restore(exc_type, exc_value, exc_tb); //steals refs
-+                    exc_type = exc_value = exc_tb = NULL;
-+                }
-+
-+            } else
-+                response =
-+                    PyObject_CallMethod(generator, "throw", "OOO",
-+                                        exc_type,
-+                                        exc_value ? exc_value : Py_None,
-+                                        exc_tb ? exc_tb : Py_None); // new ref
-+
-+        } else {
-+            message = messages_next(self); // new ref
-+            response = PyObject_CallMethod(generator, "send", "O", message); // new ref
-+            Py_DECREF(message);
-+        }
-+
-+        if(response) {
-+            if(PyGen_Check(response) || PyCompose_Check(response)) {
-+                if(!generators_push(self, response)) {
-+                    Py_XDECREF(response);
-+                    return NULL;
-+                }
-+
-+                if(PyGen_Check(response) && generator_invalid(response)) {
-+                    Py_XDECREF(response);
-+                    return NULL;
-+                }
-+
-+                messages_insert(self, Py_None);
-+
-+            } else if(self->sidekick && self->sidekick != Py_None && PyCallable_Check(response)) {
-+                messages_insert(self, Py_None);
-+                PyObject* r = PyObject_CallFunctionObjArgs(response, self->sidekick, NULL);
-+
-+                if(!r) {
-+                    Py_CLEAR(exc_type);
-+                    Py_CLEAR(exc_value);
-+                    Py_CLEAR(exc_tb);
-+                    PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
-+                }
-+
-+                else
-+                    Py_XDECREF(r);
-+
-+            } else if(response != Py_None || messages_empty(self)) {
-+                self->expect_data = response == Py_None;
-+                Py_CLEAR(exc_type);
-+                Py_CLEAR(exc_value);
-+                Py_CLEAR(exc_tb);
-+                Py_INCREF(response);
-+                return response;
-+            }
-+            Py_XDECREF(response);
-+        } else {
-+            Py_CLEAR(exc_type);
-+            Py_CLEAR(exc_value);
-+            Py_CLEAR(exc_tb);
-+            PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
-+            if(PyErr_GivenExceptionMatches(exc_type, PyExc_StopIteration)) {
-+                int ok = _compose_handle_stopiteration(self, exc_value);
-+                Py_CLEAR(exc_type); Py_CLEAR(exc_value); Py_CLEAR(exc_tb);
-+                if(!ok)
-+                    PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
-+            }
-+
-+            Py_DECREF(generator);
-+            *self->generators_top-- = NULL;
-+        }
-+    }
-+
-+    if(exc_type) {
-+        PyErr_Restore(exc_type, exc_value, exc_tb); // steals refs
-+        exc_type = exc_value = exc_tb = NULL;
-+        return NULL;
-+    }
-+
-+    PyErr_SetNone(PyExc_StopIteration);
-+    return NULL;
-+}
-+
-+
-+static PyObject* compose_send(PyComposeObject* self, PyObject* message) {
-+    if(!self->expect_data && message != Py_None) {
-+        PyErr_SetString(PyExc_AssertionError, "Cannot accept data. First send None.");
-+        return NULL;
-+    }
-+
-+    messages_append(self, message);
-+
-+    if(!self->expect_data && self->messages_start[0] != Py_None)
-+        messages_insert(self, Py_None);
-+
-+    return _compose_go(self, NULL, NULL, NULL);
-+}
-+
-+
-+static PyObject* compose_throw(PyComposeObject* self, PyObject* arg) {
-+    PyObject* exc_type = NULL, *exc_value = NULL, *exc_tb = NULL;
-+
-+    if(!PyArg_ParseTuple(arg, "O|OO", &exc_type, &exc_value, &exc_tb)) //borrowed refs
-+        return NULL;
-+
-+    if(PyExceptionInstance_Check(exc_type)) { // e.g. throw(Exception())
-+        exc_value = exc_type;
-+        exc_type = PyExceptionInstance_Class(exc_type); // borrowed ref
-+    }
-+
-+    PyObject* r = _compose_go(self, exc_type, exc_value, exc_tb);
-+    return r;
-+}
-+
-+
-+static PyObject* compose_close(PyComposeObject* self) {
-+    _compose_go(self, PyExc_GeneratorExit, NULL, NULL);
-+
-+    if(PyErr_ExceptionMatches(PyExc_StopIteration) || PyErr_ExceptionMatches(PyExc_GeneratorExit)) {
-+        PyErr_Clear();	/* ignore these errors */
-+        Py_RETURN_NONE;
-+    }
-+
-+    return NULL;
-+}
-+
-+
-+static void compose_del(PyObject* self) {
-+    if(!compose_close((PyComposeObject*) self))
-+        PyErr_WriteUnraisable(self);
-+}
-+
-+
-+static PyObject* compose_iternext(PyComposeObject* self) {
-+    return compose_send(self, Py_None);
-+}
-+
-+
-+
-+////////// local() implementation //////////
-+
-+PyObject* find_local_in_locals(PyFrameObject* frame, PyObject* name);
-+
-+
-+PyObject* find_local_in_compose(PyComposeObject* cmps, PyObject* name) {
-+    PyObject** generator = cmps->generators_top;
-+
-+    while(--generator >= cmps->generators_base) {
-+        if(PyGen_Check(*generator)) {
-+            PyObject* result = find_local_in_locals(((PyGenObject*) * generator)->gi_frame, name);
-+
-+            if(result != NULL)
-+                return result;
-+
-+        } else {
-+            PyObject* result = find_local_in_compose((PyComposeObject*) * generator, name);
-+
-+            if(result != NULL)
-+                return result;
-+        }
-+    }
-+
-+    return NULL;
-+}
-+
-+
-+PyObject* find_local_in_locals(PyFrameObject* frame, PyObject* name) {
-+    int i;
-+
-+    for(i = 0; i < PyTuple_Size(frame->f_code->co_varnames); i++) {
-+        PyObject* localVar = frame->f_localsplus[i];
-+
-+        if(localVar) {
-+            PyObject* localName = PyTuple_GetItem(frame->f_code->co_varnames, i);
-+
-+            if(_PyString_Eq(name, localName)) {
-+                Py_INCREF(localVar);
-+                return localVar;
-+            }
-+
-+            if(localVar->ob_type == &PyCompose_Type)
-+                return find_local_in_compose((PyComposeObject*)localVar, name);
-+        }
-+    }
-+
-+    return NULL;
-+}
-+
-+
-+PyObject* find_local_in_frame(PyFrameObject* frame, PyObject* name) {
-+    if(!frame) return NULL;
-+
-+    PyObject* result = find_local_in_locals(frame, name);
-+
-+    if(result)
-+        return result;
-+
-+    return find_local_in_frame(frame->f_back, name);
-+}
-+
-+
-+PyObject* local(PyObject* self, PyObject* name) {
-+    PyFrameObject* frame = PyEval_GetFrame();
-+    PyObject* result = find_local_in_frame(frame, name);
-+
-+    if(!result) {
-+        PyErr_SetString(PyExc_AttributeError, PyString_AsString(name));
-+        return NULL;
-+    }
-+
-+    return result;
-+}
-+
-+
-+
-+////////// tostring //////////
-+
-+PyObject* py_getline;
-+
-+PyObject* tostring(PyObject* self, PyObject* gen) {
-+    if(PyGen_Check(gen)) {
-+        PyFrameObject* frame = ((PyGenObject*)gen)->gi_frame;
-+        if(!frame)
-+            return PyString_FromString("<no frame>");
-+        int ilineno = PyCode_Addr2Line(frame->f_code, frame->f_lasti);
-+        PyObject* lineno = PyInt_FromLong(ilineno); // new ref
-+        PyObject* codeline = PyObject_CallFunctionObjArgs(py_getline,
-+                             frame->f_code->co_filename, lineno, NULL); // new ref
-+        Py_DECREF(lineno);
-+
-+        if(!codeline) return NULL;
-+
-+        PyObject* codeline_stripped = PyObject_CallMethod(codeline, "strip", NULL); // new ref
-+        Py_DECREF(codeline);
-+
-+        if(!codeline_stripped) return NULL;
-+
-+        PyObject* result =
-+            PyString_FromFormat("  File \"%s\", line %d, in %s\n    %s",
-+                                PyString_AsString(frame->f_code->co_filename),
-+                                ilineno, PyString_AsString(frame->f_code->co_name),
-+                                PyString_AsString(codeline_stripped)); // new ref
-+        Py_DECREF(codeline_stripped);
-+        return result;
-+
-+    } else if(gen->ob_type == &PyCompose_Type) {
-+        PyComposeObject* cmps = (PyComposeObject*) gen;
-+        PyObject* result = NULL;
-+        PyObject** generator = cmps->generators_base;
-+
-+        while(generator < cmps->generators_top) {
-+            PyObject* s = tostring(NULL, *generator++);
-+
-+            if(!result)
-+                result = s;
-+
-+            else {
-+                PyString_ConcatAndDel(&result, PyString_FromString("\n"));
-+                PyString_ConcatAndDel(&result, s);
-+            }
-+        }
-+
-+        return result;
-+    }
-+
-+    PyErr_SetString(PyExc_TypeError, "tostring() expects generator");
-+    return NULL;
-+}
-+
-+
-+
-+////////// compose Python Type //////////
-+
-+static PyObject* _selftest(PyObject* self, PyObject* null);
-+
-+
-+static PyMethodDef compose_functionslist[] = {
-+    {"local", local, METH_O, "Finds a local variable on the call stack including compose'd generators."},
-+    {"tostring", tostring, METH_O, "Returns a string representation of a genarator."},
-+    {"_selftest", _selftest, METH_NOARGS, "runs self test"},
-+    {NULL} /* Sentinel */
-+};
-+
-+
-+static PyMethodDef compose_methods[] = {
-+    {"send", (PyCFunction) compose_send,  METH_O,       "Send arg into composed generator." },
-+    {"throw", (PyCFunction) compose_throw, METH_VARARGS, "Raise GeneratorExit in composed generator."},
-+    {"close", (PyCFunction) compose_close, METH_NOARGS,  "Throws exception in composed generator."},
-+    {NULL}	/* Sentinel */
-+};
-+
-+
-+PyTypeObject PyCompose_Type = {
-+    PyObject_HEAD_INIT(&PyType_Type)
-+    0,                                      /* ob_size */
-+    "compose",                              /* tp_name */
-+    sizeof(PyComposeObject),                /* tp_basicsize */
-+    0,                                      /* tp_itemsize */
-+    /* methods */
-+    (destructor)compose_dealloc,            /* tp_dealloc */
-+    0,                                      /* tp_print */
-+    0,                                      /* tp_getattr */
-+    0,                                      /* tp_setattr */
-+    0,                                      /* tp_compare */
-+    0,                                      /* tp_repr */
-+    0,                                      /* tp_as_number */
-+    0,                                      /* tp_as_sequence */
-+    0,                                      /* tp_as_mapping */
-+    0,                                      /* tp_hash */
-+    0,                                      /* tp_call */
-+    0,                                      /* tp_str */
-+    PyObject_GenericGetAttr,                /* tp_getattro */
-+    0,                                      /* tp_setattro */
-+    0,                                      /* tp_as_buffer */
-+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,/* tp_flags */
-+    0,                                      /* tp_doc */
-+    (traverseproc)compose_traverse,         /* tp_traverse */
-+    (inquiry)compose_clear,                 /* tp_clear */
-+    0,                                      /* tp_richcompare */
-+    offsetof(PyComposeObject, weakreflist), /* tp_weaklistoffset */
-+    PyObject_SelfIter,                      /* tp_iter */
-+    (iternextfunc)compose_iternext,         /* tp_iternext */
-+    compose_methods,                        /* tp_methods */
-+    0,                                      /* tp_members */
-+    0,                                      /* tp_getset */
-+    0,                                      /* tp_base */
-+    0,                                      /* tp_dict */
-+    0,                                      /* tp_descr_get */
-+    0,                                      /* tp_descr_set */
-+    0,                                      /* tp_dictoffset */
-+    0,                                      /* tp_init */
-+    0,                                      /* tp_alloc */
-+    (newfunc)compose_new,                   /* tp_new */
-+    0,                                      /* tp_free */
-+    0,                                      /* tp_is_gc */
-+    0,                                      /* tp_bases */
-+    0,                                      /* tp_mro */
-+    0,                                      /* tp_cache */
-+    0,                                      /* tp_subclasses */
-+    0,                                      /* tp_weaklist */
-+    compose_del,                            /* tp_del */
-+};
-+
-+
-+
-+////////// Module initialization //////////
-+
-+PyMODINIT_FUNC init_compose_c(void) {
-+    PyObject* linecache = PyImport_ImportModule("linecache"); // new ref
-+
-+    if(!linecache) {
-+        PyErr_Print();
-+        return;
-+    }
-+
-+    PyObject* dict = PyModule_GetDict(linecache); // borrowed ref
-+
-+    if(!dict) {
-+        Py_DECREF(linecache);
-+        PyErr_Print();
-+        return;
-+    }
-+
-+    py_getline = PyMapping_GetItemString(dict, "getline"); // new ref
-+
-+    if(!py_getline) {
-+        Py_DECREF(linecache);
-+        PyErr_Print();
-+        return;
-+    }
-+
-+    if(PyType_Ready(&PyCompose_Type) < 0) {
-+        Py_DECREF(linecache);
-+        Py_DECREF(py_getline);
-+        PyErr_Print();
-+        return;
-+    }
-+
-+    PyObject* module = Py_InitModule3("_compose_c", compose_functionslist, "fast compose");
-+
-+    if(!module) {
-+        Py_DECREF(linecache);
-+        Py_DECREF(py_getline);
-+        PyErr_Print();
-+        return;
-+    }
-+
-+    Py_INCREF(&PyCompose_Type);
-+    PyModule_AddObject(module, "compose", (PyObject*) &PyCompose_Type);
-+}
-+
-+
-+
-+////////// Testing support //////////
-+
-+void assertTrue(const int condition, const char* msg) {
-+    if(!condition) {
-+        printf("FAIL: ");
-+        printf(msg);
-+        printf("\n");
-+    }
-+}
-+
-+
-+static PyObject* _selftest(PyObject* self, PyObject* null) {
-+    printf("\nRunning self test in " __FILE__ "\n");
-+    PyComposeObject c;
-+    _compose_initialize(&c);
-+    // test initial state of generator stack
-+    assertTrue(c.generators_base != NULL, "generator stack not allocated");
-+    assertTrue(c.generators_top == c.generators_base, "generator top of stack invalid");
-+    assertTrue(c.generators_allocated == INITIAL_STACK_SIZE, "invalid allocated stack size");
-+    // test pushing to generator stack
-+    Py_ssize_t refcount = Py_None->ob_refcnt;
-+    assertTrue(generators_push(&c, Py_None) == 1, "generators_push must return 1");
-+    assertTrue(Py_None->ob_refcnt == refcount + 1, "refcount not increased");
-+    assertTrue(c.generators_top == c.generators_base + 1, "stack top not increased");
-+    assertTrue(c.generators_base[0] == Py_None, "top of stack must be Py_None");
-+    int i;
-+
-+    for(i = 0; i < INITIAL_STACK_SIZE * 3; i++)
-+        generators_push(&c, Py_None);
-+
-+    assertTrue(c.generators_top - c.generators_base == 3 * INITIAL_STACK_SIZE + 1, "extending stack failed");
-+    assertTrue(c.generators_allocated == 2 * 2 * INITIAL_STACK_SIZE, "stack allocation failed");
-+    // test messages queue initial state
-+    assertTrue(messages_empty(&c), "messages not empty");
-+    assertTrue(0 == _messages_size(&c), "initial queue size must be 0");
-+    // test append to messages queue
-+    refcount = Py_None->ob_refcnt;
-+    messages_append(&c, Py_None);
-+    assertTrue(1 == _messages_size(&c), "now queue size must be 1");
-+    assertTrue(Py_None->ob_refcnt == refcount + 1, "messages_append did not increase ref count");
-+    assertTrue(!messages_empty(&c), "messages must not be empty");
-+    assertTrue(Py_None == messages_next(&c), "incorrect value from queue");
-+    // test next on messages queue
-+    assertTrue(0 == _messages_size(&c), "now queue size must be 0 again");
-+    assertTrue(messages_empty(&c), "messages must be empty again");
-+    messages_append(&c, PyInt_FromLong(5));
-+    messages_append(&c, PyInt_FromLong(6));
-+    assertTrue(2 == _messages_size(&c), "now queue size must be 2");
-+    assertTrue(PyInt_AsLong(messages_next(&c)) == 5, "incorrect value from queue");
-+    assertTrue(PyInt_AsLong(messages_next(&c)) == 6, "incorrect value from queue");
-+    // test wrap around on append
-+    compose_clear(&c);
-+    _compose_initialize(&c);
-+
-+    for(i = 0; i < QUEUE_SIZE - 2; i++)                                     // 8
-+        messages_append(&c, PyInt_FromLong(i));
-+
-+    assertTrue(i == _messages_size(&c), "queue must be equals to i");
-+    int status = messages_append(&c, PyInt_FromLong(i));                    // 9
-+    assertTrue(i + 1 == _messages_size(&c), "queue must be equals to i+1");
-+    assertTrue(status == 1, "status must be ok");
-+    status = messages_append(&c, PyInt_FromLong(i));                        // full!
-+    assertTrue(status == 0, "status of append must 0 (no room)");
-+    assertTrue(PyExc_RuntimeError == PyErr_Occurred(), "runtime exception must be set");
-+    PyErr_Clear();
-+    status = messages_insert(&c, PyInt_FromLong(99));
-+    assertTrue(status == 0, "status of insert must 0 (no room)");
-+    assertTrue(PyExc_RuntimeError == PyErr_Occurred(), "runtime exception must be set");
-+    PyErr_Clear();
-+    // test wrap around on insert
-+    compose_clear(&c);
-+    _compose_initialize(&c);
-+    status = messages_insert(&c, PyInt_FromLong(42));
-+    assertTrue(1 == _messages_size(&c), "after insert queue must be equals to 1");
-+    assertTrue(status == 1, "status after first insert must be ok");
-+    status = messages_insert(&c, PyInt_FromLong(42));
-+    assertTrue(2 == _messages_size(&c), "after insert queue must be equals to 2");
-+    assertTrue(status == 1, "status after second insert must be ok");
-+
-+    for(i = 0; i < QUEUE_SIZE - 3; i++)
-+        status = messages_insert(&c, PyInt_FromLong(i));
-+
-+    assertTrue(9 == _messages_size(&c), "after insert queue must be equals to 9");
-+    assertTrue(status == 1, "status after 9 inserts must be ok");
-+    status = messages_insert(&c, PyInt_FromLong(4242));
-+    assertTrue(status == 0, "status after 10 inserts must be error");
-+    assertTrue(PyExc_RuntimeError == PyErr_Occurred(), "runtime exception must be set here too");
-+    PyErr_Clear();
-+    // test wrap around on next
-+    compose_clear(&c);
-+    _compose_initialize(&c);
-+    messages_insert(&c, PyInt_FromLong(1000)); // wrap backward
-+    messages_append(&c, PyInt_FromLong(1001)); // wrap forward
-+    PyObject* o = messages_next(&c);           // end
-+    assertTrue(1000 == PyInt_AsLong(o), "expected 1000");
-+    assertTrue(2 == o->ob_refcnt, "refcount on next must be 2");
-+    o = messages_next(&c);                     // wrap
-+    assertTrue(1001 == PyInt_AsLong(o), "expected 1001");
-+    assertTrue(2 == o->ob_refcnt, "refcount on next must be 2");
-+    o = messages_next(&c);
-+    assertTrue(NULL == o, "error condition on next: empty");
-+    assertTrue(PyExc_RuntimeError == PyErr_Occurred(), "no runtime exception no next on empty queue");
-+    PyErr_Clear();
-+    printf("Done with self test\n");
-+    compose_clear(&c);
-+    Py_RETURN_NONE;
-+}
-+
+@@ -660,7 +656,7 @@
+     PyObject* dict = PyModule_GetDict(linecache); // borrowed ref
+ 
+     if(!dict) {
+-        Py_DECREF(linecache);
++        Py_CLEAR(linecache);
+         PyErr_Print();
+         return;
+     }
+@@ -668,14 +664,14 @@
+     py_getline = PyMapping_GetItemString(dict, "getline"); // new ref
+ 
+     if(!py_getline) {
+-        Py_DECREF(linecache);
++        Py_CLEAR(linecache);
+         PyErr_Print();
+         return;
+     }
+ 
+     if(PyType_Ready(&PyCompose_Type) < 0) {
+-        Py_DECREF(linecache);
+-        Py_DECREF(py_getline);
++        Py_CLEAR(linecache);
++        Py_CLEAR(py_getline);
+         PyErr_Print();
+         return;
+     }
+@@ -683,8 +679,8 @@
+     PyObject* module = Py_InitModule3("_compose_c", compose_functionslist, "fast compose");
+ 
+     if(!module) {
+-        Py_DECREF(linecache);
+-        Py_DECREF(py_getline);
++        Py_CLEAR(linecache);
++        Py_CLEAR(py_getline);
+         PyErr_Print();
+         return;
+     }
+@@ -699,7 +695,7 @@
+ 
+ void assertTrue(const int condition, const char* msg) {
+     if(!condition) {
+-        printf("FAIL: ");
++        printf("Self-test (%s) FAIL: ", __FILE__);
+         printf(msg);
+         printf("\n");
+     }
+@@ -707,7 +703,6 @@
+ 
+ 
+ static PyObject* _selftest(PyObject* self, PyObject* null) {
+-    printf("\nRunning self test in " __FILE__ "\n");
+     PyComposeObject c;
+     _compose_initialize(&c);
+     // test initial state of generator stack
+@@ -798,7 +793,6 @@
+     assertTrue(NULL == o, "error condition on next: empty");
+     assertTrue(PyExc_RuntimeError == PyErr_Occurred(), "no runtime exception no next on empty queue");
+     PyErr_Clear();
+-    printf("Done with self test\n");
+     compose_clear(&c);
+     Py_RETURN_NONE;
+ }
 diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' --recursive --unified version_1/weightless/core/compose/__init__.py version_1-sidekick/weightless/core/compose/__init__.py
 --- version_1/weightless/core/compose/__init__.py	2011-02-15 08:48:32.000000000 +0100
-+++ version_1-sidekick/weightless/core/compose/__init__.py	2011-02-15 08:54:03.000000000 +0100
-@@ -23,9 +23,13 @@
++++ version_1-sidekick/weightless/core/compose/__init__.py	2011-02-21 11:10:34.000000000 +0100
+@@ -22,10 +22,16 @@
+ #
  ## end license ##
  
++from types import GeneratorType, FunctionType
++
  from os.path import dirname, abspath, isdir, join            #DO_NOT_DISTRIBUTE
 +from sys import version_info                                 #DO_NOT_DISTRIBUTE
 +pycmd = "python%s.%s" % version_info[:2]                     #DO_NOT_DISTRIBUTE
@@ -1798,24 +1162,23 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
      if status > 0:                                           #DO_NOT_DISTRIBUTE
          import sys                                           #DO_NOT_DISTRIBUTE
          sys.exit(status)                                     #DO_NOT_DISTRIBUTE
-@@ -34,10 +38,34 @@
+@@ -34,10 +40,25 @@
      from os import getenv                                        #DO_NOT_DISTRIBUTE
      if getenv('WEIGHTLESS_COMPOSE_TEST') == 'PYTHON':            #DO_NOT_DISTRIBUTE
          raise ImportError('Python compose for testing purposes') #DO_NOT_DISTRIBUTE
 -    from _compose_c import compose, local, tostring
 +    from _compose_c import compose as _compose, local, tostring
-+#    from _compose_c import compose, local, tostring
++    ComposeType = _compose
  except ImportError:
      from warnings import warn
 -    warn("You're now using the suboptimal python version of compose(), local(), tostring()")
 -    from _compose_py import compose
 +    warn("Using Python version of compose(), local() and tostring()", stacklevel=2)
 +    from _compose_py import compose as _compose
-+#    from _compose_py import compose
      from _local_py import local
      from _tostring_py import tostring
++    ComposeType = GeneratorType
 +
-+from types import GeneratorType, FunctionType
 +from functools import partial as curry
 +
 +def compose(X, sidekick = None):
@@ -1823,16 +1186,8 @@ diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn'
 +        def helper(*args, **kwargs):
 +            return _compose(X(*args, **kwargs))
 +        return helper
-+    elif type(X) == GeneratorType or 'compose' in str(type(X)):
++    elif type(X) in (GeneratorType, ComposeType):
 +        return _compose(X, sidekick)
-+    #else:
-+    #    print ">>", X
-+    #    def decorator_with_args(f):
-+    #        def helper2(*args, **kwargs):
-+    #            print ">>", args, kwargs
-+    #            return _compose(f(*args, **kwargs), sidekick)
-+    #        return helper2
-+    #    return decorator_with_args
-+    raise TypeError("compose() expects generator, got %s" % str(X))
++    raise TypeError("compose() expects generator, got %s" % repr(X))
 +
 +

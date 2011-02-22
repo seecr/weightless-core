@@ -22,6 +22,8 @@
 #
 ## end license ##
 
+from types import GeneratorType, FunctionType
+
 from os.path import dirname, abspath, isdir, join            #DO_NOT_DISTRIBUTE
 from sys import version_info                                 #DO_NOT_DISTRIBUTE
 pycmd = "python%s.%s" % version_info[:2]                     #DO_NOT_DISTRIBUTE
@@ -39,16 +41,15 @@ try:
     if getenv('WEIGHTLESS_COMPOSE_TEST') == 'PYTHON':            #DO_NOT_DISTRIBUTE
         raise ImportError('Python compose for testing purposes') #DO_NOT_DISTRIBUTE
     from _compose_c import compose as _compose, local, tostring
-#    from _compose_c import compose, local, tostring
+    ComposeType = _compose
 except ImportError:
     from warnings import warn
     warn("Using Python version of compose(), local() and tostring()", stacklevel=2)
     from _compose_py import compose as _compose
-#    from _compose_py import compose
     from _local_py import local
     from _tostring_py import tostring
+    ComposeType = GeneratorType
 
-from types import GeneratorType, FunctionType
 from functools import partial as curry
 
 def compose(X, sidekick = None):
@@ -56,16 +57,8 @@ def compose(X, sidekick = None):
         def helper(*args, **kwargs):
             return _compose(X(*args, **kwargs))
         return helper
-    elif type(X) == GeneratorType or 'compose' in str(type(X)):
+    elif type(X) in (GeneratorType, ComposeType):
         return _compose(X, sidekick)
-    #else:
-    #    print ">>", X
-    #    def decorator_with_args(f):
-    #        def helper2(*args, **kwargs):
-    #            print ">>", args, kwargs
-    #            return _compose(f(*args, **kwargs), sidekick)
-    #        return helper2
-    #    return decorator_with_args
-    raise TypeError("compose() expects generator, got %s" % str(X))
+    raise TypeError("compose() expects generator, got %s" % repr(X))
 
 

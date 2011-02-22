@@ -35,9 +35,12 @@ for path in glob('../deps.d/*'):                  #DO_NOT_DISTRIBUTE
 sysPath.insert(0,'..')                            #DO_NOT_DISTRIBUTE
 
 from unittest import main
-
-from composetest import ComposePyTest
-from composetest import ComposeCTest
+from types import GeneratorType
+from weightless.core.compose import ComposeType
+if ComposeType == GeneratorType:
+    from composetest import ComposePyTest
+else:
+    from composetest import ComposeCTest
 from localtest import LocalTest
 from sidekicktest import SidekickTest
 from reactortest import ReactorTest

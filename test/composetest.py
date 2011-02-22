@@ -790,7 +790,7 @@ class _ComposeTest(TestCase):
                 yield
             except GeneratorExit:
                 msg.append('GeneratorExit turned into StopIteration')
-                raise StopIteration()  # <= this is the clue, see next test
+                raise StopIteration  # <= this is the clue, see next test
         g5 = compose(f5())
         g5.next()
         try:
@@ -812,7 +812,7 @@ class _ComposeTest(TestCase):
         g7 = compose(f7())
         g7.next()
         try:
-            g7.throw(GeneratorExit())
+            g7.throw(GeneratorExit)
             self.fail('must reraise RuntimeError(generator ignored GeneratorExit)')
         except RuntimeError:
             pass
@@ -885,9 +885,40 @@ class _ComposeTest(TestCase):
             yield "a"
         self.assertEquals(["a"], list(f()))
 
+    def testEmptyArgsInStopIteration(self):
+        def f1():
+            si = StopIteration()
+            si.args = () # empty tuple
+            raise si
+            yield
+        def f2():
+            x = yield f1()
+            yield x
+        g = compose(f2())
+        self.assertEquals([None], list(g))
+
+    def testArgsIsNoIterable(self):
+        # because the Python VM checks this, we test the assumtion only
+        si = StopIteration()
+        try:
+            si.args = 9 # not a tuple. Actually checked by StopIteration itself!
+        except TypeError, e:
+            self.assertEquals("'int' object is not iterable", str(e))
+
+    def testArgsIsNoTuple(self):
+        # because the Python VM turns the args into a tuple, we only test this
+        si = StopIteration()
+        si.args = [2] # not a tuple. VM turns this into tuple
+        self.assertEquals((2,), si.args)
+
     def get_tracked_objects(self):
         return [o for o in gc.get_objects() if type(o) in 
                 (compose, GeneratorType, Exception, ATrackedObj)]
+
+    def testComposeType(self):
+        from weightless.core.compose import ComposeType
+        self.assertEquals(type, type(ComposeType))
+        self.assertEquals(ComposeType, type(compose((n for n in []))))
 
     def setUp(self):
         gc.collect()

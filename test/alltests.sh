@@ -27,21 +27,20 @@ export LANG=en_US.UTF-8
 export PYTHONPATH=.:"$PYTHONPATH"
 option=$1
 pyversions="$(pyversions --installed)"
-if [ "${option:0:8}" == "--python" ]; then
+if [ "${option:0:10}" == "--python2." ]; then
     shift
     pyversions="${option:2}"
 fi
+test=
+option=$1
+if [ "$option" == "--python" ]; then
+        shift
+        test=PYTHON
+elif [ "$option" == "--c" ]; then
+        shift
+        test=C
+fi
 for pycmd in $pyversions; do
-    echo "RUNNING $pycmd tests"
-option=$1                                                  #DO_NOT_DISTRIBUTE
-if [ "$option" == "--python" ]; then                       #DO_NOT_DISTRIBUTE
-    shift                                                  #DO_NOT_DISTRIBUTE
-WEIGHTLESS_COMPOSE_TEST=PYTHON $pycmd _alltests.py "$@"    #DO_NOT_DISTRIBUTE
-elif [ "$option" == "--c" ]; then                          #DO_NOT_DISTRIBUTE
-    shift                                                  #DO_NOT_DISTRIBUTE
-$pycmd _alltests.py "$@"                                   #DO_NOT_DISTRIBUTE
-else                                                       #DO_NOT_DISTRIBUTE
-WEIGHTLESS_COMPOSE_TEST=PYTHON $pycmd _alltests.py "$@"    #DO_NOT_DISTRIBUTE
-$pycmd _alltests.py "$@"
-fi                                                         #DO_NOT_DISTRIBUTE
+    echo "================ $pycmd _alltests.py $@ ================"
+    WEIGHTLESS_COMPOSE_TEST=$test $pycmd _alltests.py "$@"
 done
