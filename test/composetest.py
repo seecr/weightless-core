@@ -660,7 +660,7 @@ class _ComposeTest(TestCase):
         result = f.next()
         self.assertEquals('f1', str(result))
 
-    def testFindLocal2(self):
+    def testFindLocalWithComposeUnassignedToVariable(self):
         def f1():
             f1local = 'f1'
             yield f2()
@@ -669,7 +669,7 @@ class _ComposeTest(TestCase):
             yield l
         self.assertEquals('f1', compose(f1()).next())
 
-    def testFindClosesedLocal(self):
+    def testFindClosestLocal(self):
         def f1():
             myLocal = 'f1'
             yield f2()
