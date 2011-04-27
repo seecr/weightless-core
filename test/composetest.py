@@ -651,14 +651,18 @@ class _ComposeTest(TestCase):
 
     def testFindLocal(self):
         def f1():
-            f1local = 'f1'
-            yield f2()
+            someLocal = 'f1'
+            yield f3()
         def f2():
-            l = local('f1local')
+            someLocal = 'f2'
+            yield f3()
+        def f3():
+            l = local('someLocal')
             yield l
         f = compose(f1())
         result = f.next()
         self.assertEquals('f1', str(result))
+        self.assertEquals('f2', str(compose(f2()).next()))
 
     def testFindLocalWithComposeUnassignedToVariable(self):
         def f1():

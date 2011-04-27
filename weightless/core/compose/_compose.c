@@ -197,6 +197,22 @@ static int PyCompose_Check(PyObject* obj) {
     return PyObject_Type(obj) == (PyObject*) &PyCompose_Type;
 }
 
+static void _compose_save_to_frame(PyComposeObject* cmps) {
+    PyFrameObject* frame = PyEval_GetFrame();
+    if(frame) {
+        PyFrame_FastToLocals(frame);
+        PyObject* frameComposeObjects = PyDict_GetItemString(frame->f_locals, "__frameComposeObjects");        
+        if(frameComposeObjects) {
+            Py_INCREF(frameComposeObjects);
+        }
+        else {
+            frameComposeObjects = PyList_New(0);
+            PyDict_SetItemString(frame->f_locals, "__frameComposeObjects", frameComposeObjects);
+        }
+        PyList_Insert(frameComposeObjects, 0, (PyObject*) cmps);
+        Py_DECREF(frameComposeObjects);
+    }
+}
 
 static void _compose_initialize(PyComposeObject* cmps) {
     cmps->expect_data = 0;
@@ -208,8 +224,9 @@ static void _compose_initialize(PyComposeObject* cmps) {
     cmps->messages_end = cmps->messages_base;
     cmps->sidekick = NULL;
     cmps->weakreflist = NULL;
-}
 
+    _compose_save_to_frame(cmps);
+}
 
 static PyObject* compose_new(PyObject* type, PyObject* args, PyObject* kwargs) {
     static char* argnames[] = {"initial", "sidekick"};
@@ -470,14 +487,10 @@ PyObject* find_local_in_locals(PyFrameObject* frame, PyObject* name) {
 
         if(localVar) {
             PyObject* localName = PyTuple_GetItem(frame->f_code->co_varnames, i);
-
             if(_PyString_Eq(name, localName)) {
                 Py_INCREF(localVar);
                 return localVar;
             }
-
-            if(localVar->ob_type == &PyCompose_Type)
-                return find_local_in_compose((PyComposeObject*)localVar, name);
         }
     }
 
@@ -489,9 +502,22 @@ PyObject* find_local_in_frame(PyFrameObject* frame, PyObject* name) {
     if(!frame) return NULL;
 
     PyObject* result = find_local_in_locals(frame, name);
-
     if(result)
         return result;
+
+    if(frame->f_locals) {
+        PyObject* frameComposeObjects = PyDict_GetItemString(frame->f_locals, "__frameComposeObjects");
+        if(frameComposeObjects) {
+            int j;
+            for (j = 0; j < PyList_Size(frameComposeObjects); j++) {
+                PyComposeObject* composeObject = (PyComposeObject*) PyList_GetItem(frameComposeObjects, j);
+                result = find_local_in_compose(composeObject, name);
+                if(result){
+                    return result;
+                }
+            }
+        }
+    }
 
     return find_local_in_frame(frame->f_back, name);
 }
@@ -576,7 +602,7 @@ static PyObject* _selftest(PyObject* self, PyObject* null);
 
 static PyMethodDef compose_functionslist[] = {
     {"local", local, METH_O, "Finds a local variable on the call stack including compose'd generators."},
-    {"tostring", tostring, METH_O, "Returns a string representation of a genarator."},
+    {"tostring", tostring, METH_O, "Returns a string representation of a generator."},
     {"_selftest", _selftest, METH_NOARGS, "runs self test"},
     {NULL} /* Sentinel */
 };
