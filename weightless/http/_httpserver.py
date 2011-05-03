@@ -279,6 +279,8 @@ class HttpHandler(object):
                         yield
                         data.resumeWriter()
                         continue
+                    if type(data) is unicode:
+                        raise TypeError("socket.send() argument must be string")
                 sent = self._sok.send(data, MSG_DONTWAIT)
                 if sent < len(data):
                     self._rest = data[sent:]

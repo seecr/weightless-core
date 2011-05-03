@@ -31,6 +31,8 @@ from time import sleep
 from calltrace import CallTrace
 from basetestcase import MATCHALL
 from os.path import join, abspath, dirname
+from StringIO import StringIO
+import sys
 
 from weightless.http import HttpServer, _httpserver
 
@@ -107,7 +109,6 @@ class HttpServerTest(TestCase):
         self.assertEquals('The Response', response)
 
     def testSmallFragmentsWhileSendingResponse(self):
-
         def response(**kwargs):
             yield 'some text that is longer than '
             yield 'the lenght of fragments sent'
@@ -129,6 +130,28 @@ class HttpServerTest(TestCase):
             reactor.step()
         fragment = sok.recv(4096)
         self.assertEquals('some text that is longer than the lenght of fragments sent', fragment)
+
+    def testHttpServerNotAcceptingUnicode(self):
+        def response(**kwargs):
+            yield unicode('some text')
+        reactor = Reactor()
+        server = HttpServer(reactor, self._portNumber, response, recvSize=3)
+        server.listen()
+        sok = socket()
+        sok.connect(('localhost', self._portNumber))
+        sok.send('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
+        output = StringIO()
+        defaultStderr = sys.stderr
+        sys.stderr = output
+        while not reactor._writers:
+            reactor.step()
+        reactor.step()
+        fragment = sok.recv(4096)
+        output.seek(0)
+        error = output.read()
+        sys.stderr = defaultStderr
+        self.assertFalse("some text" in fragment, fragment)
+        self.assertTrue("TypeError" in error, error)
 
     def testInvalidRequestStartsOnlyOneTimer(self):
         _httpserver.RECVSIZE = 3
