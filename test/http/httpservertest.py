@@ -131,27 +131,25 @@ class HttpServerTest(TestCase):
         fragment = sok.recv(4096)
         self.assertEquals('some text that is longer than the lenght of fragments sent', fragment)
 
-    def testHttpServerNotAcceptingUnicode(self):
+    def testHttpServerEncodesUnicode(self):
+        unicodeString = u'some t\xe9xt' 
+        oneStringLength = len(str(unicodeString))
         def response(**kwargs):
-            yield unicode('some text')
+            yield unicodeString * 6000
         reactor = Reactor()
         server = HttpServer(reactor, self._portNumber, response, recvSize=3)
         server.listen()
         sok = socket()
         sok.connect(('localhost', self._portNumber))
         sok.send('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
-        output = StringIO()
-        defaultStderr = sys.stderr
-        sys.stderr = output
         while not reactor._writers:
             reactor.step()
         reactor.step()
-        fragment = sok.recv(4096)
-        output.seek(0)
-        error = output.read()
-        sys.stderr = defaultStderr
-        self.assertFalse("some text" in fragment, fragment)
-        self.assertTrue("TypeError" in error, error)
+        fragment = sok.recv(100000) # will read about 49152 chars
+        reactor.step()
+        fragment += sok.recv(100000)
+        self.assertEquals(oneStringLength * 6000, len(fragment))
+        self.assertTrue("some t\xc3\xa9xt" in fragment, fragment)
 
     def testInvalidRequestStartsOnlyOneTimer(self):
         _httpserver.RECVSIZE = 3

@@ -34,7 +34,7 @@ from random import randint
 from time import time
 from socket import socket, ssl,  SOL_SOCKET, SO_REUSEADDR, SO_LINGER
 from struct import pack
-from sys import stdout
+from sys import stdout, getdefaultencoding
 
 
 RECVSIZE = 4096
@@ -115,6 +115,7 @@ class HttpHandler(object):
         self._window = ''
         self._maxConnections = maxConnections if maxConnections else maxFileDescriptors()
         self._errorHandler = errorHandler if errorHandler else defaultErrorHandler
+        self._defaultEncoding = getdefaultencoding()
 
     def __call__(self):
         part = self._sok.recv(self._recvSize)
@@ -280,7 +281,7 @@ class HttpHandler(object):
                         data.resumeWriter()
                         continue
                     if type(data) is unicode:
-                        raise TypeError("socket.send() argument must be string")
+                        data = data.encode(self._defaultEncoding)
                 sent = self._sok.send(data, MSG_DONTWAIT)
                 if sent < len(data):
                     self._rest = data[sent:]
