@@ -24,6 +24,7 @@
 from inspect import currentframe
 
 def findInLocals(f_locals, localName):
+    print f_locals
     if localName in f_locals:
         return f_locals[localName]
     if '__callstack__' in f_locals:
