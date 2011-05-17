@@ -408,7 +408,6 @@ static PyObject* compose_send(PyComposeObject* self, PyObject* message) {
     PyObject* response = _compose_go(self, NULL, NULL, NULL);
 
     frame->f_stacktop--;
-    //assert(tState->frame == frame->f_back);
     tState->frame = frame->f_back;
     Py_DECREF(frame);
 
