@@ -44,7 +44,7 @@ typedef struct {
     PyObject** messages_start;
     PyObject** messages_end;
     PyObject*  sidekick;
-    //PyFrameObject* frame;
+    PyFrameObject* frame;
     PyObject*  weakreflist;
 } PyComposeObject;
 
@@ -159,7 +159,8 @@ static int compose_traverse(PyComposeObject* self, visitproc visit, void* arg) {
         Py_VISIT(*p);
 
     Py_VISIT(self->sidekick);
-    //Py_VISIT(self->frame);
+    Py_VISIT(self->frame);
+
     return 0;
 }
 
@@ -176,8 +177,10 @@ static int compose_clear(PyComposeObject* self) {
 
     free(self->messages_base);
     self->messages_base = NULL;
+
     Py_CLEAR(self->sidekick);
-    //Py_CLEAR(self->frame);
+    Py_CLEAR(self->frame);
+
     return 0;
 }
 
@@ -213,8 +216,8 @@ static void _compose_initialize(PyComposeObject* cmps) {
     cmps->messages_end = cmps->messages_base;
     cmps->sidekick = NULL;
     cmps->weakreflist = NULL;
-    //Py_CLEAR(cmps->frame->f_back);
-    //printf(">>>>>>>>>>>>>>>> %p %p\n", cmps->frame, cmps->frame->f_back);
+    PyThreadState* tState = PyThreadState_GET();
+    cmps->frame = PyFrame_New(tState, py_code, PyEval_GetGlobals(), NULL);
 }
 
 
@@ -399,17 +402,19 @@ static PyObject* compose_send(PyComposeObject* self, PyObject* message) {
         messages_insert(self, Py_None);
 
        
-    PyThreadState* tState = PyThreadState_GET();
-    PyFrameObject* frame = PyFrame_New(tState, py_code, PyEval_GetGlobals(), NULL);
-    //self->frame->f_back = tState->frame;
-    tState->frame = frame;
-    *(frame->f_stacktop++) = (PyObject*) self;
+    PyThreadState* tstate = self->frame->f_tstate;
+    PyFrameObject* frame_f_back = self->frame->f_back;
+    PyFrameObject* tstate_frame = tstate->frame;
+
+    self->frame->f_back = tstate_frame;
+    tstate->frame = self->frame;
+    *(self->frame->f_stacktop++) = (PyObject*) self;
 
     PyObject* response = _compose_go(self, NULL, NULL, NULL);
 
-    frame->f_stacktop--;
-    tState->frame = frame->f_back;
-    Py_DECREF(frame);
+    self->frame->f_stacktop--;
+    self->frame->f_back = frame_f_back;
+    tstate->frame = tstate_frame;
 
     return response;
 }
