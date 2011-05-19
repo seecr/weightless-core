@@ -264,6 +264,22 @@ class _ComposeTest(TestCase):
         g.throw(MyException('aap'))
         self.assertEquals('aap', str(self.e))
 
+    def testThrowWithLocalCorrectly(self):
+        class MyException(Exception): pass
+        def child(x):
+            try:
+                yield 1
+            except Exception, e:
+                yield f2()
+        def f2():
+            self.e = local("x")
+            yield 2
+        a = compose(child("test"))
+        g = compose(child("aap"))
+        g.next()
+        g.throw(MyException())
+        self.assertEquals('aap', str(self.e))
+
     def testHandleAllDataAndDoAvoidSuperfluousSendCalls(self):
         data = []
         def f():
@@ -598,11 +614,11 @@ class _ComposeTest(TestCase):
         def f():
             yield
         g = f()
-        soll = """  File "%s", line 598, in f
+        soll = """  File "%s", line 615, in f
     def f():""" % __file__.replace('pyc', 'py')
         self.assertEquals(soll, tostring(g))
         g.next()
-        soll = """  File "%s", line 599, in f
+        soll = """  File "%s", line 616, in f
     yield""" % __file__.replace('pyc', 'py')
         self.assertEquals(soll, tostring(g))
 
@@ -613,9 +629,9 @@ class _ComposeTest(TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 614, in f2
+        result = """  File "%s", line 631, in f2
     yield f1()
-  File "%s", line 612, in f1
+  File "%s", line 629, in f1
     yield""" % (2*(__file__.replace('pyc', 'py'),))
         c.next()
         self.assertEquals(result, tostring(c), "\n%s\n!=\n%s\n" % (result, tostring(c)))
@@ -626,7 +642,7 @@ class _ComposeTest(TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 626, in f2
+        result = """  File "%s", line 643, in f2
     def f2():""" % __file__.replace('pyc', 'py')
         self.assertEquals(result, tostring(c))
 

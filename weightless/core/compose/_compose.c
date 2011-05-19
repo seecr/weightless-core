@@ -401,8 +401,7 @@ static PyObject* compose_send(PyComposeObject* self, PyObject* message) {
     if(!self->expect_data && self->messages_start[0] != Py_None)
         messages_insert(self, Py_None);
 
-       
-    PyThreadState* tstate = self->frame->f_tstate;
+    PyThreadState* tstate = PyThreadState_GET();
     PyFrameObject* frame_f_back = self->frame->f_back;
     PyFrameObject* tstate_frame = tstate->frame;
 
@@ -431,8 +430,21 @@ static PyObject* compose_throw(PyComposeObject* self, PyObject* arg) {
         exc_type = PyExceptionInstance_Class(exc_type); // borrowed ref
     }
 
-    PyObject* r = _compose_go(self, exc_type, exc_value, exc_tb);
-    return r;
+    PyThreadState* tstate = PyThreadState_GET();
+    PyFrameObject* frame_f_back = self->frame->f_back;
+    PyFrameObject* tstate_frame = tstate->frame;
+
+    self->frame->f_back = tstate_frame;
+    tstate->frame = self->frame;
+    *(self->frame->f_stacktop++) = (PyObject*) self;
+
+    PyObject* response = _compose_go(self, exc_type, exc_value, exc_tb);
+
+    self->frame->f_stacktop--;
+    self->frame->f_back = frame_f_back;
+    tstate->frame = tstate_frame;
+
+    return response;
 }
 
 
