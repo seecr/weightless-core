@@ -264,6 +264,22 @@ class _ComposeTest(TestCase):
         g.throw(MyException('aap'))
         self.assertEquals('aap', str(self.e))
 
+    def testThrowWithLocalCorrectly(self):
+        class MyException(Exception): pass
+        def child(x):
+            try:
+                yield 1
+            except Exception, e:
+                yield f2()
+        def f2():
+            self.e = local("x")
+            yield 2
+        a = compose(child("test"))
+        g = compose(child("aap"))
+        g.next()
+        g.throw(MyException())
+        self.assertEquals('aap', str(self.e))
+
     def testHandleAllDataAndDoAvoidSuperfluousSendCalls(self):
         data = []
         def f():
@@ -300,6 +316,21 @@ class _ComposeTest(TestCase):
         g.next()
         g.close()
         self.assertEquals(GeneratorExit, type(r[0]))
+
+    def testCloseWithLocalCorrectly(self):
+        class MyException(Exception): pass
+        def child(x):
+            yield f2()
+        def f2():
+            try:
+                yield 1
+            except BaseException, e:
+                self.e = local("x")
+                raise
+        g = compose(child("aap"))
+        g.next()
+        g.close()
+        self.assertEquals('aap', str(self.e))
 
     def testHandleStop(self):
         r = []
@@ -598,11 +629,11 @@ class _ComposeTest(TestCase):
         def f():
             yield
         g = f()
-        soll = """  File "%s", line 598, in f
+        soll = """  File "%s", line 629, in f
     def f():""" % __file__.replace('pyc', 'py')
         self.assertEquals(soll, tostring(g))
         g.next()
-        soll = """  File "%s", line 599, in f
+        soll = """  File "%s", line 630, in f
     yield""" % __file__.replace('pyc', 'py')
         self.assertEquals(soll, tostring(g))
 
@@ -613,9 +644,9 @@ class _ComposeTest(TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 614, in f2
+        result = """  File "%s", line 645, in f2
     yield f1()
-  File "%s", line 612, in f1
+  File "%s", line 643, in f1
     yield""" % (2*(__file__.replace('pyc', 'py'),))
         c.next()
         self.assertEquals(result, tostring(c), "\n%s\n!=\n%s\n" % (result, tostring(c)))
@@ -626,7 +657,7 @@ class _ComposeTest(TestCase):
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 626, in f2
+        result = """  File "%s", line 657, in f2
     def f2():""" % __file__.replace('pyc', 'py')
         self.assertEquals(result, tostring(c))
 
@@ -651,16 +682,29 @@ class _ComposeTest(TestCase):
 
     def testFindLocal(self):
         def f1():
+            someLocal = 'f1'
+            yield f3()
+        def f2():
+            someLocal = 'f2'
+            yield f3()
+        def f3():
+            l = local('someLocal')
+            yield l
+        f = compose(f1())
+        result = f.next()
+        self.assertEquals('f1', str(result))
+        self.assertEquals('f2', str(compose(f2()).next()))
+
+    def testFindLocalWithComposeUnassignedToVariable(self):
+        def f1():
             f1local = 'f1'
             yield f2()
         def f2():
             l = local('f1local')
             yield l
-        f = compose(f1())
-        result = f.next()
-        self.assertEquals('f1', str(result))
+        self.assertEquals('f1', compose(f1()).next())
 
-    def testFindClosesedLocal(self):
+    def testFindClosestLocal(self):
         def f1():
             myLocal = 'f1'
             yield f2()

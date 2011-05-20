@@ -44,6 +44,7 @@ typedef struct {
     PyObject** messages_start;
     PyObject** messages_end;
     PyObject*  sidekick;
+    PyFrameObject* frame;
     PyObject*  weakreflist;
 } PyComposeObject;
 
@@ -158,6 +159,7 @@ static int compose_traverse(PyComposeObject* self, visitproc visit, void* arg) {
         Py_VISIT(*p);
 
     Py_VISIT(self->sidekick);
+    Py_VISIT(self->frame);
     return 0;
 }
 
@@ -175,6 +177,7 @@ static int compose_clear(PyComposeObject* self) {
     free(self->messages_base);
     self->messages_base = NULL;
     Py_CLEAR(self->sidekick);
+    Py_CLEAR(self->frame);
     return 0;
 }
 
@@ -198,6 +201,8 @@ static int PyCompose_Check(PyObject* obj) {
 }
 
 
+static PyCodeObject* py_code;
+
 static void _compose_initialize(PyComposeObject* cmps) {
     cmps->expect_data = 0;
     cmps->generators_allocated = INITIAL_STACK_SIZE;
@@ -208,6 +213,8 @@ static void _compose_initialize(PyComposeObject* cmps) {
     cmps->messages_end = cmps->messages_base;
     cmps->sidekick = NULL;
     cmps->weakreflist = NULL;
+    cmps->frame = PyFrame_New(PyThreadState_GET(), py_code, PyEval_GetGlobals(), NULL);
+    Py_CLEAR(cmps->frame->f_back);
 }
 
 
@@ -380,6 +387,21 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
 }
 
 
+static PyObject* _compose_go_with_frame(PyComposeObject* self, PyObject* exc_type, PyObject* exc_value, PyObject* exc_tb) {
+    PyThreadState* tstate = PyThreadState_GET();
+    PyFrameObject* tstate_frame = tstate->frame;
+    self->frame->f_back = tstate_frame;
+    Py_INCREF(self->frame->f_back);
+    tstate->frame = self->frame;
+    *(self->frame->f_stacktop++) = (PyObject*) self;
+    PyObject* response = _compose_go(self, exc_type, exc_value, exc_tb);
+    self->frame->f_stacktop--;
+    Py_CLEAR(self->frame->f_back);
+    tstate->frame = tstate_frame;
+    return response;
+}
+
+
 static PyObject* compose_send(PyComposeObject* self, PyObject* message) {
     if(!self->expect_data && message != Py_None) {
         PyErr_SetString(PyExc_AssertionError, "Cannot accept data. First send None.");
@@ -391,7 +413,7 @@ static PyObject* compose_send(PyComposeObject* self, PyObject* message) {
     if(!self->expect_data && self->messages_start[0] != Py_None)
         messages_insert(self, Py_None);
 
-    return _compose_go(self, NULL, NULL, NULL);
+    return _compose_go_with_frame(self, NULL, NULL, NULL);
 }
 
 
@@ -406,13 +428,12 @@ static PyObject* compose_throw(PyComposeObject* self, PyObject* arg) {
         exc_type = PyExceptionInstance_Class(exc_type); // borrowed ref
     }
 
-    PyObject* r = _compose_go(self, exc_type, exc_value, exc_tb);
-    return r;
+    return _compose_go_with_frame(self, exc_type, exc_value, exc_tb);
 }
 
 
 static PyObject* compose_close(PyComposeObject* self) {
-    _compose_go(self, PyExc_GeneratorExit, NULL, NULL);
+    _compose_go_with_frame(self, PyExc_GeneratorExit, NULL, NULL);
 
     if(PyErr_ExceptionMatches(PyExc_StopIteration) || PyErr_ExceptionMatches(PyExc_GeneratorExit)) {
         PyErr_Clear();	/* ignore these errors */
@@ -421,7 +442,6 @@ static PyObject* compose_close(PyComposeObject* self) {
 
     return NULL;
 }
-
 
 static void compose_del(PyObject* self) {
     if(!compose_close((PyComposeObject*) self))
@@ -475,9 +495,14 @@ PyObject* find_local_in_locals(PyFrameObject* frame, PyObject* name) {
                 Py_INCREF(localVar);
                 return localVar;
             }
+        }
+    }
 
-            if(localVar->ob_type == &PyCompose_Type)
-                return find_local_in_compose((PyComposeObject*)localVar, name);
+    if(frame->f_stacktop > frame->f_valuestack) {
+        PyObject* o = frame->f_stacktop[-1];
+
+        if(o->ob_type == &PyCompose_Type) {
+            return find_local_in_compose((PyComposeObject*) o, name);
         }
     }
 
@@ -645,6 +670,26 @@ PyTypeObject PyCompose_Type = {
 
 ////////// Module initialization //////////
 
+static PyCodeObject* create_empty_code(void) {
+    PyObject* py_srcfile = PyString_FromString(__FILE__);
+    PyObject* py_funcname = PyString_FromString("compose");
+    PyObject* empty_string = PyString_FromString("");
+    PyObject* empty_tuple = PyTuple_New(0);
+    PyCodeObject* code = PyCode_New(
+                             0, 0, 1, 0,  // stacksize is 1
+                             empty_string,
+                             empty_tuple,
+                             empty_tuple,
+                             empty_tuple,
+                             empty_tuple,
+                             empty_tuple,
+                             py_srcfile,
+                             py_funcname,
+                             __LINE__,
+                             empty_string);
+    return code;
+}
+
 PyMODINIT_FUNC init_compose_c(void) {
     PyObject* linecache = PyImport_ImportModule("linecache"); // new ref
 
@@ -669,9 +714,19 @@ PyMODINIT_FUNC init_compose_c(void) {
         return;
     }
 
+    py_code = create_empty_code();
+
+    if(!py_code) {
+        Py_CLEAR(linecache);
+        Py_CLEAR(py_getline);
+        PyErr_Print();
+        return;
+    }
+
     if(PyType_Ready(&PyCompose_Type) < 0) {
         Py_CLEAR(linecache);
         Py_CLEAR(py_getline);
+        Py_CLEAR(py_code);
         PyErr_Print();
         return;
     }
@@ -681,6 +736,7 @@ PyMODINIT_FUNC init_compose_c(void) {
     if(!module) {
         Py_CLEAR(linecache);
         Py_CLEAR(py_getline);
+        Py_CLEAR(py_code);
         PyErr_Print();
         return;
     }

@@ -40,6 +40,7 @@ elif [ "$option" == "--c" ]; then
         shift
         test=C
 fi
+echo $test
 for pycmd in $pyversions; do
     echo "================ $pycmd _alltests.py $@ ================"
     WEIGHTLESS_COMPOSE_TEST=$test $pycmd _alltests.py "$@"
