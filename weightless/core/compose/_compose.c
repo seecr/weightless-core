@@ -216,8 +216,8 @@ static void _compose_initialize(PyComposeObject* cmps) {
     cmps->messages_end = cmps->messages_base;
     cmps->sidekick = NULL;
     cmps->weakreflist = NULL;
-    PyThreadState* tState = PyThreadState_GET();
-    cmps->frame = PyFrame_New(tState, py_code, PyEval_GetGlobals(), NULL);
+    PyThreadState* tstate = PyThreadState_GET();
+    cmps->frame = PyFrame_New(tstate, py_code, PyEval_GetGlobals(), NULL);
     Py_CLEAR(cmps->frame->f_back);
 }
 
@@ -391,46 +391,7 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
 }
 
 
-static PyObject* compose_send(PyComposeObject* self, PyObject* message) {
-    if(!self->expect_data && message != Py_None) {
-        PyErr_SetString(PyExc_AssertionError, "Cannot accept data. First send None.");
-        return NULL;
-    }
-
-    messages_append(self, message);
-
-    if(!self->expect_data && self->messages_start[0] != Py_None)
-        messages_insert(self, Py_None);
-
-    PyThreadState* tstate = PyThreadState_GET();
-    PyFrameObject* tstate_frame = tstate->frame;
-
-    self->frame->f_back = tstate_frame;
-    Py_INCREF(self->frame->f_back);
-    tstate->frame = self->frame;
-    *(self->frame->f_stacktop++) = (PyObject*) self;
-
-    PyObject* response = _compose_go(self, NULL, NULL, NULL);
-
-    self->frame->f_stacktop--;
-    Py_CLEAR(self->frame->f_back);
-    tstate->frame = tstate_frame;
-
-    return response;
-}
-
-
-static PyObject* compose_throw(PyComposeObject* self, PyObject* arg) {
-    PyObject* exc_type = NULL, *exc_value = NULL, *exc_tb = NULL;
-
-    if(!PyArg_ParseTuple(arg, "O|OO", &exc_type, &exc_value, &exc_tb)) //borrowed refs
-        return NULL;
-
-    if(PyExceptionInstance_Check(exc_type)) { // e.g. throw(Exception())
-        exc_value = exc_type;
-        exc_type = PyExceptionInstance_Class(exc_type); // borrowed ref
-    }
-
+static PyObject* _compose_go_with_frame(PyComposeObject* self, PyObject* exc_type, PyObject* exc_value, PyObject* exc_tb) {
     PyThreadState* tstate = PyThreadState_GET();
     PyFrameObject* tstate_frame = tstate->frame;
 
@@ -449,20 +410,38 @@ static PyObject* compose_throw(PyComposeObject* self, PyObject* arg) {
 }
 
 
+static PyObject* compose_send(PyComposeObject* self, PyObject* message) {
+    if(!self->expect_data && message != Py_None) {
+        PyErr_SetString(PyExc_AssertionError, "Cannot accept data. First send None.");
+        return NULL;
+    }
+
+    messages_append(self, message);
+
+    if(!self->expect_data && self->messages_start[0] != Py_None)
+        messages_insert(self, Py_None);
+
+    return _compose_go_with_frame(self, NULL, NULL, NULL);
+}
+
+
+static PyObject* compose_throw(PyComposeObject* self, PyObject* arg) {
+    PyObject* exc_type = NULL, *exc_value = NULL, *exc_tb = NULL;
+
+    if(!PyArg_ParseTuple(arg, "O|OO", &exc_type, &exc_value, &exc_tb)) //borrowed refs
+        return NULL;
+
+    if(PyExceptionInstance_Check(exc_type)) { // e.g. throw(Exception())
+        exc_value = exc_type;
+        exc_type = PyExceptionInstance_Class(exc_type); // borrowed ref
+    }
+
+    return _compose_go_with_frame(self, exc_type, exc_value, exc_tb);
+}
+
+
 static PyObject* compose_close(PyComposeObject* self) {
-    PyThreadState* tstate = PyThreadState_GET();
-    PyFrameObject* tstate_frame = tstate->frame;
-
-    self->frame->f_back = tstate_frame;
-    Py_INCREF(self->frame->f_back);
-    tstate->frame = self->frame;
-    *(self->frame->f_stacktop++) = (PyObject*) self;
-
-    _compose_go(self, PyExc_GeneratorExit, NULL, NULL);
-
-    self->frame->f_stacktop--;
-    Py_CLEAR(self->frame->f_back);
-    tstate->frame = tstate_frame;
+    _compose_go_with_frame(self, PyExc_GeneratorExit, NULL, NULL);
 
     if(PyErr_ExceptionMatches(PyExc_StopIteration) || PyErr_ExceptionMatches(PyExc_GeneratorExit)) {
         PyErr_Clear();	/* ignore these errors */
@@ -471,7 +450,6 @@ static PyObject* compose_close(PyComposeObject* self) {
 
     return NULL;
 }
-
 
 static void compose_del(PyObject* self) {
     if(!compose_close((PyComposeObject*) self))
