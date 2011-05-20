@@ -160,7 +160,6 @@ static int compose_traverse(PyComposeObject* self, visitproc visit, void* arg) {
 
     Py_VISIT(self->sidekick);
     Py_VISIT(self->frame);
-
     return 0;
 }
 
@@ -177,10 +176,8 @@ static int compose_clear(PyComposeObject* self) {
 
     free(self->messages_base);
     self->messages_base = NULL;
-
     Py_CLEAR(self->sidekick);
     Py_CLEAR(self->frame);
-
     return 0;
 }
 
@@ -216,8 +213,7 @@ static void _compose_initialize(PyComposeObject* cmps) {
     cmps->messages_end = cmps->messages_base;
     cmps->sidekick = NULL;
     cmps->weakreflist = NULL;
-    PyThreadState* tstate = PyThreadState_GET();
-    cmps->frame = PyFrame_New(tstate, py_code, PyEval_GetGlobals(), NULL);
+    cmps->frame = PyFrame_New(PyThreadState_GET(), py_code, PyEval_GetGlobals(), NULL);
     Py_CLEAR(cmps->frame->f_back);
 }
 
@@ -394,18 +390,14 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
 static PyObject* _compose_go_with_frame(PyComposeObject* self, PyObject* exc_type, PyObject* exc_value, PyObject* exc_tb) {
     PyThreadState* tstate = PyThreadState_GET();
     PyFrameObject* tstate_frame = tstate->frame;
-
     self->frame->f_back = tstate_frame;
     Py_INCREF(self->frame->f_back);
     tstate->frame = self->frame;
     *(self->frame->f_stacktop++) = (PyObject*) self;
-
     PyObject* response = _compose_go(self, exc_type, exc_value, exc_tb);
-
     self->frame->f_stacktop--;
     Py_CLEAR(self->frame->f_back);
     tstate->frame = tstate_frame;
-
     return response;
 }
 
@@ -503,15 +495,17 @@ PyObject* find_local_in_locals(PyFrameObject* frame, PyObject* name) {
                 Py_INCREF(localVar);
                 return localVar;
             }
-
         }
     }
+
     if(frame->f_stacktop > frame->f_valuestack) {
         PyObject* o = frame->f_stacktop[-1];
+
         if(o->ob_type == &PyCompose_Type) {
             return find_local_in_compose((PyComposeObject*) o, name);
         }
     }
+
     return NULL;
 }
 
@@ -682,20 +676,20 @@ static PyCodeObject* create_empty_code(void) {
     PyObject* empty_string = PyString_FromString("");
     PyObject* empty_tuple = PyTuple_New(0);
     PyCodeObject* code = PyCode_New(
-            0, 0, 1, 0,  // stacksize is 1
-            empty_string,
-            empty_tuple, 
-            empty_tuple,
-            empty_tuple,
-            empty_tuple,
-            empty_tuple,
-            py_srcfile,
-            py_funcname,
-            __LINE__,
-            empty_string);
+                             0, 0, 1, 0,  // stacksize is 1
+                             empty_string,
+                             empty_tuple,
+                             empty_tuple,
+                             empty_tuple,
+                             empty_tuple,
+                             empty_tuple,
+                             py_srcfile,
+                             py_funcname,
+                             __LINE__,
+                             empty_string);
     return code;
 }
- 
+
 PyMODINIT_FUNC init_compose_c(void) {
     PyObject* linecache = PyImport_ImportModule("linecache"); // new ref
 
@@ -721,6 +715,7 @@ PyMODINIT_FUNC init_compose_c(void) {
     }
 
     py_code = create_empty_code();
+
     if(!py_code) {
         Py_CLEAR(linecache);
         Py_CLEAR(py_getline);
