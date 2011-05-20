@@ -218,6 +218,7 @@ static void _compose_initialize(PyComposeObject* cmps) {
     cmps->weakreflist = NULL;
     PyThreadState* tState = PyThreadState_GET();
     cmps->frame = PyFrame_New(tState, py_code, PyEval_GetGlobals(), NULL);
+    Py_CLEAR(cmps->frame->f_back);
 }
 
 
@@ -402,17 +403,17 @@ static PyObject* compose_send(PyComposeObject* self, PyObject* message) {
         messages_insert(self, Py_None);
 
     PyThreadState* tstate = PyThreadState_GET();
-    PyFrameObject* frame_f_back = self->frame->f_back;
     PyFrameObject* tstate_frame = tstate->frame;
 
     self->frame->f_back = tstate_frame;
+    Py_INCREF(self->frame->f_back);
     tstate->frame = self->frame;
     *(self->frame->f_stacktop++) = (PyObject*) self;
 
     PyObject* response = _compose_go(self, NULL, NULL, NULL);
 
     self->frame->f_stacktop--;
-    self->frame->f_back = frame_f_back;
+    Py_CLEAR(self->frame->f_back);
     tstate->frame = tstate_frame;
 
     return response;
@@ -431,17 +432,17 @@ static PyObject* compose_throw(PyComposeObject* self, PyObject* arg) {
     }
 
     PyThreadState* tstate = PyThreadState_GET();
-    PyFrameObject* frame_f_back = self->frame->f_back;
     PyFrameObject* tstate_frame = tstate->frame;
 
     self->frame->f_back = tstate_frame;
+    Py_INCREF(self->frame->f_back);
     tstate->frame = self->frame;
     *(self->frame->f_stacktop++) = (PyObject*) self;
 
     PyObject* response = _compose_go(self, exc_type, exc_value, exc_tb);
 
     self->frame->f_stacktop--;
-    self->frame->f_back = frame_f_back;
+    Py_CLEAR(self->frame->f_back);
     tstate->frame = tstate_frame;
 
     return response;
@@ -449,7 +450,19 @@ static PyObject* compose_throw(PyComposeObject* self, PyObject* arg) {
 
 
 static PyObject* compose_close(PyComposeObject* self) {
+    PyThreadState* tstate = PyThreadState_GET();
+    PyFrameObject* tstate_frame = tstate->frame;
+
+    self->frame->f_back = tstate_frame;
+    Py_INCREF(self->frame->f_back);
+    tstate->frame = self->frame;
+    *(self->frame->f_stacktop++) = (PyObject*) self;
+
     _compose_go(self, PyExc_GeneratorExit, NULL, NULL);
+
+    self->frame->f_stacktop--;
+    Py_CLEAR(self->frame->f_back);
+    tstate->frame = tstate_frame;
 
     if(PyErr_ExceptionMatches(PyExc_StopIteration) || PyErr_ExceptionMatches(PyExc_GeneratorExit)) {
         PyErr_Clear();	/* ignore these errors */
