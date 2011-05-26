@@ -32,7 +32,7 @@ from calltrace import CallTrace
 from basetestcase import MATCHALL
 from os.path import join, abspath, dirname
 from StringIO import StringIO
-import sys
+from sys import getdefaultencoding
 
 from weightless.http import HttpServer, _httpserver
 
@@ -133,7 +133,8 @@ class HttpServerTest(TestCase):
 
     def testHttpServerEncodesUnicode(self):
         unicodeString = u'some t\xe9xt' 
-        oneStringLength = len(str(unicodeString))
+        oneStringLength = len(unicodeString.encode(getdefaultencoding()))
+        self.assertTrue(len(unicodeString) != oneStringLength)
         def response(**kwargs):
             yield unicodeString * 6000
         reactor = Reactor()

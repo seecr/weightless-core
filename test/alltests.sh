@@ -31,17 +31,21 @@ if [ "${option:0:10}" == "--python2." ]; then
     shift
     pyversions="${option:2}"
 fi
-test=
 option=$1
 if [ "$option" == "--python" ]; then
         shift
-        test=PYTHON
+        tests=PYTHON
 elif [ "$option" == "--c" ]; then
         shift
-        test=C
+        tests=C
+else
+    tests="C PYTHON"
 fi
-echo $test
-for pycmd in $pyversions; do
-    echo "================ $pycmd _alltests.py $@ ================"
-    WEIGHTLESS_COMPOSE_TEST=$test $pycmd _alltests.py "$@"
+
+for t in $tests; do
+    for pycmd in $pyversions; do
+        echo "================ $pycmd _alltests.py $@ ================"
+        WEIGHTLESS_COMPOSE_TEST=$t $pycmd _alltests.py "$@"
+    done
 done
+
