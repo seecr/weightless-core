@@ -171,8 +171,10 @@ static int compose_clear(PyComposeObject* self) {
     free(self->generators_base);
     self->generators_base = NULL;
 
-    while(self->messages_base && !messages_empty(self))
-        Py_DECREF(messages_next(self));
+    while(self->messages_base && !messages_empty(self)) {
+        PyObject* p = messages_next(self);
+        Py_DECREF(p);
+    }
 
     free(self->messages_base);
     self->messages_base = NULL;
