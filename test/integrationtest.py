@@ -47,6 +47,7 @@ class IntegrationTest(TestCase):
             yield "HTTP 200 ok\r\n\r\nHello World!"
 
         server = HttpServer(reactor, port, connect, timeout=1)
+        server.listen()
         s = socket()
         s.connect(('localhost', port))
         reactor.step()
@@ -64,6 +65,7 @@ class IntegrationTest(TestCase):
             yield "HTTP 200 ok\r\n\r\nHello World!"
 
         server = HttpServer(reactor, port, connect, timeout=1)
+        server.listen()
         s = socket()
         s.connect(('localhost', port))
         reactor.step()
@@ -81,6 +83,7 @@ class IntegrationTest(TestCase):
             yield "HTTP 200 ok\r\n\r\nHello World!"
 
         server = HttpServer(reactor, port, connect, timeout=1)
+        server.listen()
         s = socket()
         s.connect(('localhost', port))
         reactor.step()
