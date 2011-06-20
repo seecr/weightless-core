@@ -1039,6 +1039,20 @@ class ComposeCTest(_ComposeTest):
         except RuntimeError, e:
             self.assertEquals('maximum recursion depth exceeded (compose)', str(e))
 
+    def testDECREF_in_compose_clear(self):
+        """A bit strange, but this triggers a bug with 
+        DECREF(<temporary>) in compose_clear()"""
+        def f():
+            msg = yield
+            raise StopIteration(*msg.split())
+
+        r = compose(f())
+        r.next()
+        try:
+            r.send("ab an")
+        except StopIteration, e:
+            self.assertEquals((), e.args)
+
     def testSelftest(self):
         from weightless.core.compose._compose_c import _selftest
         _selftest()
