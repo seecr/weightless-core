@@ -21,18 +21,21 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
+#
+from __future__ import with_statement
 
-from unittest import TestCase
 from time import time, sleep
 from signal import signal, SIGALRM, alarm, pause
 from select import error as ioerror
 import os, sys
 from tempfile import mkstemp
 from StringIO import StringIO
+
+from weightlesstestcase import WeightlessTestCase
 from weightless.io import Reactor
 from socket import socketpair, error
 
-class ReactorTest(TestCase):
+class ReactorTest(WeightlessTestCase):
 
     def testAddSocketReading(self):
         class Sok:
@@ -263,8 +266,10 @@ class ReactorTest(TestCase):
         reactor.addTimer(1.1, timeout)
         alarm(1) # alarm only accept ints....
         try:
-            while not self.time:
-                reactor.step()
+            with self.stderr_replaced() as s:
+                while not self.time:
+                    reactor.step()
+                self.assertTrue("4, 'Interrupted system call'" in s.getvalue(), s.getvalue())
             self.assertTrue(self.alarm)
             self.assertTrue(targetTime - 0.01 < self.time, targetTime + 0.01)
         except ioerror:
@@ -282,10 +287,12 @@ class ReactorTest(TestCase):
         reactor.addWriter(99, None) # broken
         reactor.addReader(BadSocket(), None) # even more broken
         reactor.addTimer(0.01, timeout)
-        for i in range(10):
-            if self.timeout:
-                break
-            reactor.step()
+        with self.stderr_replaced() as s:
+            for i in range(10):
+                if self.timeout:
+                    break
+                reactor.step()
+            self.assertTrue("Bad file descriptor" in s.getvalue(), s.getvalue())
         self.assertTrue(self.timeout)
         self.assertEquals({}, reactor._readers)
         self.assertEquals({}, reactor._writers)

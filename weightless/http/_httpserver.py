@@ -64,6 +64,9 @@ class HttpServer:
     def setMaxConnections(self, m):
         self._maxConnections = m
 
+    def shutdown(self):
+        self._acceptor.shutdown()
+
 def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, certfile='', keyfile=''):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
     if sok == None:

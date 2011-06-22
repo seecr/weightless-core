@@ -23,7 +23,7 @@
 ## end license ##
 
 from sys import exc_info
-from weightless.http import Suspend
+from weightless.io import Suspend
 from weightless.core import identify
 from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_WR, SHUT_RD
 from errno import EINPROGRESS

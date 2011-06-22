@@ -46,18 +46,12 @@ class Acceptor(object):
         self._sinkFactory = sinkFactory
         self._sok = sok
         self._reactor = reactor
-        self._prio = prio
 
     def _accept(self):
         newConnection, address = self._sok.accept()
         newConnection.setsockopt(SOL_TCP, TCP_CORK, 1)
         #newConnection.setsockopt(SOL_TCP, TCP_NODELAY, 1)
-        self._reactor.addReader(newConnection,
-            self._sinkFactory(newConnection), prio=self._prio)
+        self._sinkFactory(newConnection)
 
     def close(self):
         self._sok.close()
-
-    def shutdown(self):
-        self._reactor.removeReader(self._sok)
-        self.close()

@@ -100,4 +100,5 @@ class FORMAT:
     HostHeader = 'Host: %(Host)s' + HTTP.CRLF
     Header = '%s: %s' + HTTP.CRLF
     UserAgentHeader = 'User-Agent: Weightless/v' + VERSION + HTTP.CRLF
+    StatusLine = 'HTTP/%(version)s %(status)s %(reason)s' + HTTP.CRLF
 

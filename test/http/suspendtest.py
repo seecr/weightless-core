@@ -21,19 +21,20 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
+from __future__ import with_statement
 
-from sys import exc_info
 import sys
+from sys import exc_info
 from StringIO import StringIO
-from unittest import TestCase
+
 from re import sub
 from traceback import format_exc
 
-from basetestcase import BaseTestCase
+from weightlesstestcase import WeightlessTestCase
 from calltrace import CallTrace
 
-from weightless.io import Reactor
-from weightless.http import Suspend, HttpServer
+from weightless.io import Reactor, Suspend
+from weightless.http import HttpServer
 
 class MockSocket(object):
     def close(self):
@@ -47,8 +48,7 @@ fileDict = {
     'suspend.py': Suspend.__call__.func_code.co_filename,
 }
 
-
-class SuspendTest(BaseTestCase):
+class SuspendTest(WeightlessTestCase):
 
     def testReactorSuspend(self):
         handle = ['initial value']
@@ -118,7 +118,11 @@ class SuspendTest(BaseTestCase):
         reactor.step()
         self.assertFalse(sok3 in reactor._readers)
         self.assertFalse(sok3 in reactor._writers)
-        reactor.shutdown() 
+        with self.stdout_replaced() as s:
+            reactor.shutdown() 
+            self.assertTrue(str(sok1) in s.getvalue(), s.getvalue())
+            self.assertTrue(str(sok2) in s.getvalue(), s.getvalue())
+        self.assertTrue(str(sok3) in s.getvalue())
         self.assertTrue(sok1.closed)
         self.assertTrue(sok2.closed)
         self.assertTrue(sok3.closed)

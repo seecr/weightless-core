@@ -123,9 +123,15 @@ class Reactor(object):
         self._writers[handle] = self._suspended.pop(handle)
 
     def shutdown(self):
-        for sok in self._readers: sok.close()
-        for sok in self._writers: sok.close()
-        for sok in self._suspended: sok.close()
+        for sok in self._readers.keys():
+            print 'Reactor shutdown: closing', sok
+            sok.close()
+        for sok in self._writers.keys():
+            print 'Reactor shutdown: closing', sok
+            sok.close()
+        for sok in self._suspended.keys():
+            print 'Reactor shutdown: closing', sok
+            sok.close()
 
     def loop(self):
         try:
@@ -151,6 +157,7 @@ class Reactor(object):
             self._findAndRemoveBadFd()
             return self
         except error, (errno, description):
+            print_exc()
             if errno == EBADF:
                 self._findAndRemoveBadFd()
             elif errno == EINTR:

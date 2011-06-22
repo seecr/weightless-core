@@ -1,4 +1,2 @@
-python-cq2utils (>=5.4)
-python-cq2utils (<<5.5)
 python-openssl
 

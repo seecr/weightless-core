@@ -36,15 +36,14 @@ sysPath.insert(0,'..')                            #DO_NOT_DISTRIBUTE
 
 from unittest import main
 from types import GeneratorType
+
 from weightless.core.compose import ComposeType
 if ComposeType == GeneratorType:
-    from composetest import ComposePyTest
+    from core.composetest import ComposePyTest
 else:
-    from composetest import ComposeCTest
-from localtest import LocalTest
-from sidekicktest import SidekickTest
-from reactortest import ReactorTest
-from servertestcasetest import ServerTestCaseTest
+    from core.composetest import ComposeCTest
+from core.localtest import LocalTest
+from core.sidekicktest import SidekickTest
 
 from http.acceptortest import AcceptorTest
 from http.httpreadertest import HttpReaderTest
@@ -53,6 +52,17 @@ from http.httpspectest import HttpSpecTest
 from http.httpsservertest import HttpsServerTest
 from http.suspendtest import SuspendTest
 from http.asyncreadertest import AsyncReaderTest
+
+from core.observabletest import ObservableTest
+from core.observabledirectedmessagingtest import ObservableDirectedMessagingTest
+
+from io.reactortest import ReactorTest
+from io.giotest import GioTest
+from io.gutilstest import GutilsTest
+from io.servertest import ServerTest
+
+from httpng.httpprotocolintegrationtest import HttpProtocolIntegrationTest
+from httpng.httpprotocoltest import HttpProtocolTest
 
 if __name__ == '__main__':
     main()

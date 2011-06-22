@@ -26,4 +26,3 @@ __path__ = extend_path(__path__, __name__)
 
 from sys import getdefaultencoding as _getdefaultencoding
 assert _getdefaultencoding() == 'utf-8', 'Please ensure that the default encoding is utf-8'
-

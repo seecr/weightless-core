@@ -384,7 +384,20 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
         return NULL;
     }
 
-    PyErr_SetNone(PyExc_StopIteration);
+    // if any messages are left, 'return' them by StopIteration
+    int n = _messages_size(self);
+    if (n) {
+        PyObject* args = PyTuple_New(n); // new ref
+        int i;
+        for (i = 0; i < n; i++) {
+            PyTuple_SetItem(args, i, messages_next(self)); // steals ref
+        }
+        PyObject* sie = PyObject_Call(PyExc_StopIteration, args, NULL); // new ref
+        PyErr_SetObject(PyExc_StopIteration, sie);
+        Py_DECREF(sie);
+        Py_DECREF(args);
+    } else
+        PyErr_SetNone(PyExc_StopIteration);
     return NULL;
 }
 
@@ -410,10 +423,7 @@ static PyObject* compose_send(PyComposeObject* self, PyObject* message) {
         return NULL;
     }
 
-    messages_append(self, message);
-
-    if(!self->expect_data && self->messages_start[0] != Py_None)
-        messages_insert(self, Py_None);
+    messages_insert(self, message);
 
     return _compose_go_with_frame(self, NULL, NULL, NULL);
 }

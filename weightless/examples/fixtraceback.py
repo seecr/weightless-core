@@ -1,8 +1,7 @@
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
-#    See http://weightless.io
-#    Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
+#    Copyright (C) 2006-2008 Seek You Too (CQ2) http://www.cq2.nl
 #
 #    This file is part of Weightless
 #
@@ -21,22 +20,16 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-from __future__ import with_statement
-from servertestcase import ServerTestCase
-from socket import socket
 
-class ServerTestCaseTest(ServerTestCase):
+from _compose import compose
 
-    def testWithRealSocket(self):
-        with self.server(['response one', 'response two']) as (port, messages):
-            client = socket()
-            client.connect(('127.0.0.1', port))
-            client.send('aap')
-            response = client.recv(999)
-            self.assertEquals('response one', response)
-            client.send('noot')
-            response = client.recv(999)
-            self.assertEquals('response two', response)
-        self.assertEquals('aap', messages[0])
-        self.assertEquals('noot', messages[1])
+def a():
+	yield b()
+def b():
+	yield c()
+def c():
+	yield 'a'
+	raise Exception('b')
+
+list(compose(a()))
 

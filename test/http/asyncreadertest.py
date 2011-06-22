@@ -22,7 +22,6 @@
 #
 ## end license ##
 
-from basetestcase import BaseTestCase
 from re import sub
 from sys import exc_info
 import sys
@@ -30,9 +29,10 @@ from StringIO import StringIO
 from traceback import format_exception
 from socket import socket, gaierror as SocketGaiError
 from random import randint
+from weightlesstestcase import WeightlessTestCase
 from httpreadertest import server as testserver
-from weightless.http import HttpServer, httpget, Suspend
-from weightless.io import Reactor
+from weightless.http import HttpServer, httpget
+from weightless.io import Reactor, Suspend
 from weightless.core import compose
 
 from weightless.http._httpget import _httpRequest
@@ -50,18 +50,23 @@ fileDict = {
     'httpget.py': httpget.func_code.co_filename,
 }
  
-class AsyncReaderTest(BaseTestCase):
+class AsyncReaderTest(WeightlessTestCase):
 
     def dispatch(self, *args, **kwargs):
         return compose(self.handler(*args, **kwargs))
 
     def setUp(self):
-        BaseTestCase.setUp(self)
+        WeightlessTestCase.setUp(self)
         self.reactor = Reactor()
         self.port = randint(2**10, 2**16)
         self.httpserver = HttpServer(self.reactor, self.port, self.dispatch)
         self.httpserver.listen()
-    
+
+    def tearDown(self):
+        self.httpserver.shutdown()
+        self.reactor.shutdown()
+        WeightlessTestCase.tearDown(self)
+
     def testHttpRequest(self):
         self.assertEquals('GET / HTTP/1.0\r\n', _httpRequest('/'))
         self.assertEquals('GET / HTTP/1.1\r\nHost: weightless.io\r\n', _httpRequest('/', vhost="weightless.io"))

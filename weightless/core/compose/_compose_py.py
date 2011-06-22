@@ -109,9 +109,7 @@ def _compose(initial, sidekick):
                 try:
                     message = yield response
                     assert not (message and response), 'Cannot accept data. First send None.'
-                    messages.append(message)
-                    if response and messages[0] is not None:
-                        messages.insert(0, None)
+                    messages.insert(0,message)
                 except BaseException:
                     exception = exc_info()
         except StopIteration, returnValue:

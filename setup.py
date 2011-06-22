@@ -35,12 +35,18 @@ setup(
         'weightless.core.utils',
         'weightless.http', 
         'weightless.io',
+		'weightless.examples',
     ],
     url='http://www.weightless.io',
     author='Seek You Too',
     author_email='info@cq2.nl',
-    description='Weightless is a High Performance Asynchronous Networking Library.',
-    long_description='Weightless is a High Performance Asynchronous Networking Library.',
+    description='Weightless data-processing with coroutines',
+    long_description="""
+Weightless presents a way to implement data-processing programs, such as web-servers, with coroutines in Python. The results are lightweight, efficient and readable programs without call-backs, threads and buffering. Weightless supports:
+1. decomposing programs into coroutines using compose
+2. creating pipelines using the observer pattern
+3. connecting file descriptors (sockets etc) to pipelines using gio
+""",
     license='GNU Public License',
     platforms=['linux'],
     ext_modules=[
@@ -48,6 +54,20 @@ setup(
             "weightless/core/compose/_compose.c"
             ],
         )
-    ]
+    ],
+    classifiers=[
+        'Development Status :: 3 - Alpha',
+        'Environment :: Web Environment',
+        'Intended Audience :: Developers',
+        'License :: OSI Approved :: GNU General Public License (GPL)',
+        'Operating System :: POSIX :: Linux',
+        'Programming Language :: Python',
+        'Topic :: Communications',
+        'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
+        'Topic :: Internet :: WWW/HTTP :: HTTP Servers',
+        'Topic :: Software Development :: Libraries :: Application Frameworks',
+        'Topic :: Text Processing'
+        ],
+
 )
 

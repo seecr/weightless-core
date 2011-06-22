@@ -35,7 +35,7 @@ from weightless.http._httpreader import HttpReaderFacade, Connector, HandlerFaca
 import sys
 from StringIO import StringIO
 from calltrace import CallTrace
-from basetestcase import MATCHALL
+from weightlesstestcase import MATCHALL
 
 def server(port, response, expectedrequest, delay=0, loop=50):
     isListening = Event()
@@ -82,7 +82,8 @@ class HttpReaderTest(TestCase):
 
     def testRequestAndHeaders(self):
         port = randint(2**10, 2**16)
-        expectedrequest = "GET /aap/noot/mies HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v0.4.x\r\n\r\n"
+        v = 'v0.5.x'
+        expectedrequest = "GET /aap/noot/mies HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/%s\r\n\r\n" % v
         dataReceived = []
         serverThread = server(port, "HTTP/1.1 200 OK\r\ncOnteNt-type: text/html\r\n\r\nHello World!", expectedrequest)
         class Generator(object):
@@ -120,7 +121,7 @@ class HttpReaderTest(TestCase):
     def testEmptyPath(self):
         port = randint(2**10, 2**16)
         reactor = Reactor()
-        request = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v0.4.x\r\n\r\n"
+        request = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
         serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\n", request)
         reader = HttpReaderFacade(reactor, "http://localhost:%s" % port, lambda data: 'a')
         reactor.step()
@@ -131,7 +132,7 @@ class HttpReaderTest(TestCase):
     def testTimeoutOnInvalidRequest(self):
         port = randint(2**10, 2**16)
         reactor = Reactor()
-        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v0.4.x\r\n\r\n"
+        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
         serverThread = server(port, "HTTP/1.1 *invalid reponse* 200 OK\r\n\r\n", expectedrequest)
         errorArgs = []
         def error(exception):
@@ -145,7 +146,7 @@ class HttpReaderTest(TestCase):
     def testTimeoutOnSilentServer(self):
         port = randint(2**10, 2**16)
         reactor = Reactor()
-        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v0.4.x\r\n\r\n"
+        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
         serverThread = server(port, "", expectedrequest)
         errorArgs = []
         class Handler:
@@ -163,7 +164,7 @@ class HttpReaderTest(TestCase):
     def testTimeoutOnServerGoingSilentAfterHeaders(self):
         port = randint(2**10, 2**16)
         reactor = Reactor()
-        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v0.4.x\r\n\r\n"
+        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
         serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\n", expectedrequest, delay=1)
         errorArgs = []
         class Handler:
@@ -183,7 +184,7 @@ class HttpReaderTest(TestCase):
     def testClearTimer(self):
         port = randint(2**10, 2**16)
         reactor = Reactor()
-        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v0.4.x\r\n\r\n"
+        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
         serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\nresponse", expectedrequest)
         self.exception = None
         sentData = []
@@ -201,7 +202,7 @@ class HttpReaderTest(TestCase):
     def testPost(self):
         port = randint(2048, 4096)
         reactor = Reactor()
-        request = "POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nSOAPAction: blah\r\nUser-Agent: Weightless/v0.4.x\r\n\r\n1\r\nA\r\n1\r\nB\r\n1\r\nC\r\n0\r\n\r\n"
+        request = "POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nSOAPAction: blah\r\nUser-Agent: Weightless/v%s\r\n\r\n1\r\nA\r\n1\r\nB\r\n1\r\nC\r\n0\r\n\r\n" % WlVersion
         serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\nresponse", request, loop=9)
         sentData = []
         done = []
@@ -237,7 +238,7 @@ class HttpReaderTest(TestCase):
         reactor = Reactor()
         sentData = []
         done = []
-        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v0.4.x\r\n\r\n"
+        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
         serverThread = server(port, "\r\n".join("""HTTP/1.1 302 Found
 Date: Fri, 26 Oct 2007 07:23:26 GMT
 Server: Apache/2.2.3 (Debian) mod_python/3.2.10 Python/2.4.4 mod_ssl/2.2.3 OpenSSL/0.9.8c

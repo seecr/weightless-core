@@ -48,4 +48,3 @@ for t in $tests; do
         WEIGHTLESS_COMPOSE_TEST=$t $pycmd _alltests.py "$@"
     done
 done
-

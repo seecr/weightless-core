@@ -22,14 +22,15 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-from unittest import TestCase
+from __future__ import with_statement
+
+from weightlesstestcase import WeightlessTestCase, MATCHALL
 from random import randint
 from socket import socket, error as SocketError
 from select import select
 from weightless.io import Reactor
 from time import sleep
 from calltrace import CallTrace
-from basetestcase import MATCHALL
 from os.path import join, abspath, dirname
 from StringIO import StringIO
 from sys import getdefaultencoding
@@ -39,29 +40,25 @@ from weightless.http import HttpServer, _httpserver
 def inmydir(p):
     return join(dirname(abspath(__file__)), p)
 
-class HttpServerTest(TestCase):
-
-    def setUp(self):
-        self.reactor = Reactor()
-        self._portNumber = randint(2048, 62000)
-
-    def tearDown(self):
-        self.reactor.shutdown()
-        self.reactor = None
+class HttpServerTest(WeightlessTestCase):
 
     def sendRequestAndReceiveResponse(self, request, recvSize=4096):
         self.responseCalled = False
         def response(**kwargs):
             yield 'The Response'
             self.responseCalled = True
-        server = HttpServer(self.reactor, self._portNumber, response, recvSize=recvSize)
+        server = HttpServer(self.reactor, self.port, response, recvSize=recvSize)
         server.listen()
         sok = socket()
-        sok.connect(('localhost', self._portNumber))
+        sok.connect(('localhost', self.port))
         sok.send(request)
-        while not self.responseCalled:
-            self.reactor.step()
-        return sok.recv(4096)
+        with self.stdout_replaced():
+            while not self.responseCalled:
+                self.reactor.step()
+        server.shutdown()
+        r = sok.recv(4096)
+        sok.close()
+        return r
 
     def testConnect(self):
         self.req = False
@@ -69,10 +66,10 @@ class HttpServerTest(TestCase):
             self.req = True
             yield 'nosens'
         reactor = Reactor()
-        server = HttpServer(reactor, self._portNumber, onRequest)
+        server = HttpServer(reactor, self.port, onRequest)
         server.listen()
         sok = socket()
-        sok.connect(('localhost', self._portNumber))
+        sok.connect(('localhost', self.port))
         sok.send('GET / HTTP/1.0\r\n\r\n')
         reactor.step() # connect/accept
         reactor.step() # read GET request
@@ -85,10 +82,10 @@ class HttpServerTest(TestCase):
             self.kwargs = kwargs
             yield 'nosense'
         reactor = Reactor()
-        server = HttpServer(reactor, self._portNumber, response)
+        server = HttpServer(reactor, self.port, response)
         server.listen()
         sok = socket()
-        sok.connect(('localhost', self._portNumber))
+        sok.connect(('localhost', self.port))
         sok.send('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
         while not self.kwargs:
             reactor.step()
@@ -101,7 +98,7 @@ class HttpServerTest(TestCase):
     def testCloseConnection(self):
         response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
         self.assertEquals('The Response', response)
-        self.assertEquals(1, len(self.reactor._readers)) # only acceptor left
+        self.assertEquals({}, self.reactor._readers)
         self.assertEquals({}, self.reactor._writers)
 
     def testSmallFragments(self):
@@ -113,10 +110,10 @@ class HttpServerTest(TestCase):
             yield 'some text that is longer than '
             yield 'the lenght of fragments sent'
         reactor = Reactor()
-        server = HttpServer(reactor, self._portNumber, response, recvSize=3)
+        server = HttpServer(reactor, self.port, response, recvSize=3)
         server.listen()
         sok = socket()
-        sok.connect(('localhost', self._portNumber))
+        sok.connect(('localhost', self.port))
         sok.send('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
         while not reactor._writers:
             reactor.step()
@@ -138,10 +135,10 @@ class HttpServerTest(TestCase):
         def response(**kwargs):
             yield unicodeString * 6000
         reactor = Reactor()
-        server = HttpServer(reactor, self._portNumber, response, recvSize=3)
+        server = HttpServer(reactor, self.port, response, recvSize=3)
         server.listen()
         sok = socket()
-        sok.connect(('localhost', self._portNumber))
+        sok.connect(('localhost', self.port))
         sok.send('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
         while not reactor._writers:
             reactor.step()
@@ -161,10 +158,10 @@ class HttpServerTest(TestCase):
             timers.append(timer)
             return orgAddTimer(*timer)
         reactor.addTimer = addTimerInterceptor
-        server = HttpServer(reactor, self._portNumber, None, timeout=0.01)
+        server = HttpServer(reactor, self.port, None, timeout=0.01)
         server.listen()
         sok = socket()
-        sok.connect(('localhost', self._portNumber))
+        sok.connect(('localhost', self.port))
         sok.send('GET HTTP/1.0\r\n\r\n') # no path
         while select([sok],[], [], 0) != ([sok], [], []):
             reactor.step()
@@ -174,10 +171,10 @@ class HttpServerTest(TestCase):
 
     def testValidRequestResetsTimer(self):
         reactor = Reactor()
-        server = HttpServer(reactor, self._portNumber, lambda **kwargs: ('a' for a in range(3)), timeout=0.01, recvSize=3)
+        server = HttpServer(reactor, self.port, lambda **kwargs: ('a' for a in range(3)), timeout=0.01, recvSize=3)
         server.listen()
         sok = socket()
-        sok.connect(('localhost', self._portNumber))
+        sok.connect(('localhost', self.port))
         sok.send('GET / HTTP/1.0\r\n\r\n')
         sleep(0.02)
         for i in range(11):
@@ -191,10 +188,10 @@ class HttpServerTest(TestCase):
             self.requestData = kwargs
 
         reactor = Reactor()
-        server = HttpServer(reactor, self._portNumber, handler, timeout=0.01)
+        server = HttpServer(reactor, self.port, handler, timeout=0.01)
         server.listen()
         sok = socket()
-        sok.connect(('localhost', self._portNumber))
+        sok.connect(('localhost', self.port))
         sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\nbodydata')
 
         while not self.requestData:
@@ -221,11 +218,11 @@ class HttpServerTest(TestCase):
             done.append(True)
 
         reactor = Reactor()
-        server = HttpServer(reactor, self._portNumber, handler, timeout=0.01)
+        server = HttpServer(reactor, self.port, handler, timeout=0.01)
         server.listen()
         reactor.addTimer(0.02, onDone)
         sok = socket()
-        sok.connect(('localhost', self._portNumber))
+        sok.connect(('localhost', self.port))
         sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\n')
 
         while not done:
@@ -238,10 +235,10 @@ class HttpServerTest(TestCase):
             self.requestData = kwargs
 
         reactor = Reactor()
-        server = HttpServer(reactor, self._portNumber, handler, timeout=0.01, recvSize=3)
+        server = HttpServer(reactor, self.port, handler, timeout=0.01, recvSize=3)
         server.listen()
         sok = socket()
-        sok.connect(('localhost', self._portNumber))
+        sok.connect(('localhost', self.port))
         sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nabcde\r\n5\r\nfghij\r\n0\r\n')
 
         reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
@@ -255,10 +252,10 @@ class HttpServerTest(TestCase):
             self.requestData = kwargs
 
         reactor = Reactor()
-        server = HttpServer(reactor, self._portNumber, handler)
+        server = HttpServer(reactor, self.port, handler)
         server.listen()
         sok = socket()
-        sok.connect(('localhost', self._portNumber))
+        sok.connect(('localhost', self.port))
         sok.send(httpRequest)
 
         reactor.addTimer(2, lambda: self.fail("Test Stuck"))
@@ -275,10 +272,10 @@ class HttpServerTest(TestCase):
             self.requestData = kwargs
 
         reactor = Reactor()
-        server = HttpServer(reactor, self._portNumber, handler)
+        server = HttpServer(reactor, self.port, handler)
         server.listen()
         sok = socket()
-        sok.connect(('localhost', self._portNumber))
+        sok.connect(('localhost', self.port))
         sok.send(httpRequest)
 
         reactor.addTimer(2, lambda: self.fail("Test Stuck"))
@@ -299,10 +296,10 @@ class HttpServerTest(TestCase):
             self.requestData = kwargs
 
         reactor = Reactor()
-        server = HttpServer(reactor, self._portNumber, handler)
+        server = HttpServer(reactor, self.port, handler)
         server.listen()
         sok = socket()
-        sok.connect(('localhost', self._portNumber))
+        sok.connect(('localhost', self.port))
         sok.send(httpRequest)
 
         reactor.addTimer(2, lambda: self.fail("Test Stuck"))
@@ -323,10 +320,10 @@ class HttpServerTest(TestCase):
             self.requestData = kwargs
 
         reactor = Reactor()
-        server = HttpServer(reactor, self._portNumber, handler)
+        server = HttpServer(reactor, self.port, handler)
         server.listen()
         sok = socket()
-        sok.connect(('localhost', self._portNumber))
+        sok.connect(('localhost', self.port))
         sok.send(httpRequest)
 
         reactor.addTimer(2, lambda: self.fail("Test Stuck"))
@@ -345,17 +342,17 @@ class HttpServerTest(TestCase):
             codes.append(kwargs['ResponseCode'])
             yield "FAIL"
 
-        server = HttpServer(self.reactor, self._portNumber, handler, errorHandler=error_handler, maxConnections=5)
+        server = HttpServer(self.reactor, self.port, handler, errorHandler=error_handler, maxConnections=5)
         server.listen()
 
         self.reactor.getOpenConnections = lambda: 10
 
         sock = socket()
-        sock.connect(('localhost', self._portNumber))
+        sock.connect(('localhost', self.port))
         self.reactor.step()
         sock.send("GET / HTTP/1.0\r\n\r\n")
-        self.reactor.step()
-        self.reactor.step()
+        self.reactor.step().step().step()
+        server.shutdown()
 
         self.assertEquals('FAIL', sock.recv(1024))
         self.assertEquals([503], codes)
@@ -367,17 +364,17 @@ class HttpServerTest(TestCase):
         def error_handler(**kwargs):
             yield "FAIL"
 
-        server = HttpServer(self.reactor, self._portNumber, handler, errorHandler=error_handler, maxConnections=10)
+        server = HttpServer(self.reactor, self.port, handler, errorHandler=error_handler, maxConnections=10)
         server.listen()
 
         self.reactor.getOpenConnections = lambda: 5
 
         sock = socket()
-        sock.connect(('localhost', self._portNumber))
+        sock.connect(('localhost', self.port))
         self.reactor.step()
         sock.send("GET / HTTP/1.0\r\n\r\n")
-        self.reactor.step()
-        self.reactor.step()
+        self.reactor.step().step().step()
+        server.shutdown()
 
         self.assertEquals('OK', sock.recv(1024))
 
@@ -385,19 +382,19 @@ class HttpServerTest(TestCase):
         def handler(**kwargs):
             yield "OK"
 
-        server = HttpServer(self.reactor, self._portNumber, handler, maxConnections=5)
+        server = HttpServer(self.reactor, self.port, handler, maxConnections=5)
         server.listen()
 
         self.reactor.getOpenConnections = lambda: 10
 
         sock = socket()
-        sock.connect(('localhost', self._portNumber))
+        sock.connect(('localhost', self.port))
         self.reactor.step()
         sock.send("GET / HTTP/1.0\r\n\r\n")
-        self.reactor.step()
-        self.reactor.step()
+        self.reactor.step().step().step()
 
         self.assertEquals('HTTP/1.0 503 Service Unavailable\r\n\r\n<html><head></head><body><h1>Service Unavailable</h1></body></html>', sock.recv(1024))
+        server.shutdown()
 
 
     #def testUncaughtException(self):
