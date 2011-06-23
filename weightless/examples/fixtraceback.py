@@ -21,7 +21,7 @@
 #
 ## end license ##
 
-from _compose import compose
+from weightless.core import compose
 
 def a():
 	yield b()

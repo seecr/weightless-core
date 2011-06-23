@@ -1,4 +1,4 @@
-from _compose import compose
+from weightless.core import compose
 
 print """ 1. calling generators """
 def f():

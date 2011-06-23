@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
-from weightless import Reactor, Server, HttpProtocol, be, http
+from weightless.core import be 
+from weightless.io import Reactor, Server
+from weightless.httpng import HttpProtocol, http
 
 class HelloWorld(object):
     def processRequest(self, *args, **kwargs):

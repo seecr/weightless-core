@@ -1,5 +1,6 @@
 from unittest import TestCase, main
-from util import autostart, compose
+from weightless.core import compose
+from weightless.core.utils import autostart
 
 """ This code demonstrated the difficulties with callbacks and showed a simpler implementation with a generator.  Most of the value is in the dynamics of writing the code, not in staring at the end-result.  If you want to get the full value of it, throw away the code, start with implementing the first test, see how relatively simple the code is, then watch what you need to do in order to let the second test (which breaks the header in two messages) succeed: how complicated the callback based handler becomes.
 Then proceed to the generatorBasedHTTPHandler() and see how this is a simple lineair piece of code, and how it remains lineair and simple while fixing it for making the second test (with a broken-up heade) succeed.

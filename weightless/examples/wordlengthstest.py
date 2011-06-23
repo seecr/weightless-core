@@ -1,5 +1,6 @@
 from unittest import TestCase, main
-from util import autostart
+
+from weightless.core.utils import autostart
 
 """ This code demonstrates the use of generators in Python.
 It has been life coded on conferences SPA2008, AgileOpen2008 and the
