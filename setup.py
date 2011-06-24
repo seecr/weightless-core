@@ -27,19 +27,20 @@ from distutils.extension import Extension
 
 setup(
     name='weightless-core',
-    version='%VERSION%',
+    version='0.5.2.3-seecr-1',
     packages=[
         'weightless', 
         'weightless.core', 
         'weightless.core.compose', 
         'weightless.core.utils',
         'weightless.http', 
+        'weightless.httpng', 
         'weightless.io',
 		'weightless.examples',
     ],
     url='http://www.weightless.io',
-    author='Seek You Too',
-    author_email='info@cq2.nl',
+    author='Erik J. Groeneveld',
+    author_email='erik@seecr.nl',
     description='Weightless data-processing with coroutines',
     long_description="""
 Weightless presents a way to implement data-processing programs, such as web-servers, with coroutines in Python. The results are lightweight, efficient and readable programs without call-backs, threads and buffering. Weightless supports:
@@ -48,7 +49,7 @@ Weightless presents a way to implement data-processing programs, such as web-ser
 3. connecting file descriptors (sockets etc) to pipelines using gio
 """,
     license='GNU Public License',
-    platforms=['linux'],
+    platforms=['cpython'],
     ext_modules=[
         Extension("weightless.core.compose._compose_c", [
             "weightless/core/compose/_compose.c"
