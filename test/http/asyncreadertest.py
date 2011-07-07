@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
@@ -204,6 +205,7 @@ RuntimeError: Boom!""" % fileDict)
     def testPost(self):
         post_request = []
         port = self.port + 1
+        body = u"BÖDY" * 20000
         def server():
             import BaseHTTPServer
             import SocketServer
@@ -225,7 +227,7 @@ RuntimeError: Boom!""" % fileDict)
         done = []
         def posthandler(*args, **kwargs):
             request = kwargs['RequestURI']
-            response = yield httppost('localhost', port, '/path', 'BODY')
+            response = yield httppost('localhost', port, '/path', body)
             yield response
             done.append(response)
         self.handler = posthandler
@@ -236,7 +238,7 @@ RuntimeError: Boom!""" % fileDict)
         self.assertTrue("POST RESPONSE" in done[0], done[0])
         self.assertEquals('POST', post_request[0]['command'])
         self.assertEquals('/path', post_request[0]['path'])
-        self.assertEquals('BODY', post_request[0]['body'])
+        self.assertEquals(body, post_request[0]['body'])
 
 
         

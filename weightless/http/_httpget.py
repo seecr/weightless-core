@@ -22,7 +22,7 @@
 #
 ## end license ##
 
-from sys import exc_info
+from sys import exc_info, getdefaultencoding
 from weightless.http import Suspend
 from weightless.core import identify
 from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_WR, SHUT_RD
@@ -52,7 +52,16 @@ def doGet(method, host, port, request, body=None, vhost=""):
         # error checking
         sok.send('%s\r\n' % _httpRequest(method, request, vhost=vhost))
         if body:
-            sok.send(body)
+            data = body
+            if type(data) is unicode:
+                data = data.encode(getdefaultencoding())
+            sentBytes = 0
+            suspend._reactor.addWriter(sok, this.next)
+            while data != "":
+                size = sok.send(data)
+                data = data[size:]
+                yield
+            suspend._reactor.removeWriter(sok)
         sok.shutdown(SHUT_WR)
         #sok.shutdown(WRITER)
         suspend._reactor.addReader(sok, this.next)
