@@ -29,6 +29,7 @@ from sys import exc_info
 import sys
 from StringIO import StringIO
 from traceback import format_exception
+from time import sleep
 from socket import socket, gaierror as SocketGaiError
 from random import randint
 from cq2utils import CallTrace
@@ -37,8 +38,8 @@ from weightless.http import HttpServer, httpget, httppost, Suspend
 from weightless.io import Reactor
 from weightless.core import compose
 
-from weightless.http._httpget import _httpRequest
-from weightless.http import _httpget as httpGetModule
+from weightless.http._httprequest import _httpRequest
+from weightless.http import _httprequest as httpRequestModule
 
 from threading import Thread
 
@@ -51,7 +52,7 @@ def clientget(host, port, path):
 fileDict = {
     '__file__': clientget.func_code.co_filename,
     'suspend.py': Suspend.__call__.func_code.co_filename,
-    'httpget.py': httpget.func_code.co_filename,
+    'httprequest.py': httpget.func_code.co_filename,
 }
  
 class AsyncReaderTest(BaseTestCase):
@@ -111,11 +112,11 @@ class AsyncReaderTest(BaseTestCase):
         expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
   File "%(__file__)s", line 85, in failingserver
     response = yield httpget(*target)
-  File "%(httpget.py)s", line 78, in httpget
+  File "%(httprequest.py)s", line 78, in httpget
     result = s.getResult()
   File "%(suspend.py)s", line 34, in __call__
     self._doNext(self)
-  File "%(httpget.py)s", line 35, in doGet
+  File "%(httprequest.py)s", line 35, in _do
     sok.connect((host, port))
   File "<string>", line 1, in connect
 TypeError: an integer is required
@@ -178,8 +179,8 @@ TypeError: an integer is required
             raise RuntimeError("Boom!")
 
         try:
-            originalHttpRequest = httpGetModule._httpRequest
-            httpGetModule._httpRequest = httpRequest
+            originalHttpRequest = httpRequestModule._httpRequest
+            httpRequestModule._httpRequest = httpRequest
 
             clientget('localhost', self.port, '/')
             while not exceptions:
@@ -188,9 +189,9 @@ TypeError: an integer is required
             expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
   File "%(__file__)s", line 144, in failingserver
     response = yield httpget(*target)
-  File "%(httpget.py)s", line 80, in httpget
+  File "%(httprequest.py)s", line 80, in httpget
     result = s.getResult()
-  File "%(httpget.py)s", line 51, in doGet
+  File "%(httprequest.py)s", line 51, in _do
     sok.send('%%s\\r\\n' %% _httpRequest(method, request, vhost=vhost))
   File "%(__file__)s", line 150, in httpRequest
     raise RuntimeError("Boom!")
@@ -199,7 +200,7 @@ RuntimeError: Boom!""" % fileDict)
             self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(resultingTraceback))
 
         finally:
-            httpGetModule._httpRequest = originalHttpRequest
+            httpRequestModule._httpRequest = originalHttpRequest
 
 
     def testPost(self):
@@ -223,7 +224,7 @@ RuntimeError: Boom!""" % fileDict)
             httpd.serve_forever()
         thread=Thread(None, server)
         thread.start()
-
+        sleep(0.2)
         done = []
         def posthandler(*args, **kwargs):
             request = kwargs['RequestURI']

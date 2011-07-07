@@ -29,7 +29,7 @@ from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_WR, 
 from errno import EINPROGRESS
 
 @identify
-def doGet(method, host, port, request, body=None, vhost=""):
+def _do(method, host, port, request, body=None, vhost=""):
     this = yield # this generator, from @identify
     suspend = yield # suspend object, from Suspend.__call__
     sok = socket()
@@ -48,7 +48,6 @@ def doGet(method, host, port, request, body=None, vhost=""):
             raise IOError(err)
         yield
         suspend._reactor.removeWriter(sok)
-        # sendall() of loop gebruiken
         # error checking
         sok.send('%s\r\n' % _httpRequest(method, request, vhost=vhost))
         if body:
@@ -87,13 +86,13 @@ def _httpRequest(method, request, vhost=""):
     return httpRequest
 
 def httpget(host, port, request, vhost=""):
-    s = Suspend(doGet('GET', host, port, request, vhost=vhost).send)
+    s = Suspend(_do('GET', host, port, request, vhost=vhost).send)
     yield s
     result = s.getResult()
     raise StopIteration(result)
 
 def httppost(host, port, request, body, vhost=""):
-    s = Suspend(doGet('POST', host, port, request, body, vhost=vhost).send)
+    s = Suspend(_do('POST', host, port, request, body, vhost=vhost).send)
     yield s
     result = s.getResult()
     raise StopIteration(result)

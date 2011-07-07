@@ -27,4 +27,4 @@ from _suspend import Suspend
 from _httpreader import HttpReader
 from _httpserver import HttpServer, HttpsServer
 from _acceptor import Acceptor
-from _httpget import httpget, httppost
+from _httprequest import httpget, httppost
