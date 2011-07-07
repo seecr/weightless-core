@@ -238,7 +238,7 @@ RuntimeError: Boom!""" % fileDict)
         get_request = []
         port = self.port + 1
         simpleServer(port, get_request)
-        sleep(0.2)
+
         done = []
         def gethandler(*args, **kwargs):
             request = kwargs['RequestURI']
