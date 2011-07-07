@@ -30,13 +30,16 @@ from StringIO import StringIO
 from traceback import format_exception
 from socket import socket, gaierror as SocketGaiError
 from random import randint
+from cq2utils import CallTrace
 from httpreadertest import server as testserver
-from weightless.http import HttpServer, httpget, Suspend
+from weightless.http import HttpServer, httpget, httppost, Suspend
 from weightless.io import Reactor
 from weightless.core import compose
 
 from weightless.http._httpget import _httpRequest
 from weightless.http import _httpget as httpGetModule
+
+from threading import Thread
 
 def clientget(host, port, path):
     client = socket()
@@ -63,9 +66,9 @@ class AsyncReaderTest(BaseTestCase):
         self.httpserver.listen()
     
     def testHttpRequest(self):
-        self.assertEquals('GET / HTTP/1.0\r\n', _httpRequest('/'))
-        self.assertEquals('GET / HTTP/1.1\r\nHost: weightless.io\r\n', _httpRequest('/', vhost="weightless.io"))
-
+        self.assertEquals('GET / HTTP/1.0\r\n', _httpRequest('GET', '/'))
+        self.assertEquals('POST / HTTP/1.0\r\n', _httpRequest('POST', '/'))
+        self.assertEquals('GET / HTTP/1.1\r\nHost: weightless.io\r\n', _httpRequest('GET', '/', vhost="weightless.io"))
 
     def testPassRequestThruToBackOfficeServer(self):
         done = [False]
@@ -187,7 +190,7 @@ TypeError: an integer is required
   File "%(httpget.py)s", line 80, in httpget
     result = s.getResult()
   File "%(httpget.py)s", line 51, in doGet
-    sok.send('%%s\\r\\n' %% _httpRequest(request, vhost=vhost))
+    sok.send('%%s\\r\\n' %% _httpRequest(method, request, vhost=vhost))
   File "%(__file__)s", line 150, in httpRequest
     raise RuntimeError("Boom!")
 RuntimeError: Boom!""" % fileDict)
@@ -198,6 +201,45 @@ RuntimeError: Boom!""" % fileDict)
             httpGetModule._httpRequest = originalHttpRequest
 
 
+    def testPost(self):
+        post_request = []
+        port = self.port + 1
+        def server():
+            import BaseHTTPServer
+            import SocketServer
+            class Handler(BaseHTTPServer.BaseHTTPRequestHandler):
+                def log_message(*args, **kwargs):
+                    pass
+
+                def do_POST(self, *args, **kwargs):
+                    post_request.append({
+                        'command': self.command,
+                        'path': self.path,
+                        'body': self.rfile.read()})
+                    self.send_response(200, "POST RESPONSE")
+            httpd = SocketServer.TCPServer(("", port), Handler)
+            httpd.serve_forever()
+        thread=Thread(None, server)
+        thread.start()
+
+        done = []
+        def posthandler(*args, **kwargs):
+            request = kwargs['RequestURI']
+            response = yield httppost('localhost', port, '/path', 'BODY')
+            yield response
+            done.append(response)
+        self.handler = posthandler
+        clientget('localhost', self.port, '/')
+        while not done:
+            self.reactor.step()
+
+        self.assertTrue("POST RESPONSE" in done[0], done[0])
+        self.assertEquals('POST', post_request[0]['command'])
+        self.assertEquals('/path', post_request[0]['path'])
+        self.assertEquals('BODY', post_request[0]['body'])
+
+
+        
 def ignoreLineNumbers(s):
     return sub("line \d+,", "line [#],", s)
 

@@ -29,7 +29,7 @@ from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_WR, 
 from errno import EINPROGRESS
 
 @identify
-def doGet(host, port, request, vhost=""):
+def doGet(method, host, port, request, body=None, vhost=""):
     this = yield # this generator, from @identify
     suspend = yield # suspend object, from Suspend.__call__
     sok = socket()
@@ -50,7 +50,9 @@ def doGet(host, port, request, vhost=""):
         suspend._reactor.removeWriter(sok)
         # sendall() of loop gebruiken
         # error checking
-        sok.send('%s\r\n' % _httpRequest(request, vhost=vhost))
+        sok.send('%s\r\n' % _httpRequest(method, request, vhost=vhost))
+        if body:
+            sok.send(body)
         sok.shutdown(SHUT_WR)
         #sok.shutdown(WRITER)
         suspend._reactor.addReader(sok, this.next)
@@ -69,15 +71,20 @@ def doGet(host, port, request, vhost=""):
         suspend.throw(*exc_info())
     yield
 
-def _httpRequest(request, vhost=""):
-    httpRequest = "GET %s HTTP/1.0\r\n" % request
+def _httpRequest(method, request, vhost=""):
+    httpRequest = "%s %s HTTP/1.0\r\n" % (method, request)
     if vhost != "":
-        httpRequest = "GET %s HTTP/1.1\r\nHost: %s\r\n" % (request, vhost)
+        httpRequest = "%s %s HTTP/1.1\r\nHost: %s\r\n" % (method, request, vhost)
     return httpRequest
 
-
 def httpget(host, port, request, vhost=""):
-    s = Suspend(doGet(host, port, request, vhost=vhost).send)
+    s = Suspend(doGet('GET', host, port, request, vhost=vhost).send)
+    yield s
+    result = s.getResult()
+    raise StopIteration(result)
+
+def httppost(host, port, request, body, vhost=""):
+    s = Suspend(doGet('POST', host, port, request, body, vhost=vhost).send)
     yield s
     result = s.getResult()
     raise StopIteration(result)
