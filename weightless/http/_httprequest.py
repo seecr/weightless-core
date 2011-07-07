@@ -29,7 +29,7 @@ from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_WR, 
 from errno import EINPROGRESS
 
 @identify
-def _do(method, host, port, request, body=None, vhost=""):
+def _do(method, host, port, request, body=None, headers=None):
     this = yield # this generator, from @identify
     suspend = yield # suspend object, from Suspend.__call__
     sok = socket()
@@ -49,7 +49,7 @@ def _do(method, host, port, request, body=None, vhost=""):
         yield
         suspend._reactor.removeWriter(sok)
         # error checking
-        sok.send('%s\r\n' % _httpRequest(method, request, vhost=vhost))
+        _sendHttpHeaders(sok, method, request, headers)
         if body:
             data = body
             if type(data) is unicode:
@@ -79,20 +79,24 @@ def _do(method, host, port, request, body=None, vhost=""):
         suspend.throw(*exc_info())
     yield
 
-def _httpRequest(method, request, vhost=""):
-    httpRequest = "%s %s HTTP/1.0\r\n" % (method, request)
-    if vhost != "":
-        httpRequest = "%s %s HTTP/1.1\r\nHost: %s\r\n" % (method, request, vhost)
-    return httpRequest
+def _httpRequest(method, request, headers):
+    httpVersion = '1.1' if headers and 'Host' in headers else '1.0'
+    return "%s %s HTTP/%s\r\n" % (method, request, httpVersion)
+    
+def _sendHttpHeaders(sok, method, request, headers):
+    sok.send(_httpRequest(method, request, headers))
+    if headers:
+        sok.send(''.join('%s: %s\r\n' % i for i in headers.items()))
+    sok.send('\r\n')
 
-def httpget(host, port, request, vhost=""):
-    s = Suspend(_do('GET', host, port, request, vhost=vhost).send)
+def httpget(host, port, request, headers=None):
+    s = Suspend(_do('GET', host, port, request, headers=headers).send)
     yield s
     result = s.getResult()
     raise StopIteration(result)
 
-def httppost(host, port, request, body, vhost=""):
-    s = Suspend(_do('POST', host, port, request, body, vhost=vhost).send)
+def httppost(host, port, request, body, headers=None):
+    s = Suspend(_do('POST', host, port, request, body, headers=headers).send)
     yield s
     result = s.getResult()
     raise StopIteration(result)

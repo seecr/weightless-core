@@ -43,6 +43,9 @@ from weightless.http import _httprequest as httpRequestModule
 
 from threading import Thread
 
+from BaseHTTPServer import BaseHTTPRequestHandler
+from SocketServer import TCPServer
+
 def clientget(host, port, path):
     client = socket()
     client.connect((host,  port))
@@ -68,9 +71,10 @@ class AsyncReaderTest(BaseTestCase):
         self.httpserver.listen()
     
     def testHttpRequest(self):
-        self.assertEquals('GET / HTTP/1.0\r\n', _httpRequest('GET', '/'))
-        self.assertEquals('POST / HTTP/1.0\r\n', _httpRequest('POST', '/'))
-        self.assertEquals('GET / HTTP/1.1\r\nHost: weightless.io\r\n', _httpRequest('GET', '/', vhost="weightless.io"))
+        self.assertEquals('GET / HTTP/1.0\r\n', _httpRequest('GET', '/', headers={}))
+        self.assertEquals('POST / HTTP/1.0\r\n', _httpRequest('POST', '/', headers={}))
+        self.assertEquals('GET / HTTP/1.1\r\n', _httpRequest('GET', '/', headers={'Host': "weightless.io"}))
+        self.assertEquals('POST / HTTP/1.1\r\n', _httpRequest('POST', '/', headers={'Host': "weightless.io"}))
 
     def testPassRequestThruToBackOfficeServer(self):
         done = [False]
@@ -192,7 +196,9 @@ TypeError: an integer is required
   File "%(httprequest.py)s", line 80, in httpget
     result = s.getResult()
   File "%(httprequest.py)s", line 51, in _do
-    sok.send('%%s\\r\\n' %% _httpRequest(method, request, vhost=vhost))
+    _sendHttpHeaders(sok, method, request, headers)
+  File "../weightless/http/_httprequest.py", line 82, in _sendHttpHeaders
+    sok.send(_httpRequest(method, request, headers))
   File "%(__file__)s", line 150, in httpRequest
     raise RuntimeError("Boom!")
 RuntimeError: Boom!""" % fileDict)
@@ -202,33 +208,18 @@ RuntimeError: Boom!""" % fileDict)
         finally:
             httpRequestModule._httpRequest = originalHttpRequest
 
-
     def testPost(self):
         post_request = []
         port = self.port + 1
-        body = u"BÖDY" * 20000
-        def server():
-            import BaseHTTPServer
-            import SocketServer
-            class Handler(BaseHTTPServer.BaseHTTPRequestHandler):
-                def log_message(*args, **kwargs):
-                    pass
+        simpleServer(port, post_request)
 
-                def do_POST(self, *args, **kwargs):
-                    post_request.append({
-                        'command': self.command,
-                        'path': self.path,
-                        'body': self.rfile.read()})
-                    self.send_response(200, "POST RESPONSE")
-            httpd = SocketServer.TCPServer(("", port), Handler)
-            httpd.serve_forever()
-        thread=Thread(None, server)
-        thread.start()
-        sleep(0.2)
+        body = u"BÖDY" * 20000
         done = []
         def posthandler(*args, **kwargs):
             request = kwargs['RequestURI']
-            response = yield httppost('localhost', port, '/path', body)
+            response = yield httppost('localhost', port, '/path', body, 
+                    headers={'Content-Type': 'text/plain', 'Content-Length': len(body)}
+            )
             yield response
             done.append(response)
         self.handler = posthandler
@@ -239,10 +230,61 @@ RuntimeError: Boom!""" % fileDict)
         self.assertTrue("POST RESPONSE" in done[0], done[0])
         self.assertEquals('POST', post_request[0]['command'])
         self.assertEquals('/path', post_request[0]['path'])
+        headers = post_request[0]['headers'].headers
+        self.assertEquals(['Content-Length: 80000\r\n', 'Content-Type: text/plain\r\n'], headers)
         self.assertEquals(body, post_request[0]['body'])
 
+    def testGet(self):
+        get_request = []
+        port = self.port + 1
+        simpleServer(port, get_request)
+        sleep(0.2)
+        done = []
+        def gethandler(*args, **kwargs):
+            request = kwargs['RequestURI']
+            response = yield httpget('localhost', port, '/path',  
+                    headers={'Content-Type': 'text/plain', 'Content-Length': 0}
+            )
+            yield response
+            done.append(response)
+        self.handler = gethandler
+        clientget('localhost', self.port, '/')
+        while not done:
+            self.reactor.step()
 
+        self.assertTrue("GET RESPONSE" in done[0], done[0])
+        self.assertEquals('GET', get_request[0]['command'])
+        self.assertEquals('/path', get_request[0]['path'])
+        headers = get_request[0]['headers'].headers
+        self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
         
+def simpleServer(port, request):
+    def server():
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(*args, **kwargs):
+                pass
+
+            def do_GET(self, *args, **kwargs):
+                request.append({
+                    'command': self.command,
+                    'path': self.path,
+                    'headers': self.headers})
+                self.send_response(200, "GET RESPONSE")
+
+            def do_POST(self, *args, **kwargs):
+                request.append({
+                    'command': self.command,
+                    'path': self.path,
+                    'headers': self.headers,
+                    'body': self.rfile.read()})
+                self.send_response(200, "POST RESPONSE")
+
+        httpd = TCPServer(("", port), Handler)
+        httpd.serve_forever()
+    thread=Thread(None, server)
+    thread.start()
+
+
 def ignoreLineNumbers(s):
     return sub("line \d+,", "line [#],", s)
 
