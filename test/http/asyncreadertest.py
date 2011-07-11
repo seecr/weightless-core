@@ -231,7 +231,7 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEquals('POST', post_request[0]['command'])
         self.assertEquals('/path', post_request[0]['path'])
         headers = post_request[0]['headers'].headers
-        self.assertEquals(['Content-Length: 80000\r\n', 'Content-Type: text/plain\r\n'], headers)
+        self.assertEquals(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n'], headers)
         self.assertEquals(body, post_request[0]['body'])
 
     def testGet(self):

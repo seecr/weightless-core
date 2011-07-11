@@ -49,11 +49,13 @@ def _do(method, host, port, request, body=None, headers=None):
         yield
         suspend._reactor.removeWriter(sok)
         # error checking
-        _sendHttpHeaders(sok, method, request, headers)
         if body:
             data = body
             if type(data) is unicode:
                 data = data.encode(getdefaultencoding())
+            headers.update({'Content-Length': len(data)})
+        _sendHttpHeaders(sok, method, request, headers)
+        if body:
             sentBytes = 0
             suspend._reactor.addWriter(sok, this.next)
             while data != "":
