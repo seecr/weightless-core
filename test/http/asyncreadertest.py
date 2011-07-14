@@ -22,7 +22,7 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
-
+from __future__ import with_statement
 import sys
 from sys import exc_info
 from StringIO import StringIO
@@ -30,6 +30,7 @@ from traceback import format_exception
 from time import sleep
 from socket import socket, gaierror as SocketGaiError
 from random import randint
+from re import sub
 from calltrace import CallTrace
 from httpreadertest import server as testserver
 from weightless.http import HttpServer, httpget, httppost
@@ -110,14 +111,13 @@ class AsyncReaderTest(WeightlessTestCase):
 
         clientget('localhost', self.port, '/')
         target = ('localhost', 'port', '/') # non-numeric port
-        while not exceptions:
-            #orgout = sys.stderr
-            #sys.stderr = StringIO()
-            try:
-                self.reactor.step()
-            finally:
-                #sys.stderr = orgout
-                pass
+        try:
+            with self.stderr_replaced():
+                with self.loopingReactor():
+                    if exceptions:
+                        raise StopIteration
+        except Exception, e:
+            pass
 
         expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
   File "%(__file__)s", line 85, in failingserver

@@ -45,6 +45,7 @@ def _do(method, host, port, request, body=None, headers=None):
     try:
         err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
         if err != 0:    # connection created succesfully?
+            suspend._reactor.removeWriter(sok)
             raise IOError(err)
         yield
         suspend._reactor.removeWriter(sok)

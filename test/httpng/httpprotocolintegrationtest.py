@@ -264,10 +264,9 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
         sok = socket()
         sok.connect(('localhost', self.port))
         localport = sok.getsockname()[1]
-        self.reactor.step().step().step()
-        self.assertEquals('HTTP/1.1 408 Request Timeout\r\n', sok.recv(999))
-        self.reactor.step()
-        self.assertEquals('\r\n', sok.recv(999))
+        with self.loopingReactor():
+            response = sok.recv(9999)
+        self.assertEquals('HTTP/1.1 408 Request Timeout\r\n\r\n', response)
         sok.close()
         stat = getNetStat(self.port, localport)
         self.assertTrue('TIME_WAIT' in stat[0], stat[0])
@@ -316,7 +315,7 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
         self.assertNetStat(localport, remoteport, 'ESTABLISHED')
 
         remote.close()
-        self.assertNetStat(remoteport, localport, 'FIN_WAIT2')
+        self.assertNetStat(remoteport, localport, 'FIN_WAIT')
         self.assertNetStat(localport, remoteport, 'CLOSE_WAIT')
 
         local.close()
@@ -348,7 +347,7 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
         self.assertNetStat(localport, remoteport, 'ESTABLISHED')
 
         local.close()
-        self.assertNetStat(localport, remoteport, 'FIN_WAIT2')
+        self.assertNetStat(localport, remoteport, 'FIN_WAIT')
         self.assertNetStat(remoteport, localport, 'CLOSE_WAIT')
 
         remote.close()
