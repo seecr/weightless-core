@@ -26,4 +26,4 @@ from httpspec import parseHeaders, parseHeader, HTTP, REGEXP, FORMAT
 from _httpreader import HttpReader
 from _httpserver import HttpServer, HttpsServer
 from _acceptor import Acceptor
-from _httpget import httpget
+from _httprequest import httpget, httppost

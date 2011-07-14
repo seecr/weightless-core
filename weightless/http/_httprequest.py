@@ -22,14 +22,14 @@
 #
 ## end license ##
 
-from sys import exc_info
+from sys import exc_info, getdefaultencoding
 from weightless.io import Suspend
 from weightless.core import identify
 from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_WR, SHUT_RD
 from errno import EINPROGRESS
 
 @identify
-def doGet(host, port, request, vhost=""):
+def _do(method, host, port, request, body=None, headers=None):
     this = yield # this generator, from @identify
     suspend = yield # suspend object, from Suspend.__call__
     sok = socket()
@@ -48,9 +48,21 @@ def doGet(host, port, request, vhost=""):
             raise IOError(err)
         yield
         suspend._reactor.removeWriter(sok)
-        # sendall() of loop gebruiken
         # error checking
-        sok.send('%s\r\n' % _httpRequest(request, vhost=vhost))
+        if body:
+            data = body
+            if type(data) is unicode:
+                data = data.encode(getdefaultencoding())
+            headers.update({'Content-Length': len(data)})
+        _sendHttpHeaders(sok, method, request, headers)
+        if body:
+            sentBytes = 0
+            suspend._reactor.addWriter(sok, this.next)
+            while data != "":
+                size = sok.send(data)
+                data = data[size:]
+                yield
+            suspend._reactor.removeWriter(sok)
         sok.shutdown(SHUT_WR)
         #sok.shutdown(WRITER)
         suspend._reactor.addReader(sok, this.next)
@@ -69,15 +81,24 @@ def doGet(host, port, request, vhost=""):
         suspend.throw(*exc_info())
     yield
 
-def _httpRequest(request, vhost=""):
-    httpRequest = "GET %s HTTP/1.0\r\n" % request
-    if vhost != "":
-        httpRequest = "GET %s HTTP/1.1\r\nHost: %s\r\n" % (request, vhost)
-    return httpRequest
+def _httpRequest(method, request, headers):
+    httpVersion = '1.1' if headers and 'Host' in headers else '1.0'
+    return "%s %s HTTP/%s\r\n" % (method, request, httpVersion)
+    
+def _sendHttpHeaders(sok, method, request, headers):
+    sok.send(_httpRequest(method, request, headers))
+    if headers:
+        sok.send(''.join('%s: %s\r\n' % i for i in headers.items()))
+    sok.send('\r\n')
 
+def httpget(host, port, request, headers=None):
+    s = Suspend(_do('GET', host, port, request, headers=headers).send)
+    yield s
+    result = s.getResult()
+    raise StopIteration(result)
 
-def httpget(host, port, request, vhost=""):
-    s = Suspend(doGet(host, port, request, vhost=vhost).send)
+def httppost(host, port, request, body, headers=None):
+    s = Suspend(_do('POST', host, port, request, body, headers=headers).send)
     yield s
     result = s.getResult()
     raise StopIteration(result)

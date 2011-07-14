@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
@@ -22,21 +23,28 @@
 #
 ## end license ##
 
-from re import sub
-from sys import exc_info
 import sys
+from sys import exc_info
 from StringIO import StringIO
 from traceback import format_exception
+from time import sleep
 from socket import socket, gaierror as SocketGaiError
 from random import randint
-from weightlesstestcase import WeightlessTestCase
+from calltrace import CallTrace
 from httpreadertest import server as testserver
-from weightless.http import HttpServer, httpget
+from weightless.http import HttpServer, httpget, httppost
 from weightless.io import Reactor, Suspend
 from weightless.core import compose
+ 
+from weightless.http._httprequest import _httpRequest
+from weightless.http import _httprequest as httpRequestModule
 
-from weightless.http._httpget import _httpRequest
-from weightless.http import _httpget as httpGetModule
+from threading import Thread
+
+from BaseHTTPServer import BaseHTTPRequestHandler
+from SocketServer import TCPServer
+
+from weightlesstestcase import WeightlessTestCase
 
 def clientget(host, port, path):
     client = socket()
@@ -47,7 +55,7 @@ def clientget(host, port, path):
 fileDict = {
     '__file__': clientget.func_code.co_filename,
     'suspend.py': Suspend.__call__.func_code.co_filename,
-    'httpget.py': httpget.func_code.co_filename,
+    'httprequest.py': httpget.func_code.co_filename,
 }
  
 class AsyncReaderTest(WeightlessTestCase):
@@ -68,9 +76,10 @@ class AsyncReaderTest(WeightlessTestCase):
         WeightlessTestCase.tearDown(self)
 
     def testHttpRequest(self):
-        self.assertEquals('GET / HTTP/1.0\r\n', _httpRequest('/'))
-        self.assertEquals('GET / HTTP/1.1\r\nHost: weightless.io\r\n', _httpRequest('/', vhost="weightless.io"))
-
+        self.assertEquals('GET / HTTP/1.0\r\n', _httpRequest('GET', '/', headers={}))
+        self.assertEquals('POST / HTTP/1.0\r\n', _httpRequest('POST', '/', headers={}))
+        self.assertEquals('GET / HTTP/1.1\r\n', _httpRequest('GET', '/', headers={'Host': "weightless.io"}))
+        self.assertEquals('POST / HTTP/1.1\r\n', _httpRequest('POST', '/', headers={'Host': "weightless.io"}))
 
     def testPassRequestThruToBackOfficeServer(self):
         done = [False]
@@ -102,21 +111,22 @@ class AsyncReaderTest(WeightlessTestCase):
         clientget('localhost', self.port, '/')
         target = ('localhost', 'port', '/') # non-numeric port
         while not exceptions:
-            orgout = sys.stderr
-            sys.stderr = StringIO()
+            #orgout = sys.stderr
+            #sys.stderr = StringIO()
             try:
                 self.reactor.step()
             finally:
-                sys.stderr = orgout
+                #sys.stderr = orgout
+                pass
 
         expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
   File "%(__file__)s", line 85, in failingserver
     response = yield httpget(*target)
-  File "%(httpget.py)s", line 78, in httpget
+  File "%(httprequest.py)s", line 78, in httpget
     result = s.getResult()
   File "%(suspend.py)s", line 34, in __call__
     self._doNext(self)
-  File "%(httpget.py)s", line 35, in doGet
+  File "%(httprequest.py)s", line 35, in _do
     sok.connect((host, port))
   File "<string>", line 1, in connect
 TypeError: an integer is required
@@ -179,8 +189,8 @@ TypeError: an integer is required
             raise RuntimeError("Boom!")
 
         try:
-            originalHttpRequest = httpGetModule._httpRequest
-            httpGetModule._httpRequest = httpRequest
+            originalHttpRequest = httpRequestModule._httpRequest
+            httpRequestModule._httpRequest = httpRequest
 
             clientget('localhost', self.port, '/')
             while not exceptions:
@@ -189,10 +199,12 @@ TypeError: an integer is required
             expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
   File "%(__file__)s", line 144, in failingserver
     response = yield httpget(*target)
-  File "%(httpget.py)s", line 80, in httpget
+  File "%(httprequest.py)s", line 80, in httpget
     result = s.getResult()
-  File "%(httpget.py)s", line 51, in doGet
-    sok.send('%%s\\r\\n' %% _httpRequest(request, vhost=vhost))
+  File "%(httprequest.py)s", line 51, in _do
+    _sendHttpHeaders(sok, method, request, headers)
+  File "../weightless/http/_httprequest.py", line 82, in _sendHttpHeaders
+    sok.send(_httpRequest(method, request, headers))
   File "%(__file__)s", line 150, in httpRequest
     raise RuntimeError("Boom!")
 RuntimeError: Boom!""" % fileDict)
@@ -200,7 +212,83 @@ RuntimeError: Boom!""" % fileDict)
             self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(resultingTraceback))
 
         finally:
-            httpGetModule._httpRequest = originalHttpRequest
+            httpRequestModule._httpRequest = originalHttpRequest
+
+    def testPost(self):
+        post_request = []
+        port = self.port + 1
+        simpleServer(port, post_request)
+
+        body = u"BÖDY" * 20000
+        done = []
+        def posthandler(*args, **kwargs):
+            request = kwargs['RequestURI']
+            response = yield httppost('localhost', port, '/path', body, 
+                    headers={'Content-Type': 'text/plain', 'Content-Length': len(body)}
+            )
+            yield response
+            done.append(response)
+        self.handler = posthandler
+        clientget('localhost', self.port, '/')
+        while not done:
+            self.reactor.step()
+
+        self.assertTrue("POST RESPONSE" in done[0], done[0])
+        self.assertEquals('POST', post_request[0]['command'])
+        self.assertEquals('/path', post_request[0]['path'])
+        headers = post_request[0]['headers'].headers
+        self.assertEquals(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n'], headers)
+        self.assertEquals(body, post_request[0]['body'])
+
+    def testGet(self):
+        get_request = []
+        port = self.port + 1
+        simpleServer(port, get_request)
+
+        done = []
+        def gethandler(*args, **kwargs):
+            request = kwargs['RequestURI']
+            response = yield httpget('localhost', port, '/path',  
+                    headers={'Content-Type': 'text/plain', 'Content-Length': 0}
+            )
+            yield response
+            done.append(response)
+        self.handler = gethandler
+        clientget('localhost', self.port, '/')
+        while not done:
+            self.reactor.step()
+
+        self.assertTrue("GET RESPONSE" in done[0], done[0])
+        self.assertEquals('GET', get_request[0]['command'])
+        self.assertEquals('/path', get_request[0]['path'])
+        headers = get_request[0]['headers'].headers
+        self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
+        
+def simpleServer(port, request):
+    def server():
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(*args, **kwargs):
+                pass
+
+            def do_GET(self, *args, **kwargs):
+                request.append({
+                    'command': self.command,
+                    'path': self.path,
+                    'headers': self.headers})
+                self.send_response(200, "GET RESPONSE")
+
+            def do_POST(self, *args, **kwargs):
+                request.append({
+                    'command': self.command,
+                    'path': self.path,
+                    'headers': self.headers,
+                    'body': self.rfile.read()})
+                self.send_response(200, "POST RESPONSE")
+
+        httpd = TCPServer(("", port), Handler)
+        httpd.serve_forever()
+    thread=Thread(None, server)
+    thread.start()
 
 
 def ignoreLineNumbers(s):
