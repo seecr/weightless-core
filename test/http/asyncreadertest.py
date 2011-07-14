@@ -69,7 +69,7 @@ class AsyncReaderTest(WeightlessTestCase):
 
     def testHttpRequest(self):
         self.assertEquals('GET / HTTP/1.0\r\n', _httpRequest('/'))
-        self.assertEquals('GET / HTTP/1.1\r\nHost: weightless.io\r\n', _httpRequest('/', vhost="weightless.io"))
+        self.assertEquals('GET http://weightless.io/ HTTP/1.0\r\n', _httpRequest('/', vhost="weightless.io"))
 
 
     def testPassRequestThruToBackOfficeServer(self):

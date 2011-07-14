@@ -34,7 +34,6 @@ def doGet(host, port, request, vhost=""):
     suspend = yield # suspend object, from Suspend.__call__
     sok = socket()
     sok.setblocking(0)
-    #sok.settimeout(1.0)
     try:
         sok.connect((host, port))
     except SocketError, (errno, msg):
@@ -51,8 +50,6 @@ def doGet(host, port, request, vhost=""):
         # sendall() of loop gebruiken
         # error checking
         sok.send('%s\r\n' % _httpRequest(request, vhost=vhost))
-        sok.shutdown(SHUT_WR)
-        #sok.shutdown(WRITER)
         suspend._reactor.addReader(sok, this.next)
         responses = []
         while True:
@@ -62,7 +59,6 @@ def doGet(host, port, request, vhost=""):
                 break
             responses.append(response)
         suspend._reactor.removeReader(sok)
-        #sok.shutdown(READER)
         sok.close()
         suspend.resume(''.join(responses))
     except Exception, e:
@@ -72,7 +68,7 @@ def doGet(host, port, request, vhost=""):
 def _httpRequest(request, vhost=""):
     httpRequest = "GET %s HTTP/1.0\r\n" % request
     if vhost != "":
-        httpRequest = "GET %s HTTP/1.1\r\nHost: %s\r\n" % (request, vhost)
+        httpRequest = "GET http://%s%s HTTP/1.0\r\n" % (vhost, request)
     return httpRequest
 
 
