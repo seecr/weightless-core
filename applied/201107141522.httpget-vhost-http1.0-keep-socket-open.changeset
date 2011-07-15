@@ -1,0 +1,58 @@
+Changeset created on Thu Jul 14 15:22:53 CEST 2011 by Seecr
+
+Description: httpget fix wrt keeping socket open + not suggesting support for http 1.1
+
+    Ran into a server that stopped responding after httpget sent SHUT_WR, so no longer doing that.
+    Also: got chunked response that we don't actually support. Replacing HTTP 1.1 reference with HTTP 1.0 results in unchunked response.
+
+Baseline version: https://weightless.svn.sourceforge.net/svnroot/weightless/weightless-core/workingsets/0.6-seecr/version_1
+
+diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' --recursive --unified version_1/test/http/asyncreadertest.py version_1-vhost-http1.0//test/http/asyncreadertest.py
+--- version_1/test/http/asyncreadertest.py	2011-07-13 11:50:13.000000000 +0200
++++ version_1-vhost-http1.0//test/http/asyncreadertest.py	2011-07-14 15:10:44.000000000 +0200
+@@ -69,7 +69,7 @@
+ 
+     def testHttpRequest(self):
+         self.assertEquals('GET / HTTP/1.0\r\n', _httpRequest('/'))
+-        self.assertEquals('GET / HTTP/1.1\r\nHost: weightless.io\r\n', _httpRequest('/', vhost="weightless.io"))
++        self.assertEquals('GET http://weightless.io/ HTTP/1.0\r\n', _httpRequest('/', vhost="weightless.io"))
+ 
+ 
+     def testPassRequestThruToBackOfficeServer(self):
+diff --unidirectional-new-file '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' --recursive --unified version_1/weightless/http/_httpget.py version_1-vhost-http1.0//weightless/http/_httpget.py
+--- version_1/weightless/http/_httpget.py	2011-07-13 11:50:19.000000000 +0200
++++ version_1-vhost-http1.0//weightless/http/_httpget.py	2011-07-14 15:07:39.000000000 +0200
+@@ -34,7 +34,6 @@
+     suspend = yield # suspend object, from Suspend.__call__
+     sok = socket()
+     sok.setblocking(0)
+-    #sok.settimeout(1.0)
+     try:
+         sok.connect((host, port))
+     except SocketError, (errno, msg):
+@@ -51,8 +50,6 @@
+         # sendall() of loop gebruiken
+         # error checking
+         sok.send('%s\r\n' % _httpRequest(request, vhost=vhost))
+-        sok.shutdown(SHUT_WR)
+-        #sok.shutdown(WRITER)
+         suspend._reactor.addReader(sok, this.next)
+         responses = []
+         while True:
+@@ -62,7 +59,6 @@
+                 break
+             responses.append(response)
+         suspend._reactor.removeReader(sok)
+-        #sok.shutdown(READER)
+         sok.close()
+         suspend.resume(''.join(responses))
+     except Exception, e:
+@@ -72,7 +68,7 @@
+ def _httpRequest(request, vhost=""):
+     httpRequest = "GET %s HTTP/1.0\r\n" % request
+     if vhost != "":
+-        httpRequest = "GET %s HTTP/1.1\r\nHost: %s\r\n" % (request, vhost)
++        httpRequest = "GET http://%s%s HTTP/1.0\r\n" % (vhost, request)
+     return httpRequest
+ 
+ 
