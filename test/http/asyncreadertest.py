@@ -77,10 +77,8 @@ class AsyncReaderTest(WeightlessTestCase):
         WeightlessTestCase.tearDown(self)
 
     def testHttpRequest(self):
-        self.assertEquals('GET / HTTP/1.0\r\n', _httpRequest('GET', '/', headers={}))
-        self.assertEquals('POST / HTTP/1.0\r\n', _httpRequest('POST', '/', headers={}))
-        self.assertEquals('GET / HTTP/1.1\r\n', _httpRequest('GET', '/', headers={'Host': "weightless.io"}))
-        self.assertEquals('POST / HTTP/1.1\r\n', _httpRequest('POST', '/', headers={'Host': "weightless.io"}))
+        self.assertEquals('GET / HTTP/1.0\r\n', _httpRequest('GET', '/'))
+        self.assertEquals('POST / HTTP/1.0\r\n', _httpRequest('POST', '/'))
 
     def testPassRequestThruToBackOfficeServer(self):
         done = [False]
@@ -204,7 +202,7 @@ TypeError: an integer is required
   File "%(httprequest.py)s", line 51, in _do
     _sendHttpHeaders(sok, method, request, headers)
   File "../weightless/http/_httprequest.py", line 82, in _sendHttpHeaders
-    sok.send(_httpRequest(method, request, headers))
+    sok.send(_httpRequest(method, request))
   File "%(__file__)s", line 150, in httpRequest
     raise RuntimeError("Boom!")
 RuntimeError: Boom!""" % fileDict)
@@ -224,7 +222,7 @@ RuntimeError: Boom!""" % fileDict)
         def posthandler(*args, **kwargs):
             request = kwargs['RequestURI']
             response = yield httppost('localhost', port, '/path', body, 
-                    headers={'Content-Type': 'text/plain', 'Content-Length': len(body)}
+                    headers={'Content-Type': 'text/plain'}
             )
             yield response
             done.append(response)
@@ -263,7 +261,11 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEquals('/path', get_request[0]['path'])
         headers = get_request[0]['headers'].headers
         self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
-        
+
+    def testHttpGetWithVhost(self):
+        suspendObject = httpget("localhost", 9999, '/path', vhost="weightless.io").next()
+        self.assertEquals("http://weightless.io/path", suspendObject._doNext.__self__.gi_frame.f_locals["request"])
+
 def simpleServer(port, request):
     def server():
         class Handler(BaseHTTPRequestHandler):
@@ -282,14 +284,13 @@ def simpleServer(port, request):
                     'command': self.command,
                     'path': self.path,
                     'headers': self.headers,
-                    'body': self.rfile.read()})
+                    'body': self.rfile.read(int(self.headers["Content-Length"]))})
                 self.send_response(200, "POST RESPONSE")
 
         httpd = TCPServer(("", port), Handler)
         httpd.serve_forever()
     thread=Thread(None, server)
     thread.start()
-
 
 def ignoreLineNumbers(s):
     return sub("line \d+,", "line [#],", s)

@@ -27,6 +27,7 @@ from weightless.io import Suspend
 from weightless.core import identify
 from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_WR, SHUT_RD
 from errno import EINPROGRESS
+from warnings import warn
 
 @identify
 def _do(method, host, port, request, body=None, headers=None):
@@ -34,7 +35,6 @@ def _do(method, host, port, request, body=None, headers=None):
     suspend = yield # suspend object, from Suspend.__call__
     sok = socket()
     sok.setblocking(0)
-    #sok.settimeout(1.0)
     try:
         sok.connect((host, port))
     except SocketError, (errno, msg):
@@ -64,8 +64,6 @@ def _do(method, host, port, request, body=None, headers=None):
                 data = data[size:]
                 yield
             suspend._reactor.removeWriter(sok)
-        sok.shutdown(SHUT_WR)
-        #sok.shutdown(WRITER)
         suspend._reactor.addReader(sok, this.next)
         responses = []
         while True:
@@ -75,24 +73,25 @@ def _do(method, host, port, request, body=None, headers=None):
                 break
             responses.append(response)
         suspend._reactor.removeReader(sok)
-        #sok.shutdown(READER)
         sok.close()
         suspend.resume(''.join(responses))
     except Exception, e:
         suspend.throw(*exc_info())
     yield
 
-def _httpRequest(method, request, headers):
-    httpVersion = '1.1' if headers and 'Host' in headers else '1.0'
-    return "%s %s HTTP/%s\r\n" % (method, request, httpVersion)
+def _httpRequest(method, request):
+    return "%s %s HTTP/1.0\r\n" % (method, request)
     
 def _sendHttpHeaders(sok, method, request, headers):
-    sok.send(_httpRequest(method, request, headers))
+    sok.send(_httpRequest(method, request))
     if headers:
         sok.send(''.join('%s: %s\r\n' % i for i in headers.items()))
     sok.send('\r\n')
 
-def httpget(host, port, request, headers=None):
+def httpget(host, port, request, headers=None, vhost=""):
+    if vhost != "":
+        warn("Vhost is deprectated. Use request instead with a full URI.", DeprecationWarning)
+        request = "http://%s%s" % (vhost, request)
     s = Suspend(_do('GET', host, port, request, headers=headers).send)
     yield s
     result = s.getResult()
