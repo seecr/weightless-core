@@ -1,26 +1,28 @@
 ## begin license ##
-#
-#    Weightless is a High Performance Asynchronous Networking Library
-#    See http://weightless.io
-#    Copyright (C) 2010-2011 Seek You Too (CQ2) http://www.cq2.nl
-#
-#    This file is part of Weightless
-#
-#    Weightless is free software; you can redistribute it and/or modify
-#    it under the terms of the GNU General Public License as published by
-#    the Free Software Foundation; either version 2 of the License, or
-#    (at your option) any later version.
-#
-#    Weightless is distributed in the hope that it will be useful,
-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#    GNU General Public License for more details.
-#
-#    You should have received a copy of the GNU General Public License
-#    along with Weightless; if not, write to the Free Software
-#    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-#
+# 
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
+# 
+# Copyright (C) 2010-2011 Seek You Too (CQ2) http://www.cq2.nl
+# Copyright (C) 2011 Seecr (Seek You Too B.V.) http://seecr.nl
+# 
+# This file is part of "Weightless"
+# 
+# "Weightless" is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+# 
+# "Weightless" is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with "Weightless"; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+# 
 ## end license ##
+
 from __future__ import with_statement
 
 import sys
@@ -84,6 +86,22 @@ class SuspendTest(WeightlessTestCase):
         self.assertTrue(sok in reactor._writers)
         self.assertTrue(sok not in reactor._readers)
         self.assertRaises(KeyError, reactor.resumeWriter, handle[0])
+
+    def testReactorResumeReader(self):
+        handle = ['initial value']
+        reactor = Reactor(select_func=mockselect)
+        def callback():
+            handle[0] = reactor.suspend()
+            yield
+            yield
+        sok = MockSocket()
+        reactor.addReader(sok, callback().next)
+        reactor.step()
+        reactor.resumeReader(handle[0])
+        reactor.step()
+        self.assertFalse(sok in reactor._writers)
+        self.assertTrue(sok in reactor._readers)
+        self.assertRaises(KeyError, reactor.resumeReader, handle[0])
 
     def testWrongUseAfterSuspending(self):
         reactor = Reactor(select_func=mockselect)
