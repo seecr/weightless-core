@@ -22,8 +22,8 @@
 ## end license ##
 from unittest import TestCase
 from weightless.core import compose, autostart
+from weightless.core.utils import copyBytes, readAll
 from weightless.httpng import HttpProtocol, http
-from weightless.io import copyBytes, readAll
 
 class MockTimer(object):
     def __init__(self, timeout):

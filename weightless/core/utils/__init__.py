@@ -22,4 +22,4 @@
 #
 ## end license ##
 
-from _utils import identify, autostart
+from _utils import identify, autostart, copyBytes, readRe, readAll

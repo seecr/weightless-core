@@ -23,6 +23,11 @@
 ## end license ##
 
 VERSION='$Version: 0.5.x$'[9:-1].strip() # Modified by package scripts
+try:
+    from platform import python_implementation
+    cpython = python_implementation() == "CPython"
+except ImportError:
+    cpython = False
 
 from compose import compose, local, tostring
 from utils import identify, autostart

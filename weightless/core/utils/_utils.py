@@ -21,7 +21,26 @@
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
+from linecache import getline
 from re import compile
+from types import GeneratorType
+
+def tostring(generator):
+    if type(generator) != GeneratorType:
+        raise TypeError("tostring() expects generator")
+    frame = generator.gi_frame
+    glocals = frame.f_locals
+    lineno = frame.f_lineno
+    code = frame.f_code
+    name = code.co_name
+    if name == "_compose":
+        if 'generators' in glocals:
+            return '\n'.join(tostring(g) for g in glocals['generators'])
+        else:
+            return tostring(glocals['initial'])
+    filename = code.co_filename
+    codeline = getline(filename, lineno).strip()
+    return '  File "%(filename)s", line %(lineno)d, in %(name)s\n    %(codeline)s' % locals()
 
 def identify(generator):
     def helper(*args, **kwargs):
@@ -46,8 +65,13 @@ def readRe(regexp, maximum=None):
     while not match:
         if maximum and len(message) > maximum:
             raise OverflowError('no match after %s bytes' % len(message))
-        message += yield
+        msg = yield
+        if msg == None:
+            break
+        message += msg
         match = regexp.match(message)
+    if not match:
+        raise Exception("no match at eof: '%s'" % message)
     args = match.groupdict()
     rest = message[match.end():]
     if rest:

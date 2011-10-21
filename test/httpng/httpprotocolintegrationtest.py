@@ -28,6 +28,7 @@ from select import select
 import sys
 from subprocess import Popen, PIPE
 from re import compile
+from time import sleep
 
 from weightlesstestcase import WeightlessTestCase
 from weightless.core import compose, Observable, Transparant, be, autostart

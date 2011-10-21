@@ -24,7 +24,7 @@ from unittest import TestCase
 from random import choice, randint
 from string import ascii_letters
 from weightless.core import compose
-from weightless.io import copyBytes, readAll, readRe
+from weightless.core.utils import copyBytes, readAll, readRe
 from re import compile
 
 def collector(basket, responses):
@@ -190,4 +190,13 @@ class GutilsTest(TestCase):
             self.fail('must not come here')
         except OverflowError, e:
             self.assertEquals('no match after 6 bytes', str(e))
+
+    def testReadReEndOfStream(self):
+        x = readRe(compile('.*'), 10)
+        x.next()
+        try:
+            x.send(None)
+            self.fail('must raise Exception')
+        except Exception, e:
+            self.assertEquals("no match at eof: ''", str(e))
 

@@ -23,6 +23,7 @@
 ## end license ##
 from types import GeneratorType
 from sys import exc_info
+from weightless.core import cpython
 
 """
 Wrt exceptions, see http://www.python.org/doc/2.5.4/lib/module-exceptions.html for Python 2.5:
@@ -102,8 +103,8 @@ def _compose(initial, sidekick):
             elif type(response) == GeneratorType:
                 generators.append(response)
                 frame = response.gi_frame
-                assert frame, 'Generator is exhausted.'
-                assert frame.f_lineno == frame.f_code.co_firstlineno, 'Generator already used.'
+                if cpython: assert frame, 'Generator is exhausted.'
+                if cpython: assert frame.f_lineno == frame.f_code.co_firstlineno, 'Generator already used.'
                 messages.insert(0, None)
             elif response or not messages:
                 try:
@@ -115,8 +116,11 @@ def _compose(initial, sidekick):
         except StopIteration, returnValue:
             exception = None
             generators.pop()
-            if returnValue.args:
-                messages = list(returnValue.args) + messages
+            retvals = returnValue.args
+            if retvals:
+                if retvals == ('',): #jython
+                    retvals = (None,)
+                messages = list(retvals) + messages
             else:
                 messages.insert(0, None)
         except BaseException:

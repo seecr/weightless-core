@@ -25,12 +25,17 @@
 
 export LANG=en_US.UTF-8
 export PYTHONPATH=.:"$PYTHONPATH"
+
+#winpdb _alltests.py "$@"
+#exit 0
+
 option=$1
 pyversions="$(pyversions --installed)"
 if [ "${option:0:10}" == "--python2." ]; then
     shift
     pyversions="${option:2}"
 fi
+echo Found Python versions: $pyversions
 option=$1
 if [ "$option" == "--python" ]; then
         shift
@@ -41,10 +46,11 @@ elif [ "$option" == "--c" ]; then
 else
     tests="C PYTHON"
 fi
+echo Performing tests: $tests
 
 for t in $tests; do
     for pycmd in $pyversions; do
-        echo "================ $pycmd _alltests.py $@ ================"
+        echo "================ $t with $pycmd _alltests.py $@ ================"
         WEIGHTLESS_COMPOSE_TEST=$t $pycmd _alltests.py "$@"
     done
 done

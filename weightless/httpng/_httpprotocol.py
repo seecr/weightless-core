@@ -25,7 +25,8 @@ from cgi import parse_qs, parse_header
 from urlparse import urlsplit, urlparse
 
 from weightless.core import compose, Observable
-from weightless.io import readRe, readAll, copyBytes, Timer, TimeoutException
+from weightless.core.utils import readRe, readAll, copyBytes
+from weightless.io import Timer, TimeoutException
 from weightless.http import HTTP, FORMAT, REGEXP
 
 MAXREQUESTSIZE = 10*1024 # max size of RequestLine (including URI) and Headers
@@ -68,6 +69,10 @@ class HttpProtocol(Observable):
                 yield requestTimeout()
                 yield HTTP.CRLF
                 return
+            #except Exception:
+            #    yield badRequest()
+            #    yield HTTP.CRLF
+            #    return
             headers = parseHeaders(reqArgs)
             scheme, netloc, path, query, fragment = urlsplit(reqArgs['RequestURI'])
             netloc = tuple(netloc.split(':'))
@@ -111,6 +116,12 @@ def ok():
     version = 1.1
     status = 200
     reason = 'Ok'
+    return FORMAT.StatusLine % locals()
+
+def badRequest():
+    version = 1.1
+    status = 400
+    reason = "Bad Request"
     return FORMAT.StatusLine % locals()
 
 def notImplemented():

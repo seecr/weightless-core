@@ -1,4 +1,3 @@
-#!/usr/bin/env python2.5
 # encoding: utf-8
 ## begin license ##
 #

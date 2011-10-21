@@ -61,7 +61,7 @@ from io.giotest import GioTest
 from io.gutilstest import GutilsTest
 from io.servertest import ServerTest
 
-from httpng.httpprotocolintegrationtest import HttpProtocolIntegrationTest
+#from httpng.httpprotocolintegrationtest import HttpProtocolIntegrationTest
 from httpng.httpprotocoltest import HttpProtocolTest
 
 if __name__ == '__main__':

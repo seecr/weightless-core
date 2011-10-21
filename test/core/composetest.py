@@ -27,12 +27,21 @@ from sys import stdout, exc_info, getrecursionlimit, version_info
 import gc
 from weakref import ref
 from types import GeneratorType
-from weightless.core import autostart
+from weightless.core import autostart, cpython
 from weightless.core.compose._local_py import local as pyLocal
 from weightless.core.compose._compose_py import compose as pyCompose
 from weightless.core.compose._tostring_py import tostring as pyTostring
-from weightless.core.compose._compose_c import local as cLocal, compose as cCompose
-from weightless.core.compose._compose_c import tostring as cTostring
+try:
+    from weightless.core.compose._compose_c import local as cLocal, compose as cCompose
+    from weightless.core.compose._compose_c import tostring as cTostring
+except ImportError:
+    pass
+from inspect import currentframe
+
+__file__ = __file__.replace(".pyc", ".py").replace("$py.class", ".py")
+
+def __NEXTLINE__(offset=0):
+    return currentframe().f_back.f_lineno + offset + 1
 
 class ATrackedObj(object):
     def __init__(self):
@@ -176,8 +185,8 @@ class _ComposeTest(TestCase):
             self.fail()
         except StopIteration:
             pass
-        self.assertEquals(['result', None, 'remainingData0', 'remainingData1', None, None], messages)
         self.assertEquals(['A', 'C'], responses)
+        self.assertEquals(['result', None, 'remainingData0', 'remainingData1', None, None], messages)
 
     def testStopIterationWithReturnValue(self):
         def f():
@@ -219,6 +228,7 @@ class _ComposeTest(TestCase):
         self.assertEquals(['child-1:ding1retval', 'child-2:ding2retval', 'parent:rest(rest(dataIn))'], r)
 
     def testCheckForFreshGenerator(self):
+        if not cpython: return
         def sub():
             yield
             yield
@@ -234,6 +244,7 @@ class _ComposeTest(TestCase):
             self.assertEquals('Generator already used.', str(e))
 
     def testForExhaustedGenerator(self):
+        if not cpython: return
         def sub():
             yield
         def main():
@@ -626,39 +637,45 @@ class _ComposeTest(TestCase):
             self.assertEquals('f', exTraceback.tb_next.tb_next.tb_frame.f_code.co_name)
     
     def testToStringForSimpleGenerator(self):
+        line = __NEXTLINE__()
         def f():
             yield
         g = f()
-        soll = """  File "%s", line 629, in f
-    def f():""" % __file__.replace('pyc', 'py')
+        soll = """  File "%s", line %s, in f
+    %s""" % (__file__, line if cpython else '?', "def f():" if cpython else "<no source line available>")
         self.assertEquals(soll, tostring(g))
         g.next()
-        soll = """  File "%s", line 630, in f
-    yield""" % __file__.replace('pyc', 'py')
+        soll = """  File "%s", line %s, in f
+    yield""" % (__file__, line + 1)
         self.assertEquals(soll, tostring(g))
 
 
     def testToStringGivesStackOfGeneratorsAKAcallStack(self):
+        l1 = __NEXTLINE__(+1)
         def f1():
             yield
+        l2 = __NEXTLINE__(+1)
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 645, in f2
+        result = """  File "%s", line %s, in f2
     yield f1()
-  File "%s", line 643, in f1
-    yield""" % (2*(__file__.replace('pyc', 'py'),))
+  File "%s", line %s, in f1
+    yield""" % (__file__, l2, __file__, l1)
         c.next()
         self.assertEquals(result, tostring(c), "\n%s\n!=\n%s\n" % (result, tostring(c)))
 
     def testToStringForUnstartedGenerator(self):
         def f1():
             yield
+        line = __NEXTLINE__()
         def f2():
             yield f1()
         c = compose(f2())
-        result = """  File "%s", line 657, in f2
-    def f2():""" % __file__.replace('pyc', 'py')
+        if cpython:
+            result = """  File "%s", line %s, in f2\n    def f2():""" % (__file__, line)
+        else:
+            result = """  File "%s", line '?' in _compose\n    <no source line available>""" % __file__
         self.assertEquals(result, tostring(c))
 
     def testWrongArgToToString(self):
@@ -1004,20 +1021,22 @@ class _ComposeTest(TestCase):
                 (compose, GeneratorType, Exception, StopIteration, ATrackedObj)]
 
     def setUp(self):
-        gc.collect()
-        self._baseline = self.get_tracked_objects()
+        if cpython:
+            gc.collect()
+            self._baseline = self.get_tracked_objects()
 
     def tearDown(self):
-        def tostr(o):
-            try:
-                return tostring(o)
-            except:
-                return repr(o)
-        gc.collect()
-        for obj in self.get_tracked_objects():
-            self.assertTrue(obj in self._baseline, obj) #tostr(obj))
-        del self._baseline
-        gc.collect()
+        if cpython:
+            def tostr(o):
+                try:
+                    return tostring(o)
+                except:
+                    return repr(o)
+            gc.collect()
+            for obj in self.get_tracked_objects():
+                self.assertTrue(obj in self._baseline, obj) #tostr(obj))
+            del self._baseline
+            gc.collect()
 
 class ComposePyTest(_ComposeTest):
     def setUp(self):
