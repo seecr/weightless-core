@@ -82,7 +82,7 @@ class HttpReaderTest(TestCase):
 
     def testRequestAndHeaders(self):
         port = randint(2**10, 2**16)
-        v = 'v0.5.x'
+        v = 'vx.y.z'
         expectedrequest = "GET /aap/noot/mies HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/%s\r\n\r\n" % v
         dataReceived = []
         serverThread = server(port, "HTTP/1.1 200 OK\r\ncOnteNt-type: text/html\r\n\r\nHello World!", expectedrequest)
