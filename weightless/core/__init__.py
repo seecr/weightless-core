@@ -22,7 +22,7 @@
 #
 ## end license ##
 
-VERSION='$Version: 0.5.x$'[9:-1].strip() # Modified by package scripts
+VERSION='$Version: x.y.z$'[9:-1].strip() # Modified by package scripts
 
 import platform
 if hasattr(platform, 'python_implementation'):
