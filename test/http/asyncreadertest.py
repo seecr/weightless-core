@@ -40,11 +40,6 @@ from weightless.core import compose
 from weightless.http._httprequest import _httpRequest
 from weightless.http import _httprequest as httpRequestModule
 
-from threading import Thread
-
-from BaseHTTPServer import BaseHTTPRequestHandler
-from SocketServer import TCPServer
-
 from weightlesstestcase import WeightlessTestCase
 
 def clientget(host, port, path):
@@ -215,36 +210,33 @@ RuntimeError: Boom!""" % fileDict)
     def testPost(self):
         post_request = []
         port = self.port + 1
-        server = simpleServer(port, post_request)
-        try:
-            body = u"BÖDY" * 20000
-            done = []
-            def posthandler(*args, **kwargs):
-                request = kwargs['RequestURI']
-                response = yield httppost('localhost', port, '/path', body, 
-                        headers={'Content-Type': 'text/plain'}
-                )
-                yield response
-                done.append(response)
-            self.handler = posthandler
-            clientget('localhost', self.port, '/')
-            with self.loopingReactor():
-                while not done:
-                    pass
+        self.referenceHttpServer(port, post_request)
+        body = u"BÖDY" * 20000
+        done = []
+        def posthandler(*args, **kwargs):
+            request = kwargs['RequestURI']
+            response = yield httppost('localhost', port, '/path', body, 
+                    headers={'Content-Type': 'text/plain'}
+            )
+            yield response
+            done.append(response)
+        self.handler = posthandler
+        clientget('localhost', self.port, '/')
+        with self.loopingReactor():
+            while not done:
+                pass
 
-            self.assertTrue("POST RESPONSE" in done[0], done[0])
-            self.assertEquals('POST', post_request[0]['command'])
-            self.assertEquals('/path', post_request[0]['path'])
-            headers = post_request[0]['headers'].headers
-            self.assertEquals(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n'], headers)
-            self.assertEquals(body, post_request[0]['body'])
-        finally:
-            server.shutdown()
+        self.assertTrue("POST RESPONSE" in done[0], done[0])
+        self.assertEquals('POST', post_request[0]['command'])
+        self.assertEquals('/path', post_request[0]['path'])
+        headers = post_request[0]['headers'].headers
+        self.assertEquals(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n'], headers)
+        self.assertEquals(body, post_request[0]['body'])
 
     def testGet(self):
         get_request = []
         port = self.port + 1
-        simpleServer(port, get_request)
+        self.referenceHttpServer(port, get_request)
 
         done = []
         def gethandler(*args, **kwargs):
@@ -269,33 +261,6 @@ RuntimeError: Boom!""" % fileDict)
     def testHttpGetWithVhost(self):
         suspendObject = httpget("localhost", 9999, '/path', vhost="weightless.io").next()
         self.assertEquals("http://weightless.io/path", suspendObject._doNext.__self__.gi_frame.f_locals["request"])
-
-def simpleServer(port, request):
-    def server(httpd):
-        httpd.serve_forever()
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(*args, **kwargs):
-            pass
-
-        def do_GET(self, *args, **kwargs):
-            request.append({
-                'command': self.command,
-                'path': self.path,
-                'headers': self.headers})
-            self.send_response(200, "GET RESPONSE")
-
-        def do_POST(self, *args, **kwargs):
-            request.append({
-                'command': self.command,
-                'path': self.path,
-                'headers': self.headers,
-                'body': self.rfile.read(int(self.headers["Content-Length"]))})
-            self.send_response(200, "POST RESPONSE")
-
-    httpd = TCPServer(("", port), Handler)
-    thread=Thread(None, lambda: server(httpd))
-    thread.start()
-    return httpd
 
 def ignoreLineNumbers(s):
     return sub("line \d+,", "line [#],", s)

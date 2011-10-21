@@ -35,6 +35,10 @@ from unittest import TestCase
 from threading import Thread
 from weightless.io import Reactor
 
+from threading import Thread
+from BaseHTTPServer import BaseHTTPRequestHandler
+from SocketServer import TCPServer
+
 class WeightlessTestCase(TestCase):
 
     def setUp(self):
@@ -47,6 +51,8 @@ class WeightlessTestCase(TestCase):
 
     def tearDown(self):
         t0 = time()
+        if hasattr(self, 'httpd') and hasattr(self.httpd, 'shutdown'):
+            self.httpd.shutdown()
         self.assertEquals({}, self.reactor._readers)
         self.assertEquals({}, self.reactor._writers)
         self.assertEquals({}, self.reactor._suspended)
@@ -145,6 +151,32 @@ class WeightlessTestCase(TestCase):
         finally:
             sys.stdout = oldstdout
 
+    def referenceHttpServer(self, port, request):
+        def server(httpd):
+            httpd.serve_forever()
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(*args, **kwargs):
+                pass
+
+            def do_GET(self, *args, **kwargs):
+                request.append({
+                    'command': self.command,
+                    'path': self.path,
+                    'headers': self.headers})
+                self.send_response(200, "GET RESPONSE")
+
+            def do_POST(self, *args, **kwargs):
+                request.append({
+                    'command': self.command,
+                    'path': self.path,
+                    'headers': self.headers,
+                    'body': self.rfile.read(int(self.headers["Content-Length"]))})
+                self.send_response(200, "POST RESPONSE")
+
+        self.httpd = TCPServer(("", port), Handler)
+        thread=Thread(None, lambda: server(self.httpd))
+        thread.start()
+
 class MatchAll(object):
     def __eq__(self, other):
         return True
@@ -154,3 +186,4 @@ class MatchAll(object):
         return '*MatchAll*'
 
 MATCHALL = MatchAll()
+

@@ -90,7 +90,7 @@ def _sendHttpHeaders(sok, method, request, headers):
 
 def httpget(host, port, request, headers=None, vhost=""):
     if vhost != "":
-        warn("Vhost is deprectated. Use request instead with a full URI.", DeprecationWarning)
+        warn("Vhost is deprecated. Use request instead with a full URI.", DeprecationWarning)
         request = "http://%s%s" % (vhost, request)
     s = Suspend(_do('GET', host, port, request, headers=headers).send)
     yield s
