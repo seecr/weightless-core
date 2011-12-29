@@ -53,6 +53,8 @@ from http.httpsservertest import HttpsServerTest
 from http.suspendtest import SuspendTest
 from http.asyncreadertest import AsyncReaderTest
 
+from udp.acceptortest import AcceptorTest
+
 from core.observabletest import ObservableTest
 from core.observabledirectedmessagingtest import ObservableDirectedMessagingTest
 
