@@ -1,0 +1,119 @@
+Changeset created on Fri Jul 15 09:04:38 CEST 2011 by Seek You Too
+
+Description: Remove the writer in httppost/httpget in case of socket error.
+
+   Additional: 
+   - Refactored some tests use loopingReactor and stderr_replaced;
+   - Socket status test using netstat now checks FIN_WAIT
+
+Baseline version: https://weightless.svn.sourceforge.net/svnroot/weightless/weightless-core/workingsets/0.6-seecr/version_1
+
+diff --unidirectional-new-file --exclude='*.so' --exclude='*.o' --exclude=.svn --exclude='*.pyc' --exclude=deps.d --exclude=applied --recursive --unified version_1_tmp/test/http/asyncreadertest.py version_1-httppost/test/http/asyncreadertest.py
+--- version_1_tmp/test/http/asyncreadertest.py	2011-07-15 09:01:26.000000000 +0200
++++ version_1-httppost/test/http/asyncreadertest.py	2011-07-15 08:58:11.000000000 +0200
+@@ -22,22 +22,21 @@
+ #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ #
+ ## end license ##
+-
+-from re import sub
+-from sys import exc_info
++from __future__ import with_statement
+ import sys
++from sys import exc_info
+ from StringIO import StringIO
+ from traceback import format_exception
+ from time import sleep
+ from socket import socket, gaierror as SocketGaiError
+ from random import randint
+-from cq2utils import CallTrace
+-from weightlesstestcase import WeightlessTestCase
++from re import sub
++from calltrace import CallTrace
+ from httpreadertest import server as testserver
+ from weightless.http import HttpServer, httpget, httppost
+ from weightless.io import Reactor, Suspend
+ from weightless.core import compose
+-
++ 
+ from weightless.http._httprequest import _httpRequest
+ from weightless.http import _httprequest as httpRequestModule
+ 
+@@ -46,6 +45,8 @@
+ from BaseHTTPServer import BaseHTTPRequestHandler
+ from SocketServer import TCPServer
+ 
++from weightlesstestcase import WeightlessTestCase
++
+ def clientget(host, port, path):
+     client = socket()
+     client.connect((host,  port))
+@@ -110,13 +111,13 @@
+ 
+         clientget('localhost', self.port, '/')
+         target = ('localhost', 'port', '/') # non-numeric port
+-        while not exceptions:
+-            orgout = sys.stderr
+-            sys.stderr = StringIO()
+-            try:
+-                self.reactor.step()
+-            finally:
+-                sys.stderr = orgout
++        try:
++            with self.stderr_replaced():
++                with self.loopingReactor():
++                    if exceptions:
++                        raise StopIteration
++        except Exception, e:
++            pass
+ 
+         expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+   File "%(__file__)s", line 85, in failingserver
+Only in version_1_tmp/test/http: asyncreadertest.py.rej
+diff --unidirectional-new-file --exclude='*.so' --exclude='*.o' --exclude=.svn --exclude='*.pyc' --exclude=deps.d --exclude=applied --recursive --unified version_1_tmp/test/httpng/httpprotocolintegrationtest.py version_1-httppost/test/httpng/httpprotocolintegrationtest.py
+--- version_1_tmp/test/httpng/httpprotocolintegrationtest.py	2011-07-15 08:58:55.000000000 +0200
++++ version_1-httppost/test/httpng/httpprotocolintegrationtest.py	2011-07-15 08:58:11.000000000 +0200
+@@ -264,10 +264,9 @@
+         sok = socket()
+         sok.connect(('localhost', self.port))
+         localport = sok.getsockname()[1]
+-        self.reactor.step().step().step()
+-        self.assertEquals('HTTP/1.1 408 Request Timeout\r\n', sok.recv(999))
+-        self.reactor.step()
+-        self.assertEquals('\r\n', sok.recv(999))
++        with self.loopingReactor():
++            response = sok.recv(9999)
++        self.assertEquals('HTTP/1.1 408 Request Timeout\r\n\r\n', response)
+         sok.close()
+         stat = getNetStat(self.port, localport)
+         self.assertTrue('TIME_WAIT' in stat[0], stat[0])
+@@ -316,7 +315,7 @@
+         self.assertNetStat(localport, remoteport, 'ESTABLISHED')
+ 
+         remote.close()
+-        self.assertNetStat(remoteport, localport, 'FIN_WAIT2')
++        self.assertNetStat(remoteport, localport, 'FIN_WAIT')
+         self.assertNetStat(localport, remoteport, 'CLOSE_WAIT')
+ 
+         local.close()
+@@ -348,7 +347,7 @@
+         self.assertNetStat(localport, remoteport, 'ESTABLISHED')
+ 
+         local.close()
+-        self.assertNetStat(localport, remoteport, 'FIN_WAIT2')
++        self.assertNetStat(localport, remoteport, 'FIN_WAIT')
+         self.assertNetStat(remoteport, localport, 'CLOSE_WAIT')
+ 
+         remote.close()
+Only in version_1_tmp/weightless/http: _httpget.py
+diff --unidirectional-new-file --exclude='*.so' --exclude='*.o' --exclude=.svn --exclude='*.pyc' --exclude=deps.d --exclude=applied --recursive --unified version_1_tmp/weightless/http/_httprequest.py version_1-httppost/weightless/http/_httprequest.py
+--- version_1_tmp/weightless/http/_httprequest.py	2011-07-15 09:01:44.000000000 +0200
++++ version_1-httppost/weightless/http/_httprequest.py	2011-07-15 08:58:11.000000000 +0200
+@@ -45,6 +45,7 @@
+     try:
+         err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
+         if err != 0:    # connection created succesfully?
++            suspend._reactor.removeWriter(sok)
+             raise IOError(err)
+         yield
+         suspend._reactor.removeWriter(sok)
