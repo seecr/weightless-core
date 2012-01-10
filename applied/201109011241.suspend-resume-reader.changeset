@@ -1,0 +1,220 @@
+Changeset created on Thu Sep 01 12:41:59 CET 2011 by Seecr (Seek You Too B.V.)
+
+Description: <short one line description>
+
+    <summary>
+
+Baseline version: https://weightless.svn.sourceforge.net/svnroot/weightless/weightless-core/workingsets/0.6.2-Edurep/version_0
+
+Changeset created on Thu Sep 01 12:41:59 CET 2011 by Seecr (Seek You Too B.V.)
+
+Description: Resume of readers
+
+    Reactor now also resume readers which are suspended using a Suspend object.
+
+Baseline version: https://weightless.svn.sourceforge.net/svnroot/weightless/weightless-core/workingsets/0.6.2-Edurep/version_0
+
+diff --unidirectional-new-file --recursive --unified --exclude='*.so' --exclude='*.o' --exclude=.svn --exclude='*.pyc' --exclude=deps.d --exclude=applied version_0/test/http/suspendtest.py version_1/test/http/suspendtest.py
+--- version_0/test/http/suspendtest.py	2011-08-10 16:18:15.000000000 +0200
++++ version_1/test/http/suspendtest.py	2011-09-01 14:41:27.000000000 +0200
+@@ -1,26 +1,28 @@
+ ## begin license ##
+-#
+-#    Weightless is a High Performance Asynchronous Networking Library
+-#    See http://weightless.io
+-#    Copyright (C) 2010-2011 Seek You Too (CQ2) http://www.cq2.nl
+-#
+-#    This file is part of Weightless
+-#
+-#    Weightless is free software; you can redistribute it and/or modify
+-#    it under the terms of the GNU General Public License as published by
+-#    the Free Software Foundation; either version 2 of the License, or
+-#    (at your option) any later version.
+-#
+-#    Weightless is distributed in the hope that it will be useful,
+-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-#    GNU General Public License for more details.
+-#
+-#    You should have received a copy of the GNU General Public License
+-#    along with Weightless; if not, write to the Free Software
+-#    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+-#
++# 
++# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
++# 
++# Copyright (C) 2010-2011 Seek You Too (CQ2) http://www.cq2.nl
++# Copyright (C) 2011 Seecr (Seek You Too B.V.) http://seecr.nl
++# 
++# This file is part of "Weightless"
++# 
++# "Weightless" is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation; either version 2 of the License, or
++# (at your option) any later version.
++# 
++# "Weightless" is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++# 
++# You should have received a copy of the GNU General Public License
++# along with "Weightless"; if not, write to the Free Software
++# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
++# 
+ ## end license ##
++
+ from __future__ import with_statement
+ 
+ import sys
+@@ -85,6 +87,22 @@
+         self.assertTrue(sok not in reactor._readers)
+         self.assertRaises(KeyError, reactor.resumeWriter, handle[0])
+ 
++    def testReactorResumeReader(self):
++        handle = ['initial value']
++        reactor = Reactor(select_func=mockselect)
++        def callback():
++            handle[0] = reactor.suspend()
++            yield
++            yield
++        sok = MockSocket()
++        reactor.addReader(sok, callback().next)
++        reactor.step()
++        reactor.resumeReader(handle[0])
++        reactor.step()
++        self.assertFalse(sok in reactor._writers)
++        self.assertTrue(sok in reactor._readers)
++        self.assertRaises(KeyError, reactor.resumeReader, handle[0])
++
+     def testWrongUseAfterSuspending(self):
+         reactor = Reactor(select_func=mockselect)
+         handle = ['initial value']
+diff --unidirectional-new-file --recursive --unified --exclude='*.so' --exclude='*.o' --exclude=.svn --exclude='*.pyc' --exclude=deps.d --exclude=applied version_0/weightless/io/_reactor.py version_1/weightless/io/_reactor.py
+--- version_0/weightless/io/_reactor.py	2011-08-10 16:18:15.000000000 +0200
++++ version_1/weightless/io/_reactor.py	2011-09-01 14:41:32.000000000 +0200
+@@ -1,27 +1,29 @@
+ # -*- coding: utf-8 -*-
+ ## begin license ##
+-#
+-#    Weightless is a High Performance Asynchronous Networking Library
+-#    See http://weightless.io
+-#    Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
+-#
+-#    This file is part of Weightless
+-#
+-#    Weightless is free software; you can redistribute it and/or modify
+-#    it under the terms of the GNU General Public License as published by
+-#    the Free Software Foundation; either version 2 of the License, or
+-#    (at your option) any later version.
+-#
+-#    Weightless is distributed in the hope that it will be useful,
+-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-#    GNU General Public License for more details.
+-#
+-#    You should have received a copy of the GNU General Public License
+-#    along with Weightless; if not, write to the Free Software
+-#    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+-#
++# 
++# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
++# 
++# Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
++# Copyright (C) 2011 Seecr (Seek You Too B.V.) http://seecr.nl
++# 
++# This file is part of "Weightless"
++# 
++# "Weightless" is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation; either version 2 of the License, or
++# (at your option) any later version.
++# 
++# "Weightless" is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++# 
++# You should have received a copy of the GNU General Public License
++# along with "Weightless"; if not, write to the Free Software
++# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
++# 
+ ## end license ##
++
+ from traceback import print_exc
+ from inspect import currentframe
+ from select import select, error
+@@ -119,6 +121,9 @@
+         self._suspended[self.currentsok] = self.currentcontext
+         return self.currentsok
+ 
++    def resumeReader(self, handle):
++        self._readers[handle] = self._suspended.pop(handle)
++
+     def resumeWriter(self, handle):
+         self._writers[handle] = self._suspended.pop(handle)
+ 
+diff --unidirectional-new-file --recursive --unified --exclude='*.so' --exclude='*.o' --exclude=.svn --exclude='*.pyc' --exclude=deps.d --exclude=applied version_0/weightless/io/_suspend.py version_1/weightless/io/_suspend.py
+--- version_0/weightless/io/_suspend.py	2011-08-10 16:18:15.000000000 +0200
++++ version_1/weightless/io/_suspend.py	2011-09-01 14:41:32.000000000 +0200
+@@ -1,26 +1,28 @@
+ ## begin license ##
+-#
+-#    Weightless is a High Performance Asynchronous Networking Library
+-#    See http://weightless.io
+-#    Copyright (C) 2010-2011 Seek You Too (CQ2) http://www.cq2.nl
+-#
+-#    This file is part of Weightless
+-#
+-#    Weightless is free software; you can redistribute it and/or modify
+-#    it under the terms of the GNU General Public License as published by
+-#    the Free Software Foundation; either version 2 of the License, or
+-#    (at your option) any later version.
+-#
+-#    Weightless is distributed in the hope that it will be useful,
+-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-#    GNU General Public License for more details.
+-#
+-#    You should have received a copy of the GNU General Public License
+-#    along with Weightless; if not, write to the Free Software
+-#    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+-#
++# 
++# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
++# 
++# Copyright (C) 2010-2011 Seek You Too (CQ2) http://www.cq2.nl
++# Copyright (C) 2011 Seecr (Seek You Too B.V.) http://seecr.nl
++# 
++# This file is part of "Weightless"
++# 
++# "Weightless" is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation; either version 2 of the License, or
++# (at your option) any later version.
++# 
++# "Weightless" is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++# 
++# You should have received a copy of the GNU General Public License
++# along with "Weightless"; if not, write to the Free Software
++# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
++# 
+ ## end license ##
++
+ from traceback import print_exc
+ from sys import exc_info
+ 
+@@ -52,6 +54,10 @@
+             self._exception = (exc_type, exc_value, exc_traceback)
+         self._whenDone()
+ 
++    def resumeReader(self):
++        if hasattr(self, "_handle"):
++            self._reactor.resumeReader(self._handle)
++
+     def resumeWriter(self):
+         if hasattr(self, "_handle"):
+             self._reactor.resumeWriter(self._handle)

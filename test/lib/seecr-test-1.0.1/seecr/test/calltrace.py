@@ -1,0 +1,130 @@
+## begin license ##
+# 
+# "Seecr Test" provides test tools. 
+# 
+# Copyright (C) 2005-2009 Seek You Too (CQ2) http://www.cq2.nl
+# Copyright (C) 2012 Seecr (Seek You Too B.V.) http://seecr.nl
+# 
+# This file is part of "Seecr Test"
+# 
+# "Seecr Test" is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+# 
+# "Seecr Test" is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with "Seecr Test"; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+# 
+## end license ##
+
+from types import InstanceType, ClassType
+from re import compile
+
+class CallTrace:
+    def __init__(self, name="CallTrace", verbose=False, returnValues=None, ignoredAttributes=[], methods=None, onlySpecifiedMethods=False):
+        self.calledMethods = CalledMethods()
+        self.returnValues = returnValues or {}
+        self.methods = methods or {}
+        self.exceptions = {}
+        self._verbose = verbose
+        self._name = name
+        self.ignoredAttributes = ignoredAttributes or []
+        self.onlySpecifiedMethods = onlySpecifiedMethods
+
+    def __getattr__(self, attrname):
+        if attrname.startswith('__') and attrname.endswith('__') and not attrname in self.returnValues:
+            return object.__getattr__(self, attrname)
+        if attrname in self.ignoredAttributes:
+            raise AttributeError("'CallTrace' is instructed to not have an attribute called '%s'" % attrname)
+        if self.onlySpecifiedMethods and not attrname in (self.returnValues.keys() + self.methods.keys()):
+            raise AttributeError("'CallTrace' does not support '%s' as it is instructed to only allow specified methods." % attrname) 
+        return TracedCall(attrname, self)
+
+    def __calltrace__(self):
+        return map(str, self.calledMethods)
+
+    def __nonzero__(self):
+        return 1
+
+    def __repr__(self):
+        #TODO: __repr__ ook terug laten komen in calltrace
+        return "<CallTrace: %s>" % self._name
+
+    def __str__(self):
+        #TODO: __str__ ook terug laten komen in calltrace
+        return self.__repr__()
+
+class TracedCall:
+    def __init__(self, methodName, callTrace):
+        self.name = methodName
+        self._callTrace = callTrace
+        #inits are necessary to make __repr__ calls before __call__ calls possible
+        self.args = ()
+        self.kwargs = {}
+
+    def __call__(self, *args, **kwargs):
+        self._callTrace.calledMethods.append(self)
+        self.args = args
+        self.arguments = list(args) # For backwards compatibility only
+        self.kwargs = kwargs
+        if self._callTrace._verbose:
+            print '%s.%s -> %s' % (
+                self._callTrace._name,
+                self.__repr__(),
+                self.represent(self._callTrace.returnValues.get(self.name, None)))
+        if self._callTrace.exceptions.has_key(self.name):
+            raise self._callTrace.exceptions[self.name]
+
+        returnValue = None
+        if self.name in self._callTrace.returnValues:
+            returnValue = self._callTrace.returnValues.get(self.name)
+        elif self.name in self._callTrace.methods:
+            returnValue = self._callTrace.methods.get(self.name)(*args, **kwargs)            
+        return returnValue
+
+    def represent(self, something):
+        """
+        <calltracetest.NonObject instance at 0x2b02ba1075a8>
+        <calltracetest.IsObject object at 0x2b02ba0f3510>
+        <class 'calltracetest.IsObject'>
+        calltracetest.NonObject
+        """
+        objectOnlyRe = r'((?:\w+\.)*\w+)'
+        instanceRe = r'<%s instance at .*>' % objectOnlyRe
+        objectRe = r'<%s object at .*>' % objectOnlyRe
+        classRe = r"<class '%s'>" % objectOnlyRe
+        objectsRe = compile(r'|'.join([instanceRe, objectRe]))
+        classesRe = compile(r'|'.join([classRe, objectOnlyRe]))
+
+        if something == None:
+            return 'None'
+
+        if isinstance(something, basestring):
+            return "'%s'" % something
+        if type(something) == int or type(something) == float:
+            return str(something)
+
+        typeName = str(something)
+        match = objectsRe.match(typeName)
+        if match:
+            return "<%s>" % filter(None, match.groups())[0]
+
+        match = classesRe.match(typeName)
+        if match:
+            return "<class %s>" % filter(None, match.groups())[0]
+
+        return typeName
+
+    def __repr__(self):
+        return '%s(%s)' % (self.name, ", ".join(map(self.represent, self.args)+['%s=%s' % (key, self.represent(value)) for key, value in self.kwargs.items()]))
+
+class CalledMethods(list):
+    def reset(self):
+        del self[:]
+        return self

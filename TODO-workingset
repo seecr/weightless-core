@@ -1,0 +1,13 @@
+QUESTIONS/Philosophical annotations for this workingset:
+========================================================
+
+- Yield / stepping "on" is an invasive change for compose users.
+
+    "-ng"/Gio like would help considerably, but is no small step.
+
+- Next smallest integration step.  Possibly:
+    
+    Reactor() -> PeriodicDownload [meresco-components] -> OaiDownloadProcessor() [meresco-oai]
+
+    And after OaiDownloadProcessor, switch back to the old behaviour (compose without stepping).
+
