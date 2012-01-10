@@ -214,7 +214,7 @@ Traceback (most recent call last):
     yield f()  # first Yield
   File "%%(__file__)s", line %(fLine)s, in f
     yield Yield  # second Yield
-  File "%%(compose_py)s", line 112, in _compose
+  File "%%(compose_py)s", line 114, in _compose
     assert not ((message is not None) and (response is not None)), 'Cannot accept data. First send None.'
 AssertionError: Cannot accept data. First send None.\n""" % {
                 'cLine': cLine,
@@ -249,7 +249,7 @@ Traceback (most recent call last):
     yield f()  # first Yield
   File "%%(__file__)s", line %(fLine)s, in f
     yield Yield  # second Yield
-  File "%%(compose_py)s", line 110, in _compose
+  File "%%(compose_py)s", line 112, in _compose
     message = yield response
 Exception: tripping compose\n""" % {
                 'cLine': cLine,
@@ -331,7 +331,7 @@ AssertionError: Generator already used.\n""" % {
 Traceback (most recent call last):
   File "%(__file__)s", line %(cLine)s, in testExceptionThrownInCompose
     c.throw(Exception("tripping compose"))
-  File "%(compose_py)s", line 131, in _compose
+  File "%(compose_py)s", line 133, in _compose
     raise exception[0], exception[1], exception[2]
 Exception: tripping compose\n""" % {
                 '__file__': fileDict['__file__'],
