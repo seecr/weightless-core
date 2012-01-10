@@ -28,29 +28,11 @@ from os import getcwd
 from os.path import split
 from sys import argv
 
-#upload to pypi with:
-#python setup.py register sdist upload
-
-v = None
-if len(argv) > 1 and argv[1].startswith("--version="):
-    _, v = argv[1].split('=')
-    del argv[1]
-
-if not v:
-    # heuristic for version from version_x.y.z directory
-    parentdir, cwd = split(getcwd())
-    if '_' in cwd:
-        _, v = cwd.rsplit('_', 1)
-    v_user = raw_input('Version [%s]: ' % v)
-    v = v_user if v_user else v
-
-if not v:
-    print "Please use --version= or enter version when asked."
-    exit(-1)
+version = '$Version: trunk$'[9:-1].strip()
 
 setup(
     name='weightless-core',
-    version=v,
+    version=version,
     packages=[
         'weightless', 
         'weightless.core', 
