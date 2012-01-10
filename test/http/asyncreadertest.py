@@ -196,7 +196,7 @@ TypeError: an integer is required
     result = s.getResult()
   File "%(httprequest.py)s", line 51, in _do
     _sendHttpHeaders(sok, method, request, headers)
-  File "../weightless/http/_httprequest.py", line 82, in _sendHttpHeaders
+  File "%(httprequest.py)s", line 82, in _sendHttpHeaders
     sok.send(_httpRequest(method, request))
   File "%(__file__)s", line 150, in httpRequest
     raise RuntimeError("Boom!")

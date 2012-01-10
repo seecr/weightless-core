@@ -37,9 +37,9 @@ if isdir(join(abspath(dirname(__file__)), '.svn')):          #DO_NOT_DISTRIBUTE
         sys.exit(status)                                     #DO_NOT_DISTRIBUTE
 
 try:
-    from os import getenv                                        #DO_NOT_DISTRIBUTE
-    if getenv('WEIGHTLESS_COMPOSE_TEST') == 'PYTHON':            #DO_NOT_DISTRIBUTE
-        raise ImportError('Python compose for testing purposes') #DO_NOT_DISTRIBUTE
+    from os import getenv
+    if getenv('WEIGHTLESS_COMPOSE_TEST') == 'PYTHON':
+        raise ImportError('Python compose for testing purposes')
     from _compose_c import compose as _compose, local, tostring
     ComposeType = _compose
 except ImportError:

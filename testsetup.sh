@@ -1,3 +1,4 @@
+#!/bin/bash
 ## begin license ##
 #
 #    Weightless is a High Performance Asynchronous Networking Library
@@ -27,6 +28,12 @@ rm -rf tmp build
 for pycmd in $(pyversions --installed); do
 
 $pycmd setup.py install --root tmp
+
+VERSION="x.y.z"
+
+find tmp -name '*.py' -exec sed -r -e \
+    "/DO_NOT_DISTRIBUTE/ d;
+    s/\\\$Version:[^\\\$]*\\\$/\\\$Version: ${VERSION}\\\$/" -i '{}' \;
 
 if [ "$pycmd" == "python2.5" ]; then
     export PYTHONPATH=`pwd`/tmp/usr/lib/python2.5/site-packages
