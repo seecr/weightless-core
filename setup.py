@@ -28,7 +28,7 @@ from os import getcwd
 from os.path import split
 from sys import argv
 
-version = "$Version: 0.6.5.1$"[9:-1].strip()
+version = "$Version: 0.6.6$"[9:-1].strip()
 
 setup(
     name='weightless-core',
