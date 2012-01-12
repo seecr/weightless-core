@@ -1,27 +1,29 @@
 # -*- coding: utf-8 -*-
 ## begin license ##
-#
-#    Weightless is a High Performance Asynchronous Networking Library
-#    See http://weightless.io
-#    Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-#
-#    This file is part of Weightless
-#
-#    Weightless is free software; you can redistribute it and/or modify
-#    it under the terms of the GNU General Public License as published by
-#    the Free Software Foundation; either version 2 of the License, or
-#    (at your option) any later version.
-#
-#    Weightless is distributed in the hope that it will be useful,
-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#    GNU General Public License for more details.
-#
-#    You should have received a copy of the GNU General Public License
-#    along with Weightless; if not, write to the Free Software
-#    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-#
+# 
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
+# 
+# Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
+# Copyright (C) 2012 Seecr (Seek You Too B.V.) http://seecr.nl
+# 
+# This file is part of "Weightless"
+# 
+# "Weightless" is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+# 
+# "Weightless" is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with "Weightless"; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+# 
 ## end license ##
+
 from __future__ import with_statement
 
 from weightlesstestcase import WeightlessTestCase, MATCHALL
@@ -168,6 +170,21 @@ class HttpServerTest(WeightlessTestCase):
         response = sok.recv(4096)
         self.assertEquals('HTTP/1.0 400 Bad Request\r\n\r\n', response)
         self.assertEquals(1, len(timers))
+
+    def testInvalidRequestWithHalfHeader(self):
+        reactor = Reactor()
+        server = HttpServer(reactor, self.port, None, timeout=0.1)
+        server.listen()
+        sok = socket()
+        sok.connect(('localhost', self.port))
+        sok.send('POST / HTTP/1.0\r\n') 
+        sok.send('Expect: something\r\n')
+        sok.send('Content-Length: 5\r\n')
+        sok.send('\r\n1234')
+        sok.close()
+        for i in range(4):
+            reactor.step()
+        self.assertEquals(1, len(reactor._readers))
 
     def testValidRequestResetsTimer(self):
         reactor = Reactor()
