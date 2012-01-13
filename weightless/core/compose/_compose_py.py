@@ -62,12 +62,12 @@ class Yield(object):
     """Sentinel for compose stepping"""
     pass
 
-def compose(initial, stepping=False, filter=None):
+def compose(initial, stepping=False):
     if type(initial) != GeneratorType:
         raise TypeError("compose() expects generator")
-    return _compose(initial, stepping, filter)
+    return _compose(initial, stepping)
 
-def _compose(initial, stepping, filter):
+def _compose(initial, stepping):
     """
     The method compose() allows program (de)composition with generators.  It enables calls like:
         retvat = yield otherGenerator(args)
@@ -110,8 +110,7 @@ def _compose(initial, stepping, filter):
             elif (response is not None) or not messages:
                 try:
                     message = yield response
-                    if not(filter and filter(response)):
-                        assert not ((message is not None) and (response is not None)), 'Cannot accept data. First send None.'
+                    assert not ((message is not None) and (response is not None)), 'Cannot accept data. First send None.'
                     messages.insert(0, message)
                 except BaseException:
                     exception = exc_info()

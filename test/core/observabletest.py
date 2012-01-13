@@ -419,7 +419,7 @@ class ObservableTest(TestCase):
                         )
                     )
                 ))
-        result = compose(t.all.dataflow(), filter=callable)
+        result = compose(t.all.dataflow())
         result.next()
         r = result.send(2)
         self.assertEquals('CC', r)

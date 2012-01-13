@@ -48,7 +48,6 @@ else:
     from core.composetest import ComposeCTest
 from core.localtest import LocalTest
 from core.composeschedulingtest import ComposeSchedulingPyTest
-from core.composefiltertest import ComposeFilterPyTest
 
 from http.acceptortest import AcceptorTest
 from http.httpreadertest import HttpReaderTest
