@@ -320,6 +320,10 @@ class HttpsHandler(HttpHandler):
     def __call__(self):
         try:
             part = self._sok.recv(self._recvSize)
+            if not part:
+                # SOCKET CLOSED by PEER
+                self._badRequest()
+                return
         except (SSL.WantReadError, SSL.WantWriteError, SSL.WantX509LookupError):
             pass
         except Exception, e:
