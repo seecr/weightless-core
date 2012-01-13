@@ -33,6 +33,12 @@ from weightless.core.compose._compose_py import __file__ as  _compose_py_module_
 from weightless.core.compose._compose_py import compose as pyCompose
 from weightless.core.compose._compose_py import Yield as pyYield
 from weightless.core.compose._tostring_py import tostring as pyTostring
+try:
+    from weightless.core.compose._compose_c import compose as cCompose
+    from weightless.core.compose._compose_c import tostring as cTostring
+    from weightless.core.compose._compose_c import Yield as cYield
+except ImportError:
+    pass
 
 from inspect import currentframe
 from traceback import format_exc
@@ -46,16 +52,6 @@ def __NEXTLINE__(offset=0):
     return currentframe().f_back.f_lineno + offset + 1
 
 class _ComposeSchedulingTest(TestCase):
-    pass
-
-class ComposeSchedulingPyTest(_ComposeSchedulingTest):
-    def setUp(self):
-        global compose, Yield, tostring
-        compose = pyCompose
-        Yield = pyYield
-        tostring = pyTostring
-        _ComposeSchedulingTest.setUp(self)
-
     def testOneGenerator(self):
         def gen():
             yield "one"
@@ -343,4 +339,19 @@ Exception: tripping compose\n""" % {
         else:
             self.fail("Should not happen.")
 
+class ComposeSchedulingCTest(_ComposeSchedulingTest):
+    def setUp(self):
+        global compose, Yield, tostring
+        compose = cCompose
+        Yield = cYield
+        tostring = cTostring
+        _ComposeSchedulingTest.setUp(self)
+
+class ComposeSchedulingPyTest(_ComposeSchedulingTest):
+    def setUp(self):
+        global compose, Yield, tostring
+        compose = pyCompose
+        Yield = pyYield
+        tostring = pyTostring
+        _ComposeSchedulingTest.setUp(self)
 

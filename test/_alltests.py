@@ -44,10 +44,11 @@ from types import GeneratorType
 from weightless.core.compose import ComposeType
 if ComposeType == GeneratorType:
     from core.composetest import ComposePyTest
+    from core.composeschedulingtest import ComposeSchedulingPyTest
 else:
     from core.composetest import ComposeCTest
+    from core.composeschedulingtest import ComposeSchedulingCTest
 from core.localtest import LocalTest
-from core.composeschedulingtest import ComposeSchedulingPyTest
 
 from http.acceptortest import AcceptorTest
 from http.httpreadertest import HttpReaderTest
