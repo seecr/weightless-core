@@ -45,7 +45,6 @@ typedef struct {
     PyObject** messages_base;
     PyObject** messages_start;
     PyObject** messages_end;
-    PyObject*  sidekick;
     PyFrameObject* frame;
     PyObject*  weakreflist;
 } PyComposeObject;
@@ -194,7 +193,6 @@ static int compose_traverse(PyComposeObject* self, visitproc visit, void* arg) {
     for(p = self->messages_base; p < self->messages_base + QUEUE_SIZE; p++)
         Py_VISIT(*p);
 
-    Py_VISIT(self->sidekick);
     Py_VISIT(self->frame);
     return 0;
 }
@@ -214,7 +212,6 @@ static int compose_clear(PyComposeObject* self) {
 
     free(self->messages_base);
     self->messages_base = NULL;
-    Py_CLEAR(self->sidekick);
     Py_CLEAR(self->frame);
     return 0;
 }
@@ -250,7 +247,6 @@ static void _compose_initialize(PyComposeObject* cmps) {
     cmps->messages_base = (PyObject**) calloc(QUEUE_SIZE, sizeof(PyObject*));
     cmps->messages_start = cmps->messages_base;
     cmps->messages_end = cmps->messages_base;
-    cmps->sidekick = NULL;
     cmps->weakreflist = NULL;
     cmps->frame = PyFrame_New(PyThreadState_GET(), py_code, PyEval_GetGlobals(), NULL);
     Py_CLEAR(cmps->frame->f_back);
@@ -258,16 +254,21 @@ static void _compose_initialize(PyComposeObject* cmps) {
 
 
 static PyObject* compose_new(PyObject* type, PyObject* args, PyObject* kwargs) {
-    static char* argnames[] = {"initial", "sidekick"};
+    static char* argnames[] = {"initial", "stepping"};
     PyObject* initial = NULL;
-    PyObject* sidekick = NULL;
+    PyObject* stepping = NULL;
 
     if(!PyArg_ParseTupleAndKeywords(                            // borrowed refs
                 args, kwargs, "O|O:compose", argnames,
-                &initial, &sidekick)) return NULL;
+                &initial, &stepping)) return NULL;
 
     if(!PyGen_Check(initial) && !PyCompose_Check(initial)) {
         PyErr_SetString(PyExc_TypeError, "compose() argument 1 must be generator");
+        return NULL;
+    }
+
+    if (stepping != NULL) {
+        PyErr_SetString(PyExc_NotImplementedError, "stepping not yet implemented in c version of compose");
         return NULL;
     }
 
@@ -279,11 +280,6 @@ static PyObject* compose_new(PyObject* type, PyObject* args, PyObject* kwargs) {
     _compose_initialize((PyComposeObject*) cmps);
 
     if(!generators_push(cmps, initial)) return NULL;
-
-    if(sidekick) {
-        Py_INCREF(sidekick);
-        cmps->sidekick = sidekick;
-    }
 
     PyObject_GC_Track(cmps);
     return (PyObject*) cmps;
@@ -393,15 +389,6 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
                 }
 
                 messages_insert(self, Py_None);
-
-            } else if(self->sidekick && self->sidekick != Py_None && PyCallable_Check(response)) {
-                messages_insert(self, Py_None);
-                PyObject* r = PyObject_CallFunctionObjArgs(response, self->sidekick, NULL);
-
-                if(!r)
-                    PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
-
-                Py_CLEAR(r);
 
             } else if(response != Py_None || messages_empty(self)) {
                 self->expect_data = response == Py_None;

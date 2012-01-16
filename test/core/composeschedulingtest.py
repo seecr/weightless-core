@@ -339,13 +339,21 @@ Exception: tripping compose\n""" % {
         else:
             self.fail("Should not happen.")
 
-class ComposeSchedulingCTest(_ComposeSchedulingTest):
+class ComposeSchedulingCTest(TestCase):
     def setUp(self):
         global compose, Yield, tostring
         compose = cCompose
         Yield = cYield
         tostring = cTostring
-        _ComposeSchedulingTest.setUp(self)
+        TestCase.setUp(self)
+
+    def testHasYield(self):
+        self.assertEquals("<type 'Yield'>", repr(Yield))
+
+    def testSteppingNotYetImplementedInC(self):
+        def f():
+            yield
+        self.assertRaises(NotImplementedError, lambda: compose(initial=f(), stepping=True))
 
 class ComposeSchedulingPyTest(_ComposeSchedulingTest):
     def setUp(self):
