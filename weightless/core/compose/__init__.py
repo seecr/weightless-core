@@ -41,7 +41,7 @@ try:
     from os import getenv
     if getenv('WEIGHTLESS_COMPOSE_TEST') == 'PYTHON':
         raise ImportError('Python compose for testing purposes')
-    from _compose_c import compose as _compose, local, tostring
+    from _compose_c import compose as _compose, local, tostring, Yield
     ComposeType = _compose
 except ImportError:
     from warnings import warn
