@@ -422,22 +422,23 @@ class HttpServerTest(WeightlessTestCase):
 
     def testYieldPossibleUseCase(self):
         bucket = []
+        result = []
         ready = []
         useYield = []
         workDone = []
         def handler(RequestURI, **kwargs):
             name = 'work' if 'aLotOfWork' in RequestURI else 'lazy'
-            bucket.append('%s_A' % name)
-            yield 'A'
+            bucket.append('%s_START' % name)
+            yield 'START'
             if '/aLotOfWork' in RequestURI:
                 bucket.append('%s_part_1' % name)
                 if True in useYield:
                     while not workDone:
                         yield Yield
                 bucket.append('%s_part_2' % name)
-            bucket.append('%s_B' % name)
+            bucket.append('%s_END' % name)
             ready.append('yes')
-            yield 'B'
+            yield 'END'
 
         reactor = Reactor()
         server = HttpServer(reactor, self.port, handler)
@@ -446,6 +447,7 @@ class HttpServerTest(WeightlessTestCase):
         def loopWithYield(use):
             del ready[:]
             del bucket[:]
+            del result[:]
             del workDone[:]
             useYield[:] = [use]
             sok0 = socket()
@@ -457,15 +459,26 @@ class HttpServerTest(WeightlessTestCase):
             sleep(0.02)
             while ready != ['yes']:
                 reactor.step()
+                if bucket:
+                    result.append(set(bucket))
+                    del bucket[:]
             workDone.append(True)
             while ready != ['yes', 'yes']:
                 reactor.step()
-            return bucket
+                if bucket:
+                    result.append(set(bucket))
+                    del bucket[:]
+            return result
 
-        self.assertEquals(['work_A', 'work_part_1',
-            'lazy_A', 'lazy_B',
-            'work_part_2', 'work_B'], loopWithYield(True))
         self.assertEquals([
-            'work_A', 'work_part_1', 'work_part_2', 'work_B',
-            'lazy_A', 'lazy_B'], loopWithYield(False))
+                set(['work_START']),
+                set(['lazy_START', 'work_part_1', 'work_part_2', 'work_END']),
+                set(['lazy_END'])
+           ], loopWithYield(False))
+        self.assertEquals([
+                set(['work_START']),
+                set(['lazy_START', 'work_part_1']),
+                set(['lazy_END']),
+                set(['work_part_2', 'work_END']),
+           ], loopWithYield(True))
 
