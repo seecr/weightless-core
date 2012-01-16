@@ -260,9 +260,6 @@ RuntimeError: Boom!""" % fileDict)
         headers = get_request[0]['headers'].headers
         self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
 
-    def testHttpGetWithVhost(self):
-        suspendObject = httpget("localhost", 9999, '/path', vhost="weightless.io").next()
-        self.assertEquals("http://weightless.io/path", suspendObject._doNext.__self__.gi_frame.f_locals["request"])
 
 def ignoreLineNumbers(s):
     return sub("line \d+,", "line [#],", s)

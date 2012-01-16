@@ -89,10 +89,7 @@ def _sendHttpHeaders(sok, method, request, headers):
         sok.send(''.join('%s: %s\r\n' % i for i in headers.items()))
     sok.send('\r\n')
 
-def httpget(host, port, request, headers=None, vhost=""):
-    if vhost != "":
-        warn("Vhost is deprecated. Use request instead with a full URI.", DeprecationWarning)
-        request = "http://%s%s" % (vhost, request)
+def httpget(host, port, request, headers=None):
     s = Suspend(_do('GET', host, port, request, headers=headers).send)
     yield s
     result = s.getResult()
