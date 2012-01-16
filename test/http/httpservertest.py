@@ -38,6 +38,7 @@ from StringIO import StringIO
 from sys import getdefaultencoding
 
 from weightless.http import HttpServer, _httpserver
+from weightless.core import Yield
 
 def inmydir(p):
     return join(dirname(abspath(__file__)), p)
@@ -398,53 +399,68 @@ class HttpServerTest(WeightlessTestCase):
         self.assertEquals('HTTP/1.0 503 Service Unavailable\r\n\r\n<html><head></head><body><h1>Service Unavailable</h1></body></html>', sock.recv(1024))
         server.shutdown()
 
+    def testYieldInHttpServer(self):
+        bucket = []
+        def handler(RequestURI, **kwargs):
+            yield 'A'
+            while 'continue' not in bucket:
+                yield Yield
+            yield 'B'
 
-    #def testUncaughtException(self):
-        #done = []
-        #def onRequest(**kwargs):
-            #yield "HTTP\1.0 200 Ok\r\n\r\nStart data"
-            #done.append('onRequest')
-            #raise Exception("This exception is printed.")
-        #port = randint(10000, 2**16)
-        #reactor = Reactor()
-        #server = HttpServer(reactor, port, onRequest)
-        #sok = socket()
-        #sok.connect(('localhost', port))
-        #sok.send('GET / HTTP/1.0\r\n\r\n')
-        #reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
-        #while not done:
-            #reactor.step()
+        reactor = Reactor()
+        server = HttpServer(reactor, self.port, handler)
+        server.listen()
+        sok = socket()
+        sok.connect(('localhost', self.port))
+        sok.send('GET /path/here HTTP/1.0\r\n\r\n')
+        for i in xrange(500):
+            reactor.step()
+        self.assertEquals('A', sok.recv(100))
+        bucket.append('continue')
+        reactor.step()
+        self.assertEquals('B', sok.recv(100))
 
-        #try:
-            #sok.recv(4000) # wie een beter plan heeft mag het zeggen
-            #self.fail('Socket not closed by server')
-        #except SocketError, e:
-            #print "asdf", type(e), str(e)
+    def testYieldPossibleUseCase(self):
+        bucket = []
+        ready = []
+        useYield = []
+        def handler(RequestURI, **kwargs):
+            name = 'work' if 'aLotOfWork' in RequestURI else 'lazy'
+            bucket.append('%s_A' % name)
+            yield 'A'
+            if '/aLotOfWork' in RequestURI:
+                bucket.append('%s_part_1' % name)
+                if True in useYield:
+                    yield Yield
+                bucket.append('%s_part_2' % name)
+            bucket.append('%s_B' % name)
+            ready.append('yes')
+            yield 'B'
 
-        ## 1. socket closed
-        ## 2. exceptie geraised (print or whatever)
+        reactor = Reactor()
+        server = HttpServer(reactor, self.port, handler)
+        server.listen()
 
+        def loopWithYield(use):
+            del ready[:]
+            del bucket[:]
+            useYield[:] = [use]
+            sok0 = socket()
+            sok0.connect(('localhost', self.port))
+            sok0.send('GET /aLotOfWork HTTP/1.0\r\n\r\n')
+            sok1 = socket()
+            sok1.connect(('localhost', self.port))
+            sok1.send('GET /path/here HTTP/1.0\r\n\r\n')
+            sleep(0.02)
+            while ready != ['yes', 'yes']:
+                reactor.step()
+            return bucket
 
+        self.assertEquals(['work_A', 'work_part_1',
+            'lazy_A',
+            'work_part_2', 'work_B',
+            'lazy_B'], loopWithYield(True))
+        self.assertEquals([
+            'work_A', 'work_part_1', 'work_part_2', 'work_B',
+            'lazy_A', 'lazy_B'], loopWithYield(False))
 
-    #def testPrematureClientClose(self):
-        """Seen in certain phases of the moon. Kvs has not (20071101) been able to reproduce this in tests."""
-        #self.almostDone = False
-        #self.done = False
-
-        #def handler(**kwargs):
-            #if self.almostDone == True:
-                #self.done = True
-                #raise StopIteration()
-            #if kwargs.get("Body", None) == 'abcde':
-                #self.almostDone = True
-
-        #port = randint(20000,25000)
-        #reactor = Reactor()
-        #server = HttpServer(reactor, port, handler, timeout=0.01)
-        #sok = socket()
-        #sok.connect(('localhost', port))
-        #sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nabcde\r\n0\r\n')
-
-        #reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
-        #while not self.done:
-            #reactor.step()

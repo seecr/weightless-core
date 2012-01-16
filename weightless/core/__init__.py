@@ -33,7 +33,7 @@ elif hasattr(platform, 'system'):
 else:
     cpython = False
 
-from compose import compose, local, tostring
+from compose import compose, local, tostring, Yield
 from utils import identify, autostart
 from _observable import Observable, Transparent, be, methodOrMethodPartialStr
 

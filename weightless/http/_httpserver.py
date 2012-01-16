@@ -25,7 +25,7 @@
 ## end license ##
 
 from _acceptor import Acceptor
-from weightless.core import identify
+from weightless.core import identify, Yield
 from weightless.http import REGEXP, FORMAT, parseHeaders, parseHeader
 from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
 from tempfile import TemporaryFile
@@ -280,6 +280,8 @@ class HttpHandler(object):
                     data = self._rest
                 else:
                     data = self._handler.next()
+                    if data is Yield:
+                        continue
                     if callable(data):
                         data(self._reactor, this.next)
                         yield
