@@ -424,6 +424,7 @@ class HttpServerTest(WeightlessTestCase):
         bucket = []
         ready = []
         useYield = []
+        workDone = []
         def handler(RequestURI, **kwargs):
             name = 'work' if 'aLotOfWork' in RequestURI else 'lazy'
             bucket.append('%s_A' % name)
@@ -431,7 +432,8 @@ class HttpServerTest(WeightlessTestCase):
             if '/aLotOfWork' in RequestURI:
                 bucket.append('%s_part_1' % name)
                 if True in useYield:
-                    yield Yield
+                    while not workDone:
+                        yield Yield
                 bucket.append('%s_part_2' % name)
             bucket.append('%s_B' % name)
             ready.append('yes')
@@ -444,6 +446,7 @@ class HttpServerTest(WeightlessTestCase):
         def loopWithYield(use):
             del ready[:]
             del bucket[:]
+            del workDone[:]
             useYield[:] = [use]
             sok0 = socket()
             sok0.connect(('localhost', self.port))
@@ -452,14 +455,16 @@ class HttpServerTest(WeightlessTestCase):
             sok1.connect(('localhost', self.port))
             sok1.send('GET /path/here HTTP/1.0\r\n\r\n')
             sleep(0.02)
+            while ready != ['yes']:
+                reactor.step()
+            workDone.append(True)
             while ready != ['yes', 'yes']:
                 reactor.step()
             return bucket
 
         self.assertEquals(['work_A', 'work_part_1',
-            'lazy_A',
-            'work_part_2', 'work_B',
-            'lazy_B'], loopWithYield(True))
+            'lazy_A', 'lazy_B',
+            'work_part_2', 'work_B'], loopWithYield(True))
         self.assertEquals([
             'work_A', 'work_part_1', 'work_part_2', 'work_B',
             'lazy_A', 'lazy_B'], loopWithYield(False))
