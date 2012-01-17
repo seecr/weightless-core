@@ -24,7 +24,7 @@
 # 
 ## end license ##
 
-set -e
+set -o errexit
 
 rm -rf tmp build
 for pycmd in $(pyversions --installed); do
@@ -44,10 +44,12 @@ else
 fi
 cp -r test tmp/test
 
+set +o errexit
 (
 cd tmp/test
 ./alltests.sh --${pycmd}
 )
+set -o errexit
 
 rm -rf tmp build
 done
