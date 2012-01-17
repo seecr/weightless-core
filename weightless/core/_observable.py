@@ -28,6 +28,7 @@
 from sys import exc_info
 from weightless.core import local
 from functools import partial
+from weightless.core.utils import isgeneratorfunction
 
 NORESPONDERS = 'None of the %d observers respond to %s(...)'
 
@@ -112,6 +113,7 @@ class OnceMessage(AllMessage):
             except AttributeError:
                 pass
             else:
+                assert isgeneratorfunction(method), "%s should be a generator function." % methodOrMethodPartialStr(method)
                 _ = yield method(*args, **kwargs)
                 assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
             if isinstance(observer, Observable):

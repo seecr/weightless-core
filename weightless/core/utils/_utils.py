@@ -27,6 +27,15 @@ from linecache import getline
 from re import compile
 from types import GeneratorType
 
+try:
+    from inspect import isgeneratorfunction
+except ImportError:
+    def isgeneratorfunction(func):
+        try:
+            return bool(func.func_code.co_flags & 0x20)
+        except AttributeError:
+            return False
+
 def tostring(generator):
     if type(generator) != GeneratorType:
         raise TypeError("tostring() expects generator")

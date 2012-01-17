@@ -601,6 +601,8 @@ class ObservableTest(TestCase):
         class MyObserver(Observable):
             def methodOnlyCalledOnce(self, aList):
                 aList.append('once')
+                return
+                yield
         once = MyObserver()
         dna = \
             (Observable(),
@@ -612,10 +614,28 @@ class ObservableTest(TestCase):
         list(compose(root.once.methodOnlyCalledOnce(collector)))
         self.assertEquals(['once'], collector)
 
+    def testOnceCalledMethodsMustBeGeneratorFunctions(self):
+        class MyObserver(Observable):
+            def noGeneratorFunction(self):
+                pass
+        once = MyObserver()
+        dna = \
+            (Observable(),
+                (once,),
+            )
+        root = be(dna)
+        try:
+            list(compose(root.once.noGeneratorFunction()))
+            self.fail('Expected AssertionError')
+        except AssertionError, e:
+            self.assertEquals('<bound method MyObserver.noGeneratorFunction of MyObserver(name=None)> should be a generator function.', str(e))
+
     def testOnceInDiamondWithTransparent(self):
         class MyObserver(Observable):
             def methodOnlyCalledOnce(self, aList):
                 aList.append('once')
+                return
+                yield
         once = MyObserver()
         diamond = \
             (Transparent(),
@@ -635,6 +655,8 @@ class ObservableTest(TestCase):
         class MyObserver(Observable):
             def methodOnlyCalledOnce(self, aList):
                 aList.append('once')
+                return
+                yield
         once = MyObserver()
         diamond = \
             (Observable(),
@@ -654,6 +676,8 @@ class ObservableTest(TestCase):
         class MyObserver(object):
             def methodOnNonObservableSubclass(self, aList):
                 aList.append('once')
+                return
+                yield
         once = MyObserver()
         dna =   (Observable(),
                     (once,)
@@ -667,6 +691,8 @@ class ObservableTest(TestCase):
         class MyObserver(Observable):
             def methodOnlyCalledOnce(self, aList):
                 aList.append(self)
+                return
+                yield
         ownobserverobserver = MyObserver()
         dna = \
             (Observable(),

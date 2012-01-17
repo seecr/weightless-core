@@ -49,6 +49,9 @@ else:
     from core.composetest import ComposeCTest
     from core.composeschedulingtest import ComposeSchedulingCTest
 from core.localtest import LocalTest
+from core.observabletest import ObservableTest
+from core.observabledirectedmessagingtest import ObservableDirectedMessagingTest
+from core.utilstest import UtilsTest
 
 from http.acceptortest import AcceptorTest
 from http.httpreadertest import HttpReaderTest
@@ -57,9 +60,6 @@ from http.httpspectest import HttpSpecTest
 from http.httpsservertest import HttpsServerTest
 from http.suspendtest import SuspendTest
 from http.asyncreadertest import AsyncReaderTest
-
-from core.observabletest import ObservableTest
-from core.observabledirectedmessagingtest import ObservableDirectedMessagingTest
 
 from io.reactortest import ReactorTest
 from io.giotest import GioTest
