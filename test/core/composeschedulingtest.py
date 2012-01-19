@@ -52,6 +52,18 @@ def __NEXTLINE__(offset=0):
     return currentframe().f_back.f_lineno + offset + 1
 
 class _ComposeSchedulingTest(TestCase):
+    def testYieldSentinel_Py(self):
+        self.assertTrue(Yield is Yield)
+        self.assertTrue(Yield == Yield)
+        self.assertEquals("<class 'weightless.core.compose._compose_py.Yield'>", repr(Yield))
+        self.assertEquals(type, type(Yield))
+        try:
+            Yield()
+        except TypeError, e:
+            self.assertEquals("cannot create 'Yield' instances", str(e))
+        else:
+            self.fail('Should not happen')
+
     def testOneGenerator(self):
         def gen():
             yield "one"
@@ -210,7 +222,7 @@ Traceback (most recent call last):
     yield f()  # first Yield
   File "%%(__file__)s", line %(fLine)s, in f
     yield Yield  # second Yield
-  File "%%(compose_py)s", line 113, in _compose
+  File "%%(compose_py)s", line 114, in _compose
     assert not ((message is not None) and (response is not None)), 'Cannot accept data. First send None.'
 AssertionError: Cannot accept data. First send None.\n""" % {
                 'cLine': cLine,
@@ -245,7 +257,7 @@ Traceback (most recent call last):
     yield f()  # first Yield
   File "%%(__file__)s", line %(fLine)s, in f
     yield Yield  # second Yield
-  File "%%(compose_py)s", line 112, in _compose
+  File "%%(compose_py)s", line 113, in _compose
     message = yield response
 Exception: tripping compose\n""" % {
                 'cLine': cLine,
@@ -327,7 +339,7 @@ AssertionError: Generator already used.\n""" % {
 Traceback (most recent call last):
   File "%(__file__)s", line %(cLine)s, in testExceptionThrownInCompose
     c.throw(Exception("tripping compose"))
-  File "%(compose_py)s", line 132, in _compose
+  File "%(compose_py)s", line 133, in _compose
     raise exception[0], exception[1], exception[2]
 Exception: tripping compose\n""" % {
                 '__file__': fileDict['__file__'],
@@ -349,6 +361,18 @@ class ComposeSchedulingCTest(TestCase):
 
     def testHasYield(self):
         self.assertEquals("<type 'Yield'>", repr(Yield))
+
+    def testYieldSentinel_C(self):
+        self.assertTrue(Yield is Yield)
+        self.assertTrue(Yield == Yield)
+        self.assertEquals("<type 'Yield'>", repr(Yield))
+        self.assertEquals(type, type(Yield))
+        try:
+            Yield()
+        except TypeError, e:
+            self.assertEquals("cannot create 'Yield' instances", str(e))
+        else:
+            self.fail('Should not happen')
 
     def testSteppingNotYetImplementedInC(self):
         def f():

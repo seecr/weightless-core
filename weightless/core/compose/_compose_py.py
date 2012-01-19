@@ -60,7 +60,8 @@ BaseException
 
 class Yield(object):
     """Sentinel for compose stepping"""
-    pass
+    def __new__(self):
+        raise TypeError("cannot create 'Yield' instances")
 
 def compose(initial, stepping=False):
     if type(initial) != GeneratorType:
