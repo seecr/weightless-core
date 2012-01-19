@@ -113,9 +113,9 @@ class OnceMessage(AllMessage):
             except AttributeError:
                 pass
             else:
-                methodResult = method(*args, **kwargs)
-                assert isGeneratorOrComposed(methodResult), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)
-                _ = yield methodResult
+                _ = methodResult = method(*args, **kwargs)
+                if isGeneratorOrComposed(methodResult):
+                    _ = yield methodResult
                 assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
             if isinstance(observer, Observable):
                 _ = yield self._callonce(observer._observers, args, kwargs, done)

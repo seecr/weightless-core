@@ -616,26 +616,35 @@ class ObservableTest(TestCase):
         self.assertEquals(['once'], collector)
 
     def testOnceCalledMethodsMustResultInAGeneratorOrCompose(self):
+        callLog = []
         class MyObserver(Observable):
             def __init__(self):
                 Observable.__init__(self)
                 self.generatorReturningCallable = partial(lambda arg: (x for x in 'a'), arg='partialed')
 
             def noGeneratorFunction(self):
-                pass
+                callLog.append('function called')
+
+            def valueReturningFunction(self):
+                return 42
+
             def composedGenerator(self):
                 return compose(x for x in 'a')
+
         once = MyObserver()
         dna = \
             (Observable(),
                 (once,),
             )
         root = be(dna)
+        list(compose(root.once.noGeneratorFunction()))
+        self.assertEquals(['function called'], callLog)
+
         try:
-            list(compose(root.once.noGeneratorFunction()))
-            self.fail('Expected AssertionError')
+            list(compose(root.once.valueReturningFunction()))
+            self.fail("Should have gotten AssertionError because of unexpected return value")
         except AssertionError, e:
-            self.assertEquals('<bound method MyObserver.noGeneratorFunction of MyObserver(name=None)> should have resulted in a generator.', str(e))
+            self.assertEquals("<bound method MyObserver.valueReturningFunction of MyObserver(name=None)> returned '42'", str(e))
 
         try:
             result = list(compose(root.once.composedGenerator()))
