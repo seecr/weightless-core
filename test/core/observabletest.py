@@ -33,6 +33,7 @@ from sys import exc_info
 from traceback import format_tb
 from inspect import isframe, getframeinfo
 from types import GeneratorType
+from functools import partial
 from weightless.core import compose, Observable, Transparent, be, tostring
 from weightless.core._observable import AllMessage, AnyMessage, DoMessage, OnceMessage
 from unittest import TestCase
@@ -614,10 +615,16 @@ class ObservableTest(TestCase):
         list(compose(root.once.methodOnlyCalledOnce(collector)))
         self.assertEquals(['once'], collector)
 
-    def testOnceCalledMethodsMustBeGeneratorFunctions(self):
+    def testOnceCalledMethodsMustResultInAGeneratorOrCompose(self):
         class MyObserver(Observable):
+            def __init__(self):
+                Observable.__init__(self)
+                self.generatorReturningCallable = partial(lambda arg: (x for x in 'a'), arg='partialed')
+
             def noGeneratorFunction(self):
                 pass
+            def composedGenerator(self):
+                return compose(x for x in 'a')
         once = MyObserver()
         dna = \
             (Observable(),
@@ -628,7 +635,19 @@ class ObservableTest(TestCase):
             list(compose(root.once.noGeneratorFunction()))
             self.fail('Expected AssertionError')
         except AssertionError, e:
-            self.assertEquals('<bound method MyObserver.noGeneratorFunction of MyObserver(name=None)> should be a generator function.', str(e))
+            self.assertEquals('<bound method MyObserver.noGeneratorFunction of MyObserver(name=None)> should have resulted in a generator.', str(e))
+
+        try:
+            result = list(compose(root.once.composedGenerator()))
+            self.assertEquals(['a'], result)
+        except AssertionError, e:
+            self.fail('Should not fail: %s' % e)
+
+        try:
+            result = list(compose(root.once.generatorReturningCallable()))
+            self.assertEquals(['a'], result)
+        except AssertionError, e:
+            self.fail('Should not fail: %s' % e)
 
     def testOnceInDiamondWithTransparent(self):
         class MyObserver(Observable):

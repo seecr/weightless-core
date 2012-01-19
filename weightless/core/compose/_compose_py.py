@@ -98,7 +98,7 @@ def _compose(initial, stepping):
             else:
                 message = messages.pop(0)
                 response = generator.send(message)
-            if type(response) == GeneratorType:
+            if type(response) is GeneratorType:
                 if stepping:
                     message = yield Yield
                 frame = response.gi_frame

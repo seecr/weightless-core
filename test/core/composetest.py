@@ -37,6 +37,8 @@ try:
     from weightless.core.compose._compose_c import tostring as cTostring
 except ImportError:
     pass
+
+from weightless.core.compose import isGeneratorOrComposed
 from inspect import currentframe
 
 __file__ = __file__.replace(".pyc", ".py").replace("$py.class", ".py")
@@ -1077,6 +1079,15 @@ class _ComposeTest(TestCase):
         g = compose(f())
         c = compose(g)
         self.assertEquals(['a'], list(c))
+
+    def testIsGeneratorOrComposed(self):
+        def f():
+            yield
+
+        self.assertTrue(isGeneratorOrComposed(f()))
+        self.assertTrue(isGeneratorOrComposed(compose(f())))
+        self.assertFalse(isGeneratorOrComposed(lambda: None))
+        self.assertFalse(isGeneratorOrComposed(None))
 
     def get_tracked_objects(self):
         return [o for o in gc.get_objects() if type(o) in 

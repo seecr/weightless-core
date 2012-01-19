@@ -51,7 +51,8 @@ except ImportError:
     from _tostring_py import tostring
     ComposeType = GeneratorType
 
-from functools import partial as curry
+def isGeneratorOrComposed(o):
+    return type(o) is GeneratorType or type(o) is ComposeType
 
 def compose(X, *args, **kwargs):
     if type(X) == FunctionType: # compose used as decorator

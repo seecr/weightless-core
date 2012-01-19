@@ -28,7 +28,7 @@
 from sys import exc_info
 from weightless.core import local
 from functools import partial
-from weightless.core.utils import isgeneratorfunction
+from weightless.core.compose import isGeneratorOrComposed
 
 NORESPONDERS = 'None of the %d observers respond to %s(...)'
 
@@ -113,8 +113,9 @@ class OnceMessage(AllMessage):
             except AttributeError:
                 pass
             else:
-                assert isgeneratorfunction(method), "%s should be a generator function." % methodOrMethodPartialStr(method)
-                _ = yield method(*args, **kwargs)
+                methodResult = method(*args, **kwargs)
+                assert isGeneratorOrComposed(methodResult), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)
+                _ = yield methodResult
                 assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
             if isinstance(observer, Observable):
                 _ = yield self._callonce(observer._observers, args, kwargs, done)
