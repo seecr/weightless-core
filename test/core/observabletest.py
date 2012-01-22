@@ -615,7 +615,7 @@ class ObservableTest(TestCase):
         list(compose(root.once.methodOnlyCalledOnce(collector)))
         self.assertEquals(['once'], collector)
 
-    def testOnceCalledMethodsMustResultInAGeneratorOrCompose(self):
+    def testOnceCalledMethodsMustResultInAGeneratorOrComposeOrNone(self):
         callLog = []
         class MyObserver(Observable):
             def __init__(self):
