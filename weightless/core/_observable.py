@@ -58,26 +58,42 @@ class Defer(object):
 
 class AllMessage(object):
     altname = 'all_unknown'
+    assertGeneratorResult = True
+    assertNoneResult = False
+
     def __init__(self, defer, message):
         self._defer = defer
         self._message = message
 
     def __call__(self, *args, **kwargs):
-        try:
-            for observer in self._defer.observers():
-                try: method = getattr(observer, self._message)
+        for observer in self._defer.observers():
+            try: method = getattr(observer, self._message)
+            except AttributeError:
+                try: method = partial(getattr(observer, self.altname), self._message)
                 except AttributeError:
-                    try: method = partial(getattr(observer, self.altname), self._message)
-                    except AttributeError:
-                        continue 
-                _ = yield method(*args, **kwargs)
-                assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
-        except:
-            c, v, t = exc_info()
-            raise c, v, t.tb_next
+                    continue 
+            try:
+                result = method(*args, **kwargs)
+            except:
+                c, v, t = exc_info()
+                raise c, v, t.tb_next
+
+            if self.assertGeneratorResult:
+                assert isGeneratorOrComposed(result), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)
+            elif self.assertNoneResult:
+                assert result is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), result)
+
+            try:
+                _ = yield result
+            except:
+                c, v, t = exc_info()
+                raise c, v, t.tb_next
+            assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
 
 class AnyMessage(AllMessage):
     altname = 'any_unknown'
+    assertGeneratorResult = True
+
     def __call__(self, *args, **kwargs):
         try:
             for r in AllMessage.__call__(self, *args, **kwargs):
@@ -88,10 +104,14 @@ class AnyMessage(AllMessage):
         raise AttributeError(NORESPONDERS % (len(list(self._defer.observers())), self._message))
 
 class CallMessage(AnyMessage):
+    assertGeneratorResult = False
     altname = 'call_unknown'
 
 class DoMessage(AllMessage):
     altname = 'do_unknown'
+    assertGeneratorResult = False
+    assertNoneResult = True
+
     def __call__(self, *args, **kwargs):
         try:
             for _ in AllMessage.__call__(self, *args, **kwargs):
@@ -101,6 +121,8 @@ class DoMessage(AllMessage):
             raise c, v, t.tb_next
 
 class OnceMessage(AllMessage):
+    assertGeneratorResult = False
+
     def __call__(self, *args, **kwargs):
         done = set()
         return self._callonce(self._defer.observers(), args, kwargs, done)

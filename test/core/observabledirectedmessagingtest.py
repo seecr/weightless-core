@@ -24,19 +24,21 @@
 
 from unittest import TestCase
 
-from weightless.core import Observable
+from weightless.core import Observable, compose
+
 
 class ObservableDirectedMessagingTest(TestCase):
-
     def testDirectedObserverMessagingDoesNotBreakUndirectedCall(self):
         observable = Observable()
         called = []
         class A(Observable):
             def method(this):
                 called.append("A")
+                return
+                yield
         observable.addObserver(A("name"))
 
-        list(observable.all["name"].method())
+        list(compose(observable.all["name"].method()))
         
         self.assertEquals(["A"], called)
 
@@ -46,13 +48,15 @@ class ObservableDirectedMessagingTest(TestCase):
         class Z(object):
             def method(this):
                 called.append("Z")
+                return
+                yield
         observable.addObserver(Z())
 
-        list(observable.all["name"].method())
+        list(compose(observable.all["name"].method()))
         
         self.assertEquals([], called)
 
-        list(observable.all.method())
+        list(compose(observable.all.method()))
 
         self.assertEquals(["Z"], called)
 
@@ -62,27 +66,31 @@ class ObservableDirectedMessagingTest(TestCase):
         class Y(object):
             def method(this):
                 called.append("Y")
+                return
+                yield
             def observable_name(this):
                 return 'name'
         class Z(object):
             def method(this):
                 called.append("Z")
+                return
+                yield
         observable.addObserver(Y())
         observable.addObserver(Z())
 
-        list(observable.all["name"].method())
+        list(compose(observable.all["name"].method()))
         
         self.assertEquals(['Y'], called)
 
         del called[:]
 
-        list(observable.all.method())
+        list(compose(observable.all.method()))
 
         self.assertEquals(['Y', "Z"], called)
 
         del called[:]
 
-        list(observable.all["other"].method())
+        list(compose(observable.all["other"].method()))
 
         self.assertEquals([], called)
 
@@ -93,17 +101,21 @@ class ObservableDirectedMessagingTest(TestCase):
         class A(Observable):
             def method(this):
                 called.append(("A", this.observable_name()))
+                return
+                yield
         
         class B(Observable):
             def method(this):
                 called.append(("B", this.observable_name()))
+                return
+                yield
 
         observable.addObserver(A("name"))
         observable.addObserver(A().observable_setName("anothername"))
         observable.addObserver(B("anothername"))
         observable.addObserver(B())
 
-        list(observable.all.method())
+        list(compose(observable.all.method()))
         
         self.assertEquals([("A", "name"), 
             ("A", "anothername"), 
@@ -111,7 +123,7 @@ class ObservableDirectedMessagingTest(TestCase):
             ("B", None)], called)
         del called[:]
 
-        list(observable.all["name"].method())
+        list(compose(observable.all["name"].method()))
         self.assertEquals([("A", "name")], called)
 
     def testSetName(self):

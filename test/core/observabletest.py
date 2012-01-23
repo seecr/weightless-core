@@ -34,7 +34,7 @@ from traceback import format_tb
 from inspect import isframe, getframeinfo
 from types import GeneratorType
 from functools import partial
-from weightless.core import compose, Observable, Transparent, be, tostring
+from weightless.core import compose, Yield, Observable, Transparent, be, tostring
 from weightless.core._observable import AllMessage, AnyMessage, DoMessage, OnceMessage
 from unittest import TestCase
 
@@ -75,9 +75,10 @@ class ObservableTest(TestCase):
         class A(object):
             def f(self):
                 raise Exception(A.f)
+                yield
         class B(object):
             def f(self):
-                pass
+                yield Yield
         root = be((Observable(), (A(),), (B(),)))
         c = compose(root.all.f())
         try:
@@ -125,6 +126,29 @@ class ObservableTest(TestCase):
         except AssertionError, e:
             self.assertTrue("<bound method A.all_unknown of <core.observabletest.A object at 0x" in str(e), str(e))
             self.assertTrue(">> returned '2'" in str(e), str(e))
+
+    def testAllAssertsResultOfCallIsGeneratorOrComposed(self):
+        class A(object):
+            def f(self):
+                return 42
+            def all_unknown(self, message, *args, **kwargs):
+                return 42
+        root = be((Observable(), (A(),)))
+        g = compose(root.all.f())
+        try:
+            g.next()
+            self.fail("Should not happen")
+        except AssertionError, e:
+            self.assertTrue("<bound method A.f of <core.observabletest.A object at 0x" in str(e), str(e))
+            self.assertTrue(">> should have resulted in a generator." in str(e), str(e))
+
+        g = compose(root.all.undefinedMethod())
+        try:
+            g.next()
+            self.fail("Should not happen")
+        except AssertionError, e:
+            self.assertTrue("<bound method A.all_unknown of <core.observabletest.A object at 0x" in str(e), str(e))
+            self.assertTrue(">> should have resulted in a generator." in str(e), str(e))
 
     def testOnceAssertsNoneReturnValues(self):
         # OnceMessage assertion on None: #1a "normal object"
@@ -238,6 +262,27 @@ class ObservableTest(TestCase):
         except StopIteration, e:
             self.assertEquals(('retval',), e.args)
 
+    def testAnyAssertsResultOfCallIsGeneratorOrComposed(self):
+        class A(object):
+            def f(self):
+                return 42
+            def any_unknown(self, message, *args, **kwargs):
+                return 42
+        root = be((Observable(), (A(),)))
+        try:
+            compose(root.any.f()).next()
+            self.fail('Should not happen')
+        except AssertionError, e:
+            self.assertTrue("<bound method A.f of <core.observabletest.A object at 0x" in str(e), str(e))
+            self.assertTrue(">> should have resulted in a generator." in str(e), str(e))
+
+        try:
+            compose(root.any.undefinedMethod()).next()
+            self.fail('Should not happen')
+        except AssertionError, e:
+            self.assertTrue("<bound method A.any_unknown of <core.observabletest.A object at 0x" in str(e), str(e))
+            self.assertTrue(">> should have resulted in a generator." in str(e), str(e))
+
     def testAnyViaUnknown(self):
         class A(object):
             def any_unknown(self, message, *args, **kwargs):
@@ -281,6 +326,29 @@ class ObservableTest(TestCase):
         root = be((Observable(), (A(),)))
         root.do.f()
         self.assertEquals([('f', (), {})], called)
+
+    def testDoAssertsIndividualCallsReturnNone(self):
+        class A(object):
+            def f(self):
+                return
+                yield
+            def do_unknown(self, message, *args, **kwargs):
+                return 42
+        root = be((Observable(), (A(),)))
+
+        try:
+            root.do.f()
+            self.fail('Should not happen')
+        except AssertionError, e:
+            self.assertTrue("<bound method A.f of <core.observabletest.A object at 0x" in str(e), str(e))
+            self.assertTrue(">> returned '<generator object" in str(e), str(e))
+
+        try:
+            root.do.undefinedMethod()
+            self.fail('Should not happen')
+        except AssertionError, e:
+            self.assertTrue("<bound method A.do_unknown of <core.observabletest.A object at 0x" in str(e), str(e))
+            self.assertTrue(">> returned '42'" in str(e), str(e))
 
     def testUnknownDispatchingNoImplementation(self):
         observable = Observable()
