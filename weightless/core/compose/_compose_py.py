@@ -111,7 +111,7 @@ def _compose(initial, stepping):
             elif (response is not None) or not messages:
                 try:
                     message = yield response
-                    assert not ((message is not None) and (response is not None)), 'Cannot accept data. First send None.'
+                    assert message is None or response is None, 'Cannot accept data. First send None.'
                     messages.insert(0, message)
                 except BaseException:
                     exception = exc_info()

@@ -223,7 +223,7 @@ Traceback (most recent call last):
   File "%%(__file__)s", line %(fLine)s, in f
     yield Yield  # second Yield
   File "%%(compose_py)s", line 114, in _compose
-    assert not ((message is not None) and (response is not None)), 'Cannot accept data. First send None.'
+    assert message is None or response is None, 'Cannot accept data. First send None.'
 AssertionError: Cannot accept data. First send None.\n""" % {
                 'cLine': cLine,
                 'fLine': fLine,
