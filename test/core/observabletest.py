@@ -38,8 +38,8 @@ from weightless.core import compose, Yield, Observable, Transparent, be, tostrin
 from weightless.core._observable import AllMessage, AnyMessage, DoMessage, OnceMessage
 from unittest import TestCase
 
-class ObservableTest(TestCase):
 
+class ObservableTest(TestCase):
     def testAllWithoutImplementers(self):
         observable = Observable()
         responses = observable.all.someMethodNobodyIsListeningTo()
@@ -856,6 +856,28 @@ class ObservableTest(TestCase):
             def __eq__(self, other):
                 return True
         self.assertTrue({'z':11, 'y':10} == {'z':11, 'y': Wildcard()})
+
+    def testUnknownNotAnsweringCallAndAnyWhenNoChildResponds(self):
+        class Responder(Observable):
+            def m1(self):
+                return 'response'
+
+            def m2(self):
+                yield 'response'
+
+        root = be((Observable(),
+            (Transparent(),
+                (object(),)
+            ),
+            (Responder(),)
+        ))
+
+        self.assertEquals('response', root.call.m1())
+
+        m2Generator = root.any.m2()
+        self.assertEquals(['response'], list(compose(m2Generator)))
+
+
 
     def assertFunctionsOnTraceback(self, *args):
         na, na, tb = exc_info()

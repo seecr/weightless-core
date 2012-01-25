@@ -28,10 +28,11 @@
 from sys import exc_info
 from weightless.core import local
 from functools import partial
+
 from weightless.core.compose import isGeneratorOrComposed
 
-NORESPONDERS = 'None of the %d observers respond to %s(...)'
 
+NORESPONDERS = 'None of the %d observers respond to %s(...)'
 
 class Defer(object):
     def __init__(self, observable, msgclass, filter=bool):
@@ -74,6 +75,8 @@ class AllMessage(object):
                     continue 
             try:
                 result = method(*args, **kwargs)
+            except AttributeError, e:  # Temp hack
+                continue
             except:
                 c, v, t = exc_info()
                 raise c, v, t.tb_next
@@ -85,6 +88,8 @@ class AllMessage(object):
 
             try:
                 _ = yield result
+            except AttributeError, e:  # Temp hack
+                continue
             except:
                 c, v, t = exc_info()
                 raise c, v, t.tb_next
@@ -96,16 +101,31 @@ class AnyMessage(AllMessage):
 
     def __call__(self, *args, **kwargs):
         try:
+            allGenerator = AllMessage.__call__(self, *args, **kwargs)
+            for r in allGenerator:
+                try:
+                    result = yield r
+                    raise StopIteration(result)
+                except AttributeError, e:
+                    continue
+                return
+        except:
+            c, v, t = exc_info()
+            raise c, v, t.tb_next
+        raise AttributeError(NORESPONDERS % (len(list(self._defer.observers())), self._message))
+
+class CallMessage(AllMessage):
+    assertGeneratorResult = False
+    altname = 'call_unknown'
+
+    def __call__(self, *args, **kwargs):
+        try:
             for r in AllMessage.__call__(self, *args, **kwargs):
                 return r
         except:
             c, v, t = exc_info()
             raise c, v, t.tb_next
         raise AttributeError(NORESPONDERS % (len(list(self._defer.observers())), self._message))
-
-class CallMessage(AnyMessage):
-    assertGeneratorResult = False
-    altname = 'call_unknown'
 
 class DoMessage(AllMessage):
     altname = 'do_unknown'
