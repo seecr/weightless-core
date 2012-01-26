@@ -35,10 +35,10 @@ from weightless.core.compose import isGeneratorOrComposed
 NORESPONDERS = 'None of the %d observers respond to %s(...)'
 
 class NoneOfTheObserversRespond(Exception):
-    def __init__(self, errorMessage, unansweredMessage, throughUnknown):
+    def __init__(self, errorMessage, unansweredMessage, unknownCall):
         Exception.__init__(self, errorMessage)
         self.unansweredMessage = unansweredMessage
-        self.throughUnknown = throughUnknown
+        self.unknownCall = unknownCall
 
 class Defer(object):
     def __init__(self, observable, msgclass, filter=bool):
@@ -58,46 +58,37 @@ class Defer(object):
 
     def unknown(self, message, *args, **kwargs):
         try:
-            return self._msgclass(self, message, throughUnknown=True)(*args, **kwargs)
+            return self._msgclass(self, message, unknownCall=True)(*args, **kwargs)
         except:
-            c, v, t = exc_info()
-            raise c, v, t.tb_next
+            c, v, t = exc_info(); raise c, v, t.tb_next
 
 
 class MessageBase(object):
-    def __init__(self, defer, message, throughUnknown=False):
+    def __init__(self, defer, message, unknownCall=False):
         self._defer = defer
         self._message = message
-        self._throughUnknown = throughUnknown
+        self._unknownCall = unknownCall
 
     def all(self, *args, **kwargs):
         for observer in self._defer.observers():
-            self.outgoingUnknown = False
+            self.callingUnknown = False
             try: method = getattr(observer, self._message)
             except AttributeError:
                 try: 
                     method = partial(getattr(observer, self.altname), self._message)
-                    self.outgoingUnknown = True
+                    self.callingUnknown = True
                 except AttributeError:
                     continue 
             try:
                 result = method(*args, **kwargs)
-            except NoneOfTheObserversRespond, e:
-                if e.unansweredMessage == self._message and self.outgoingUnknown and e.throughUnknown:
-                    continue
-                c, v, t = exc_info()
-                raise c, v, t.tb_next
-            except:
-                c, v, t = exc_info()
-                raise c, v, t.tb_next
-            
-            self.verifyMethodResult(method, result)
-
-            try:
+                self.verifyMethodResult(method, result)
                 _ = yield result
+            except NoneOfTheObserversRespond, e:
+                if self.callingUnknown and e.unknownCall and e.unansweredMessage == self._message:
+                    continue
+                c, v, t = exc_info(); raise c, v, t.tb_next
             except:
-                c, v, t = exc_info()
-                raise c, v, t.tb_next
+                c, v, t = exc_info(); raise c, v, t.tb_next
             assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
 
     def any(self, *args, **kwargs):
@@ -107,14 +98,15 @@ class MessageBase(object):
                     result = yield r
                     raise StopIteration(result)
                 except NoneOfTheObserversRespond, e:
-                    if e.unansweredMessage == self._message and self.outgoingUnknown and e.throughUnknown:
+                    if self.callingUnknown and e.unknownCall and e.unansweredMessage == self._message:
                         continue
-                    c, v, t = exc_info()
-                    raise c, v, t.tb_next
+                    c, v, t = exc_info(); raise c, v, t.tb_next
         except:
-            c, v, t = exc_info()
-            raise c, v, t.tb_next
-        raise NoneOfTheObserversRespond(NORESPONDERS % (len(list(self._defer.observers())), self._message), unansweredMessage=self._message, throughUnknown=self._throughUnknown)
+            c, v, t = exc_info(); raise c, v, t.tb_next
+        raise NoneOfTheObserversRespond(
+                NORESPONDERS % (len(list(self._defer.observers())), self._message), 
+                unansweredMessage=self._message, 
+                unknownCall=self._unknownCall)
 
     def verifyMethodResult(self, method, result):
         assert isGeneratorOrComposed(result), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)
@@ -135,8 +127,7 @@ class CallMessage(AnyMessage):
         try:
             return self.any(*args, **kwargs).next()
         except:
-            c, v, t = exc_info()
-            raise c, v, t.tb_next
+            c, v, t = exc_info(); raise c, v, t.tb_next
     __call__ = call
 
     def verifyMethodResult(self, method, result):
@@ -150,8 +141,7 @@ class DoMessage(MessageBase):
             for _ in self.all(*args, **kwargs):
                 pass
         except:
-            c, v, t = exc_info()
-            raise c, v, t.tb_next
+            c, v, t = exc_info(); raise c, v, t.tb_next
     __call__ = do
 
     def verifyMethodResult(self, method, result):
