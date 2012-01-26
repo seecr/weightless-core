@@ -133,7 +133,7 @@ class ObservableTest(TestCase):
                 return 42
             def all_unknown(self, message, *args, **kwargs):
                 return 42
-        root = be((Observable(), (A(),)))
+        root = be((Observable(), (Transparent(), (A(),))))
         g = compose(root.all.f())
         try:
             g.next()
@@ -141,6 +141,7 @@ class ObservableTest(TestCase):
         except AssertionError, e:
             self.assertTrue("<bound method A.f of <core.observabletest.A object at 0x" in str(e), str(e))
             self.assertTrue(">> should have resulted in a generator." in str(e), str(e))
+            self.assertFunctionsOnTraceback("testAllAssertsResultOfCallIsGeneratorOrComposed", "all_unknown", "verifyMethodResult")
 
         g = compose(root.all.undefinedMethod())
         try:
@@ -961,7 +962,7 @@ class ObservableTest(TestCase):
         for functionName in args:
             self.assertEquals(functionName, tb.tb_frame.f_code.co_name)
             tb = tb.tb_next
-        self.assertEquals(None, tb)
+        self.assertEquals(None, tb, format_tb(tb))
 
     def get_tracked_objects(self):
         return [o for o in gc.get_objects() if type(o) in 
