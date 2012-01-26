@@ -35,7 +35,10 @@ from weightless.core.compose import isGeneratorOrComposed
 NORESPONDERS = 'None of the %d observers respond to %s(...)'
 
 class NoneOfTheObserversRespond(Exception):
-    pass
+    def __init__(self, errorMessage, unansweredMessage, throughUnknown):
+        Exception.__init__(self, errorMessage)
+        self.unansweredMessage = unansweredMessage
+        self.throughUnknown = throughUnknown
 
 class Defer(object):
     def __init__(self, observable, msgclass, filter=bool):
@@ -55,28 +58,35 @@ class Defer(object):
 
     def unknown(self, message, *args, **kwargs):
         try:
-            return getattr(self, message)(*args, **kwargs)
+            return self._msgclass(self, message, throughUnknown=True)(*args, **kwargs)
         except:
             c, v, t = exc_info()
             raise c, v, t.tb_next
 
 
 class MessageBase(object):
-    def __init__(self, defer, message):
+    def __init__(self, defer, message, throughUnknown=False):
         self._defer = defer
         self._message = message
+        self._throughUnknown = throughUnknown
 
     def all(self, *args, **kwargs):
         for observer in self._defer.observers():
+            self.outgoingUnknown = False
             try: method = getattr(observer, self._message)
             except AttributeError:
-                try: method = partial(getattr(observer, self.altname), self._message)
+                try: 
+                    method = partial(getattr(observer, self.altname), self._message)
+                    self.outgoingUnknown = True
                 except AttributeError:
                     continue 
             try:
                 result = method(*args, **kwargs)
-            except NoneOfTheObserversRespond:
-                continue
+            except NoneOfTheObserversRespond, e:
+                if e.unansweredMessage == self._message and self.outgoingUnknown and e.throughUnknown:
+                    continue
+                c, v, t = exc_info()
+                raise c, v, t.tb_next
             except:
                 c, v, t = exc_info()
                 raise c, v, t.tb_next
@@ -96,12 +106,15 @@ class MessageBase(object):
                 try:
                     result = yield r
                     raise StopIteration(result)
-                except NoneOfTheObserversRespond:
-                    continue
+                except NoneOfTheObserversRespond, e:
+                    if e.unansweredMessage == self._message and self.outgoingUnknown and e.throughUnknown:
+                        continue
+                    c, v, t = exc_info()
+                    raise c, v, t.tb_next
         except:
             c, v, t = exc_info()
             raise c, v, t.tb_next
-        raise NoneOfTheObserversRespond(NORESPONDERS % (len(list(self._defer.observers())), self._message))
+        raise NoneOfTheObserversRespond(NORESPONDERS % (len(list(self._defer.observers())), self._message), unansweredMessage=self._message, throughUnknown=self._throughUnknown)
 
     def verifyMethodResult(self, method, result):
         assert isGeneratorOrComposed(result), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)

@@ -879,7 +879,9 @@ class ObservableTest(TestCase):
             def __init__(self, value):
                 self._value = value
             def m(self):
-                yield self._value
+                yield 'a'
+                yield 'b'
+                raise StopIteration(self._value)
 
         root = be((Observable(),
             (Transparent(),
@@ -889,8 +891,166 @@ class ObservableTest(TestCase):
             (Responder(99999),)
         ))
 
-        mGenerator = root.any.m()
-        self.assertEquals([42], list(compose(mGenerator)))
+        try:
+            g = compose(root.any.m())
+            self.assertEquals('a', g.next())
+            self.assertEquals('b', g.next())
+            g.next()
+            self.fail("Should have raised StopIteration with the value")
+        except StopIteration, e:
+            self.assertEquals((42,), e.args)
+
+    def testNoneOfTheObserversRespondStaysAtTheProperLevel(self):
+        class Translator(Observable):
+            def k(self, *args, **kwargs):
+                yield self.any.m(*args, **kwargs)
+
+        class Responder(Observable):
+            def __init__(self, value):
+                self._value = value
+            def k(self):
+                yield 'c'
+                raise StopIteration(self._value)
+
+            def m(self):
+                yield 'a'
+                yield 'b'
+                raise StopIteration(self._value)
+
+        root = be((Observable(),
+            (Translator(),
+                (Transparent(),
+                    (object(),)
+                ),
+            ),
+            (Responder(99999),)
+        ))
+
+        try:
+            g = compose(root.any.k())
+            g.next()
+            self.fail("Should have raised NoneOfTheObserversRespond")
+        except NoneOfTheObserversRespond, e:
+            self.assertEquals("None of the 1 observers respond to m(...)", str(e))
+
+
+    def testNoneOfTheObserversRespondStaysAtTheProperLevelWithUnknownUnknown(self):
+        class Translator(Observable):
+            def any_unknown(self, message, *args, **kwargs):
+                yield self.any.unknown(message, *args, **kwargs)
+
+        class Responder(Observable):
+            def __init__(self, value):
+                self._value = value
+            def k(self):
+                yield 'a'
+                raise StopIteration(self._value)
+
+
+        root = be((Observable(),
+            (Translator(),
+                (Transparent(),
+                    (object(),)
+                ),
+            ),
+            (Responder(42),)
+        ))
+
+        try:
+            g = compose(root.any.k())
+            self.assertEquals('a', g.next())
+            g.next()
+            self.fail("expected StopIteration")
+        except StopIteration, e:
+            self.assertEquals((42,), e.args)
+
+    def testNoneOfTheObserversRespondStaysAtTheProperLevelOutgoingUnknown(self):
+        class Translator(Observable):
+            def k(self, *args, **kwargs):
+                yield self.any.unknown('k', *args, **kwargs)
+
+        class Responder(Observable):
+            def __init__(self, value):
+                self._value = value
+            def k(self):
+                yield 'c'
+                raise StopIteration(self._value)
+
+
+        root = be((Observable(),
+            (Translator(),
+                (Transparent(),
+                    (object(),)
+                ),
+            ),
+            (Responder(99999),)
+        ))
+
+        try:
+            g = compose(root.any.k())
+            g.next()
+            self.fail("Should have raised NoneOfTheObserversRespond")
+        except NoneOfTheObserversRespond, e:
+            self.assertEquals("None of the 1 observers respond to k(...)", str(e))
+
+    def testNoneOfTheObserversRespondStaysAtTheProperLevelIncomingUnknown(self):
+        class Translator(Observable):
+            def any_unknown(self, message, *args, **kwargs):
+                yield self.any.k(*args, **kwargs)
+
+        class Responder(Observable):
+            def __init__(self, value):
+                self._value = value
+            def k(self):
+                yield 'c'
+                raise StopIteration(self._value)
+
+
+        root = be((Observable(),
+            (Translator(),
+                (Transparent(),
+                    (object(),)
+                ),
+            ),
+            (Responder(99999),)
+        ))
+
+        try:
+            g = compose(root.any.k())
+            g.next()
+            self.fail("Should have raised NoneOfTheObserversRespond")
+        except NoneOfTheObserversRespond, e:
+            self.assertEquals("None of the 1 observers respond to k(...)", str(e))
+
+    def testNoneOfTheObserversRespondStaysAtTheProperLevelWithoutUnknown(self):
+        class Translator(Observable):
+            def k(self, *args, **kwargs):
+                yield self.any.k(*args, **kwargs)
+
+        class Responder(Observable):
+            def __init__(self, value):
+                self._value = value
+            def k(self):
+                yield 'c'
+                raise StopIteration(self._value)
+
+
+        root = be((Observable(),
+            (Translator(),
+                (Transparent(),
+                    (object(),)
+                ),
+            ),
+            (Responder(99999),)
+        ))
+
+        try:
+            g = compose(root.any.k())
+            g.next()
+            self.fail("Should have raised NoneOfTheObserversRespond")
+        except NoneOfTheObserversRespond, e:
+            self.assertEquals("None of the 1 observers respond to k(...)", str(e))
+
 
     def testObserverAttributeErrorNotIgnored(self):
         class GetAttr(object):
