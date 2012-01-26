@@ -857,207 +857,84 @@ class ObservableTest(TestCase):
                 return True
         self.assertTrue({'z':11, 'y':10} == {'z':11, 'y': Wildcard()})
 
-    def testCallUnknownNotAnsweringWhenNoObserverResponds(self):
-        class Responder(Observable):
-            def __init__(self, value):
-                self._value = value
-            def m(self):
-                return self._value
 
+    def testUnknownReallyTransparentInCaseNoneOfTheObserversRespond(self):
         root = be((Observable(),
             (Transparent(),
                 (object(),)
             ),
+            (Transparent(),
+                (Transparent(),
+                   (object(),)
+                ),
+            ),
             (Responder(42),),
-            (Responder(99999),)
         ))
 
         self.assertEquals(42, root.call.m())
 
-    def testAnyUnknownNotAnsweringWhenNoObserverResponds(self):
-        class Responder(Observable):
-            def __init__(self, value):
-                self._value = value
-            def m(self):
-                yield 'a'
-                yield 'b'
-                raise StopIteration(self._value)
-
-        root = be((Observable(),
-            (Transparent(),
-                (object(),)
-            ),
-            (Responder(42),),
-            (Responder(99999),)
-        ))
-
         try:
             g = compose(root.any.m())
-            self.assertEquals('a', g.next())
-            self.assertEquals('b', g.next())
+            self.assertEquals(42, g.next())
             g.next()
-            self.fail("Should have raised StopIteration with the value")
+            self.fail("Should have raised StopIteration")
         except StopIteration, e:
             self.assertEquals((42,), e.args)
 
-    def testNoneOfTheObserversRespondStaysAtTheProperLevel(self):
-        class Translator(Observable):
-            def k(self, *args, **kwargs):
-                yield self.any.m(*args, **kwargs)
-
-        class Responder(Observable):
-            def __init__(self, value):
-                self._value = value
-            def k(self):
-                yield 'c'
-                raise StopIteration(self._value)
-
-            def m(self):
-                yield 'a'
-                yield 'b'
-                raise StopIteration(self._value)
-
-        root = be((Observable(),
-            (Translator(),
-                (Transparent(),
-                    (object(),)
+    def testNoneOfTheObserversRespondNotPropagatedWhenNotIncomingAndOutgoingUnknown(self):
+        def assertNoneOfTheObserversRespond(clazz):
+            root = be((Observable(),
+                (clazz(),
+                    (Transparent(),
+                        (object(),)
+                    ),
                 ),
-            ),
-            (Responder(99999),)
-        ))
+                (Unreachable(),)
+            ))
 
-        try:
-            g = compose(root.any.k())
-            g.next()
-            self.fail("Should have raised NoneOfTheObserversRespond")
-        except NoneOfTheObserversRespond, e:
-            self.assertEquals("None of the 1 observers respond to m(...)", str(e))
+            try:
+                root.call.someCallMessage()
+                self.fail("Should have raised NoneOfTheObserversRespond")
+            except NoneOfTheObserversRespond, e:
+                self.assertEquals("None of the 1 observers respond to someCallMessage(...)", str(e))
 
+            try:
+                g = compose(root.any.someAnyMessage())
+                g.next()
+                self.fail("Should have raised NoneOfTheObserversRespond")
+            except NoneOfTheObserversRespond, e:
+                self.assertEquals("None of the 1 observers respond to someAnyMessage(...)", str(e))
 
-    def testNoneOfTheObserversRespondStaysAtTheProperLevelWithUnknownUnknown(self):
-        class Translator(Observable):
+        class Message2Message(Observable):
+            def someAnyMessage(self, *args, **kwargs):
+                yield self.any.someAnyMessage(*args, **kwargs)
+            def someCallMessage(self, *args, **kwargs):
+                return self.call.someCallMessage(*args, **kwargs)
+        assertNoneOfTheObserversRespond(Message2Message)
+
+        class Message2Unknown(Observable):
+            def someAnyMessage(self, *args, **kwargs):
+                yield self.any.unknown('someAnyMessage', *args, **kwargs)
+            def someCallMessage(self, *args, **kwargs):
+                return self.call.unknown('someCallMessage', *args, **kwargs)
+        assertNoneOfTheObserversRespond(Message2Unknown)
+
+        class Unknown2Message(Observable):
             def any_unknown(self, message, *args, **kwargs):
-                yield self.any.unknown(message, *args, **kwargs)
-
-        class Responder(Observable):
-            def __init__(self, value):
-                self._value = value
-            def k(self):
-                yield 'a'
-                raise StopIteration(self._value)
-
-
-        root = be((Observable(),
-            (Translator(),
-                (Transparent(),
-                    (object(),)
-                ),
-            ),
-            (Responder(42),)
-        ))
-
-        try:
-            g = compose(root.any.k())
-            self.assertEquals('a', g.next())
-            g.next()
-            self.fail("expected StopIteration")
-        except StopIteration, e:
-            self.assertEquals((42,), e.args)
-
-    def testNoneOfTheObserversRespondStaysAtTheProperLevelOutgoingUnknown(self):
-        class Translator(Observable):
-            def k(self, *args, **kwargs):
-                yield self.any.unknown('k', *args, **kwargs)
-
-        class Responder(Observable):
-            def __init__(self, value):
-                self._value = value
-            def k(self):
-                yield 'c'
-                raise StopIteration(self._value)
-
-
-        root = be((Observable(),
-            (Translator(),
-                (Transparent(),
-                    (object(),)
-                ),
-            ),
-            (Responder(99999),)
-        ))
-
-        try:
-            g = compose(root.any.k())
-            g.next()
-            self.fail("Should have raised NoneOfTheObserversRespond")
-        except NoneOfTheObserversRespond, e:
-            self.assertEquals("None of the 1 observers respond to k(...)", str(e))
-
-    def testNoneOfTheObserversRespondStaysAtTheProperLevelIncomingUnknown(self):
-        class Translator(Observable):
-            def any_unknown(self, message, *args, **kwargs):
-                yield self.any.k(*args, **kwargs)
-
-        class Responder(Observable):
-            def __init__(self, value):
-                self._value = value
-            def k(self):
-                yield 'c'
-                raise StopIteration(self._value)
-
-
-        root = be((Observable(),
-            (Translator(),
-                (Transparent(),
-                    (object(),)
-                ),
-            ),
-            (Responder(99999),)
-        ))
-
-        try:
-            g = compose(root.any.k())
-            g.next()
-            self.fail("Should have raised NoneOfTheObserversRespond")
-        except NoneOfTheObserversRespond, e:
-            self.assertEquals("None of the 1 observers respond to k(...)", str(e))
-
-    def testNoneOfTheObserversRespondStaysAtTheProperLevelWithoutUnknown(self):
-        class Translator(Observable):
-            def k(self, *args, **kwargs):
-                yield self.any.k(*args, **kwargs)
-
-        class Responder(Observable):
-            def __init__(self, value):
-                self._value = value
-            def k(self):
-                yield 'c'
-                raise StopIteration(self._value)
-
-
-        root = be((Observable(),
-            (Translator(),
-                (Transparent(),
-                    (object(),)
-                ),
-            ),
-            (Responder(99999),)
-        ))
-
-        try:
-            g = compose(root.any.k())
-            g.next()
-            self.fail("Should have raised NoneOfTheObserversRespond")
-        except NoneOfTheObserversRespond, e:
-            self.assertEquals("None of the 1 observers respond to k(...)", str(e))
-
+                yield self.any.someAnyMessage(*args, **kwargs)
+            def call_unknown(self, message, *args, **kwargs):
+                return self.call.someCallMessage(*args, **kwargs)
+        assertNoneOfTheObserversRespond(Unknown2Message)
 
     def testObserverAttributeErrorNotIgnored(self):
         class GetAttr(object):
             def __init__(self, attrName):
                 self.attrName = attrName
-            def m(self):
+            def call_unknown(self, message, *args, **kwargs):
                 return getattr(self, self.attrName)
+            def any_unknown(self, message, *args, **kwargs):
+                raise StopIteration(getattr(self, self.attrName))
+                yield
 
         root = be((Observable(),
             (Transparent(),
@@ -1067,10 +944,17 @@ class ObservableTest(TestCase):
         ))
     
         try:
-            result = root.call.m()
+            result = root.call.someMessage()
             self.fail("should not get here: %s" % result)
         except AttributeError, e:
             self.assertEquals("'GetAttr' object has no attribute 'doesnotexist'", str(e))
+
+        try:
+            list(compose(root.any.someMessage()))
+            self.fail("should not get here")
+        except AttributeError, e:
+            self.assertEquals("'GetAttr' object has no attribute 'doesnotexist'", str(e))
+
 
     def assertFunctionsOnTraceback(self, *args):
         na, na, tb = exc_info()
@@ -1106,4 +990,19 @@ class ObservableTest(TestCase):
         #    for o in  gc.get_referrers(obj):
         #        print tostr(o)
         del self._baseline
+
+
+class Responder(Observable):
+    def __init__(self, value):
+        self._value = value
+    def any_unknown(self, message, *args, **kwargs):
+        yield self._value
+        raise StopIteration(self._value)
+    def call_unknown(self, message, *args, **kwargs):
+        return self._value
+
+class Unreachable(Observable):
+    def any_unknown(self, message, *args, **kwargs):
+        raise Exception("should not get here")
+        yield
 
