@@ -84,7 +84,7 @@ class MessageBase(object):
                 self.verifyMethodResult(method, result)
                 _ = yield result
             except NoneOfTheObserversRespond, e:
-                if self.aboutTransparentCall(e): 
+                if self._originatesFromTransparentCall(e): 
                     continue
                 c, v, t = exc_info(); raise c, v, t.tb_next
             except:
@@ -98,7 +98,7 @@ class MessageBase(object):
                     result = yield r
                     raise StopIteration(result)
                 except NoneOfTheObserversRespond, e:
-                    if self.aboutTransparentCall(e): 
+                    if self._originatesFromTransparentCall(e): 
                         continue
                     c, v, t = exc_info(); raise c, v, t.tb_next
         except:
@@ -111,8 +111,9 @@ class MessageBase(object):
     def verifyMethodResult(self, method, result):
         assert isGeneratorOrComposed(result), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)
     
-    def aboutTransparentCall(self, e):
+    def _originatesFromTransparentCall(self, e):
         return self.callingUnknown and e.unknownCall and e.unansweredMessage == self._message
+
 
 class AllMessage(MessageBase):
     altname = 'all_unknown'
