@@ -35,7 +35,7 @@ from inspect import isframe, getframeinfo
 from types import GeneratorType
 from functools import partial
 from weightless.core import compose, Yield, Observable, Transparent, be, tostring
-from weightless.core._observable import AllMessage, AnyMessage, DoMessage, OnceMessage
+from weightless.core._observable import AllMessage, AnyMessage, DoMessage, OnceMessage, NoneOfTheObserversRespond
 from unittest import TestCase
 
 
@@ -286,7 +286,7 @@ class ObservableTest(TestCase):
     def testAnyViaUnknown(self):
         class A(object):
             def any_unknown(self, message, *args, **kwargs):
-                raise StopIteration((message, args, kwargs),)
+                raise StopIteration((message, args, kwargs), )
                 yield
         root = be((Observable(), (A(),)))
         try: compose(root.any.f(1, a=2)).next()
@@ -417,9 +417,9 @@ class ObservableTest(TestCase):
         observable = Observable()
         try:
             answer = list(compose(observable.any.gimmeAnswer('please')))
-            self.fail('shoud raise AttributeError')
-        except AttributeError, e:
-            self.assertFunctionsOnTraceback("testProperErrorMessage", "__call__")
+            self.fail('should raise NoneOfTheObserversRespond')
+        except NoneOfTheObserversRespond, e:
+            self.assertFunctionsOnTraceback("testProperErrorMessage", "any")
             self.assertEquals('None of the 0 observers respond to gimmeAnswer(...)', str(e))
 
     def testProperErrorMessageWhenArgsDoNotMatch(self):
@@ -429,7 +429,7 @@ class ObservableTest(TestCase):
         observable.addObserver(YesObserver())
         try:
             answer = observable.call.yes()
-            self.fail('shoud raise AttributeError')
+            self.fail('should raise TypeError')
         except TypeError, e:
             self.assertEquals('yes() takes exactly 2 arguments (1 given)', str(e))
 
@@ -857,27 +857,60 @@ class ObservableTest(TestCase):
                 return True
         self.assertTrue({'z':11, 'y':10} == {'z':11, 'y': Wildcard()})
 
-    def testUnknownNotAnsweringCallAndAnyWhenNoChildResponds(self):
+    def testCallUnknownNotAnsweringWhenNoObserverResponds(self):
         class Responder(Observable):
-            def m1(self):
-                return 'response'
-
-            def m2(self):
-                yield 'response'
+            def __init__(self, value):
+                self._value = value
+            def m(self):
+                return self._value
 
         root = be((Observable(),
             (Transparent(),
                 (object(),)
             ),
-            (Responder(),)
+            (Responder(42),),
+            (Responder(99999),)
         ))
 
-        self.assertEquals('response', root.call.m1())
+        self.assertEquals(42, root.call.m())
 
-        m2Generator = root.any.m2()
-        self.assertEquals(['response'], list(compose(m2Generator)))
+    def testAnyUnknownNotAnsweringWhenNoObserverResponds(self):
+        class Responder(Observable):
+            def __init__(self, value):
+                self._value = value
+            def m(self):
+                yield self._value
 
+        root = be((Observable(),
+            (Transparent(),
+                (object(),)
+            ),
+            (Responder(42),),
+            (Responder(99999),)
+        ))
 
+        mGenerator = root.any.m()
+        self.assertEquals([42], list(compose(mGenerator)))
+
+    def testObserverAttributeErrorNotIgnored(self):
+        class GetAttr(object):
+            def __init__(self, attrName):
+                self.attrName = attrName
+            def m(self):
+                return getattr(self, self.attrName)
+
+        root = be((Observable(),
+            (Transparent(),
+                (GetAttr('doesnotexist'),)
+            ),
+            (GetAttr('__class__'),)
+        ))
+    
+        try:
+            result = root.call.m()
+            self.fail("should not get here: %s" % result)
+        except AttributeError, e:
+            self.assertEquals("'GetAttr' object has no attribute 'doesnotexist'", str(e))
 
     def assertFunctionsOnTraceback(self, *args):
         na, na, tb = exc_info()

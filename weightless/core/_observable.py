@@ -34,6 +34,9 @@ from weightless.core.compose import isGeneratorOrComposed
 
 NORESPONDERS = 'None of the %d observers respond to %s(...)'
 
+class NoneOfTheObserversRespond(Exception):
+    pass
+
 class Defer(object):
     def __init__(self, observable, msgclass, filter=bool):
         self._observable = observable
@@ -57,16 +60,13 @@ class Defer(object):
             c, v, t = exc_info()
             raise c, v, t.tb_next
 
-class AllMessage(object):
-    altname = 'all_unknown'
-    assertGeneratorResult = True
-    assertNoneResult = False
 
+class MessageBase(object):
     def __init__(self, defer, message):
         self._defer = defer
         self._message = message
 
-    def __call__(self, *args, **kwargs):
+    def all(self, *args, **kwargs):
         for observer in self._defer.observers():
             try: method = getattr(observer, self._message)
             except AttributeError:
@@ -75,77 +75,80 @@ class AllMessage(object):
                     continue 
             try:
                 result = method(*args, **kwargs)
-            except AttributeError, e:  # Temp hack
+            except NoneOfTheObserversRespond:
                 continue
             except:
                 c, v, t = exc_info()
                 raise c, v, t.tb_next
-
-            if self.assertGeneratorResult:
-                assert isGeneratorOrComposed(result), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)
-            elif self.assertNoneResult:
-                assert result is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), result)
+            
+            self.verifyMethodResult(method, result)
 
             try:
                 _ = yield result
-            except AttributeError, e:  # Temp hack
-                continue
             except:
                 c, v, t = exc_info()
                 raise c, v, t.tb_next
             assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
 
-class AnyMessage(AllMessage):
-    altname = 'any_unknown'
-    assertGeneratorResult = True
-
-    def __call__(self, *args, **kwargs):
+    def any(self, *args, **kwargs):
         try:
-            allGenerator = AllMessage.__call__(self, *args, **kwargs)
-            for r in allGenerator:
+            for r in self.all(*args, **kwargs):
                 try:
                     result = yield r
                     raise StopIteration(result)
-                except AttributeError, e:
+                except NoneOfTheObserversRespond:
                     continue
-                return
         except:
             c, v, t = exc_info()
             raise c, v, t.tb_next
-        raise AttributeError(NORESPONDERS % (len(list(self._defer.observers())), self._message))
+        raise NoneOfTheObserversRespond(NORESPONDERS % (len(list(self._defer.observers())), self._message))
 
-class CallMessage(AllMessage):
-    assertGeneratorResult = False
+    def verifyMethodResult(self, method, result):
+        assert isGeneratorOrComposed(result), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)
+
+
+class AllMessage(MessageBase):
+    altname = 'all_unknown'
+    __call__ = MessageBase.all
+
+class AnyMessage(MessageBase):
+    altname = 'any_unknown'
+    __call__ = MessageBase.any
+
+class CallMessage(AnyMessage):
     altname = 'call_unknown'
 
-    def __call__(self, *args, **kwargs):
+    def call(self, *args, **kwargs):
         try:
-            for r in AllMessage.__call__(self, *args, **kwargs):
-                return r
+            return self.any(*args, **kwargs).next()
         except:
             c, v, t = exc_info()
             raise c, v, t.tb_next
-        raise AttributeError(NORESPONDERS % (len(list(self._defer.observers())), self._message))
+    __call__ = call
 
-class DoMessage(AllMessage):
+    def verifyMethodResult(self, method, result):
+        pass
+
+class DoMessage(MessageBase):
     altname = 'do_unknown'
-    assertGeneratorResult = False
-    assertNoneResult = True
 
-    def __call__(self, *args, **kwargs):
+    def do(self, *args, **kwargs):
         try:
-            for _ in AllMessage.__call__(self, *args, **kwargs):
+            for _ in self.all(*args, **kwargs):
                 pass
         except:
             c, v, t = exc_info()
             raise c, v, t.tb_next
+    __call__ = do
 
-class OnceMessage(AllMessage):
-    assertGeneratorResult = False
+    def verifyMethodResult(self, method, result):
+        assert result is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), result)
 
-    def __call__(self, *args, **kwargs):
+class OnceMessage(MessageBase):
+    def once(self, *args, **kwargs):
         done = set()
         return self._callonce(self._defer.observers(), args, kwargs, done)
+    __call__ = once
 
     def _callonce(self, observers, args, kwargs, done):
         for observer in (o for o in observers if o not in done):
