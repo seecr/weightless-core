@@ -1,0 +1,155 @@
+Changeset created on Thu Jan 12 16:10:15 UTC 2012 by Seecr (Seek You Too B.V.)
+
+Description: Solved always readable socket bug
+
+    An incomplete request to the HttpServer could cause a remotely closed
+    socket to remain readable and causing an endless select loop.
+
+    This is fixed by handling an empty read from a socket as a bad request.
+
+Baseline version: https://weightless.svn.sourceforge.net/svnroot/weightless/weightless-core/workingsets/0.6.5.1-Edurep/version_0
+
+diff --unidirectional-new-file --recursive --unified --exclude='*.so' --exclude='*.o' --exclude=.svn --exclude='*.pyc' --exclude=deps.d --exclude=applied version_0/test/http/httpservertest.py /vol/extra_disk/development/weightless-core/workingsets/0.6.5.1-Edurep/version_1/test/http/httpservertest.py
+--- version_0/test/http/httpservertest.py	2012-01-12 15:29:19.000000000 +0100
++++ version_1/test/http/httpservertest.py	2012-01-12 17:10:14.000000000 +0100
+@@ -1,27 +1,29 @@
+ # -*- coding: utf-8 -*-
+ ## begin license ##
+-#
+-#    Weightless is a High Performance Asynchronous Networking Library
+-#    See http://weightless.io
+-#    Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
+-#
+-#    This file is part of Weightless
+-#
+-#    Weightless is free software; you can redistribute it and/or modify
+-#    it under the terms of the GNU General Public License as published by
+-#    the Free Software Foundation; either version 2 of the License, or
+-#    (at your option) any later version.
+-#
+-#    Weightless is distributed in the hope that it will be useful,
+-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-#    GNU General Public License for more details.
+-#
+-#    You should have received a copy of the GNU General Public License
+-#    along with Weightless; if not, write to the Free Software
+-#    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+-#
++# 
++# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
++# 
++# Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
++# Copyright (C) 2012 Seecr (Seek You Too B.V.) http://seecr.nl
++# 
++# This file is part of "Weightless"
++# 
++# "Weightless" is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation; either version 2 of the License, or
++# (at your option) any later version.
++# 
++# "Weightless" is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++# 
++# You should have received a copy of the GNU General Public License
++# along with "Weightless"; if not, write to the Free Software
++# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
++# 
+ ## end license ##
++
+ from __future__ import with_statement
+ 
+ from weightlesstestcase import WeightlessTestCase, MATCHALL
+@@ -169,6 +171,22 @@
+         self.assertEquals('HTTP/1.0 400 Bad Request\r\n\r\n', response)
+         self.assertEquals(1, len(timers))
+ 
++    def testInvalidRequestWithHalfHeader(self):
++        reactor = Reactor()
++        server = HttpServer(reactor, self.port, None, timeout=0.1)
++        server.listen()
++        sok = socket()
++        sok.connect(('localhost', self.port))
++        sok.send('POST / HTTP/1.0\r\n') 
++        sok.send('Expect: something\r\n')
++        sok.send('Content-Length: 5\r\n')
++        sok.send('\r\n1234')
++        sok.close()
++        with self.stderr_replaced() as s
++            for i in range(4):
++                reactor.step()
++            self.assertEquals(1, len(reactor._readers))
++
+     def testValidRequestResetsTimer(self):
+         reactor = Reactor()
+         server = HttpServer(reactor, self.port, lambda **kwargs: ('a' for a in range(3)), timeout=0.01, recvSize=3)
+Binary files version_0/test/http/.httpservertest.py.swp and /vol/extra_disk/development/weightless-core/workingsets/0.6.5.1-Edurep/version_1/test/http/.httpservertest.py.swp differ
+Binary files version_0/test/io/.reactortest.py.swp and /vol/extra_disk/development/weightless-core/workingsets/0.6.5.1-Edurep/version_1/test/io/.reactortest.py.swp differ
+diff --unidirectional-new-file --recursive --unified --exclude='*.so' --exclude='*.o' --exclude=.svn --exclude='*.pyc' --exclude=deps.d --exclude=applied version_0/weightless/http/_httpserver.py /vol/extra_disk/development/weightless-core/workingsets/0.6.5.1-Edurep/version_1/weightless/http/_httpserver.py
+--- version_0/weightless/http/_httpserver.py	2012-01-12 15:29:19.000000000 +0100
++++ version_1/weightless/http/_httpserver.py	2012-01-12 17:10:14.000000000 +0100
+@@ -1,27 +1,29 @@
+ # -*- coding: utf-8 -*-
+ ## begin license ##
+-#
+-#    Weightless is a High Performance Asynchronous Networking Library
+-#    See http://weightless.io
+-#    Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
+-#
+-#    This file is part of Weightless
+-#
+-#    Weightless is free software; you can redistribute it and/or modify
+-#    it under the terms of the GNU General Public License as published by
+-#    the Free Software Foundation; either version 2 of the License, or
+-#    (at your option) any later version.
+-#
+-#    Weightless is distributed in the hope that it will be useful,
+-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-#    GNU General Public License for more details.
+-#
+-#    You should have received a copy of the GNU General Public License
+-#    along with Weightless; if not, write to the Free Software
+-#    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+-#
++# 
++# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
++# 
++# Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
++# Copyright (C) 2012 Seecr (Seek You Too B.V.) http://seecr.nl
++# 
++# This file is part of "Weightless"
++# 
++# "Weightless" is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation; either version 2 of the License, or
++# (at your option) any later version.
++# 
++# "Weightless" is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++# 
++# You should have received a copy of the GNU General Public License
++# along with "Weightless"; if not, write to the Free Software
++# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
++# 
+ ## end license ##
++
+ from _acceptor import Acceptor
+ from weightless.core import identify
+ from weightless.http import REGEXP, FORMAT, parseHeaders, parseHeader
+@@ -122,6 +124,10 @@
+ 
+     def __call__(self):
+         part = self._sok.recv(self._recvSize)
++        if not part:
++            # SOCKET CLOSED by PEER
++            self._badRequest()
++            return
+         self._dataBuffer += part
+         self._dealWithCall()
+ 

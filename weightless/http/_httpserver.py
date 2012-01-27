@@ -124,6 +124,10 @@ class HttpHandler(object):
 
     def __call__(self):
         part = self._sok.recv(self._recvSize)
+        if not part:
+            # SOCKET CLOSED by PEER
+            self._badRequest()
+            return
         self._dataBuffer += part
         self._dealWithCall()
 

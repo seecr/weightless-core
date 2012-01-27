@@ -172,6 +172,22 @@ class HttpServerTest(WeightlessTestCase):
         self.assertEquals('HTTP/1.0 400 Bad Request\r\n\r\n', response)
         self.assertEquals(1, len(timers))
 
+    def testInvalidRequestWithHalfHeader(self):
+        reactor = Reactor()
+        server = HttpServer(reactor, self.port, None, timeout=0.1)
+        server.listen()
+        sok = socket()
+        sok.connect(('localhost', self.port))
+        sok.send('POST / HTTP/1.0\r\n') 
+        sok.send('Expect: something\r\n')
+        sok.send('Content-Length: 5\r\n')
+        sok.send('\r\n1234')
+        sok.close()
+        with self.stderr_replaced() as s:
+            for i in range(4):
+                reactor.step()
+            self.assertEquals(1, len(reactor._readers))
+
     def testValidRequestResetsTimer(self):
         reactor = Reactor()
         server = HttpServer(reactor, self.port, lambda **kwargs: ('a' for a in range(3)), timeout=0.01, recvSize=3)
