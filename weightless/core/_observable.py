@@ -26,7 +26,6 @@
 ## end license ##
 
 from sys import exc_info
-from weightless.core import local
 from functools import partial
 
 from weightless.core.compose import isGeneratorOrComposed
