@@ -32,11 +32,9 @@ from functools import partial
 from weightless.core.compose import isGeneratorOrComposed
 
 
-NORESPONDERS = 'None of the %d observers respond to %s(...)'
-
 class NoneOfTheObserversRespond(Exception):
-    def __init__(self, noObservers, unansweredMessage, unknownCall):
-        Exception.__init__(self, NORESPONDERS % (noObservers, unansweredMessage))
+    def __init__(self, unansweredMessage, observers, unknownCall):
+        Exception.__init__(self, 'None of the %d observers respond to %s(...)' % (len(list(observers)), unansweredMessage))
         self.unansweredMessage = unansweredMessage
         self.unknownCall = unknownCall
 
@@ -54,7 +52,7 @@ class Defer(object):
 
     def __getitem__(self, target):
         return Defer(self._observable, self._msgclass,
-                lambda o: hasattr(o, "observable_name") and o.observable_name() == target)
+                filter=lambda o: hasattr(o, "observable_name") and o.observable_name() == target)
 
     def unknown(self, message, *args, **kwargs):
         try:
@@ -84,7 +82,7 @@ class MessageBase(object):
                 self.verifyMethodResult(method, result)
                 _ = yield result
             except NoneOfTheObserversRespond, e:
-                if self._fromTransparentCall(e): 
+                if self._concernsTransparentCall(e): 
                     continue
                 c, v, t = exc_info(); raise c, v, t.tb_next
             except:
@@ -98,20 +96,20 @@ class MessageBase(object):
                     result = yield r
                     raise StopIteration(result)
                 except NoneOfTheObserversRespond, e:
-                    if self._fromTransparentCall(e): 
+                    if self._concernsTransparentCall(e): 
                         continue
                     c, v, t = exc_info(); raise c, v, t.tb_next
         except:
             c, v, t = exc_info(); raise c, v, t.tb_next
         raise NoneOfTheObserversRespond(
-                noObservers=len(list(self._defer.observers())),
                 unansweredMessage=self._message, 
+                observers=self._defer.observers(),
                 unknownCall=self._unknownCall)
 
     def verifyMethodResult(self, method, result):
         assert isGeneratorOrComposed(result), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)
     
-    def _fromTransparentCall(self, e):
+    def _concernsTransparentCall(self, e):
         return self.callingUnknown and e.unknownCall and e.unansweredMessage == self._message
 
 
