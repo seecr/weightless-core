@@ -43,6 +43,7 @@ setup(
         'weightless.http', 
         'weightless.httpng', 
         'weightless.io',
+        'weightless.udp',
 		'weightless.examples',
     ],
     url='http://www.weightless.io',

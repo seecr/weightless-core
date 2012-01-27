@@ -61,6 +61,8 @@ from http.httpsservertest import HttpsServerTest
 from http.suspendtest import SuspendTest
 from http.asyncreadertest import AsyncReaderTest
 
+from udp.acceptortest import AcceptorTest
+
 from io.reactortest import ReactorTest
 from io.giotest import GioTest
 from io.gutilstest import GutilsTest
