@@ -372,7 +372,7 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
 
         } else { // normal message
             message = messages_next(self); // new ref
-            response = PyObject_CallMethod(generator, "send", "O", message); // new ref
+            response = PyObject_CallMethod(generator, "send", "(O)", message); // new ref
             Py_CLEAR(message);
         }
 

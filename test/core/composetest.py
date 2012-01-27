@@ -1043,6 +1043,16 @@ class _ComposeTest(TestCase):
         try: f3().next()
         except StopIteration, e: self.assertEquals((4,5,6), e.args)
 
+    def testRaisStopIterationWithTupleValue(self):
+        def f0():
+            raise StopIteration((1, 2))
+            yield
+        def f1():
+            result = yield f0()
+            yield result
+        # Before fix C compose considered tuple elements as separate arguments to be passed into send()
+        self.assertEquals([(1,2)], list(compose(f1())))
+
     def testConcurrentFlow(self):
         def f():
             first_msg = yield
