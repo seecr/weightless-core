@@ -52,17 +52,6 @@ def __NEXTLINE__(offset=0):
     return currentframe().f_back.f_lineno + offset + 1
 
 class _ComposeSchedulingTest(TestCase):
-    def testYieldSentinel_Py(self):
-        self.assertTrue(Yield is Yield)
-        self.assertTrue(Yield == Yield)
-        self.assertEquals("<class 'weightless.core.compose._compose_py.Yield'>", repr(Yield))
-        self.assertEquals(type, type(Yield))
-        try:
-            Yield()
-        except TypeError, e:
-            self.assertEquals("cannot create 'Yield' instances", str(e))
-        else:
-            self.fail('Should not happen')
 
     def testOneGenerator(self):
         def gen():
@@ -147,9 +136,9 @@ class _ComposeSchedulingTest(TestCase):
         def hello(jack):
             yield 'hello ' + jack
         def sub():
-            jack = yield None
+            jack = yield
             none = yield hello(jack)
-            peter = yield None
+            peter = yield
             none = yield hello(peter)
         c = compose(sub(), stepping=True)
         self.assertEquals(None, c.send(None))      # 1 init with None, oh, it accepts data
@@ -222,8 +211,6 @@ Traceback (most recent call last):
     yield f()  # first Yield
   File "%%(__file__)s", line %(fLine)s, in f
     yield Yield  # second Yield
-  File "%%(compose_py)s", line 114, in _compose
-    assert message is None or response is None, 'Cannot accept data. First send None.'
 AssertionError: Cannot accept data. First send None.\n""" % {
                 'cLine': cLine,
                 'fLine': fLine,
@@ -257,8 +244,6 @@ Traceback (most recent call last):
     yield f()  # first Yield
   File "%%(__file__)s", line %(fLine)s, in f
     yield Yield  # second Yield
-  File "%%(compose_py)s", line 113, in _compose
-    message = yield response
 Exception: tripping compose\n""" % {
                 'cLine': cLine,
                 'fLine': fLine,
@@ -282,7 +267,9 @@ Exception: tripping compose\n""" % {
 
         stackText = """\
   File "%(__file__)s", line %(gYieldLine)s, in gen
-    yield f()""" % {
+    yield f()
+  File "%(__file__)s", line %(fLine)s, in f
+    def f():""" % {
             '__file__': fileDict['__file__'], 
             'fLine': fLine, 'gYieldLine': gYieldLine
         }
@@ -301,7 +288,6 @@ Exception: tripping compose\n""" % {
 
         composed = compose(gen(), stepping=True)
         
-        composed.next()
         try:
             cLine = __NEXTLINE__()
             composed.next()
@@ -325,8 +311,10 @@ AssertionError: Generator already used.\n""" % {
             self.fail("Should not happen.")
 
     def testExceptionThrownInCompose(self):
+        fLine = __NEXTLINE__()
         def f():
             yield 10
+        gLine = __NEXTLINE__(offset=+1)
         def g():
             yield f()
         c = compose(g(), stepping=True)
@@ -339,11 +327,15 @@ AssertionError: Generator already used.\n""" % {
 Traceback (most recent call last):
   File "%(__file__)s", line %(cLine)s, in testExceptionThrownInCompose
     c.throw(Exception("tripping compose"))
-  File "%(compose_py)s", line 133, in _compose
-    raise exception[0], exception[1], exception[2]
+  File "%(__file__)s", line %(gLine)s, in g
+    yield f()
+  File "%(__file__)s", line %(fLine)s, in f
+    def f():
 Exception: tripping compose\n""" % {
                 '__file__': fileDict['__file__'],
                 'cLine': cLine,
+                'gLine': gLine,
+                'fLine': fLine,
                 'compose_py': fileDict['compose_py'],
             }
             tbString = format_exc()
@@ -351,16 +343,13 @@ Exception: tripping compose\n""" % {
         else:
             self.fail("Should not happen.")
 
-class ComposeSchedulingCTest(TestCase):
+class ComposeSchedulingCTest(_ComposeSchedulingTest):
     def setUp(self):
         global compose, Yield, tostring
         compose = cCompose
         Yield = cYield
         tostring = cTostring
         TestCase.setUp(self)
-
-    def testHasYield(self):
-        self.assertEquals("<type 'Yield'>", repr(Yield))
 
     def testYieldSentinel_C(self):
         self.assertTrue(Yield is Yield)
@@ -374,11 +363,6 @@ class ComposeSchedulingCTest(TestCase):
         else:
             self.fail('Should not happen')
 
-    def testSteppingNotYetImplementedInC(self):
-        def f():
-            yield
-        self.assertRaises(NotImplementedError, lambda: compose(initial=f(), stepping=True))
-
 class ComposeSchedulingPyTest(_ComposeSchedulingTest):
     def setUp(self):
         global compose, Yield, tostring
@@ -387,3 +371,14 @@ class ComposeSchedulingPyTest(_ComposeSchedulingTest):
         tostring = pyTostring
         _ComposeSchedulingTest.setUp(self)
 
+    def testYieldSentinel_Py(self):
+        self.assertTrue(Yield is Yield)
+        self.assertTrue(Yield == Yield)
+        self.assertEquals("<class 'weightless.core.compose._compose_py.Yield'>", repr(Yield))
+        self.assertEquals(type, type(Yield))
+        try:
+            Yield()
+        except TypeError, e:
+            self.assertEquals("cannot create 'Yield' instances", str(e))
+        else:
+            self.fail('Should not happen')

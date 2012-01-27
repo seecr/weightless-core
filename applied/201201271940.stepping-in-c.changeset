@@ -1,0 +1,439 @@
+Changeset created on Fri Jan 27 19:40:52 UTC 2012 by Seecr (Seek You Too B.V.)
+
+Description: Stepping implemented in C
+
+    Stepping for compose is now also implemented in the C (fast) version of compose.
+
+Baseline version: https://weightless.svn.sourceforge.net/svnroot/weightless/weightless-core/workingsets/0.6.4-Seecr/version_1
+
+diff --unidirectional-new-file --recursive --unified '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' version_1/test/core/composeschedulingtest.py /home/thijs/development/sf/weightless/weightless-core/workingsets/0.6.4-Seecr/version_1-stepping-in-c/test/core/composeschedulingtest.py
+--- version_1/test/core/composeschedulingtest.py	2012-01-27 16:35:24.000000000 +0100
++++ version_1-stepping-in-c/test/core/composeschedulingtest.py	2012-01-27 20:38:12.000000000 +0100
+@@ -52,17 +52,6 @@
+     return currentframe().f_back.f_lineno + offset + 1
+ 
+ class _ComposeSchedulingTest(TestCase):
+-    def testYieldSentinel_Py(self):
+-        self.assertTrue(Yield is Yield)
+-        self.assertTrue(Yield == Yield)
+-        self.assertEquals("<class 'weightless.core.compose._compose_py.Yield'>", repr(Yield))
+-        self.assertEquals(type, type(Yield))
+-        try:
+-            Yield()
+-        except TypeError, e:
+-            self.assertEquals("cannot create 'Yield' instances", str(e))
+-        else:
+-            self.fail('Should not happen')
+ 
+     def testOneGenerator(self):
+         def gen():
+@@ -147,9 +136,9 @@
+         def hello(jack):
+             yield 'hello ' + jack
+         def sub():
+-            jack = yield None
++            jack = yield
+             none = yield hello(jack)
+-            peter = yield None
++            peter = yield
+             none = yield hello(peter)
+         c = compose(sub(), stepping=True)
+         self.assertEquals(None, c.send(None))      # 1 init with None, oh, it accepts data
+@@ -222,8 +211,6 @@
+     yield f()  # first Yield
+   File "%%(__file__)s", line %(fLine)s, in f
+     yield Yield  # second Yield
+-  File "%%(compose_py)s", line 114, in _compose
+-    assert message is None or response is None, 'Cannot accept data. First send None.'
+ AssertionError: Cannot accept data. First send None.\n""" % {
+                 'cLine': cLine,
+                 'fLine': fLine,
+@@ -257,8 +244,6 @@
+     yield f()  # first Yield
+   File "%%(__file__)s", line %(fLine)s, in f
+     yield Yield  # second Yield
+-  File "%%(compose_py)s", line 113, in _compose
+-    message = yield response
+ Exception: tripping compose\n""" % {
+                 'cLine': cLine,
+                 'fLine': fLine,
+@@ -282,7 +267,9 @@
+ 
+         stackText = """\
+   File "%(__file__)s", line %(gYieldLine)s, in gen
+-    yield f()""" % {
++    yield f()
++  File "%(__file__)s", line %(fLine)s, in f
++    def f():""" % {
+             '__file__': fileDict['__file__'], 
+             'fLine': fLine, 'gYieldLine': gYieldLine
+         }
+@@ -301,7 +288,6 @@
+ 
+         composed = compose(gen(), stepping=True)
+         
+-        composed.next()
+         try:
+             cLine = __NEXTLINE__()
+             composed.next()
+@@ -325,8 +311,10 @@
+             self.fail("Should not happen.")
+ 
+     def testExceptionThrownInCompose(self):
++        fLine = __NEXTLINE__()
+         def f():
+             yield 10
++        gLine = __NEXTLINE__(offset=+1)
+         def g():
+             yield f()
+         c = compose(g(), stepping=True)
+@@ -339,11 +327,15 @@
+ Traceback (most recent call last):
+   File "%(__file__)s", line %(cLine)s, in testExceptionThrownInCompose
+     c.throw(Exception("tripping compose"))
+-  File "%(compose_py)s", line 133, in _compose
+-    raise exception[0], exception[1], exception[2]
++  File "%(__file__)s", line %(gLine)s, in g
++    yield f()
++  File "%(__file__)s", line %(fLine)s, in f
++    def f():
+ Exception: tripping compose\n""" % {
+                 '__file__': fileDict['__file__'],
+                 'cLine': cLine,
++                'gLine': gLine,
++                'fLine': fLine,
+                 'compose_py': fileDict['compose_py'],
+             }
+             tbString = format_exc()
+@@ -351,7 +343,7 @@
+         else:
+             self.fail("Should not happen.")
+ 
+-class ComposeSchedulingCTest(TestCase):
++class ComposeSchedulingCTest(_ComposeSchedulingTest):
+     def setUp(self):
+         global compose, Yield, tostring
+         compose = cCompose
+@@ -359,9 +351,6 @@
+         tostring = cTostring
+         TestCase.setUp(self)
+ 
+-    def testHasYield(self):
+-        self.assertEquals("<type 'Yield'>", repr(Yield))
+-
+     def testYieldSentinel_C(self):
+         self.assertTrue(Yield is Yield)
+         self.assertTrue(Yield == Yield)
+@@ -374,11 +363,6 @@
+         else:
+             self.fail('Should not happen')
+ 
+-    def testSteppingNotYetImplementedInC(self):
+-        def f():
+-            yield
+-        self.assertRaises(NotImplementedError, lambda: compose(initial=f(), stepping=True))
+-
+ class ComposeSchedulingPyTest(_ComposeSchedulingTest):
+     def setUp(self):
+         global compose, Yield, tostring
+@@ -387,3 +371,14 @@
+         tostring = pyTostring
+         _ComposeSchedulingTest.setUp(self)
+ 
++    def testYieldSentinel_Py(self):
++        self.assertTrue(Yield is Yield)
++        self.assertTrue(Yield == Yield)
++        self.assertEquals("<class 'weightless.core.compose._compose_py.Yield'>", repr(Yield))
++        self.assertEquals(type, type(Yield))
++        try:
++            Yield()
++        except TypeError, e:
++            self.assertEquals("cannot create 'Yield' instances", str(e))
++        else:
++            self.fail('Should not happen')
+diff --unidirectional-new-file --recursive --unified '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' version_1/test/core/composetest.py /home/thijs/development/sf/weightless/weightless-core/workingsets/0.6.4-Seecr/version_1-stepping-in-c/test/core/composetest.py
+--- version_1/test/core/composetest.py	2012-01-27 16:35:24.000000000 +0100
++++ version_1-stepping-in-c/test/core/composetest.py	2012-01-27 20:38:12.000000000 +0100
+@@ -40,8 +40,11 @@
+ 
+ from weightless.core.compose import isGeneratorOrComposed
+ from inspect import currentframe
++from traceback import format_exc
+ 
+-__file__ = __file__.replace(".pyc", ".py").replace("$py.class", ".py")
++fileDict = {
++    '__file__' : __file__.replace(".pyc", ".py").replace("$py.class", ".py")
++}
+ 
+ def __NEXTLINE__(offset=0):
+     return currentframe().f_back.f_lineno + offset + 1
+@@ -686,11 +689,11 @@
+             yield
+         g = f()
+         soll = """  File "%s", line %s, in f
+-    %s""" % (__file__, line if cpython else '?', "def f():" if cpython else "<no source line available>")
++    %s""" % (fileDict['__file__'], line if cpython else '?', "def f():" if cpython else "<no source line available>")
+         self.assertEquals(soll, tostring(g))
+         g.next()
+         soll = """  File "%s", line %s, in f
+-    yield""" % (__file__, line + 1)
++    yield""" % (fileDict['__file__'], line + 1)
+         self.assertEquals(soll, tostring(g))
+ 
+ 
+@@ -705,7 +708,7 @@
+         result = """  File "%s", line %s, in f2
+     yield f1()
+   File "%s", line %s, in f1
+-    yield""" % (__file__, l2, __file__, l1)
++    yield""" % (fileDict['__file__'], l2, fileDict['__file__'], l1)
+         c.next()
+         self.assertEquals(result, tostring(c), "\n%s\n!=\n%s\n" % (result, tostring(c)))
+ 
+@@ -717,9 +720,9 @@
+             yield f1()
+         c = compose(f2())
+         if cpython:
+-            result = """  File "%s", line %s, in f2\n    def f2():""" % (__file__, line)
++            result = """  File "%s", line %s, in f2\n    def f2():""" % (fileDict['__file__'], line)
+         else:
+-            result = """  File "%s", line '?' in _compose\n    <no source line available>""" % __file__
++            result = """  File "%s", line '?' in _compose\n    <no source line available>""" % fileDict['__file__']
+         self.assertEquals(result, tostring(c))
+ 
+     def testWrongArgToToString(self):
+@@ -1089,6 +1092,69 @@
+         self.assertFalse(isGeneratorOrComposed(lambda: None))
+         self.assertFalse(isGeneratorOrComposed(None))
+ 
++    def testUnsuitableGeneratorTraceback(self):
++        def f():
++            yield "alreadyStarted"
++            yield "will_not_get_here"
++        genYieldLine = __NEXTLINE__(offset=3)
++        def gen():
++            genF = f()
++            self.assertEquals("alreadyStarted", genF.next())
++            yield genF
++
++        composed = compose(gen())
++        
++        try:
++            cLine = __NEXTLINE__()
++            composed.next()
++        except AssertionError, e:
++            self.assertEquals('Generator already used.', str(e))
++        
++            stackText = """\
++Traceback (most recent call last):
++  File "%(__file__)s", line %(cLine)s, in testUnsuitableGeneratorTraceback
++    composed.next()
++  File "%(__file__)s", line %(genYieldLine)s, in gen
++    yield genF
++AssertionError: Generator already used.\n""" % {
++                '__file__': fileDict['__file__'],
++                'cLine': cLine,
++                'genYieldLine': genYieldLine,
++            }
++            tbString = format_exc()
++            self.assertEquals(stackText, tbString)
++        else:
++            self.fail("Should not happen.")
++
++    def testAssertionsInComposeAreFatal(self):
++        def f():
++            yield
++        startedGen = f()
++        startedGen.next()
++        ok = []
++        def gen():
++            try:
++                yield startedGen
++                self.fail('Should not happen')
++            except AssertionError, e:
++                self.assertEquals("Generator already used.", str(e))
++        def anotherGen():
++            try:
++                yield gen()
++            finally:
++                ok.append(True)
++        composed = compose(anotherGen())
++
++
++        try:
++            composed.next()
++        except StopIteration:
++            pass
++        else:
++            self.fail('Expected StopIteration to be raised')
++        finally:
++            self.assertEquals([True], ok)
++
+     def get_tracked_objects(self):
+         return [o for o in gc.get_objects() if type(o) in 
+                 (compose, GeneratorType, Exception, StopIteration, ATrackedObj)]
+diff --unidirectional-new-file --recursive --unified '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' version_1/weightless/core/compose/_compose.c /home/thijs/development/sf/weightless/weightless-core/workingsets/0.6.4-Seecr/version_1-stepping-in-c/weightless/core/compose/_compose.c
+--- version_1/weightless/core/compose/_compose.c	2012-01-27 16:35:25.000000000 +0100
++++ version_1-stepping-in-c/weightless/core/compose/_compose.c	2012-01-27 20:38:12.000000000 +0100
+@@ -39,6 +39,8 @@
+     PyObject_HEAD
+     int        expect_data;
+     int        started;
++    int        stepping;
++    int        paused_on_step;
+     PyObject** generators_base;
+     PyObject** generators_top;
+     int        generators_allocated;
+@@ -241,6 +243,8 @@
+ static void _compose_initialize(PyComposeObject* cmps) {
+     cmps->expect_data = 0;
+     cmps->started = 0;
++    cmps->stepping = 0;
++    cmps->paused_on_step = 0;
+     cmps->generators_allocated = INITIAL_STACK_SIZE;
+     cmps->generators_base = (PyObject**) malloc(cmps->generators_allocated * sizeof(PyObject*));
+     cmps->generators_top = cmps->generators_base;
+@@ -256,7 +260,7 @@
+ static PyObject* compose_new(PyObject* type, PyObject* args, PyObject* kwargs) {
+     static char* argnames[] = {"initial", "stepping"};
+     PyObject* initial = NULL;
+-    PyObject* stepping = NULL;
++    PyObject* stepping = Py_False;
+ 
+     if(!PyArg_ParseTupleAndKeywords(                            // borrowed refs
+                 args, kwargs, "O|O:compose", argnames,
+@@ -267,11 +271,6 @@
+         return NULL;
+     }
+ 
+-    if (stepping != NULL) {
+-        PyErr_SetString(PyExc_NotImplementedError, "stepping not yet implemented in c version of compose");
+-        return NULL;
+-    }
+-
+     PyComposeObject* cmps = PyObject_GC_New(PyComposeObject, &PyCompose_Type);
+ 
+     if(cmps == NULL)
+@@ -279,6 +278,9 @@
+ 
+     _compose_initialize((PyComposeObject*) cmps);
+ 
++    if(stepping)
++        cmps->stepping = stepping == Py_True;
++
+     if(!generators_push(cmps, initial)) return NULL;
+ 
+     PyObject_GC_Track(cmps);
+@@ -344,6 +346,8 @@
+     if(!self->started)
+         self->started = 1;
+ 
++    self->paused_on_step = 0;
++
+     while(self->generators_top > self->generators_base) {
+         PyObject* generator = *(self->generators_top - 1); // take over ownership from stack
+         PyObject* response = NULL;
+@@ -375,19 +379,27 @@
+             response = PyObject_CallMethod(generator, "send", "O", message); // new ref
+             Py_CLEAR(message);
+         }
+-
++    
+         if(response) { // normal response
+             if(PyGen_Check(response) || PyCompose_Check(response)) {
+-                if(!generators_push(self, response)) {
++
++                if(generator_invalid(response)) {
++                    PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
+                     Py_CLEAR(response);
+-                    return NULL;
++                    continue;
+                 }
+ 
+-                if(generator_invalid(response)) {
++                if(!generators_push(self, response)) {
+                     Py_CLEAR(response);
+                     return NULL;
+                 }
+ 
++                if(self->stepping) {
++                    Py_CLEAR(response);
++                    self->paused_on_step = 1;
++                    Py_INCREF(&PyYield_Type);
++                    return (PyObject*) &PyYield_Type;
++                }
+                 messages_insert(self, Py_None);
+ 
+             } else if(response != Py_None || messages_empty(self)) {
+@@ -439,7 +451,6 @@
+ 
+     } else
+         PyErr_SetNone(PyExc_StopIteration);
+-
+     return NULL;
+ }
+ 
+@@ -460,13 +471,19 @@
+ 
+ 
+ static PyObject* compose_send(PyComposeObject* self, PyObject* message) {
+-    if(!self->expect_data && message != Py_None) {
+-        PyErr_SetString(PyExc_AssertionError, "Cannot accept data. First send None.");
+-        return NULL;
+-    }
+-
+-    messages_insert(self, message);
+-    return _compose_go_with_frame(self, NULL, NULL, NULL);
++    PyObject* exc_type = NULL;
++    PyObject* exc_val = NULL;
++    if(self->paused_on_step && message != Py_None) {
++        exc_val = PyString_FromString("Cannot accept data when stepping. First send None.");
++        exc_type = PyExc_AssertionError;
++    } else if(!self->expect_data && message != Py_None) {
++        exc_val = PyString_FromString("Cannot accept data. First send None.");
++        exc_type = PyExc_AssertionError;
++    } else
++        messages_insert(self, message);
++    PyObject* response = _compose_go_with_frame(self, exc_type, exc_val, NULL);
++    Py_CLEAR(exc_val);
++    return response;
+ }
+ 
+ 
+diff --unidirectional-new-file --recursive --unified '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' version_1/weightless/core/compose/_compose_py.py /home/thijs/development/sf/weightless/weightless-core/workingsets/0.6.4-Seecr/version_1-stepping-in-c/weightless/core/compose/_compose_py.py
+--- version_1/weightless/core/compose/_compose_py.py	2012-01-27 16:35:25.000000000 +0100
++++ version_1-stepping-in-c/weightless/core/compose/_compose_py.py	2012-01-27 20:38:12.000000000 +0100
+@@ -100,21 +100,27 @@
+                 message = messages.pop(0)
+                 response = generator.send(message)
+             if type(response) is GeneratorType:
+-                if stepping:
+-                    message = yield Yield
+-                frame = response.gi_frame
+                 generators.append(response)
+-                messages.insert(0, None)
+-                if stepping: assert message is None, 'Cannot accept data when stepping. First send None.'
++                frame = response.gi_frame
+                 if cpython: assert frame, 'Generator is exhausted.' 
+                 if cpython: assert frame.f_lineno == frame.f_code.co_firstlineno, 'Generator already used.' 
++                try:
++                    if stepping:
++                        _ = yield Yield
++                except BaseException:
++                    exType, exValue, exTraceback = exc_info()
++                    exception = (exType, exValue, exTraceback.tb_next)
++                    continue
++                if stepping: assert _ is None, 'Cannot accept data when stepping. First send None.'
++                messages.insert(0, None)
+             elif (response is not None) or not messages:
+                 try:
+                     message = yield response
+                     assert message is None or response is None, 'Cannot accept data. First send None.'
+                     messages.insert(0, message)
+                 except BaseException:
+-                    exception = exc_info()
++                    exType, exValue, exTraceback = exc_info()
++                    exception = (exType, exValue, exTraceback.tb_next)
+         except StopIteration, returnValue:
+             exception = None
+             generators.pop()

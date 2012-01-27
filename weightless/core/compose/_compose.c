@@ -39,6 +39,8 @@ typedef struct {
     PyObject_HEAD
     int        expect_data;
     int        started;
+    int        stepping;
+    int        paused_on_step;
     PyObject** generators_base;
     PyObject** generators_top;
     int        generators_allocated;
@@ -241,6 +243,8 @@ static PyCodeObject* py_code;
 static void _compose_initialize(PyComposeObject* cmps) {
     cmps->expect_data = 0;
     cmps->started = 0;
+    cmps->stepping = 0;
+    cmps->paused_on_step = 0;
     cmps->generators_allocated = INITIAL_STACK_SIZE;
     cmps->generators_base = (PyObject**) malloc(cmps->generators_allocated * sizeof(PyObject*));
     cmps->generators_top = cmps->generators_base;
@@ -256,7 +260,7 @@ static void _compose_initialize(PyComposeObject* cmps) {
 static PyObject* compose_new(PyObject* type, PyObject* args, PyObject* kwargs) {
     static char* argnames[] = {"initial", "stepping"};
     PyObject* initial = NULL;
-    PyObject* stepping = NULL;
+    PyObject* stepping = Py_False;
 
     if(!PyArg_ParseTupleAndKeywords(                            // borrowed refs
                 args, kwargs, "O|O:compose", argnames,
@@ -267,17 +271,15 @@ static PyObject* compose_new(PyObject* type, PyObject* args, PyObject* kwargs) {
         return NULL;
     }
 
-    if (stepping != NULL) {
-        PyErr_SetString(PyExc_NotImplementedError, "stepping not yet implemented in c version of compose");
-        return NULL;
-    }
-
     PyComposeObject* cmps = PyObject_GC_New(PyComposeObject, &PyCompose_Type);
 
     if(cmps == NULL)
         return NULL;
 
     _compose_initialize((PyComposeObject*) cmps);
+
+    if(stepping)
+        cmps->stepping = stepping == Py_True;
 
     if(!generators_push(cmps, initial)) return NULL;
 
@@ -344,6 +346,8 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
     if(!self->started)
         self->started = 1;
 
+    self->paused_on_step = 0;
+
     while(self->generators_top > self->generators_base) {
         PyObject* generator = *(self->generators_top - 1); // take over ownership from stack
         PyObject* response = NULL;
@@ -375,19 +379,27 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
             response = PyObject_CallMethod(generator, "send", "(O)", message); // new ref
             Py_CLEAR(message);
         }
-
+    
         if(response) { // normal response
             if(PyGen_Check(response) || PyCompose_Check(response)) {
+
+                if(generator_invalid(response)) {
+                    PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
+                    Py_CLEAR(response);
+                    continue;
+                }
+
                 if(!generators_push(self, response)) {
                     Py_CLEAR(response);
                     return NULL;
                 }
 
-                if(generator_invalid(response)) {
+                if(self->stepping) {
                     Py_CLEAR(response);
-                    return NULL;
+                    self->paused_on_step = 1;
+                    Py_INCREF(&PyYield_Type);
+                    return (PyObject*) &PyYield_Type;
                 }
-
                 messages_insert(self, Py_None);
 
             } else if(response != Py_None || messages_empty(self)) {
@@ -439,7 +451,6 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
 
     } else
         PyErr_SetNone(PyExc_StopIteration);
-
     return NULL;
 }
 
@@ -460,13 +471,19 @@ static PyObject* _compose_go_with_frame(PyComposeObject* self, PyObject* exc_typ
 
 
 static PyObject* compose_send(PyComposeObject* self, PyObject* message) {
-    if(!self->expect_data && message != Py_None) {
-        PyErr_SetString(PyExc_AssertionError, "Cannot accept data. First send None.");
-        return NULL;
-    }
-
-    messages_insert(self, message);
-    return _compose_go_with_frame(self, NULL, NULL, NULL);
+    PyObject* exc_type = NULL;
+    PyObject* exc_val = NULL;
+    if(self->paused_on_step && message != Py_None) {
+        exc_val = PyString_FromString("Cannot accept data when stepping. First send None.");
+        exc_type = PyExc_AssertionError;
+    } else if(!self->expect_data && message != Py_None) {
+        exc_val = PyString_FromString("Cannot accept data. First send None.");
+        exc_type = PyExc_AssertionError;
+    } else
+        messages_insert(self, message);
+    PyObject* response = _compose_go_with_frame(self, exc_type, exc_val, NULL);
+    Py_CLEAR(exc_val);
+    return response;
 }
 
 

@@ -40,8 +40,11 @@ except ImportError:
 
 from weightless.core.compose import isGeneratorOrComposed
 from inspect import currentframe
+from traceback import format_exc
 
-__file__ = __file__.replace(".pyc", ".py").replace("$py.class", ".py")
+fileDict = {
+    '__file__' : __file__.replace(".pyc", ".py").replace("$py.class", ".py")
+}
 
 def __NEXTLINE__(offset=0):
     return currentframe().f_back.f_lineno + offset + 1
@@ -686,11 +689,11 @@ class _ComposeTest(TestCase):
             yield
         g = f()
         soll = """  File "%s", line %s, in f
-    %s""" % (__file__, line if cpython else '?', "def f():" if cpython else "<no source line available>")
+    %s""" % (fileDict['__file__'], line if cpython else '?', "def f():" if cpython else "<no source line available>")
         self.assertEquals(soll, tostring(g))
         g.next()
         soll = """  File "%s", line %s, in f
-    yield""" % (__file__, line + 1)
+    yield""" % (fileDict['__file__'], line + 1)
         self.assertEquals(soll, tostring(g))
 
 
@@ -705,7 +708,7 @@ class _ComposeTest(TestCase):
         result = """  File "%s", line %s, in f2
     yield f1()
   File "%s", line %s, in f1
-    yield""" % (__file__, l2, __file__, l1)
+    yield""" % (fileDict['__file__'], l2, fileDict['__file__'], l1)
         c.next()
         self.assertEquals(result, tostring(c), "\n%s\n!=\n%s\n" % (result, tostring(c)))
 
@@ -717,9 +720,9 @@ class _ComposeTest(TestCase):
             yield f1()
         c = compose(f2())
         if cpython:
-            result = """  File "%s", line %s, in f2\n    def f2():""" % (__file__, line)
+            result = """  File "%s", line %s, in f2\n    def f2():""" % (fileDict['__file__'], line)
         else:
-            result = """  File "%s", line '?' in _compose\n    <no source line available>""" % __file__
+            result = """  File "%s", line '?' in _compose\n    <no source line available>""" % fileDict['__file__']
         self.assertEquals(result, tostring(c))
 
     def testWrongArgToToString(self):
@@ -1098,6 +1101,69 @@ class _ComposeTest(TestCase):
         self.assertTrue(isGeneratorOrComposed(compose(f())))
         self.assertFalse(isGeneratorOrComposed(lambda: None))
         self.assertFalse(isGeneratorOrComposed(None))
+
+    def testUnsuitableGeneratorTraceback(self):
+        def f():
+            yield "alreadyStarted"
+            yield "will_not_get_here"
+        genYieldLine = __NEXTLINE__(offset=3)
+        def gen():
+            genF = f()
+            self.assertEquals("alreadyStarted", genF.next())
+            yield genF
+
+        composed = compose(gen())
+        
+        try:
+            cLine = __NEXTLINE__()
+            composed.next()
+        except AssertionError, e:
+            self.assertEquals('Generator already used.', str(e))
+        
+            stackText = """\
+Traceback (most recent call last):
+  File "%(__file__)s", line %(cLine)s, in testUnsuitableGeneratorTraceback
+    composed.next()
+  File "%(__file__)s", line %(genYieldLine)s, in gen
+    yield genF
+AssertionError: Generator already used.\n""" % {
+                '__file__': fileDict['__file__'],
+                'cLine': cLine,
+                'genYieldLine': genYieldLine,
+            }
+            tbString = format_exc()
+            self.assertEquals(stackText, tbString)
+        else:
+            self.fail("Should not happen.")
+
+    def testAssertionsInComposeAreFatal(self):
+        def f():
+            yield
+        startedGen = f()
+        startedGen.next()
+        ok = []
+        def gen():
+            try:
+                yield startedGen
+                self.fail('Should not happen')
+            except AssertionError, e:
+                self.assertEquals("Generator already used.", str(e))
+        def anotherGen():
+            try:
+                yield gen()
+            finally:
+                ok.append(True)
+        composed = compose(anotherGen())
+
+
+        try:
+            composed.next()
+        except StopIteration:
+            pass
+        else:
+            self.fail('Expected StopIteration to be raised')
+        finally:
+            self.assertEquals([True], ok)
 
     def get_tracked_objects(self):
         return [o for o in gc.get_objects() if type(o) in 

@@ -100,21 +100,27 @@ def _compose(initial, stepping):
                 message = messages.pop(0)
                 response = generator.send(message)
             if type(response) is GeneratorType:
-                if stepping:
-                    message = yield Yield
-                frame = response.gi_frame
                 generators.append(response)
-                messages.insert(0, None)
-                if stepping: assert message is None, 'Cannot accept data when stepping. First send None.'
+                frame = response.gi_frame
                 if cpython: assert frame, 'Generator is exhausted.' 
                 if cpython: assert frame.f_lineno == frame.f_code.co_firstlineno, 'Generator already used.' 
+                try:
+                    if stepping:
+                        _ = yield Yield
+                except BaseException:
+                    exType, exValue, exTraceback = exc_info()
+                    exception = (exType, exValue, exTraceback.tb_next)
+                    continue
+                if stepping: assert _ is None, 'Cannot accept data when stepping. First send None.'
+                messages.insert(0, None)
             elif (response is not None) or not messages:
                 try:
                     message = yield response
                     assert message is None or response is None, 'Cannot accept data. First send None.'
                     messages.insert(0, message)
                 except BaseException:
-                    exception = exc_info()
+                    exType, exValue, exTraceback = exc_info()
+                    exception = (exType, exValue, exTraceback.tb_next)
         except StopIteration, returnValue:
             exception = None
             generators.pop()
