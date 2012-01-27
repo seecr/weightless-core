@@ -1,0 +1,23 @@
+Changeset created on Fri Jan 13 08:07:03 UTC 2012 by Seecr (Seek You Too B.V.)
+
+Description: Bugfix for always readable socket also in HttpsServer
+
+    Same bugfix as 201201121610.alwaysreadable_socket_bugfix.changeset
+    but now for HttpsServer
+
+Baseline version: https://weightless.svn.sourceforge.net/svnroot/weightless/weightless-core/tags/version_0.6.6
+
+diff --unidirectional-new-file --recursive --unified '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' version_0.6.6/weightless/http/_httpserver.py /home/thijs/development/sf/weightless/weightless-core/tags/version_0.6.6.1/weightless/http/_httpserver.py
+--- version_0.6.6/weightless/http/_httpserver.py	2012-01-13 08:47:04.000000000 +0100
++++ version_0.6.6.1/weightless/http/_httpserver.py	2012-01-13 08:55:35.000000000 +0100
+@@ -320,6 +320,10 @@
+     def __call__(self):
+         try:
+             part = self._sok.recv(self._recvSize)
++            if not part:
++                # SOCKET CLOSED by PEER
++                self._badRequest()
++                return
+         except (SSL.WantReadError, SSL.WantWriteError, SSL.WantX509LookupError):
+             pass
+         except Exception, e:
