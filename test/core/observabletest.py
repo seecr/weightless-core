@@ -981,14 +981,15 @@ class ObservableTest(TestCase):
                 return repr(o)
         gc.collect()
         diff = set(self.get_tracked_objects()) - set(self._baseline)
-        #self.assertEquals(set(), diff)
-        #for obj in diff:
-        #    print "Leak:"
-        #    print tostr(obj)
-        #    print "Referrers:"
-        #    for o in  gc.get_referrers(obj):
-        #        print tostr(o)
+        self.assertEquals(set(), diff)
+        for obj in diff:
+            print "Leak:"
+            print tostr(obj)
+            print "Referrers:"
+            for o in gc.get_referrers(obj):
+                print tostr(o)
         del self._baseline
+        gc.collect()
 
 
 class Responder(Observable):
