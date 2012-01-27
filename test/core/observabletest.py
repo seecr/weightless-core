@@ -861,9 +861,7 @@ class ObservableTest(TestCase):
 
     def testUnknownReallyTransparentInCaseNoneOfTheObserversRespond(self):
         root = be((Observable(),
-            (Transparent(),
-                (object(),)
-            ),
+            (Transparent(),),
             (Transparent(),
                 (Transparent(),
                    (object(),)

@@ -35,8 +35,8 @@ from weightless.core.compose import isGeneratorOrComposed
 NORESPONDERS = 'None of the %d observers respond to %s(...)'
 
 class NoneOfTheObserversRespond(Exception):
-    def __init__(self, errorMessage, unansweredMessage, unknownCall):
-        Exception.__init__(self, errorMessage)
+    def __init__(self, noObservers, unansweredMessage, unknownCall):
+        Exception.__init__(self, NORESPONDERS % (noObservers, unansweredMessage))
         self.unansweredMessage = unansweredMessage
         self.unknownCall = unknownCall
 
@@ -84,7 +84,7 @@ class MessageBase(object):
                 self.verifyMethodResult(method, result)
                 _ = yield result
             except NoneOfTheObserversRespond, e:
-                if self._originatesFromTransparentCall(e): 
+                if self._fromTransparentCall(e): 
                     continue
                 c, v, t = exc_info(); raise c, v, t.tb_next
             except:
@@ -98,20 +98,20 @@ class MessageBase(object):
                     result = yield r
                     raise StopIteration(result)
                 except NoneOfTheObserversRespond, e:
-                    if self._originatesFromTransparentCall(e): 
+                    if self._fromTransparentCall(e): 
                         continue
                     c, v, t = exc_info(); raise c, v, t.tb_next
         except:
             c, v, t = exc_info(); raise c, v, t.tb_next
         raise NoneOfTheObserversRespond(
-                NORESPONDERS % (len(list(self._defer.observers())), self._message), 
+                noObservers=len(list(self._defer.observers())),
                 unansweredMessage=self._message, 
                 unknownCall=self._unknownCall)
 
     def verifyMethodResult(self, method, result):
         assert isGeneratorOrComposed(result), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)
     
-    def _originatesFromTransparentCall(self, e):
+    def _fromTransparentCall(self, e):
         return self.callingUnknown and e.unknownCall and e.unansweredMessage == self._message
 
 
