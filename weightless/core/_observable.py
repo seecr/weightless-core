@@ -120,7 +120,7 @@ class AnyMessage(MessageBase):
     altname = 'any_unknown'
     __call__ = MessageBase.any
 
-class CallMessage(AnyMessage):
+class CallMessage(MessageBase):
     altname = 'call_unknown'
 
     def call(self, *args, **kwargs):
