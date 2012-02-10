@@ -34,8 +34,8 @@ from traceback import format_tb
 from inspect import isframe, getframeinfo
 from types import GeneratorType
 from functools import partial
-from weightless.core import compose, Yield, Observable, Transparent, be, tostring
-from weightless.core._observable import AllMessage, AnyMessage, DoMessage, OnceMessage, NoneOfTheObserversRespond
+from weightless.core import compose, Yield, Observable, Transparent, be, tostring, NoneOfTheObserversRespond
+from weightless.core._observable import AllMessage, AnyMessage, DoMessage, OnceMessage
 from unittest import TestCase
 
 
@@ -953,6 +953,29 @@ class ObservableTest(TestCase):
             self.fail("should not get here")
         except AttributeError, e:
             self.assertEquals("'GetAttr' object has no attribute 'doesnotexist'", str(e))
+
+    def testNoneOfTheObserversRespondRaisedFromUnknown(self):
+        class SemiTransparent(Observable):
+            def call_unknown(self, message, *args, **kwargs):
+                if message == 'theMessage':
+                    return self.call.unknown(message, *args, **kwargs)
+                raise NoneOfTheObserversRespond(message, unknownCall=True)
+
+            def any_unknown(self, message, *args, **kwargs):
+                if message == 'theMessage':
+                    value = yield self.any.unknown(message, *args, **kwargs)
+                    raise StopIteration(value)
+                raise NoneOfTheObserversRespond(message, unknownCall=True)
+        
+        root = be((Observable(),
+            (SemiTransparent(),
+                (Responder(41),)
+            ),
+            (Responder(42),)
+        ))
+
+        self.assertEquals([42], list(compose(root.any.message())))
+        self.assertEquals(42, root.call.anotherMessage())
 
 
     def assertFunctionsOnTraceback(self, *args):

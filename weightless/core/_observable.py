@@ -32,10 +32,12 @@ from weightless.core.compose import isGeneratorOrComposed
 
 
 class NoneOfTheObserversRespond(Exception):
-    def __init__(self, unansweredMessage, observers, unknownCall):
+    def __init__(self, unansweredMessage, observers=None, unknownCall=False):
+        observers = observers or []
         Exception.__init__(self, 'None of the %d observers respond to %s(...)' % (len(list(observers)), unansweredMessage))
         self.unansweredMessage = unansweredMessage
         self.unknownCall = unknownCall
+
 
 class Defer(object):
     def __init__(self, observable, msgclass, filter=bool):
@@ -210,6 +212,8 @@ class Observable(object):
 
     def __repr__(self):
         return "%s(name=%s)" % (self.__class__.__name__, repr(self._name))
+
+
 
 
 class Transparent(Observable):

@@ -35,5 +35,5 @@ else:
 
 from compose import compose, local, tostring, Yield
 from utils import identify, autostart
-from _observable import Observable, Transparent, be, methodOrMethodPartialStr
+from _observable import Observable, Transparent, be, methodOrMethodPartialStr, NoneOfTheObserversRespond
 
