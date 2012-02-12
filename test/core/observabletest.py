@@ -34,7 +34,7 @@ from traceback import format_tb
 from inspect import isframe, getframeinfo
 from types import GeneratorType
 from functools import partial
-from weightless.core import compose, Yield, Observable, Transparent, be, tostring, NoneOfTheObserversRespond
+from weightless.core import compose, Yield, Observable, Transparent, be, tostring, NoneOfTheObserversRespond, DeclineMessage
 from weightless.core._observable import AllMessage, AnyMessage, DoMessage, OnceMessage
 from unittest import TestCase
 
@@ -859,7 +859,7 @@ class ObservableTest(TestCase):
         self.assertTrue({'z':11, 'y':10} == {'z':11, 'y': Wildcard()})
 
 
-    def testUnknownReallyTransparentInCaseNoneOfTheObserversRespond(self):
+    def testTransparentInCaseNoneOfTheObserversRespond(self):
         root = be((Observable(),
             (Transparent(),),
             (Transparent(),
@@ -880,7 +880,7 @@ class ObservableTest(TestCase):
         except StopIteration, e:
             self.assertEquals((42,), e.args)
 
-    def testNoneOfTheObserversRespondNotPropagatedWhenNotIncomingAndOutgoingUnknown(self):
+    def testNoneOfTheObserversRespondPropagatesWhenNotReraisedAsDeclineMessage(self):
         def assertNoneOfTheObserversRespond(clazz):
             root = be((Observable(),
                 (clazz(),
@@ -954,18 +954,18 @@ class ObservableTest(TestCase):
         except AttributeError, e:
             self.assertEquals("'GetAttr' object has no attribute 'doesnotexist'", str(e))
 
-    def testNoneOfTheObserversRespondRaisedFromUnknown(self):
+    def testDeclineMessageRaised(self):
         class SemiTransparent(Observable):
             def call_unknown(self, message, *args, **kwargs):
                 if message == 'theMessage':
                     return self.call.unknown(message, *args, **kwargs)
-                raise NoneOfTheObserversRespond(message, unknownCall=True)
+                raise DeclineMessage() 
 
             def any_unknown(self, message, *args, **kwargs):
                 if message == 'theMessage':
                     value = yield self.any.unknown(message, *args, **kwargs)
                     raise StopIteration(value)
-                raise NoneOfTheObserversRespond(message, unknownCall=True)
+                raise DeclineMessage()
         
         root = be((Observable(),
             (SemiTransparent(),

@@ -32,11 +32,13 @@ from weightless.core.compose import isGeneratorOrComposed
 
 
 class NoneOfTheObserversRespond(Exception):
-    def __init__(self, unansweredMessage, observers=None, unknownCall=False):
+    def __init__(self, unansweredMessage, observers=None):
         observers = observers or []
         Exception.__init__(self, 'None of the %d observers respond to %s(...)' % (len(list(observers)), unansweredMessage))
         self.unansweredMessage = unansweredMessage
-        self.unknownCall = unknownCall
+
+class DeclineMessage(Exception):
+    pass
 
 
 class Defer(object):
@@ -57,35 +59,30 @@ class Defer(object):
 
     def unknown(self, message, *args, **kwargs):
         try:
-            return self._msgclass(self, message, unknownCall=True)(*args, **kwargs)
+            return self._msgclass(self, message)(*args, **kwargs)
         except:
             c, v, t = exc_info(); raise c, v, t.tb_next
 
 
 class MessageBase(object):
-    def __init__(self, defer, message, unknownCall=False):
+    def __init__(self, defer, message):
         self._defer = defer
         self._message = message
-        self._unknownCall = unknownCall
 
     def all(self, *args, **kwargs):
         for observer in self._defer.observers():
-            self.callingUnknown = False
             try: method = getattr(observer, self._message)
             except AttributeError:
                 try: 
                     method = partial(getattr(observer, self.altname), self._message)
-                    self.callingUnknown = True
                 except AttributeError:
                     continue 
             try:
                 result = method(*args, **kwargs)
                 self.verifyMethodResult(method, result)
                 _ = yield result
-            except NoneOfTheObserversRespond, e:
-                if self._concernsTransparentCall(e): 
-                    continue
-                c, v, t = exc_info(); raise c, v, t.tb_next
+            except DeclineMessage:
+                continue
             except:
                 c, v, t = exc_info(); raise c, v, t.tb_next
             assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
@@ -96,23 +93,16 @@ class MessageBase(object):
                 try:
                     result = yield r
                     raise StopIteration(result)
-                except NoneOfTheObserversRespond, e:
-                    if self._concernsTransparentCall(e): 
-                        continue
-                    c, v, t = exc_info(); raise c, v, t.tb_next
+                except DeclineMessage:
+                    continue
         except:
             c, v, t = exc_info(); raise c, v, t.tb_next
         raise NoneOfTheObserversRespond(
                 unansweredMessage=self._message, 
-                observers=self._defer.observers(),
-                unknownCall=self._unknownCall)
+                observers=self._defer.observers())
 
     def verifyMethodResult(self, method, result):
         assert isGeneratorOrComposed(result), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)
-    
-    def _concernsTransparentCall(self, e):
-        return self.callingUnknown and e.unknownCall and e.unansweredMessage == self._message
-
 
 class AllMessage(MessageBase):
     altname = 'all_unknown'
@@ -214,19 +204,22 @@ class Observable(object):
         return "%s(name=%s)" % (self.__class__.__name__, repr(self._name))
 
 
-
-
 class Transparent(Observable):
     def all_unknown(self, message, *args, **kwargs):
         yield self.all.unknown(message, *args, **kwargs)
     def any_unknown(self, message, *args, **kwargs):
-        response = yield self.any.unknown(message, *args, **kwargs)
+        try:
+            response = yield self.any.unknown(message, *args, **kwargs)
+        except NoneOfTheObserversRespond:
+            raise DeclineMessage()
         raise StopIteration(response)
     def do_unknown(self, message, *args, **kwargs):
         self.do.unknown(message, *args, **kwargs)
     def call_unknown(self, message, *args, **kwargs):
-        return self.call.unknown(message, *args, **kwargs)
-
+        try:
+            return self.call.unknown(message, *args, **kwargs)
+        except NoneOfTheObserversRespond:
+            raise DeclineMessage()
 
 def be(strand):
     helicesDone = set()
