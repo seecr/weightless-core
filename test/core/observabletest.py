@@ -37,6 +37,7 @@ from functools import partial
 from weightless.core import compose, Yield, Observable, Transparent, be, tostring, NoneOfTheObserversRespond, DeclineMessage
 from weightless.core._observable import AllMessage, AnyMessage, DoMessage, OnceMessage
 from unittest import TestCase
+from seecr.test import CallTrace
 
 
 class ObservableTest(TestCase):
@@ -858,7 +859,6 @@ class ObservableTest(TestCase):
                 return True
         self.assertTrue({'z':11, 'y':10} == {'z':11, 'y': Wildcard()})
 
-
     def testTransparentInCaseNoneOfTheObserversRespond(self):
         root = be((Observable(),
             (Transparent(),),
@@ -879,51 +879,6 @@ class ObservableTest(TestCase):
             self.fail("Should have raised StopIteration")
         except StopIteration, e:
             self.assertEquals((42,), e.args)
-
-    def testNoneOfTheObserversRespondPropagatesWhenNotReraisedAsDeclineMessage(self):
-        def assertNoneOfTheObserversRespond(clazz):
-            root = be((Observable(),
-                (clazz(),
-                    (Transparent(),
-                        (object(),)
-                    ),
-                ),
-                (Unreachable(),)
-            ))
-
-            try:
-                root.call.someCallMessage()
-                self.fail("Should have raised NoneOfTheObserversRespond")
-            except NoneOfTheObserversRespond, e:
-                self.assertEquals("None of the 1 observers respond to someCallMessage(...)", str(e))
-
-            try:
-                g = compose(root.any.someAnyMessage())
-                g.next()
-                self.fail("Should have raised NoneOfTheObserversRespond")
-            except NoneOfTheObserversRespond, e:
-                self.assertEquals("None of the 1 observers respond to someAnyMessage(...)", str(e))
-
-        class Message2Message(Observable):
-            def someAnyMessage(self, *args, **kwargs):
-                yield self.any.someAnyMessage(*args, **kwargs)
-            def someCallMessage(self, *args, **kwargs):
-                return self.call.someCallMessage(*args, **kwargs)
-        assertNoneOfTheObserversRespond(Message2Message)
-
-        class Message2Unknown(Observable):
-            def someAnyMessage(self, *args, **kwargs):
-                yield self.any.unknown('someAnyMessage', *args, **kwargs)
-            def someCallMessage(self, *args, **kwargs):
-                return self.call.unknown('someCallMessage', *args, **kwargs)
-        assertNoneOfTheObserversRespond(Message2Unknown)
-
-        class Unknown2Message(Observable):
-            def any_unknown(self, message, *args, **kwargs):
-                yield self.any.someAnyMessage(*args, **kwargs)
-            def call_unknown(self, message, *args, **kwargs):
-                return self.call.someCallMessage(*args, **kwargs)
-        assertNoneOfTheObserversRespond(Unknown2Message)
 
     def testObserverAttributeErrorNotIgnored(self):
         class GetAttr(object):
@@ -954,18 +909,18 @@ class ObservableTest(TestCase):
         except AttributeError, e:
             self.assertEquals("'GetAttr' object has no attribute 'doesnotexist'", str(e))
 
-    def testDeclineMessageRaised(self):
+    def testRaisingDeclineMessageResultsInCallOnNextObservable(self):
         class SemiTransparent(Observable):
             def call_unknown(self, message, *args, **kwargs):
                 if message == 'theMessage':
                     return self.call.unknown(message, *args, **kwargs)
-                raise DeclineMessage() 
+                raise DeclineMessage
 
             def any_unknown(self, message, *args, **kwargs):
                 if message == 'theMessage':
                     value = yield self.any.unknown(message, *args, **kwargs)
                     raise StopIteration(value)
-                raise DeclineMessage()
+                raise DeclineMessage
         
         root = be((Observable(),
             (SemiTransparent(),
@@ -977,6 +932,48 @@ class ObservableTest(TestCase):
         self.assertEquals([42], list(compose(root.any.message())))
         self.assertEquals(42, root.call.anotherMessage())
 
+    def testRaisingDeclineMessageFromAllMakesNoDifference(self):
+        class SemiTransparent(Observable):
+            def all_unknown(self, message, *args, **kwargs):
+                if message == 'theMessage':
+                    yield self.all.unknown(message, *args, **kwargs)
+                raise DeclineMessage
+        
+        root = be((Observable(),
+            (SemiTransparent(),
+                (Responder(41),)
+            ),
+            (Responder(42),)
+        ))
+
+        self.assertEquals([41, 42], list(compose(root.all.theMessage())))
+        self.assertEquals([42], list(compose(root.all.message())))
+
+    def testRaisingDeclineMessageFromDoMakesNoDifference(self):
+        class SemiTransparent(Observable):
+            def do_unknown(self, message, *args, **kwargs):
+                if message == 'theMessage':
+                    self.do.unknown(message, *args, **kwargs)
+                raise DeclineMessage
+        
+        observer1 = CallTrace('observer1')
+        observer2 = CallTrace('observer2')
+        root = be((Observable(),
+            (SemiTransparent(),
+                (observer1,)
+            ),
+            (observer2,)
+        ))
+
+        root.do.theMessage()
+        self.assertEquals(['theMessage'], [m.name for m in observer1.calledMethods])
+        self.assertEquals(['theMessage'], [m.name for m in observer2.calledMethods])
+
+        observer1.calledMethods.reset()
+        observer2.calledMethods.reset()
+        root.do.message()
+        self.assertEquals([], [m.name for m in observer1.calledMethods])
+        self.assertEquals(['message'], [m.name for m in observer2.calledMethods])
 
     def assertFunctionsOnTraceback(self, *args):
         na, na, tb = exc_info()
@@ -1023,6 +1020,8 @@ class Responder(Observable):
         raise StopIteration(self._value)
     def call_unknown(self, message, *args, **kwargs):
         return self._value
+    def all_unknown(self, message, *args, **kwargs):
+        yield self._value
 
 class Unreachable(Observable):
     def any_unknown(self, message, *args, **kwargs):

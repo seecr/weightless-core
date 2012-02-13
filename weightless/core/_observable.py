@@ -32,13 +32,28 @@ from weightless.core.compose import isGeneratorOrComposed
 
 
 class NoneOfTheObserversRespond(Exception):
-    def __init__(self, unansweredMessage, observers=None):
-        observers = observers or []
-        Exception.__init__(self, 'None of the %d observers respond to %s(...)' % (len(list(observers)), unansweredMessage))
-        self.unansweredMessage = unansweredMessage
+    """Must not be thrown anywhere outside of the Observable
+    implementation. It is exposed only so that it can be caught in 
+    specific components, typically to be able to opt out of some 
+    received message by raising DeclineMessage."""
 
-class DeclineMessage(Exception):
-    pass
+    def __init__(self, unansweredMessage, nrOfObservers):
+        Exception.__init__(self, 'None of the %d observers respond to %s(...)' % (nrOfObservers, unansweredMessage))
+
+
+class _DeclineMessage(Exception):
+    """Should be thrown by a component that wishes to opt out of a 
+    message received through 'any' or 'call' that it can't or doesn't
+    wish to handle after all.
+    
+    One reason might be that none of this components' observers responds
+    to the message after being 'forwarded' (as signalled by a 
+    NoneOfTheObserversRespond exception). For an example, please refer
+    to the code of Transparent below.
+    
+    The exception only ever needs a single instance. For convenience and
+    aesthetics this single instance is named as a class."""
+DeclineMessage = _DeclineMessage()
 
 
 class Defer(object):
@@ -81,7 +96,7 @@ class MessageBase(object):
                 result = method(*args, **kwargs)
                 self.verifyMethodResult(method, result)
                 _ = yield result
-            except DeclineMessage:
+            except _DeclineMessage:
                 continue
             except:
                 c, v, t = exc_info(); raise c, v, t.tb_next
@@ -93,13 +108,13 @@ class MessageBase(object):
                 try:
                     result = yield r
                     raise StopIteration(result)
-                except DeclineMessage:
+                except _DeclineMessage:
                     continue
         except:
             c, v, t = exc_info(); raise c, v, t.tb_next
         raise NoneOfTheObserversRespond(
                 unansweredMessage=self._message, 
-                observers=self._defer.observers())
+                nrOfObservers=len(list(self._defer.observers())))
 
     def verifyMethodResult(self, method, result):
         assert isGeneratorOrComposed(result), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)
@@ -211,7 +226,7 @@ class Transparent(Observable):
         try:
             response = yield self.any.unknown(message, *args, **kwargs)
         except NoneOfTheObserversRespond:
-            raise DeclineMessage()
+            raise DeclineMessage
         raise StopIteration(response)
     def do_unknown(self, message, *args, **kwargs):
         self.do.unknown(message, *args, **kwargs)
@@ -219,7 +234,7 @@ class Transparent(Observable):
         try:
             return self.call.unknown(message, *args, **kwargs)
         except NoneOfTheObserversRespond:
-            raise DeclineMessage()
+            raise DeclineMessage
 
 def be(strand):
     helicesDone = set()
