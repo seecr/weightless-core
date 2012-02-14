@@ -37,9 +37,9 @@ find tmp -name '*.py' -exec sed -r -e \
     s/\\\$Version:[^\\\$]*\\\$/\\\$Version: ${VERSION}\\\$/" -i '{}' \;
 
 if [ -f /etc/debian_version ]; then
-    export PYTHONPATH=`pwd`/tmp/usr/local/lib/python2.6/dist-packages
+    export PYTHONPATH=`pwd`/tmp/usr/local/lib/python2.6/dist-packages:${PYTHONPATH}
 else
-    export PYTHONPATH=`pwd`/tmp/usr/lib/python2.6/site-packages
+    export PYTHONPATH=`pwd`/tmp/usr/lib/python2.6/site-packages:${PYTHONPATH}
 fi
 
 cp -r test tmp/test
