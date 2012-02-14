@@ -28,7 +28,7 @@ export LANG=en_US.UTF-8
 export PYTHONPATH=.:"$PYTHONPATH"
 
 option=$1
-pyversions="$(pyversions --installed)"
+pyversions="python2.6"
 if [ "${option:0:10}" == "--python2." ]; then
     shift
     pyversions="${option:2}"
