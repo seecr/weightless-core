@@ -28,11 +28,7 @@ set -o errexit
 
 rm -rf tmp build
 
-setupoption=""
-if [ -f /etc/debian_version ]; then
-    setupoption="--install-layout=unix"
-fi
-python2.6 setup.py install --root tmp ${setupoption}
+python2.6 setup.py install --root tmp
 
 VERSION="x.y.z"
 
@@ -40,7 +36,11 @@ find tmp -name '*.py' -exec sed -r -e \
     "/DO_NOT_DISTRIBUTE/ d;
     s/\\\$Version:[^\\\$]*\\\$/\\\$Version: ${VERSION}\\\$/" -i '{}' \;
 
-export PYTHONPATH=`pwd`/tmp/usr/lib/python2.6/site-packages
+if [ -f /etc/debian_version ]; then
+    export PYTHONPATH=`pwd`/tmp/usr/local/lib/python2.6/dist-packages
+else
+    export PYTHONPATH=`pwd`/tmp/usr/lib/python2.6/site-packages
+fi
 
 cp -r test tmp/test
 
