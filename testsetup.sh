@@ -27,9 +27,8 @@
 set -o errexit
 
 rm -rf tmp build
-for pycmd in $(pyversions --installed); do
 
-$pycmd setup.py install --root tmp
+python2.6 setup.py install --root tmp
 
 VERSION="x.y.z"
 
@@ -37,19 +36,15 @@ find tmp -name '*.py' -exec sed -r -e \
     "/DO_NOT_DISTRIBUTE/ d;
     s/\\\$Version:[^\\\$]*\\\$/\\\$Version: ${VERSION}\\\$/" -i '{}' \;
 
-if [ "$pycmd" == "python2.5" ]; then
-    export PYTHONPATH=`pwd`/tmp/usr/lib/python2.5/site-packages
-else
-    export PYTHONPATH=`pwd`/tmp/usr/local/lib/python2.6/dist-packages
-fi
+export PYTHONPATH=`pwd`/tmp/usr/local/lib/python2.6/dist-packages
+
 cp -r test tmp/test
 
 set +o errexit
 (
 cd tmp/test
-./alltests.sh --${pycmd}
+./alltests.sh 
 )
 set -o errexit
 
 rm -rf tmp build
-done
