@@ -37,11 +37,13 @@ def reactor():
         frame = frame.f_back
     return frame.f_locals['__reactor__']
 
+
 class Context(object):
     def __init__(self, callback, prio):
         self.callback = callback
         self.prio = prio
         self.locals = {}
+
 
 class Timer(Context):
     def __init__(self, seconds, callback):
@@ -54,11 +56,6 @@ class Timer(Context):
             return 1
         return cmp(self.time, rhs.time)
 
-    def __eq__(self, other):
-        return other and \
-                other.__class__ == Timer and \
-                other.time == self.time and \
-                other.callback == self.callback
 
 class Reactor(object):
     """This Reactor allows applications to be notified of read, write or time events.  The callbacks being executed can contain instructions to modify the reader, writers and timers in the reactor.  Additions of new events are effective with the next step() call, removals are effective immediately, even if the actual event was already trigger, but the handler wat not called yet."""
@@ -148,7 +145,6 @@ class Reactor(object):
     def step(self):
         __reactor__ = self
 
-        aTimerTimedOut = False
         self._prio = (self._prio + 1) % Reactor.MAXPRIO
         if self._timers:
             timeout = max(0, self._timers[0].time - time())
@@ -179,13 +175,12 @@ class Reactor(object):
                 break
             try:
                 self.currentcontext = timer
+                self.removeTimer(timer)
                 timer.callback()
             except AssertionError:
                 raise
             except:
                 print_exc()
-            finally:
-                del self._timers[0]
 
         self._callback(rReady, self._readers)
         self._callback(wReady, self._writers)

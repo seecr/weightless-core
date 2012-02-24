@@ -107,6 +107,20 @@ class ReactorTest(WeightlessTestCase):
         self.assertTrue(0.45 < time() - start < 0.55, time()-start)
         itstime = []
 
+    def testMustRemoveToBeExecutedTimerTheNotFirstOne(self):
+        reactor = Reactor()
+        executed = []
+        def addNewTimer():
+            reactor.addTimer(0.001, lambda: executed.append('newTimer'))
+            sleep(0.15)
+        reactor.addTimer(0, lambda: (addNewTimer(), executed.append('zero')))
+        reactor.addTimer(0.1, lambda: executed.append('one'))
+
+        reactor.step()
+        reactor.step()
+        self.assertEquals(0, len(reactor._timers))
+        self.assertEquals(['zero', 'one', 'newTimer'], executed)
+
     def testInvalidTime(self):
         reactor = Reactor()
         try:
@@ -156,15 +170,15 @@ class ReactorTest(WeightlessTestCase):
         def callback1():
             self.assertEquals([], done)
             done.append(1)
-            self.assertEquals([timer1, timer2, timer3], reactor._timers)
+            self.assertEquals([timer2, timer3], reactor._timers)
         def callback2():
             self.assertEquals([1], done)
             done.append(2)
-            self.assertEquals([timer2, timer3], reactor._timers)
+            self.assertEquals([timer3], reactor._timers)
         def callback3():
             self.assertEquals([1,2], done)
             done.append(3)
-            self.assertEquals([timer3], reactor._timers)
+            self.assertEquals([], reactor._timers)
         timer1 = reactor.addTimer(0.0001, callback1)
         timer2 = reactor.addTimer(0.0002, callback2)
         timer3 = reactor.addTimer(0.0003, callback3)
@@ -428,7 +442,4 @@ class ReactorTest(WeightlessTestCase):
         self.assertEquals(1, reactor.getOpenConnections())
         reactor.removeWriter('')
         self.assertEquals(0, reactor.getOpenConnections())
-
-
-
 
