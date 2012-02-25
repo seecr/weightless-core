@@ -107,7 +107,7 @@ class ReactorTest(WeightlessTestCase):
         self.assertTrue(0.45 < time() - start < 0.55, time()-start)
         itstime = []
 
-    def testMustRemoveToBeExecutedTimerTheNotFirstOne(self):
+    def testMustRemoveToBeExecutedTimerNotTheFirstOne(self):
         reactor = Reactor()
         executed = []
         def addNewTimer():
