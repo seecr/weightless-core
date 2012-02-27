@@ -1,0 +1,203 @@
+Changeset created on Mon Feb 27 10:25:09 UTC 2012 by Seecr (Seek You Too B.V.)
+
+Description: Timer handling bugfix
+
+    Always remove the currently (to be executed) timer, this is not always
+    the first one.  Additionally removing the timer before executing it.
+
+Baseline version: https://weightless.svn.sourceforge.net/svnroot/weightless/weightless-core/workingsets/0.6.6.1-Seecr/version_0
+
+diff --unidirectional-new-file --recursive --unified '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' version_0/test/io/reactortest.py /home/hendrik/development/weightless/weightless-core/workingsets/0.6.6.1-Seecr/version_1/test/io/reactortest.py
+--- version_0/test/io/reactortest.py	2012-02-27 09:32:31.000000000 +0100
++++ version_1/test/io/reactortest.py	2012-02-27 11:24:47.000000000 +0100
+@@ -1,26 +1,28 @@
+ ## begin license ##
+-#
+-#    Weightless is a High Performance Asynchronous Networking Library
+-#    See http://weightless.io
+-#    Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
+-#
+-#    This file is part of Weightless
+-#
+-#    Weightless is free software; you can redistribute it and/or modify
+-#    it under the terms of the GNU General Public License as published by
+-#    the Free Software Foundation; either version 2 of the License, or
+-#    (at your option) any later version.
+-#
+-#    Weightless is distributed in the hope that it will be useful,
+-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-#    GNU General Public License for more details.
+-#
+-#    You should have received a copy of the GNU General Public License
+-#    along with Weightless; if not, write to the Free Software
+-#    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+-#
++# 
++# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
++# 
++# Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
++# Copyright (C) 2012 Seecr (Seek You Too B.V.) http://seecr.nl
++# 
++# This file is part of "Weightless"
++# 
++# "Weightless" is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation; either version 2 of the License, or
++# (at your option) any later version.
++# 
++# "Weightless" is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++# 
++# You should have received a copy of the GNU General Public License
++# along with "Weightless"; if not, write to the Free Software
++# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
++# 
+ ## end license ##
++
+ #
+ from __future__ import with_statement
+ 
+@@ -107,6 +109,20 @@
+         self.assertTrue(0.45 < time() - start < 0.55, time()-start)
+         itstime = []
+ 
++    def testMustRemoveToBeExecutedTimerNotTheFirstOne(self):
++        reactor = Reactor()
++        executed = []
++        def addNewTimer():
++            reactor.addTimer(0.001, lambda: executed.append('newTimer'))
++            sleep(0.15)
++        reactor.addTimer(0, lambda: (addNewTimer(), executed.append('zero')))
++        reactor.addTimer(0.1, lambda: executed.append('one'))
++
++        reactor.step()
++        reactor.step()
++        self.assertEquals(0, len(reactor._timers))
++        self.assertEquals(['zero', 'newTimer', 'one'], executed)
++
+     def testInvalidTime(self):
+         reactor = Reactor()
+         try:
+@@ -137,6 +153,18 @@
+         reactor.removeTimer(token1)
+         self.assertEquals(1, len(reactor._timers))
+ 
++    def testRemoveTimerById(self):
++        def itsTime(): pass
++        reactor = Reactor()
++        token1 = reactor.addTimer(0.051, itsTime)
++        token2 = reactor.addTimer(0.051, itsTime)
++        token3 = reactor.addTimer(0.051, itsTime)
++        token3.time = token2.time = token1.time  # whiteboxing, can happen in real code, not easy to reproduce in a test situation.
++        self.assertEquals(token1.callback, token2.callback)
++        self.assertEquals(token2.callback, token3.callback)
++        reactor.removeTimer(token2)
++        self.assertEquals([token1, token3], reactor._timers)
++
+     def testExceptionInTimeoutCallback(self):
+         sys.stderr = StringIO()
+         try:
+@@ -156,20 +184,20 @@
+         def callback1():
+             self.assertEquals([], done)
+             done.append(1)
+-            self.assertEquals([timer1, timer2, timer3], reactor._timers)
++            self.assertEquals([timer2, timer3], reactor._timers)
+         def callback2():
+             self.assertEquals([1], done)
+             done.append(2)
+-            self.assertEquals([timer2, timer3], reactor._timers)
++            self.assertEquals([timer3], reactor._timers)
+         def callback3():
+             self.assertEquals([1,2], done)
+             done.append(3)
+-            self.assertEquals([timer3], reactor._timers)
++            self.assertEquals([], reactor._timers)
+         timer1 = reactor.addTimer(0.0001, callback1)
+         timer2 = reactor.addTimer(0.0002, callback2)
+         timer3 = reactor.addTimer(0.0003, callback3)
+         self.assertEquals([timer1, timer2, timer3], reactor._timers)
+-        sleep(0.004)
++        sleep(0.04)
+         reactor.step()
+         self.assertEquals([1,2,3], done)
+         self.assertEquals([], reactor._timers)
+@@ -429,6 +457,3 @@
+         reactor.removeWriter('')
+         self.assertEquals(0, reactor.getOpenConnections())
+ 
+-
+-
+-
+diff --unidirectional-new-file --recursive --unified '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' version_0/weightless/io/_reactor.py /home/hendrik/development/weightless/weightless-core/workingsets/0.6.6.1-Seecr/version_1/weightless/io/_reactor.py
+--- version_0/weightless/io/_reactor.py	2012-02-27 09:32:31.000000000 +0100
++++ version_1/weightless/io/_reactor.py	2012-02-27 11:24:47.000000000 +0100
+@@ -4,7 +4,7 @@
+ # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
+ # 
+ # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
+-# Copyright (C) 2011 Seecr (Seek You Too B.V.) http://seecr.nl
++# Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
+ # 
+ # This file is part of "Weightless"
+ # 
+@@ -37,12 +37,14 @@
+         frame = frame.f_back
+     return frame.f_locals['__reactor__']
+ 
++
+ class Context(object):
+     def __init__(self, callback, prio):
+         self.callback = callback
+         self.prio = prio
+         self.locals = {}
+ 
++
+ class Timer(Context):
+     def __init__(self, seconds, callback):
+         Context.__init__(self, callback, Reactor.DEFAULTPRIO)
+@@ -54,11 +56,6 @@
+             return 1
+         return cmp(self.time, rhs.time)
+ 
+-    def __eq__(self, other):
+-        return other and \
+-                other.__class__ == Timer and \
+-                other.time == self.time and \
+-                other.callback == self.callback
+ 
+ class Reactor(object):
+     """This Reactor allows applications to be notified of read, write or time events.  The callbacks being executed can contain instructions to modify the reader, writers and timers in the reactor.  Additions of new events are effective with the next step() call, removals are effective immediately, even if the actual event was already trigger, but the handler wat not called yet."""
+@@ -148,7 +145,6 @@
+     def step(self):
+         __reactor__ = self
+ 
+-        aTimerTimedOut = False
+         self._prio = (self._prio + 1) % Reactor.MAXPRIO
+         if self._timers:
+             timeout = max(0, self._timers[0].time - time())
+@@ -174,18 +170,18 @@
+             self.shutdown()
+             raise
+ 
++        currentTime = time()
+         for timer in self._timers[:]:
+-            if timer.time > time():
++            if timer.time > currentTime:
+                 break
+             try:
+                 self.currentcontext = timer
++                self.removeTimer(timer)
+                 timer.callback()
+             except AssertionError:
+                 raise
+             except:
+                 print_exc()
+-            finally:
+-                del self._timers[0]
+ 
+         self._callback(rReady, self._readers)
+         self._callback(wReady, self._writers)
