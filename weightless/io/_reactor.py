@@ -170,8 +170,9 @@ class Reactor(object):
             self.shutdown()
             raise
 
+        currentTime = time()
         for timer in self._timers[:]:
-            if timer.time > time():
+            if timer.time > currentTime:
                 break
             try:
                 self.currentcontext = timer

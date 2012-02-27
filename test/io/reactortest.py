@@ -119,7 +119,7 @@ class ReactorTest(WeightlessTestCase):
         reactor.step()
         reactor.step()
         self.assertEquals(0, len(reactor._timers))
-        self.assertEquals(['zero', 'one', 'newTimer'], executed)
+        self.assertEquals(['zero', 'newTimer', 'one'], executed)
 
     def testInvalidTime(self):
         reactor = Reactor()
@@ -150,6 +150,18 @@ class ReactorTest(WeightlessTestCase):
         token2 = reactor.addTimer(0.051, itsTime)
         reactor.removeTimer(token1)
         self.assertEquals(1, len(reactor._timers))
+
+    def testRemoveTimerById(self):
+        def itsTime(): pass
+        reactor = Reactor()
+        token1 = reactor.addTimer(0.051, itsTime)
+        token2 = reactor.addTimer(0.051, itsTime)
+        token3 = reactor.addTimer(0.051, itsTime)
+        token3.time = token2.time = token1.time  # whiteboxing, can happen in real code, not easy to reproduce in a test situation.
+        self.assertEquals(token1.callback, token2.callback)
+        self.assertEquals(token2.callback, token3.callback)
+        reactor.removeTimer(token2)
+        self.assertEquals([token1, token3], reactor._timers)
 
     def testExceptionInTimeoutCallback(self):
         sys.stderr = StringIO()
@@ -183,7 +195,7 @@ class ReactorTest(WeightlessTestCase):
         timer2 = reactor.addTimer(0.0002, callback2)
         timer3 = reactor.addTimer(0.0003, callback3)
         self.assertEquals([timer1, timer2, timer3], reactor._timers)
-        sleep(0.004)
+        sleep(0.04)
         reactor.step()
         self.assertEquals([1,2,3], done)
         self.assertEquals([], reactor._timers)
