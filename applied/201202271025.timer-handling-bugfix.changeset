@@ -1,0 +1,139 @@
+Changeset created on Mon Feb 27 10:56:46 UTC 2012 by Seecr (Seek You Too B.V.)
+
+Description: Timer handling bugfix
+
+    Always remove the currently (to be executed) timer, this is not always
+    the first one.  Additionally removing the timer before executing it. 
+
+Baseline version: https://weightless.svn.sourceforge.net/svnroot/weightless/weightless-core/tags/version_0.7.1
+
+diff --unidirectional-new-file --recursive --unified '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' version_0.7.1/test/io/reactortest.py /home/hendrik/development/weightless/weightless-core/tags/version_0.7.2/test/io/reactortest.py
+--- version_0.7.1/test/io/reactortest.py	2012-02-27 09:32:25.000000000 +0100
++++ version_0.7.2/test/io/reactortest.py	2012-02-27 11:49:50.000000000 +0100
+@@ -111,6 +111,20 @@
+         self.assertTrue(0.45 < time() - start < 0.55, time()-start)
+         itstime = []
+ 
++    def testMustRemoveToBeExecutedTimerNotTheFirstOne(self):
++        reactor = Reactor()
++        executed = []
++        def addNewTimer():
++            reactor.addTimer(0.001, lambda: executed.append('newTimer'))
++            sleep(0.15)
++        reactor.addTimer(0, lambda: (addNewTimer(), executed.append('zero')))
++        reactor.addTimer(0.1, lambda: executed.append('one'))
++
++        reactor.step()
++        reactor.step()
++        self.assertEquals(0, len(reactor._timers))
++        self.assertEquals(['zero', 'newTimer', 'one'], executed)
++
+     def testInvalidTime(self):
+         reactor = Reactor()
+         try:
+@@ -141,6 +155,18 @@
+         reactor.removeTimer(token1)
+         self.assertEquals(1, len(reactor._timers))
+ 
++    def testRemoveTimerById(self):
++        def itsTime(): pass
++        reactor = Reactor()
++        token1 = reactor.addTimer(0.051, itsTime)
++        token2 = reactor.addTimer(0.051, itsTime)
++        token3 = reactor.addTimer(0.051, itsTime)
++        token3.time = token2.time = token1.time  # whiteboxing, can happen in real code, not easy to reproduce in a test situation.
++        self.assertEquals(token1.callback, token2.callback)
++        self.assertEquals(token2.callback, token3.callback)
++        reactor.removeTimer(token2)
++        self.assertEquals([token1, token3], reactor._timers)
++
+     def testExceptionInTimeoutCallback(self):
+         sys.stderr = StringIO()
+         try:
+@@ -160,20 +186,20 @@
+         def callback1():
+             self.assertEquals([], done)
+             done.append(1)
+-            self.assertEquals([timer1, timer2, timer3], reactor._timers)
++            self.assertEquals([timer2, timer3], reactor._timers)
+         def callback2():
+             self.assertEquals([1], done)
+             done.append(2)
+-            self.assertEquals([timer2, timer3], reactor._timers)
++            self.assertEquals([timer3], reactor._timers)
+         def callback3():
+             self.assertEquals([1,2], done)
+             done.append(3)
+-            self.assertEquals([timer3], reactor._timers)
++            self.assertEquals([], reactor._timers)
+         timer1 = reactor.addTimer(0.0001, callback1)
+         timer2 = reactor.addTimer(0.0002, callback2)
+         timer3 = reactor.addTimer(0.0003, callback3)
+         self.assertEquals([timer1, timer2, timer3], reactor._timers)
+-        sleep(0.004)
++        sleep(0.04)
+         reactor.step()
+         self.assertEquals([1,2,3], done)
+         self.assertEquals([], reactor._timers)
+diff --unidirectional-new-file --recursive --unified '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' version_0.7.1/weightless/io/_reactor.py /home/hendrik/development/weightless/weightless-core/tags/version_0.7.2/weightless/io/_reactor.py
+--- version_0.7.1/weightless/io/_reactor.py	2012-02-27 09:32:27.000000000 +0100
++++ version_0.7.2/weightless/io/_reactor.py	2012-02-27 11:44:48.000000000 +0100
+@@ -33,6 +33,7 @@
+ def reactor():
+     return local('__reactor__')
+ 
++
+ class Context(object):
+     def __init__(self, callback, prio):
+         if prio is None:
+@@ -43,6 +44,7 @@
+         self.callback = callback
+         self.prio = prio
+ 
++
+ class Timer(Context):
+     def __init__(self, seconds, callback):
+         Context.__init__(self, callback, Reactor.DEFAULTPRIO)
+@@ -54,12 +56,6 @@
+             return 1
+         return cmp(self.time, rhs.time)
+ 
+-    def __eq__(self, other):
+-        return other and \
+-                other.__class__ == Timer and \
+-                other.time == self.time and \
+-                other.callback == self.callback
+-
+ 
+ class Reactor(object):
+     """This Reactor allows applications to be notified of read, write or time events.  The callbacks being executed can contain instructions to modify the reader, writers and timers in the reactor.  Additions of new events are effective with the next step() call, removals are effective immediately, even if the actual event was already trigger, but the handler wat not called yet."""
+@@ -162,7 +158,6 @@
+     def step(self):
+         __reactor__ = self
+ 
+-        aTimerTimedOut = False
+         self._prio = (self._prio + 1) % Reactor.MAXPRIO
+         if self._timers:
+             timeout = max(0, self._timers[0].time - time())
+@@ -220,18 +215,18 @@
+                             del soks[self.currenthandle]
+ 
+     def _timerCallbacks(self, timers):
++        currentTime = time()
+         for timer in timers[:]:
+-            if timer.time > time():
++            if timer.time > currentTime:
+                 break
+             self.currentcontext = timer
++            self.removeTimer(timer)
+             try:
+                 timer.callback()
+             except (AssertionError, SystemExit, KeyboardInterrupt):
+                 raise
+             except:
+                 print_exc()
+-            finally:
+-                del timers[0]
+ 
+     def _processCallbacks(self, processes):
+         for self.currenthandle, context in processes.items():
