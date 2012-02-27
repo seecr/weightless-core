@@ -33,6 +33,7 @@ from weightless.core import local
 def reactor():
     return local('__reactor__')
 
+
 class Context(object):
     def __init__(self, callback, prio):
         if prio is None:
@@ -42,6 +43,7 @@ class Context(object):
 
         self.callback = callback
         self.prio = prio
+
 
 class Timer(Context):
     def __init__(self, seconds, callback):
@@ -53,12 +55,6 @@ class Timer(Context):
         if not rhs:
             return 1
         return cmp(self.time, rhs.time)
-
-    def __eq__(self, other):
-        return other and \
-                other.__class__ == Timer and \
-                other.time == self.time and \
-                other.callback == self.callback
 
 
 class Reactor(object):
@@ -162,7 +158,6 @@ class Reactor(object):
     def step(self):
         __reactor__ = self
 
-        aTimerTimedOut = False
         self._prio = (self._prio + 1) % Reactor.MAXPRIO
         if self._timers:
             timeout = max(0, self._timers[0].time - time())
@@ -220,18 +215,18 @@ class Reactor(object):
                             del soks[self.currenthandle]
 
     def _timerCallbacks(self, timers):
+        currentTime = time()
         for timer in timers[:]:
-            if timer.time > time():
+            if timer.time > currentTime:
                 break
             self.currentcontext = timer
+            self.removeTimer(timer)
             try:
                 timer.callback()
             except (AssertionError, SystemExit, KeyboardInterrupt):
                 raise
             except:
                 print_exc()
-            finally:
-                del timers[0]
 
     def _processCallbacks(self, processes):
         for self.currenthandle, context in processes.items():
