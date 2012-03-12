@@ -36,6 +36,7 @@ from seecr.test import CallTrace
 from os.path import join, abspath, dirname
 from StringIO import StringIO
 from sys import getdefaultencoding
+from zlib import compress
 
 from weightless.http import HttpServer, _httpserver
 from weightless.core import Yield
@@ -45,12 +46,12 @@ def inmydir(p):
 
 class HttpServerTest(WeightlessTestCase):
 
-    def sendRequestAndReceiveResponse(self, request, recvSize=4096):
+    def sendRequestAndReceiveResponse(self, request, response='The Response', recvSize=4096):
         self.responseCalled = False
-        def response(**kwargs):
-            yield 'The Response'
+        def responseGenFunc(**kwargs):
+            yield response
             self.responseCalled = True
-        server = HttpServer(self.reactor, self.port, response, recvSize=recvSize)
+        server = HttpServer(self.reactor, self.port, responseGenFunc, recvSize=recvSize)
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
@@ -225,6 +226,81 @@ class HttpServerTest(WeightlessTestCase):
         self.assertTrue('Body' in self.requestData)
         self.assertEquals('bodydata', self.requestData['Body'])
 
+    def testPostMethodDeCompressesDeflatedBody_deflate(self):
+        self.requestData = None
+        def handler(**kwargs):
+            self.requestData = kwargs
+
+        reactor = Reactor()
+        server = HttpServer(reactor, self.port, handler, timeout=0.01)
+        server.listen()
+        sok = socket()
+        sok.connect(('localhost', self.port))
+        bodyData = 'bodydatabodydata'
+        bodyDataCompressed = compress(bodyData)
+        contentLengthCompressed = len(bodyDataCompressed)
+        sok.send(('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nContent-Encoding: deflate\r\n\r\n' % contentLengthCompressed) + bodyDataCompressed)
+
+        while not self.requestData:
+            reactor.step()
+        self.assertEquals(dict, type(self.requestData))
+        self.assertTrue('Headers' in self.requestData)
+        headers = self.requestData['Headers']
+        self.assertEquals('POST', self.requestData['Method'])
+        self.assertEquals('application/x-www-form-urlencoded', headers['Content-Type'])
+        self.assertEquals(contentLengthCompressed, int(headers['Content-Length']))  # TS: is this correct?, maybe decompressed length?
+
+        self.assertTrue('Body' in self.requestData)
+        self.assertEquals('bodydatabodydata', self.requestData['Body'])
+
+    def testPostMethodDeCompressesDeflatedBody_x_deflate(self):
+        self.requestData = None
+        def handler(**kwargs):
+            self.requestData = kwargs
+            return
+            yield
+
+        reactor = Reactor()
+        server = HttpServer(reactor, self.port, handler, timeout=0.01)
+        server.listen()
+        sok = socket()
+        sok.connect(('localhost', self.port))
+        bodyData = 'bodydatabodydata'
+        bodyDataCompressed = compress(bodyData)
+        contentLengthCompressed = len(bodyDataCompressed)
+        sok.send(('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nContent-Encoding: x-deflate\r\n\r\n' % contentLengthCompressed) + bodyDataCompressed)
+
+        while select([sok],[], [], 0) != ([sok], [], []):
+            reactor.step()
+        self.assertFalse(sok.recv(4096).startswith('HTTP/1.0 400 Bad Request'))
+
+        # TS: minimalistic assert that it works too for x-deflate
+        self.assertEquals('bodydatabodydata', self.requestData['Body'])
+
+    def testPostMethodDeCompressesDeflatedBody_unrecognizedEncoding(self):
+        self.requestData = None
+        def handler(**kwargs):
+            self.requestData = kwargs
+            return
+            yield
+
+        reactor = Reactor()
+        server = HttpServer(reactor, self.port, handler, timeout=0.01)
+        server.listen()
+        sok = socket()
+        sok.connect(('localhost', self.port))
+        bodyData = 'bodydatabodydata'
+        bodyDataCompressed = compress(bodyData)
+        contentLengthCompressed = len(bodyDataCompressed)
+        sok.send(('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nContent-Encoding: unknown\r\n\r\n' % contentLengthCompressed) + bodyDataCompressed)
+
+        while select([sok],[], [], 0) != ([sok], [], []):
+            reactor.step()
+        self.assertTrue(sok.recv(4096).startswith('HTTP/1.0 400 Bad Request'))
+
+        # TS: minimalistic assert that it works too for x-deflate
+        self.assertEquals(None, self.requestData)
+
     def testPostMethodTimesOutOnBadBody(self):
         self.requestData = None
         def handler(**kwargs):
@@ -247,7 +323,6 @@ class HttpServerTest(WeightlessTestCase):
         while not done:
             reactor.step()
 
-
     def testReadChunkedPost(self):
         self.requestData = {}
         def handler(**kwargs):
@@ -263,6 +338,33 @@ class HttpServerTest(WeightlessTestCase):
         reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
         while self.requestData.get('Body', None) != 'abcdefghij':
             reactor.step()
+
+    def testReadChunkedAndCompressedPost(self):
+        postData = 'AhjBeehCeehAhjBeehCeehAhjBeehCeehAhjBeehCeeh'
+        postDataCompressed = compress(postData)
+        self.assertEquals(20, len(postDataCompressed))
+        self.assertEquals(15, len(postDataCompressed[:15]))
+        self.assertEquals(5, len(postDataCompressed[15:]))
+
+        self.requestData = {}
+        def handler(**kwargs):
+            self.requestData = kwargs
+
+        reactor = Reactor()
+        server = HttpServer(reactor, self.port, handler, timeout=0.01, recvSize=3)
+        server.listen()
+        sok = socket()
+        sok.connect(('localhost', self.port))
+        postString = 'POST / HTTP/1.1\r\nContent-Type: application/x-www-form-urlencoded\r\nTransfer-Encoding: chunked\r\nContent-Encoding: deflate\r\n\r\n15\r\n%s\r\n5\r\n%s\r\n0\r\n' % (postDataCompressed[:15], postDataCompressed[15:])
+        sok.send(postString)
+
+        reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
+        while self.requestData.get('Body', None) != postData:
+            try:
+                reactor.step()
+            except AssertionError:
+                print '###', sok.recv(4096)
+                break
 
     def testPostMultipartForm(self):
         httpRequest = open(inmydir('data/multipart-data-01')).read()

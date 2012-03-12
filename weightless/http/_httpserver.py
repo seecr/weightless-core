@@ -104,8 +104,17 @@ def maxFileDescriptors():
 def defaultErrorHandler(**kwargs):
     yield 'HTTP/1.0 503 Service Unavailable\r\n\r\n<html><head></head><body><h1>Service Unavailable</h1></body></html>'
 
+# TS: additional imports
+from zlib import compressobj as deflateCompress
+from zlib import decompressobj as deflateDeCompress
+
+#TS: helpers
+def parseContentEncoding(headerValue):
+    # TS: May there be multi-valued ??, contradiction available.
+    return [x.strip().lower().split(';', 1)[0] for x in headerValue.split(',')][0]
+
 class HttpHandler(object):
-    def __init__(self, reactor, sok, generatorFactory, timeout, recvSize=RECVSIZE, prio=None, maxConnections=None, errorHandler=None):
+    def __init__(self, reactor, sok, generatorFactory, timeout, recvSize=RECVSIZE, prio=None, maxConnections=None, errorHandler=None, compressResponse=False):
         self._reactor = reactor
         self._sok = sok
         self._generatorFactory = generatorFactory
@@ -121,6 +130,23 @@ class HttpHandler(object):
         self._maxConnections = maxConnections if maxConnections else maxFileDescriptors()
         self._errorHandler = errorHandler if errorHandler else defaultErrorHandler
         self._defaultEncoding = getdefaultencoding()
+
+        # TS: Newies
+        self._decodeRequestBody = None
+        self._encodeResponseBody = None
+        _deflateCompress = deflateCompress()
+        _deflateDeCompress = deflateDeCompress()
+        # objects must support: compress / decompress and argumentless flush
+        self._supportedContentEncodings = {
+                'deflate': {
+                    'encode': _deflateCompress,
+                    'decode': _deflateDeCompress,
+                 },
+                'x-deflate': {
+                    'encode': _deflateCompress,
+                    'decode': _deflateDeCompress,
+                 },
+        }
 
     def __call__(self):
         part = self._sok.recv(self._recvSize)
@@ -147,6 +173,9 @@ class HttpHandler(object):
         self.request = match.groupdict()
         self.request['Body'] = ''
         self.request['Headers'] = parseHeaders(self.request['_headers'])
+        # TS: Demarkation Point --> after match.end() may lie compressed
+        # data.  From here on, apply a decompression function over input,
+        # when appropriate.
         matchEnd = match.end()
         self._dataBuffer = self._dataBuffer[matchEnd:]
         if 'Content-Type' in self.request['Headers']:
@@ -159,6 +188,7 @@ class HttpHandler(object):
                 return
         if 'Expect' in self.request['Headers']:
             self._sok.send('HTTP/1.1 100 Continue\r\n\r\n')
+
         if self._reactor.getOpenConnections() > self._maxConnections:
             self.request['ResponseCode'] = 503
             self._finalize(self._errorHandler)
@@ -169,6 +199,8 @@ class HttpHandler(object):
         if self._timer:
             self._reactor.removeTimer(self._timer)
             self._timer = None
+        # TS: i.s.o. writing to tempfile, deChunk, then possibly decode
+        # then write to self._window and tempfile
         self._tempfile.write(self._dataBuffer)
 
         self._window += self._dataBuffer
@@ -210,6 +242,19 @@ class HttpHandler(object):
         if self.request['Method'] == 'GET':
             self.finalize()
         elif self.request['Method'] == 'POST':
+            # Determine Content-Encoding in request, if any.
+            if not self._decodeRequestBody and 'Content-Encoding' in self.request['Headers']:
+                contentEncoding = parseContentEncoding(self.request['Headers']['Content-Encoding'])
+                if contentEncoding not in self._supportedContentEncodings:
+                    if self._timer:
+                        self._reactor.removeTimer(self._timer)
+                        self._timer = None
+                    self._badRequest()
+                    return  # TS: look up correct status code for this
+
+                self._decodeRequestBody = self._supportedContentEncodings[contentEncoding]['decode']
+
+            # Not chunked
             if 'Content-Length' in self.request['Headers']:
                 contentLength = int(self.request['Headers']['Content-Length'])
 
@@ -221,12 +266,20 @@ class HttpHandler(object):
                     self._reactor.removeTimer(self._timer)
                     self._timer = None
 
-                self.request['Body'] = self._dataBuffer
+                if self._decodeRequestBody:
+                    self.request['Body'] = self._decodeRequestBody.decompress(self._dataBuffer)
+                    self.request['Body'] += self._decodeRequestBody.flush()
+                else:
+                    self.request['Body'] = self._dataBuffer
                 self.finalize()
+
+            # Chunked - client thinks we're HTTP/1.1
             elif 'Transfer-Encoding' in self.request['Headers'] and self.request['Headers']['Transfer-Encoding'] == 'chunked':
                 self.setCallDealer(self._readChunk)
+            # TS: No body?!
             else:
                 self.finalize()
+        # TS: every other method.  This feels very greedy to me.
         else:
             self.finalize()
 
@@ -245,6 +298,8 @@ class HttpHandler(object):
 
     def _readChunkBody(self):
         if self._chunkSize == 0:
+            if self._decodeRequestBody:
+                self.request['Body'] += self._decodeRequestBody.flush()
             self.finalize()
         else:
             if len(self._dataBuffer) < self._chunkSize + CRLF_LEN:
@@ -254,7 +309,11 @@ class HttpHandler(object):
             if self._timer:
                 self._reactor.removeTimer(self._timer)
                 self._timer = None
-            self.request['Body'] += self._dataBuffer[:self._chunkSize]
+            # TS: intervene here, at Body-filling
+            if self._decodeRequestBody:
+                self.request['Body'] += self._decodeRequestBody.decompress(self._dataBuffer[:self._chunkSize])
+            else:
+                self.request['Body'] += self._dataBuffer[:self._chunkSize]
             self._dataBuffer = self._dataBuffer[self._chunkSize + CRLF_LEN:]
             self.setCallDealer(self._readChunk)
 
