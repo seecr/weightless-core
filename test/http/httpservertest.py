@@ -355,16 +355,12 @@ class HttpServerTest(WeightlessTestCase):
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
-        postString = 'POST / HTTP/1.1\r\nContent-Type: application/x-www-form-urlencoded\r\nTransfer-Encoding: chunked\r\nContent-Encoding: deflate\r\n\r\n15\r\n%s\r\n5\r\n%s\r\n0\r\n' % (postDataCompressed[:15], postDataCompressed[15:])
+        postString = 'POST / HTTP/1.1\r\nContent-Type: application/x-www-form-urlencoded\r\nTransfer-Encoding: chunked\r\nContent-Encoding: deflate\r\n\r\nf\r\n%s\r\n5\r\n%s\r\n0\r\n' % (postDataCompressed[:15], postDataCompressed[15:])
         sok.send(postString)
 
         reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
         while self.requestData.get('Body', None) != postData:
-            try:
-                reactor.step()
-            except AssertionError:
-                print '###', sok.recv(4096)
-                break
+            reactor.step()
 
     def testPostMultipartForm(self):
         httpRequest = open(inmydir('data/multipart-data-01')).read()
