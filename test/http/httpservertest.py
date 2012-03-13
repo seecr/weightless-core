@@ -298,7 +298,6 @@ class HttpServerTest(WeightlessTestCase):
             reactor.step()
         self.assertTrue(sok.recv(4096).startswith('HTTP/1.0 400 Bad Request'))
 
-        # TS: minimalistic assert that it works too for x-deflate
         self.assertEquals(None, self.requestData)
 
     def testPostMethodTimesOutOnBadBody(self):
@@ -364,6 +363,27 @@ class HttpServerTest(WeightlessTestCase):
 
     def testPostMultipartForm(self):
         httpRequest = open(inmydir('data/multipart-data-01')).read()
+        self.requestData = {}
+        def handler(**kwargs):
+            self.requestData = kwargs
+
+        reactor = Reactor()
+        server = HttpServer(reactor, self.port, handler)
+        server.listen()
+        sok = socket()
+        sok.connect(('localhost', self.port))
+        sok.send(httpRequest)
+
+        reactor.addTimer(2, lambda: self.fail("Test Stuck"))
+        while self.requestData.get('Form', None) == None:
+            reactor.step()
+        form = self.requestData['Form']
+        self.assertEquals(4, len(form))
+        self.assertEquals(['SOME ID'], form['id'])
+
+    def XXX_testPostMultipartFormCompressed(self):
+        """Not yet"""
+        httpRequest = open(inmydir('data/multipart-data-01-compressed')).read()
         self.requestData = {}
         def handler(**kwargs):
             self.requestData = kwargs
