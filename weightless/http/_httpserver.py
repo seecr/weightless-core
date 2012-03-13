@@ -42,9 +42,9 @@ from sys import stdout, getdefaultencoding
 RECVSIZE = 4096
 CRLF_LEN = 2
 
-class HttpServer:
+class HttpServer(object):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
-    def __init__(self, reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None):
+    def __init__(self, reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, compressResponse=False):
         self._reactor = reactor
         self._port = port
         self._generatorFactory = generatorFactory
@@ -54,12 +54,14 @@ class HttpServer:
         self._sok = sok
         self._maxConnections = maxConnections
         self._errorHandler = errorHandler
+        self._compressResponse = compressResponse
 
     def listen(self):
         self._acceptor = Acceptor(self._reactor, self._port, 
                 lambda sok: HttpHandler(self._reactor, sok, self._generatorFactory, self._timeout, 
                     self._recvSize, prio=self._prio, maxConnections=self._maxConnections, 
-                    errorHandler=self._errorHandler),
+                    errorHandler=self._errorHandler,
+                    compressResponse=self._compressResponse),
                 prio=self._prio, sok=self._sok)
 
 
@@ -69,7 +71,7 @@ class HttpServer:
     def shutdown(self):
         self._acceptor.shutdown()
 
-def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, certfile='', keyfile=''):
+def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, compressResponse=False, certfile='', keyfile=''):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
     if sok == None:
         def verify_cb(conn, cert, errnum, depth, ok):
@@ -92,7 +94,7 @@ def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, p
         sok.bind(('0.0.0.0', port))
         sok.listen(127)
 
-    return Acceptor(reactor, port, lambda s: HttpsHandler(reactor, s, generatorFactory, timeout, recvSize, prio=prio, maxConnections=maxConnections, errorHandler=errorHandler), prio=prio, sok=sok)
+    return Acceptor(reactor, port, lambda s: HttpsHandler(reactor, s, generatorFactory, timeout, recvSize, prio=prio, maxConnections=maxConnections, errorHandler=errorHandler, compressResponse=compressResponse), prio=prio, sok=sok)
 
 from sys import stdout
 from resource import getrlimit, RLIMIT_NOFILE
@@ -113,6 +115,9 @@ def parseContentEncoding(headerValue):
     # TS: May there be multi-valued ??, contradiction available.
     return [x.strip().lower().split(';', 1)[0] for x in headerValue.split(',')][0]
 
+def parseAcceptEncoding(headerValue):
+    return [x.strip().lower().split(';', 1)[0] for x in [v.strip() for v in headerValue.split(',')] if x]
+
 class HttpHandler(object):
     def __init__(self, reactor, sok, generatorFactory, timeout, recvSize=RECVSIZE, prio=None, maxConnections=None, errorHandler=None, compressResponse=False):
         self._reactor = reactor
@@ -132,6 +137,7 @@ class HttpHandler(object):
         self._defaultEncoding = getdefaultencoding()
 
         # TS: Newies
+        self._compressResponse = compressResponse
         self._decodeRequestBody = None
         self._encodeResponseBody = None
         _deflateCompress = deflateCompress()
@@ -173,9 +179,6 @@ class HttpHandler(object):
         self.request = match.groupdict()
         self.request['Body'] = ''
         self.request['Headers'] = parseHeaders(self.request['_headers'])
-        # TS: Demarkation Point --> after match.end() may lie compressed
-        # data.  From here on, apply a decompression function over input,
-        # when appropriate.
         matchEnd = match.end()
         self._dataBuffer = self._dataBuffer[matchEnd:]
         if 'Content-Type' in self.request['Headers']:
@@ -243,14 +246,14 @@ class HttpHandler(object):
             self.finalize()
         elif self.request['Method'] == 'POST':
             # Determine Content-Encoding in request, if any.
-            if not self._decodeRequestBody and 'Content-Encoding' in self.request['Headers']:
+            if self._decodeRequestBody is None and 'Content-Encoding' in self.request['Headers']:
                 contentEncoding = parseContentEncoding(self.request['Headers']['Content-Encoding'])
                 if contentEncoding not in self._supportedContentEncodings:
                     if self._timer:
                         self._reactor.removeTimer(self._timer)
                         self._timer = None
                     self._badRequest()
-                    return  # TS: look up correct status code for this
+                    return
 
                 self._decodeRequestBody = self._supportedContentEncodings[contentEncoding]['decode']
 
@@ -266,20 +269,18 @@ class HttpHandler(object):
                     self._reactor.removeTimer(self._timer)
                     self._timer = None
 
-                if self._decodeRequestBody:
+                if self._decodeRequestBody is not None:
                     self.request['Body'] = self._decodeRequestBody.decompress(self._dataBuffer)
                     self.request['Body'] += self._decodeRequestBody.flush()
                 else:
                     self.request['Body'] = self._dataBuffer
                 self.finalize()
 
-            # Chunked - client thinks we're HTTP/1.1
+            # Chunked - means HTTP/1.1
             elif 'Transfer-Encoding' in self.request['Headers'] and self.request['Headers']['Transfer-Encoding'] == 'chunked':
                 self.setCallDealer(self._readChunk)
-            # TS: No body?!
             else:
                 self.finalize()
-        # TS: every other method.  This feels very greedy to me.
         else:
             self.finalize()
 
@@ -298,7 +299,7 @@ class HttpHandler(object):
 
     def _readChunkBody(self):
         if self._chunkSize == 0:
-            if self._decodeRequestBody:
+            if self._decodeRequestBody is not None:
                 self.request['Body'] += self._decodeRequestBody.flush()
             self.finalize()
         else:
@@ -309,16 +310,27 @@ class HttpHandler(object):
             if self._timer:
                 self._reactor.removeTimer(self._timer)
                 self._timer = None
-            # TS: intervene here, at Body-filling
-            if self._decodeRequestBody:
+            if self._decodeRequestBody is not None:
                 self.request['Body'] += self._decodeRequestBody.decompress(self._dataBuffer[:self._chunkSize])
             else:
                 self.request['Body'] += self._dataBuffer[:self._chunkSize]
             self._dataBuffer = self._dataBuffer[self._chunkSize + CRLF_LEN:]
             self.setCallDealer(self._readChunk)
 
+    def _determineContentEncoding(self):
+        if 'Accept-Encoding' not in self.request['Headers']:
+            return
+        acceptEncodings = set(parseAcceptEncoding(self.request['Headers']['Accept-Encoding']))
+        for encoding in sorted(self._supportedContentEncodings.keys()):
+            if encoding in acceptEncodings:
+                return encoding
+
     def _finalize(self, finalizeMethod):
         del self.request['_headers']
+        if self._compressResponse == True:
+            self._encodeResponseBodyStr = self._determineContentEncoding()
+            self._encodeResponseBody = self._supportedContentEncodings[self._encodeResponseBodyStr]['encode']
+
         self.request['Client'] = self._sok.getpeername()
         self._handler = finalizeMethod(**self.request)
         self._reactor.removeReader(self._sok)
@@ -336,6 +348,10 @@ class HttpHandler(object):
     @identify
     def _writeResponse(self):
         this = yield
+        endHeader = False
+        headers = ''
+        encodeResponseBody = self._encodeResponseBody
+        # TODO: set self._encodeResponseBody before, test is not None!
         while True:
             yield
             try:
@@ -352,12 +368,33 @@ class HttpHandler(object):
                         continue
                     if type(data) is unicode:
                         data = data.encode(self._defaultEncoding)
+                if encodeResponseBody is not None:
+                    if endHeader is False:
+                        headers += data
+                        if '\r\n\r\n' in headers:
+                            endHeader = True
+                            _header, _bodyStart = headers.split('\r\n\r\n', 1)
+                            data = _header + '\r\nContent-Encoding: %s\r\n\r\n%s' % (self._encodeResponseBodyStr, encodeResponseBody.compress(_bodyStart))
+                        else:
+                            continue
+                    else:
+                        data = encodeResponseBody.compress(data)
+
                 sent = self._sok.send(data, MSG_DONTWAIT)
                 if sent < len(data):
                     self._rest = data[sent:]
                 else:
                     self._rest = None
             except StopIteration:
+                if encodeResponseBody:
+                    self._rest = encodeResponseBody.flush()
+                    while self._rest:
+                        data = self._rest
+                        sent = self._sok.send(data, MSG_DONTWAIT)
+                        if sent < len(data):
+                            self._rest = data[sent:]
+                        else:
+                            self._rest = None
                 self._closeConnection()
                 yield
             except:

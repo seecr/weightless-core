@@ -39,26 +39,34 @@ from sys import getdefaultencoding
 from zlib import compress
 
 from weightless.http import HttpServer, _httpserver
-from weightless.core import Yield
+from weightless.core import Yield, compose
 
 def inmydir(p):
     return join(dirname(abspath(__file__)), p)
 
 class HttpServerTest(WeightlessTestCase):
 
-    def sendRequestAndReceiveResponse(self, request, response='The Response', recvSize=4096):
+    def sendRequestAndReceiveResponse(self, request, response='The Response', recvSize=4096, compressResponse=False):
         self.responseCalled = False
+        @compose
         def responseGenFunc(**kwargs):
             yield response
+            yield ''
             self.responseCalled = True
-        server = HttpServer(self.reactor, self.port, responseGenFunc, recvSize=recvSize)
+        server = HttpServer(self.reactor, self.port, responseGenFunc, recvSize=recvSize, compressResponse=compressResponse)
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
         sok.send(request)
-        with self.stdout_replaced():
+
+        mockStdout = None
+        with self.stdout_replaced() as mockStdout:
             while not self.responseCalled:
                 self.reactor.step()
+        stdoutValue = mockStdout.getvalue()
+        if stdoutValue:
+            print stdoutValue
+
         server.shutdown()
         r = sok.recv(4096)
         sok.close()
@@ -98,6 +106,19 @@ class HttpServerTest(WeightlessTestCase):
     def testGetResponse(self):
         response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
         self.assertEquals('The Response', response)
+
+    def testGetCompressedResponse_deflate(self):
+        rawHeaders = 'HTTP/1.1 200 OK\r\n'
+        rawBody = '''This is the response.
+        Nicely uncompressed, and readable.'''
+        rawResponse = rawHeaders + '\r\n' + rawBody
+        def rawResponser():
+            for c in rawResponse:
+                yield Yield
+                yield c
+        compressedResponse = rawHeaders + 'Content-Encoding: deflate\r\n\r\n' + compress(rawBody)
+        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
+        self.assertEquals(compressedResponse, response)
 
     def testCloseConnection(self):
         response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
