@@ -62,6 +62,10 @@ class Suspend(object):
         if hasattr(self, "_handle"):
             self._reactor.resumeWriter(self._handle)
 
+    def resumeProcess(self):
+        if hasattr(self, "_handle"):
+            self._reactor.resumeProcess(self._handle)
+
     def getResult(self):
         if self._exception:
             raise self._exception[0], self._exception[1], self._exception[2]
