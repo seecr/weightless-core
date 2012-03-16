@@ -38,8 +38,10 @@ from StringIO import StringIO
 from sys import getdefaultencoding
 from zlib import compress
 
-from weightless.http import HttpServer, _httpserver
+from weightless.http import HttpServer, _httpserver, REGEXP
 from weightless.core import Yield, compose
+
+from weightless.http._httpserver import updateResponseHeaders, parseContentEncoding
 
 def inmydir(p):
     return join(dirname(abspath(__file__)), p)
@@ -119,6 +121,101 @@ class HttpServerTest(WeightlessTestCase):
         compressedResponse = rawHeaders + 'Content-Encoding: deflate\r\n\r\n' + compress(rawBody)
         response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
         self.assertEquals(compressedResponse, response)
+
+    def testGetCompressedResponse_deflate_ContentLengthStripped(self):
+        rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nAnother: Header\r\n'
+        rawBody = '''This is the response.
+        Nicely uncompressed, and readable.'''
+        rawResponse = rawHeaders + '\r\n' + rawBody
+        def rawResponser():
+            for c in rawResponse:
+                yield Yield
+                yield c
+        compressedResponse = rawHeaders.replace('Content-Length: 12345\r\n', '') + 'Content-Encoding: deflate\r\n\r\n' + compress(rawBody)
+        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
+        self.assertEquals(compressedResponse, response)
+
+    def testParseContentEncoding(self):
+        self.assertEquals(['gzip'], parseContentEncoding('gzip'))
+        self.assertEquals(['gzip'], parseContentEncoding('    gzip       '))
+        self.assertEquals(['gzip', 'deflate'], parseContentEncoding('gzip, deflate'))
+        self.assertEquals(['deflate', 'gzip'], parseContentEncoding('  deflate  ,    gzip '))
+
+    def testParseAcceptEncoding(self):
+        self.assertEquals(['gzip'], parseAcceptEncoding('gzip'))
+        self.assertEquals(['gzip', 'deflate'], parseAcceptEncoding('gzip, deflate'))
+        self.assertEquals(['gzip', 'deflate'], parseAcceptEncoding(' gzip  , deflate '))
+        self.assertEquals(['deflate'], parseAcceptEncoding('gzip;q=0, deflate;q=1.0'))
+        self.assertEquals(['deflate'], parseAcceptEncoding('gzip;q=0.00, deflate;q=1.001'))
+
+    def testUpdateResponseHeaders(self):
+        headers = 'HTTP/1.0 200 OK\r\nSome: Header\r\n\r\nThe Body'
+        match = REGEXP.RESPONSE.match(headers)
+        newHeaders, newBody = updateResponseHeaders(headers, match)
+
+        self.assertEquals('HTTP/1.0 200 OK\r\nSome: Header\r\n\r\n', newHeaders)
+        self.assertEquals('The Body', newBody)
+
+        headers = 'HTTP/1.0 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nAnother: 1\r\n\r\nThe Body'
+        match = REGEXP.RESPONSE.match(headers)
+        newHeaders, newBody = updateResponseHeaders(headers, match, removeHeaders=['Content-Length'])
+
+        self.assertEquals('HTTP/1.0 200 OK\r\nSome: Header\r\nAnother: 1\r\n\r\n', newHeaders)
+        self.assertEquals('The Body', newBody)
+
+        headers = 'HTTP/1.0 200 OK\r\nA: H\r\ncOnTeNt-LENGTh:\r\nB: I\r\n\r\nThe Body'
+        match = REGEXP.RESPONSE.match(headers)
+        newHeaders, newBody = updateResponseHeaders(headers, match, removeHeaders=['Content-Length'])
+
+        self.assertEquals('HTTP/1.0 200 OK\r\nA: H\r\nB: I\r\n\r\n', newHeaders)
+        self.assertEquals('The Body', newBody)
+
+    def testUpdateResponseHeaders_addHeaders(self):
+        headers = 'HTTP/1.0 200 OK\r\nA: H\r\n\r\nbody'
+        match = REGEXP.RESPONSE.match(headers)
+        newHeaders, newBody = updateResponseHeaders(headers, match, addHeaders={'Content-Encoding': 'deflate'})
+        self.assertEquals(('HTTP/1.0 200 OK\r\nA: H\r\nContent-Encoding: deflate\r\n\r\n', 'body'), (newHeaders, newBody))
+
+    def testUpdateResponseHeaders_removeHeaders(self):
+        statusLineAndHeaders = 'HTTP/1.0 200 OK\r\nB: have\r\n\r\nbody'
+        match = REGEXP.RESPONSE.match(statusLineAndHeaders)
+        newSLandHeaders, newBody = updateResponseHeaders(statusLineAndHeaders, match, removeHeaders=['B'])
+        self.assertEquals(('HTTP/1.0 200 OK\r\n\r\n', 'body'), (newSLandHeaders, newBody))
+
+        statusLineAndHeaders = 'HTTP/1.0 200 OK\r\nB: have\r\n\r\nbody'
+        match = REGEXP.RESPONSE.match(statusLineAndHeaders)
+        newSLandHeaders, newBody = updateResponseHeaders(statusLineAndHeaders, match, removeHeaders=['Not-Found-Header'])
+        self.assertEquals(('HTTP/1.0 200 OK\r\nB: have\r\n\r\n', 'body'), (newSLandHeaders, newBody))
+
+        statusLineAndHeaders = 'HTTP/1.0 200 OK\r\nAnother: header\r\nB: have\r\nBe: haved\r\n\r\nbody'
+        match = REGEXP.RESPONSE.match(statusLineAndHeaders)
+        newSLandHeaders, newBody = updateResponseHeaders(statusLineAndHeaders, match, removeHeaders=['B'])
+        self.assertEquals(('HTTP/1.0 200 OK\r\nAnother: header\r\nBe: haved\r\n\r\n', 'body'), (newSLandHeaders, newBody))
+
+    def testUpdateResponseHeaders_requireAbsent(self):
+        headers = 'HTTP/1.0 200 OK\r\nA: H\r\n\r\nbody'
+        match = REGEXP.RESPONSE.match(headers)
+        newHeaders, newBody = updateResponseHeaders(headers, match, requireAbsent=['Content-Encoding'])
+        self.assertEquals(('HTTP/1.0 200 OK\r\nA: H\r\n\r\n', 'body'), (newHeaders, newBody))
+
+        headers = 'HTTP/1.0 200 OK\r\nA: H\r\nContent-Encoding: Yes, Please\r\n\r\nbody'
+        match = REGEXP.RESPONSE.match(headers)
+        self.assertRaises(ValueError, lambda: updateResponseHeaders(headers, match, requireAbsent=['Content-Encoding']))
+
+        headers = 'HTTP/1.0 200 OK\r\ncoNTent-ENCodIng:\r\n\r\nbody'
+        match = REGEXP.RESPONSE.match(headers)
+        self.assertRaises(ValueError, lambda: updateResponseHeaders(headers, match, requireAbsent=['Content-Encoding']))
+
+        headers = 'HTTP/1.0 200 OK\r\nA: Content-Encoding\r\nOh: No\r\n\r\nbody'
+        match = REGEXP.RESPONSE.match(headers)
+        self.assertRaises(ValueError, lambda: updateResponseHeaders(headers, match, requireAbsent=['Content-Encoding', 'Oh']))
+
+        headers = 'HTTP/1.0 200 OK\r\nA:\r\nB:\r\nC:\r\nD:\r\n\r\nbody'
+        match = REGEXP.RESPONSE.match(headers)
+        try:
+            updateResponseHeaders(headers, match, requireAbsent=['B', 'C'])
+        except ValueError, e:
+            self.assertEquals('Response headers contained disallowed items: C, B', str(e))
 
     def testCloseConnection(self):
         response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
