@@ -141,6 +141,15 @@ class HttpServerTest(WeightlessTestCase):
         self.assertEquals(['gzip', 'deflate'], parseContentEncoding('gzip, deflate'))
         self.assertEquals(['deflate', 'gzip'], parseContentEncoding('  deflate  ,    gzip '))
 
+    def testTodo(self):
+        self.fail('''
+        TODO:
+            - Add gzip support (using StringIO buffering and gzip module for now)
+            - Accept-Encoding parsing better ("q=0 -> 0.000" means don't use)
+            - updateResponseHeaders(...) ValueError and try...catch testing
+            - Refactor away: self._encodeResponseBody self._encodeResponseBodyStr (args to _writeResponse ?)
+                ''')
+
     def testParseAcceptEncoding(self):
         self.assertEquals(['gzip'], parseAcceptEncoding('gzip'))
         self.assertEquals(['gzip', 'deflate'], parseAcceptEncoding('gzip, deflate'))

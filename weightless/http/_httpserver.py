@@ -386,7 +386,6 @@ class HttpHandler(object):
         endHeader = False
         headers = ''
         encodeResponseBody = self._encodeResponseBody
-        # TODO: set self._encodeResponseBody before, test is not None!
         while True:
             yield
             try:
@@ -409,7 +408,6 @@ class HttpHandler(object):
                         match = REGEXP.RESPONSE.match(headers)
                         if match:
                             endHeader = True
-                            #_header, _bodyStart = updateResponseHeaders(headers, match)
                             try:
                                 _statusLineAndHeaders, _bodyStart = updateResponseHeaders(
                                         headers, match,
@@ -420,8 +418,7 @@ class HttpHandler(object):
                                 # Don't interfere with an existing content-encoding
                                 encodeResponseBody = None
                                 data = headers
-                            #_header, _bodyStart = headers.split('\r\n\r\n', 1)
-                            #data = _header + '\r\nContent-Encoding: %s\r\n\r\n%s' % (self._encodeResponseBodyStr, encodeResponseBody.compress(_bodyStart))
+
                             data = _statusLineAndHeaders + encodeResponseBody.compress(_bodyStart)
                         else:
                             continue
