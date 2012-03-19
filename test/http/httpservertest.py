@@ -37,11 +37,12 @@ from os.path import join, abspath, dirname
 from StringIO import StringIO
 from sys import getdefaultencoding
 from zlib import compress
+from gzip import GzipFile
 
 from weightless.http import HttpServer, _httpserver, REGEXP
 from weightless.core import Yield, compose
 
-from weightless.http._httpserver import updateResponseHeaders, parseContentEncoding
+from weightless.http._httpserver import updateResponseHeaders, parseContentEncoding, parseAcceptEncoding
 
 def inmydir(p):
     return join(dirname(abspath(__file__)), p)
@@ -135,20 +136,55 @@ class HttpServerTest(WeightlessTestCase):
         response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
         self.assertEquals(compressedResponse, response)
 
+    def testGetCompressedResponse_gzip_ContentLengthStripped(self):
+        rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nAnother: Header\r\n'
+        rawBody = '''This is the response.
+        Nicely uncompressed, and readable.'''
+        rawResponse = rawHeaders + '\r\n' + rawBody
+        def rawResponser():
+            for c in rawResponse:
+                yield Yield
+                yield c
+        _sio = StringIO()
+        _gzFileObj = GzipFile(filename=None, mode='wb', compresslevel=6, fileobj=_sio)
+        _gzFileObj.write(rawBody); _gzFileObj.close()
+        compressedBody = _sio.getvalue()
+
+        compressedResponse = rawHeaders.replace('Content-Length: 12345\r\n', '') + 'Content-Encoding: gzip\r\n\r\n' + compressedBody
+        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: gzip;q=0.999, deflate;q=0.998, dontknowthisone;q=1\r\n\r\n', response=rawResponser(), compressResponse=True)
+        self.assertEquals(compressedResponse, response)
+
+    def testOnlyCompressBodyWhenCompressResponseIsOn(self):
+        rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nAnother: Header\r\n'
+        rawBody = '''This is the response.
+        Nicely uncompressed, and readable.'''
+        rawResponse = rawHeaders + '\r\n' + rawBody
+        def rawResponser():
+            for c in rawResponse:
+                yield c
+
+        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=False)
+        self.assertEquals(rawResponse, response)
+
+        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
+        self.assertNotEqual(rawResponse, response)
+
+    def testGetCompressedResponse_uncompressedWhenContentEncodingPresent(self):
+        rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nContent-Encoding: enlightened\r\n'
+        rawBody = '''This is the response.
+        *NOT* compressed.'''
+        rawResponse = rawHeaders + '\r\n' + rawBody
+        def rawResponser():
+            for c in rawResponse:
+                yield c
+        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
+        self.assertEquals(rawResponse, response)
+
     def testParseContentEncoding(self):
         self.assertEquals(['gzip'], parseContentEncoding('gzip'))
         self.assertEquals(['gzip'], parseContentEncoding('    gzip       '))
         self.assertEquals(['gzip', 'deflate'], parseContentEncoding('gzip, deflate'))
         self.assertEquals(['deflate', 'gzip'], parseContentEncoding('  deflate  ,    gzip '))
-
-    def testTodo(self):
-        self.fail('''
-        TODO:
-            - Add gzip support (using StringIO buffering and gzip module for now)
-            - Accept-Encoding parsing better ("q=0 -> 0.000" means don't use)
-            - updateResponseHeaders(...) ValueError and try...catch testing
-            - Refactor away: self._encodeResponseBody self._encodeResponseBodyStr (args to _writeResponse ?)
-                ''')
 
     def testParseAcceptEncoding(self):
         self.assertEquals(['gzip'], parseAcceptEncoding('gzip'))
@@ -156,6 +192,8 @@ class HttpServerTest(WeightlessTestCase):
         self.assertEquals(['gzip', 'deflate'], parseAcceptEncoding(' gzip  , deflate '))
         self.assertEquals(['deflate'], parseAcceptEncoding('gzip;q=0, deflate;q=1.0'))
         self.assertEquals(['deflate'], parseAcceptEncoding('gzip;q=0.00, deflate;q=1.001'))
+        self.assertEquals(['deflate;media=range'], parseAcceptEncoding('gzip;q=0.00, deflate;media=range;q=1.001;I=amIgnored'))
+        self.assertEquals(['text/xhtml+xml', 'x-gzip', 'text/html;level=2'], parseAcceptEncoding('text/html;level=2;q=0.005, text/xhtml+xml;q=0.7, x-gzip;q=0.6'))
 
     def testUpdateResponseHeaders(self):
         headers = 'HTTP/1.0 200 OK\r\nSome: Header\r\n\r\nThe Body'
@@ -376,6 +414,37 @@ class HttpServerTest(WeightlessTestCase):
         self.assertEquals('POST', self.requestData['Method'])
         self.assertEquals('application/x-www-form-urlencoded', headers['Content-Type'])
         self.assertEquals(contentLengthCompressed, int(headers['Content-Length']))  # TS: is this correct?, maybe decompressed length?
+
+        self.assertTrue('Body' in self.requestData)
+        self.assertEquals('bodydatabodydata', self.requestData['Body'])
+
+    def testPostMethodDeCompressesDeflatedBody_gzip(self):
+        self.requestData = None
+        def handler(**kwargs):
+            self.requestData = kwargs
+
+        reactor = Reactor()
+        server = HttpServer(reactor, self.port, handler, timeout=0.01)
+        server.listen()
+        sok = socket()
+        sok.connect(('localhost', self.port))
+        bodyData = 'bodydatabodydata'
+        _sio = StringIO()
+        _gzFileObj = GzipFile(filename=None, mode='wb', compresslevel=6, fileobj=_sio)
+        _gzFileObj.write(bodyData); _gzFileObj.close()
+        compressedBodyData = _sio.getvalue()
+        bodyDataCompressed = compress(bodyData)
+        contentLengthCompressed = len(bodyDataCompressed)
+        sok.send(('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nContent-Encoding: gzip\r\n\r\n' % contentLengthCompressed) + bodyDataCompressed)
+
+        while not self.requestData:
+            reactor.step()
+        self.assertEquals(dict, type(self.requestData))
+        self.assertTrue('Headers' in self.requestData)
+        headers = self.requestData['Headers']
+        self.assertEquals('POST', self.requestData['Method'])
+        self.assertEquals('application/x-www-form-urlencoded', headers['Content-Type'])
+        self.assertEquals(contentLengthCompressed, int(headers['Content-Length']))
 
         self.assertTrue('Body' in self.requestData)
         self.assertEquals('bodydatabodydata', self.requestData['Body'])

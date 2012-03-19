@@ -29,11 +29,13 @@ from weightless.core import identify, Yield
 from weightless.http import REGEXP, FORMAT, parseHeaders, parseHeader
 
 import re
+from StringIO import StringIO
 from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
 from tempfile import TemporaryFile
 from email import message_from_file as parse_mime_message
 from zlib import compressobj as deflateCompress
 from zlib import decompressobj as deflateDeCompress
+from gzip import GzipFile
 
 
 from OpenSSL import SSL
@@ -113,11 +115,29 @@ def defaultErrorHandler(**kwargs):
     yield 'HTTP/1.0 503 Service Unavailable\r\n\r\n<html><head></head><body><h1>Service Unavailable</h1></body></html>'
 
 def parseContentEncoding(headerValue):
-    # TS: May there be multi-valued ??, contradiction available.
     return [x.strip().lower() for x in headerValue.split(',')]
 
 def parseAcceptEncoding(headerValue):
-    return [x.strip().lower().split(';', 1)[0] for x in [v.strip() for v in headerValue.split(',')] if x]
+    result = []
+    for encodingMaybeQValue in (v.strip() for v in headerValue.split(',') if v):
+        _splitted = encodingMaybeQValue.split(';')
+        encoding = _splitted[0]
+        if len(_splitted) == 1:
+            qvalue = 1.0
+        else:
+            for acceptParam in _splitted[1:]:
+                pName, pValue = acceptParam.split('=', 1)
+                if pName == 'q':
+                    qvalue = float(pValue)
+                    break
+                else:
+                    encoding += ';' + acceptParam  # media-range
+
+        if qvalue != 0.0:
+            result.append((encoding, qvalue))
+
+    result.sort(key=lambda o: o[1], reverse=True)
+    return map(lambda o: o[0], result)
 
 
 _removeHeaderReCache = {}
@@ -153,6 +173,31 @@ def updateResponseHeaders(headers, match, addHeaders=None, removeHeaders=None, r
     return _statusLine + _headers + _headerToBodySep, _body
 
 
+class GzipCompress(object):
+    def __init__(self):
+        self._buffer = StringIO()
+        self._gzipFileObj = GzipFile(filename=None, mode='wb', compresslevel=6, fileobj=self._buffer)
+
+    def compress(self, data):
+        self._gzipFileObj.write(data)
+        return ''
+
+    def flush(self):
+        self._gzipFileObj.close()
+        return self._buffer.getvalue()
+
+
+class GzipDeCompress(object):
+    def __init__(self):
+        self._decompressObj = deflateDeCompress()
+
+    def decompress(self, data):
+        return self._decompressObj.decompress(data, 48)  # wbits=16+32; decompress gzip-stream only
+
+    def flush(self):
+        return self._decompressObj.flush()
+
+
 class HttpHandler(object):
     def __init__(self, reactor, sok, generatorFactory, timeout, recvSize=RECVSIZE, prio=None, maxConnections=None, errorHandler=None, compressResponse=False):
         self._reactor = reactor
@@ -173,20 +218,25 @@ class HttpHandler(object):
 
         self._compressResponse = compressResponse
         self._decodeRequestBody = None
-        self._encodeResponseBody = None
 
-        # objects must support: compress / decompress and argumentless flush
-        _deflateCompress = deflateCompress
-        _deflateDeCompress = deflateDeCompress
+        # (De)compression-objects must support: compress / decompress and argumentless flush
         self._supportedContentEncodings = {
                 'deflate': {
-                    'encode': _deflateCompress,
-                    'decode': _deflateDeCompress,
+                    'encode': deflateCompress,
+                    'decode': deflateDeCompress,
                  },
                 'x-deflate': {
-                    'encode': _deflateCompress,
-                    'decode': _deflateDeCompress,
+                    'encode': deflateCompress,
+                    'decode': deflateDeCompress,
                  },
+                'gzip': {
+                    'encode': GzipCompress,
+                    'decode': GzipDeCompress,
+                },
+                'x-gzip': {
+                    'encode': GzipCompress,
+                    'decode': GzipDeCompress,
+                },
         }
 
     def __call__(self):
@@ -355,21 +405,22 @@ class HttpHandler(object):
     def _determineContentEncoding(self):
         if 'Accept-Encoding' not in self.request['Headers']:
             return
-        acceptEncodings = set(parseAcceptEncoding(self.request['Headers']['Accept-Encoding']))
-        for encoding in sorted(self._supportedContentEncodings.keys()):
-            if encoding in acceptEncodings:
+        acceptEncodings = parseAcceptEncoding(self.request['Headers']['Accept-Encoding'])
+        for encoding in acceptEncodings:
+            if encoding in self._supportedContentEncodings:
                 return encoding
 
     def _finalize(self, finalizeMethod):
         del self.request['_headers']
+
+        encoding = None
         if self._compressResponse == True:
-            self._encodeResponseBodyStr = self._determineContentEncoding()
-            self._encodeResponseBody = self._supportedContentEncodings[self._encodeResponseBodyStr]['encode']()
+            encoding = self._determineContentEncoding()
 
         self.request['Client'] = self._sok.getpeername()
         self._handler = finalizeMethod(**self.request)
         self._reactor.removeReader(self._sok)
-        self._reactor.addWriter(self._sok, self._writeResponse().next, prio=self._prio)
+        self._reactor.addWriter(self._sok, self._writeResponse(encoding=encoding).next, prio=self._prio)
 
     def finalize(self):
         self._finalize(self._generatorFactory)
@@ -381,11 +432,11 @@ class HttpHandler(object):
         self._sok.close()
 
     @identify
-    def _writeResponse(self):
+    def _writeResponse(self, encoding=None):
         this = yield
         endHeader = False
         headers = ''
-        encodeResponseBody = self._encodeResponseBody
+        encodeResponseBody = self._supportedContentEncodings[encoding]['encode']() if encoding is not None else None
         while True:
             yield
             try:
@@ -411,15 +462,15 @@ class HttpHandler(object):
                             try:
                                 _statusLineAndHeaders, _bodyStart = updateResponseHeaders(
                                         headers, match,
-                                        addHeaders={'Content-Encoding': self._encodeResponseBodyStr},
+                                        addHeaders={'Content-Encoding': encoding},
                                         removeHeaders=['Content-Length'],
                                         requireAbsent=['Content-Encoding'])
                             except ValueError:
                                 # Don't interfere with an existing content-encoding
                                 encodeResponseBody = None
                                 data = headers
-
-                            data = _statusLineAndHeaders + encodeResponseBody.compress(_bodyStart)
+                            else:
+                                data = _statusLineAndHeaders + encodeResponseBody.compress(_bodyStart)
                         else:
                             continue
                     else:
