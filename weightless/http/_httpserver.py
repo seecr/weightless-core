@@ -133,11 +133,11 @@ def parseAcceptEncoding(headerValue):
                 else:
                     encoding += ';' + acceptParam  # media-range
 
-        if qvalue != 0.0:
+        if qvalue > 0.0001:
             result.append((encoding, qvalue))
 
     result.sort(key=lambda o: o[1], reverse=True)
-    return map(lambda o: o[0], result)
+    return [o[0] for o in result]
 
 
 _removeHeaderReCache = {}
@@ -404,11 +404,12 @@ class HttpHandler(object):
 
     def _determineContentEncoding(self):
         if 'Accept-Encoding' not in self.request['Headers']:
-            return
+            return None
         acceptEncodings = parseAcceptEncoding(self.request['Headers']['Accept-Encoding'])
         for encoding in acceptEncodings:
             if encoding in self._supportedContentEncodings:
                 return encoding
+        return None
 
     def _finalize(self, finalizeMethod):
         del self.request['_headers']
