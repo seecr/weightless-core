@@ -47,6 +47,7 @@ from sys import stdout, getdefaultencoding
 
 
 RECVSIZE = 4096
+CRLF = '\r\n'
 CRLF_LEN = 2
 
 
@@ -152,7 +153,6 @@ def updateResponseHeaders(headers, match, addHeaders=None, removeHeaders=None, r
     matchEnd = match.end()
     _statusLine = headers[:matchStartHeaders - CRLF_LEN]
     _headers = headers[matchStartHeaders - CRLF_LEN:matchEnd - CRLF_LEN]
-    _headerToBodySep = '\r\n'
     _body = headers[matchEnd:]
 
     notAbsents = requireAbsent.intersection(set(headersDict.keys()))
@@ -165,12 +165,12 @@ def updateResponseHeaders(headers, match, addHeaders=None, removeHeaders=None, r
             
             headerRe = re.compile(r'\r\n%s:.*?\r\n' % re.escape(header), flags=re.I)
             _removeHeaderReCache[header] = headerRe
-        _headers = headerRe.sub('\r\n', _headers, count=1)
+        _headers = headerRe.sub(CRLF, _headers, count=1)
 
     for header, value in addHeaders.items():
         _headers += '%s: %s\r\n' % (header, value)
 
-    return _statusLine + _headers + _headerToBodySep, _body
+    return _statusLine + _headers + CRLF, _body
 
 
 class GzipCompress(object):
@@ -197,6 +197,25 @@ class GzipDeCompress(object):
     def flush(self):
         return self._decompressObj.flush()
 
+# (De)compression-objects must support: compress / decompress and argumentless flush
+SUPPORTED_CONTENT_ENCODINGS = {
+    'deflate': {
+        'encode': deflateCompress,
+        'decode': deflateDeCompress,
+     },
+    'x-deflate': {
+        'encode': deflateCompress,
+        'decode': deflateDeCompress,
+     },
+    'gzip': {
+        'encode': GzipCompress,
+        'decode': GzipDeCompress,
+    },
+    'x-gzip': {
+        'encode': GzipCompress,
+        'decode': GzipDeCompress,
+    },
+}
 
 class HttpHandler(object):
     def __init__(self, reactor, sok, generatorFactory, timeout, recvSize=RECVSIZE, prio=None, maxConnections=None, errorHandler=None, compressResponse=False):
@@ -219,25 +238,6 @@ class HttpHandler(object):
         self._compressResponse = compressResponse
         self._decodeRequestBody = None
 
-        # (De)compression-objects must support: compress / decompress and argumentless flush
-        self._supportedContentEncodings = {
-                'deflate': {
-                    'encode': deflateCompress,
-                    'decode': deflateDeCompress,
-                 },
-                'x-deflate': {
-                    'encode': deflateCompress,
-                    'decode': deflateDeCompress,
-                 },
-                'gzip': {
-                    'encode': GzipCompress,
-                    'decode': GzipDeCompress,
-                },
-                'x-gzip': {
-                    'encode': GzipCompress,
-                    'decode': GzipDeCompress,
-                },
-        }
 
     def __call__(self):
         part = self._sok.recv(self._recvSize)
@@ -332,7 +332,7 @@ class HttpHandler(object):
             # Determine Content-Encoding in request, if any.
             if self._decodeRequestBody is None and 'Content-Encoding' in self.request['Headers']:
                 contentEncoding = parseContentEncoding(self.request['Headers']['Content-Encoding'])
-                if len(contentEncoding) != 1 or contentEncoding[0] not in self._supportedContentEncodings:
+                if len(contentEncoding) != 1 or contentEncoding[0] not in SUPPORTED_CONTENT_ENCODINGS:
                     if self._timer:
                         self._reactor.removeTimer(self._timer)
                         self._timer = None
@@ -340,7 +340,7 @@ class HttpHandler(object):
                     return
                 contentEncoding = contentEncoding[0]
 
-                self._decodeRequestBody = self._supportedContentEncodings[contentEncoding]['decode']()
+                self._decodeRequestBody = SUPPORTED_CONTENT_ENCODINGS[contentEncoding]['decode']()
 
             # Not chunked
             if 'Content-Length' in self.request['Headers']:
@@ -407,7 +407,7 @@ class HttpHandler(object):
             return None
         acceptEncodings = parseAcceptEncoding(self.request['Headers']['Accept-Encoding'])
         for encoding in acceptEncodings:
-            if encoding in self._supportedContentEncodings:
+            if encoding in SUPPORTED_CONTENT_ENCODINGS:
                 return encoding
         return None
 
@@ -437,7 +437,7 @@ class HttpHandler(object):
         this = yield
         endHeader = False
         headers = ''
-        encodeResponseBody = self._supportedContentEncodings[encoding]['encode']() if encoding is not None else None
+        encodeResponseBody = SUPPORTED_CONTENT_ENCODINGS[encoding]['encode']() if encoding is not None else None
         while True:
             yield
             try:
