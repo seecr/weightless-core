@@ -103,6 +103,23 @@ class SuspendTest(WeightlessTestCase):
         self.assertTrue(sok in reactor._readers)
         self.assertRaises(KeyError, reactor.resumeReader, handle[0])
 
+    def testReactorResumeProcess(self):
+        reactor = Reactor(select_func=mockselect)
+        def callback():
+            handle[0] = reactor.suspend()
+            yield
+            yield
+        handle = [callback().next]
+        sok = MockSocket()
+        reactor.addProcess(handle[0])
+        reactor.step()
+        reactor.resumeProcess(handle[0])
+        reactor.step()
+        self.assertFalse(handle[0] in reactor._writers)
+        self.assertFalse(handle[0] in reactor._readers)
+        self.assertTrue(handle[0] in reactor._processes)
+        self.assertRaises(KeyError, reactor.resumeProcess, handle[0])
+
     def testWrongUseAfterSuspending(self):
         reactor = Reactor(select_func=mockselect)
         handle = ['initial value']
