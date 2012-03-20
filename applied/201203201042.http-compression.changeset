@@ -1,0 +1,748 @@
+Changeset created on Tue Mar 20 10:42:09 UTC 2012 by Seecr (Seek You Too B.V.)
+
+Description: HTTP Compression
+
+    HTTP compression added to HttpServer and HttpsServer.
+    Encodings gzip/x-gzip and deflate/x-deflate are supported for both
+    decoding requests and generating responses.
+
+Baseline version: https://weightless.svn.sourceforge.net/svnroot/weightless/weightless-core/workingsets/0.7.2-Edurep/version_0
+
+Binary files version_0/test/http/data/multipart-data-01-compressed and /newroot/home/tom/repositories/work/weightless/weightless-core/workingsets/0.7.2-Edurep/version_2/test/http/data/multipart-data-01-compressed differ
+diff --unidirectional-new-file --recursive --unified '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' version_0/test/http/httpservertest.py /newroot/home/tom/repositories/work/weightless/weightless-core/workingsets/0.7.2-Edurep/version_2/test/http/httpservertest.py
+--- version_0/test/http/httpservertest.py	2012-03-09 16:09:01.525496813 +0100
++++ version_2/test/http/httpservertest.py	2012-03-20 11:41:38.773625145 +0100
+@@ -36,28 +36,40 @@
+ from os.path import join, abspath, dirname
+ from StringIO import StringIO
+ from sys import getdefaultencoding
++from zlib import compress
++from gzip import GzipFile
+ 
+-from weightless.http import HttpServer, _httpserver
+-from weightless.core import Yield
++from weightless.http import HttpServer, _httpserver, REGEXP
++from weightless.core import Yield, compose
++
++from weightless.http._httpserver import updateResponseHeaders, parseContentEncoding, parseAcceptEncoding
+ 
+ def inmydir(p):
+     return join(dirname(abspath(__file__)), p)
+ 
+ class HttpServerTest(WeightlessTestCase):
+ 
+-    def sendRequestAndReceiveResponse(self, request, recvSize=4096):
++    def sendRequestAndReceiveResponse(self, request, response='The Response', recvSize=4096, compressResponse=False):
+         self.responseCalled = False
+-        def response(**kwargs):
+-            yield 'The Response'
++        @compose
++        def responseGenFunc(**kwargs):
++            yield response
++            yield ''
+             self.responseCalled = True
+-        server = HttpServer(self.reactor, self.port, response, recvSize=recvSize)
++        server = HttpServer(self.reactor, self.port, responseGenFunc, recvSize=recvSize, compressResponse=compressResponse)
+         server.listen()
+         sok = socket()
+         sok.connect(('localhost', self.port))
+         sok.send(request)
+-        with self.stdout_replaced():
++
++        mockStdout = None
++        with self.stdout_replaced() as mockStdout:
+             while not self.responseCalled:
+                 self.reactor.step()
++        stdoutValue = mockStdout.getvalue()
++        if stdoutValue:
++            print stdoutValue
++
+         server.shutdown()
+         r = sok.recv(4096)
+         sok.close()
+@@ -98,6 +110,160 @@
+         response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
+         self.assertEquals('The Response', response)
+ 
++    def testGetCompressedResponse_deflate(self):
++        rawHeaders = 'HTTP/1.1 200 OK\r\n'
++        rawBody = '''This is the response.
++        Nicely uncompressed, and readable.'''
++        rawResponse = rawHeaders + '\r\n' + rawBody
++        def rawResponser():
++            for c in rawResponse:
++                yield Yield
++                yield c
++        compressedResponse = rawHeaders + 'Content-Encoding: deflate\r\n\r\n' + compress(rawBody)
++        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
++        self.assertEquals(compressedResponse, response)
++
++    def testGetCompressedResponse_deflate_ContentLengthStripped(self):
++        rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nAnother: Header\r\n'
++        rawBody = '''This is the response.
++        Nicely uncompressed, and readable.'''
++        rawResponse = rawHeaders + '\r\n' + rawBody
++        def rawResponser():
++            for c in rawResponse:
++                yield Yield
++                yield c
++        compressedResponse = rawHeaders.replace('Content-Length: 12345\r\n', '') + 'Content-Encoding: deflate\r\n\r\n' + compress(rawBody)
++        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
++        self.assertEquals(compressedResponse, response)
++
++    def testGetCompressedResponse_gzip_ContentLengthStripped(self):
++        rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nAnother: Header\r\n'
++        rawBody = '''This is the response.
++        Nicely uncompressed, and readable.'''
++        rawResponse = rawHeaders + '\r\n' + rawBody
++        def rawResponser():
++            for c in rawResponse:
++                yield Yield
++                yield c
++        _sio = StringIO()
++        _gzFileObj = GzipFile(filename=None, mode='wb', compresslevel=6, fileobj=_sio)
++        _gzFileObj.write(rawBody); _gzFileObj.close()
++        compressedBody = _sio.getvalue()
++
++        compressedResponse = rawHeaders.replace('Content-Length: 12345\r\n', '') + 'Content-Encoding: gzip\r\n\r\n' + compressedBody
++        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: gzip;q=0.999, deflate;q=0.998, dontknowthisone;q=1\r\n\r\n', response=rawResponser(), compressResponse=True)
++        self.assertEquals(compressedResponse, response)
++
++    def testOnlyCompressBodyWhenCompressResponseIsOn(self):
++        rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nAnother: Header\r\n'
++        rawBody = '''This is the response.
++        Nicely uncompressed, and readable.'''
++        rawResponse = rawHeaders + '\r\n' + rawBody
++        def rawResponser():
++            for c in rawResponse:
++                yield c
++
++        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=False)
++        self.assertEquals(rawResponse, response)
++
++        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
++        self.assertNotEqual(rawResponse, response)
++
++    def testGetCompressedResponse_uncompressedWhenContentEncodingPresent(self):
++        rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nContent-Encoding: enlightened\r\n'
++        rawBody = '''This is the response.
++        *NOT* compressed.'''
++        rawResponse = rawHeaders + '\r\n' + rawBody
++        def rawResponser():
++            for c in rawResponse:
++                yield c
++        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
++        self.assertEquals(rawResponse, response)
++
++    def testParseContentEncoding(self):
++        self.assertEquals(['gzip'], parseContentEncoding('gzip'))
++        self.assertEquals(['gzip'], parseContentEncoding('    gzip       '))
++        self.assertEquals(['gzip', 'deflate'], parseContentEncoding('gzip, deflate'))
++        self.assertEquals(['deflate', 'gzip'], parseContentEncoding('  deflate  ,    gzip '))
++
++    def testParseAcceptEncoding(self):
++        self.assertEquals(['gzip'], parseAcceptEncoding('gzip'))
++        self.assertEquals(['gzip', 'deflate'], parseAcceptEncoding('gzip, deflate'))
++        self.assertEquals(['gzip', 'deflate'], parseAcceptEncoding(' gzip  , deflate '))
++        self.assertEquals(['deflate'], parseAcceptEncoding('gzip;q=0, deflate;q=1.0'))
++        self.assertEquals(['deflate'], parseAcceptEncoding('gzip;q=0.00, deflate;q=1.001'))
++        self.assertEquals(['deflate;media=range'], parseAcceptEncoding('gzip;q=0.00, deflate;media=range;q=1.001;I=amIgnored'))
++        self.assertEquals(['text/xhtml+xml', 'x-gzip', 'text/html;level=2'], parseAcceptEncoding('text/html;level=2;q=0.005, text/xhtml+xml;q=0.7, x-gzip;q=0.6'))
++
++    def testUpdateResponseHeaders(self):
++        headers = 'HTTP/1.0 200 OK\r\nSome: Header\r\n\r\nThe Body'
++        match = REGEXP.RESPONSE.match(headers)
++        newHeaders, newBody = updateResponseHeaders(headers, match)
++
++        self.assertEquals('HTTP/1.0 200 OK\r\nSome: Header\r\n\r\n', newHeaders)
++        self.assertEquals('The Body', newBody)
++
++        headers = 'HTTP/1.0 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nAnother: 1\r\n\r\nThe Body'
++        match = REGEXP.RESPONSE.match(headers)
++        newHeaders, newBody = updateResponseHeaders(headers, match, removeHeaders=['Content-Length'])
++
++        self.assertEquals('HTTP/1.0 200 OK\r\nSome: Header\r\nAnother: 1\r\n\r\n', newHeaders)
++        self.assertEquals('The Body', newBody)
++
++        headers = 'HTTP/1.0 200 OK\r\nA: H\r\ncOnTeNt-LENGTh:\r\nB: I\r\n\r\nThe Body'
++        match = REGEXP.RESPONSE.match(headers)
++        newHeaders, newBody = updateResponseHeaders(headers, match, removeHeaders=['Content-Length'])
++
++        self.assertEquals('HTTP/1.0 200 OK\r\nA: H\r\nB: I\r\n\r\n', newHeaders)
++        self.assertEquals('The Body', newBody)
++
++    def testUpdateResponseHeaders_addHeaders(self):
++        headers = 'HTTP/1.0 200 OK\r\nA: H\r\n\r\nbody'
++        match = REGEXP.RESPONSE.match(headers)
++        newHeaders, newBody = updateResponseHeaders(headers, match, addHeaders={'Content-Encoding': 'deflate'})
++        self.assertEquals(('HTTP/1.0 200 OK\r\nA: H\r\nContent-Encoding: deflate\r\n\r\n', 'body'), (newHeaders, newBody))
++
++    def testUpdateResponseHeaders_removeHeaders(self):
++        statusLineAndHeaders = 'HTTP/1.0 200 OK\r\nB: have\r\n\r\nbody'
++        match = REGEXP.RESPONSE.match(statusLineAndHeaders)
++        newSLandHeaders, newBody = updateResponseHeaders(statusLineAndHeaders, match, removeHeaders=['B'])
++        self.assertEquals(('HTTP/1.0 200 OK\r\n\r\n', 'body'), (newSLandHeaders, newBody))
++
++        statusLineAndHeaders = 'HTTP/1.0 200 OK\r\nB: have\r\n\r\nbody'
++        match = REGEXP.RESPONSE.match(statusLineAndHeaders)
++        newSLandHeaders, newBody = updateResponseHeaders(statusLineAndHeaders, match, removeHeaders=['Not-Found-Header'])
++        self.assertEquals(('HTTP/1.0 200 OK\r\nB: have\r\n\r\n', 'body'), (newSLandHeaders, newBody))
++
++        statusLineAndHeaders = 'HTTP/1.0 200 OK\r\nAnother: header\r\nB: have\r\nBe: haved\r\n\r\nbody'
++        match = REGEXP.RESPONSE.match(statusLineAndHeaders)
++        newSLandHeaders, newBody = updateResponseHeaders(statusLineAndHeaders, match, removeHeaders=['B'])
++        self.assertEquals(('HTTP/1.0 200 OK\r\nAnother: header\r\nBe: haved\r\n\r\n', 'body'), (newSLandHeaders, newBody))
++
++    def testUpdateResponseHeaders_requireAbsent(self):
++        headers = 'HTTP/1.0 200 OK\r\nA: H\r\n\r\nbody'
++        match = REGEXP.RESPONSE.match(headers)
++        newHeaders, newBody = updateResponseHeaders(headers, match, requireAbsent=['Content-Encoding'])
++        self.assertEquals(('HTTP/1.0 200 OK\r\nA: H\r\n\r\n', 'body'), (newHeaders, newBody))
++
++        headers = 'HTTP/1.0 200 OK\r\nA: H\r\nContent-Encoding: Yes, Please\r\n\r\nbody'
++        match = REGEXP.RESPONSE.match(headers)
++        self.assertRaises(ValueError, lambda: updateResponseHeaders(headers, match, requireAbsent=['Content-Encoding']))
++
++        headers = 'HTTP/1.0 200 OK\r\ncoNTent-ENCodIng:\r\n\r\nbody'
++        match = REGEXP.RESPONSE.match(headers)
++        self.assertRaises(ValueError, lambda: updateResponseHeaders(headers, match, requireAbsent=['Content-Encoding']))
++
++        headers = 'HTTP/1.0 200 OK\r\nA: Content-Encoding\r\nOh: No\r\n\r\nbody'
++        match = REGEXP.RESPONSE.match(headers)
++        self.assertRaises(ValueError, lambda: updateResponseHeaders(headers, match, requireAbsent=['Content-Encoding', 'Oh']))
++
++        headers = 'HTTP/1.0 200 OK\r\nA:\r\nB:\r\nC:\r\nD:\r\n\r\nbody'
++        match = REGEXP.RESPONSE.match(headers)
++        try:
++            updateResponseHeaders(headers, match, requireAbsent=['B', 'C'])
++        except ValueError, e:
++            self.assertEquals('Response headers contained disallowed items: C, B', str(e))
++
+     def testCloseConnection(self):
+         response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
+         self.assertEquals('The Response', response)
+@@ -225,6 +391,111 @@
+         self.assertTrue('Body' in self.requestData)
+         self.assertEquals('bodydata', self.requestData['Body'])
+ 
++    def testPostMethodDeCompressesDeflatedBody_deflate(self):
++        self.requestData = None
++        def handler(**kwargs):
++            self.requestData = kwargs
++
++        reactor = Reactor()
++        server = HttpServer(reactor, self.port, handler, timeout=0.01)
++        server.listen()
++        sok = socket()
++        sok.connect(('localhost', self.port))
++        bodyData = 'bodydatabodydata'
++        bodyDataCompressed = compress(bodyData)
++        contentLengthCompressed = len(bodyDataCompressed)
++        sok.send(('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nContent-Encoding: deflate\r\n\r\n' % contentLengthCompressed) + bodyDataCompressed)
++
++        while not self.requestData:
++            reactor.step()
++        self.assertEquals(dict, type(self.requestData))
++        self.assertTrue('Headers' in self.requestData)
++        headers = self.requestData['Headers']
++        self.assertEquals('POST', self.requestData['Method'])
++        self.assertEquals('application/x-www-form-urlencoded', headers['Content-Type'])
++        self.assertEquals(contentLengthCompressed, int(headers['Content-Length']))  # TS: is this correct?, maybe decompressed length?
++
++        self.assertTrue('Body' in self.requestData)
++        self.assertEquals('bodydatabodydata', self.requestData['Body'])
++
++    def testPostMethodDeCompressesDeflatedBody_gzip(self):
++        self.requestData = None
++        def handler(**kwargs):
++            self.requestData = kwargs
++
++        reactor = Reactor()
++        server = HttpServer(reactor, self.port, handler, timeout=0.01)
++        server.listen()
++        sok = socket()
++        sok.connect(('localhost', self.port))
++        bodyData = 'bodydatabodydata'
++        _sio = StringIO()
++        _gzFileObj = GzipFile(filename=None, mode='wb', compresslevel=6, fileobj=_sio)
++        _gzFileObj.write(bodyData); _gzFileObj.close()
++        compressedBodyData = _sio.getvalue()
++        bodyDataCompressed = compress(bodyData)
++        contentLengthCompressed = len(bodyDataCompressed)
++        sok.send(('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nContent-Encoding: gzip\r\n\r\n' % contentLengthCompressed) + bodyDataCompressed)
++
++        while not self.requestData:
++            reactor.step()
++        self.assertEquals(dict, type(self.requestData))
++        self.assertTrue('Headers' in self.requestData)
++        headers = self.requestData['Headers']
++        self.assertEquals('POST', self.requestData['Method'])
++        self.assertEquals('application/x-www-form-urlencoded', headers['Content-Type'])
++        self.assertEquals(contentLengthCompressed, int(headers['Content-Length']))
++
++        self.assertTrue('Body' in self.requestData)
++        self.assertEquals('bodydatabodydata', self.requestData['Body'])
++
++    def testPostMethodDeCompressesDeflatedBody_x_deflate(self):
++        self.requestData = None
++        def handler(**kwargs):
++            self.requestData = kwargs
++            return
++            yield
++
++        reactor = Reactor()
++        server = HttpServer(reactor, self.port, handler, timeout=0.01)
++        server.listen()
++        sok = socket()
++        sok.connect(('localhost', self.port))
++        bodyData = 'bodydatabodydata'
++        bodyDataCompressed = compress(bodyData)
++        contentLengthCompressed = len(bodyDataCompressed)
++        sok.send(('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nContent-Encoding: x-deflate\r\n\r\n' % contentLengthCompressed) + bodyDataCompressed)
++
++        while select([sok],[], [], 0) != ([sok], [], []):
++            reactor.step()
++        self.assertFalse(sok.recv(4096).startswith('HTTP/1.0 400 Bad Request'))
++
++        # TS: minimalistic assert that it works too for x-deflate
++        self.assertEquals('bodydatabodydata', self.requestData['Body'])
++
++    def testPostMethodDeCompressesDeflatedBody_unrecognizedEncoding(self):
++        self.requestData = None
++        def handler(**kwargs):
++            self.requestData = kwargs
++            return
++            yield
++
++        reactor = Reactor()
++        server = HttpServer(reactor, self.port, handler, timeout=0.01)
++        server.listen()
++        sok = socket()
++        sok.connect(('localhost', self.port))
++        bodyData = 'bodydatabodydata'
++        bodyDataCompressed = compress(bodyData)
++        contentLengthCompressed = len(bodyDataCompressed)
++        sok.send(('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nContent-Encoding: unknown\r\n\r\n' % contentLengthCompressed) + bodyDataCompressed)
++
++        while select([sok],[], [], 0) != ([sok], [], []):
++            reactor.step()
++        self.assertTrue(sok.recv(4096).startswith('HTTP/1.0 400 Bad Request'))
++
++        self.assertEquals(None, self.requestData)
++
+     def testPostMethodTimesOutOnBadBody(self):
+         self.requestData = None
+         def handler(**kwargs):
+@@ -247,7 +518,6 @@
+         while not done:
+             reactor.step()
+ 
+-
+     def testReadChunkedPost(self):
+         self.requestData = {}
+         def handler(**kwargs):
+@@ -264,11 +534,55 @@
+         while self.requestData.get('Body', None) != 'abcdefghij':
+             reactor.step()
+ 
++    def testReadChunkedAndCompressedPost(self):
++        postData = 'AhjBeehCeehAhjBeehCeehAhjBeehCeehAhjBeehCeeh'
++        postDataCompressed = compress(postData)
++        self.assertEquals(20, len(postDataCompressed))
++        self.assertEquals(15, len(postDataCompressed[:15]))
++        self.assertEquals(5, len(postDataCompressed[15:]))
++
++        self.requestData = {}
++        def handler(**kwargs):
++            self.requestData = kwargs
++
++        reactor = Reactor()
++        server = HttpServer(reactor, self.port, handler, timeout=0.01, recvSize=3)
++        server.listen()
++        sok = socket()
++        sok.connect(('localhost', self.port))
++        postString = 'POST / HTTP/1.1\r\nContent-Type: application/x-www-form-urlencoded\r\nTransfer-Encoding: chunked\r\nContent-Encoding: deflate\r\n\r\nf\r\n%s\r\n5\r\n%s\r\n0\r\n' % (postDataCompressed[:15], postDataCompressed[15:])
++        sok.send(postString)
++
++        reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
++        while self.requestData.get('Body', None) != postData:
++            reactor.step()
++
+     def testPostMultipartForm(self):
+         httpRequest = open(inmydir('data/multipart-data-01')).read()
+         self.requestData = {}
+         def handler(**kwargs):
+             self.requestData = kwargs
++
++        reactor = Reactor()
++        server = HttpServer(reactor, self.port, handler)
++        server.listen()
++        sok = socket()
++        sok.connect(('localhost', self.port))
++        sok.send(httpRequest)
++
++        reactor.addTimer(2, lambda: self.fail("Test Stuck"))
++        while self.requestData.get('Form', None) == None:
++            reactor.step()
++        form = self.requestData['Form']
++        self.assertEquals(4, len(form))
++        self.assertEquals(['SOME ID'], form['id'])
++
++    def XXX_testPostMultipartFormCompressed(self):
++        """Not yet"""
++        httpRequest = open(inmydir('data/multipart-data-01-compressed')).read()
++        self.requestData = {}
++        def handler(**kwargs):
++            self.requestData = kwargs
+ 
+         reactor = Reactor()
+         server = HttpServer(reactor, self.port, handler)
+diff --unidirectional-new-file --recursive --unified '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' version_0/weightless/http/_httpserver.py /newroot/home/tom/repositories/work/weightless/weightless-core/workingsets/0.7.2-Edurep/version_2/weightless/http/_httpserver.py
+--- version_0/weightless/http/_httpserver.py	2012-03-09 16:09:04.785496772 +0100
++++ version_2/weightless/http/_httpserver.py	2012-03-20 11:41:40.830217539 +0100
+@@ -27,9 +27,16 @@
+ from _acceptor import Acceptor
+ from weightless.core import identify, Yield
+ from weightless.http import REGEXP, FORMAT, parseHeaders, parseHeader
++
++import re
++from StringIO import StringIO
+ from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
+ from tempfile import TemporaryFile
+ from email import message_from_file as parse_mime_message
++from zlib import compressobj as deflateCompress
++from zlib import decompressobj as deflateDeCompress
++from gzip import GzipFile
++
+ 
+ from OpenSSL import SSL
+ from random import randint
+@@ -40,11 +47,13 @@
+ 
+ 
+ RECVSIZE = 4096
++CRLF = '\r\n'
+ CRLF_LEN = 2
+ 
+-class HttpServer:
++
++class HttpServer(object):
+     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
+-    def __init__(self, reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None):
++    def __init__(self, reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, compressResponse=False):
+         self._reactor = reactor
+         self._port = port
+         self._generatorFactory = generatorFactory
+@@ -54,12 +63,14 @@
+         self._sok = sok
+         self._maxConnections = maxConnections
+         self._errorHandler = errorHandler
++        self._compressResponse = compressResponse
+ 
+     def listen(self):
+         self._acceptor = Acceptor(self._reactor, self._port, 
+                 lambda sok: HttpHandler(self._reactor, sok, self._generatorFactory, self._timeout, 
+                     self._recvSize, prio=self._prio, maxConnections=self._maxConnections, 
+-                    errorHandler=self._errorHandler),
++                    errorHandler=self._errorHandler,
++                    compressResponse=self._compressResponse),
+                 prio=self._prio, sok=self._sok)
+ 
+ 
+@@ -69,7 +80,7 @@
+     def shutdown(self):
+         self._acceptor.shutdown()
+ 
+-def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, certfile='', keyfile=''):
++def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, compressResponse=False, certfile='', keyfile=''):
+     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
+     if sok == None:
+         def verify_cb(conn, cert, errnum, depth, ok):
+@@ -92,7 +103,7 @@
+         sok.bind(('0.0.0.0', port))
+         sok.listen(127)
+ 
+-    return Acceptor(reactor, port, lambda s: HttpsHandler(reactor, s, generatorFactory, timeout, recvSize, prio=prio, maxConnections=maxConnections, errorHandler=errorHandler), prio=prio, sok=sok)
++    return Acceptor(reactor, port, lambda s: HttpsHandler(reactor, s, generatorFactory, timeout, recvSize, prio=prio, maxConnections=maxConnections, errorHandler=errorHandler, compressResponse=compressResponse), prio=prio, sok=sok)
+ 
+ from sys import stdout
+ from resource import getrlimit, RLIMIT_NOFILE
+@@ -104,8 +115,110 @@
+ def defaultErrorHandler(**kwargs):
+     yield 'HTTP/1.0 503 Service Unavailable\r\n\r\n<html><head></head><body><h1>Service Unavailable</h1></body></html>'
+ 
++def parseContentEncoding(headerValue):
++    return [x.strip().lower() for x in headerValue.split(',')]
++
++def parseAcceptEncoding(headerValue):
++    result = []
++    for encodingMaybeQValue in (v.strip() for v in headerValue.split(',') if v):
++        _splitted = encodingMaybeQValue.split(';')
++        encoding = _splitted[0]
++        if len(_splitted) == 1:
++            qvalue = 1.0
++        else:
++            for acceptParam in _splitted[1:]:
++                pName, pValue = acceptParam.split('=', 1)
++                if pName == 'q':
++                    qvalue = float(pValue)
++                    break
++                else:
++                    encoding += ';' + acceptParam  # media-range
++
++        if qvalue > 0.0001:
++            result.append((encoding, qvalue))
++
++    result.sort(key=lambda o: o[1], reverse=True)
++    return [o[0] for o in result]
++
++
++_removeHeaderReCache = {}
++CONTENT_LENGTH_RE = re.compile(r'\r\nContent-Length:.*?\r\n', flags=re.I)
++def updateResponseHeaders(headers, match, addHeaders=None, removeHeaders=None, requireAbsent=None):
++    requireAbsent = set(requireAbsent or [])
++    addHeaders = addHeaders or {}
++    removeHeaders = removeHeaders or []
++    headersDict = parseHeaders(match.groupdict()['_headers'])
++
++    matchStartHeaders = match.start('_headers')
++    matchEnd = match.end()
++    _statusLine = headers[:matchStartHeaders - CRLF_LEN]
++    _headers = headers[matchStartHeaders - CRLF_LEN:matchEnd - CRLF_LEN]
++    _body = headers[matchEnd:]
++
++    notAbsents = requireAbsent.intersection(set(headersDict.keys()))
++    if notAbsents:
++        raise ValueError('Response headers contained disallowed items: %s' % ', '.join(notAbsents))
++
++    for header in removeHeaders:
++        headerRe = _removeHeaderReCache.get(header, None)
++        if headerRe is None:
++            
++            headerRe = re.compile(r'\r\n%s:.*?\r\n' % re.escape(header), flags=re.I)
++            _removeHeaderReCache[header] = headerRe
++        _headers = headerRe.sub(CRLF, _headers, count=1)
++
++    for header, value in addHeaders.items():
++        _headers += '%s: %s\r\n' % (header, value)
++
++    return _statusLine + _headers + CRLF, _body
++
++
++class GzipCompress(object):
++    def __init__(self):
++        self._buffer = StringIO()
++        self._gzipFileObj = GzipFile(filename=None, mode='wb', compresslevel=6, fileobj=self._buffer)
++
++    def compress(self, data):
++        self._gzipFileObj.write(data)
++        return ''
++
++    def flush(self):
++        self._gzipFileObj.close()
++        return self._buffer.getvalue()
++
++
++class GzipDeCompress(object):
++    def __init__(self):
++        self._decompressObj = deflateDeCompress()
++
++    def decompress(self, data):
++        return self._decompressObj.decompress(data, 48)  # wbits=16+32; decompress gzip-stream only
++
++    def flush(self):
++        return self._decompressObj.flush()
++
++# (De)compression-objects must support: compress / decompress and argumentless flush
++SUPPORTED_CONTENT_ENCODINGS = {
++    'deflate': {
++        'encode': deflateCompress,
++        'decode': deflateDeCompress,
++     },
++    'x-deflate': {
++        'encode': deflateCompress,
++        'decode': deflateDeCompress,
++     },
++    'gzip': {
++        'encode': GzipCompress,
++        'decode': GzipDeCompress,
++    },
++    'x-gzip': {
++        'encode': GzipCompress,
++        'decode': GzipDeCompress,
++    },
++}
++
+ class HttpHandler(object):
+-    def __init__(self, reactor, sok, generatorFactory, timeout, recvSize=RECVSIZE, prio=None, maxConnections=None, errorHandler=None):
++    def __init__(self, reactor, sok, generatorFactory, timeout, recvSize=RECVSIZE, prio=None, maxConnections=None, errorHandler=None, compressResponse=False):
+         self._reactor = reactor
+         self._sok = sok
+         self._generatorFactory = generatorFactory
+@@ -122,6 +235,10 @@
+         self._errorHandler = errorHandler if errorHandler else defaultErrorHandler
+         self._defaultEncoding = getdefaultencoding()
+ 
++        self._compressResponse = compressResponse
++        self._decodeRequestBody = None
++
++
+     def __call__(self):
+         part = self._sok.recv(self._recvSize)
+         if not part:
+@@ -159,6 +276,7 @@
+                 return
+         if 'Expect' in self.request['Headers']:
+             self._sok.send('HTTP/1.1 100 Continue\r\n\r\n')
++
+         if self._reactor.getOpenConnections() > self._maxConnections:
+             self.request['ResponseCode'] = 503
+             self._finalize(self._errorHandler)
+@@ -166,6 +284,7 @@
+             self.setCallDealer(self._readBody)
+ 
+     def _readMultiForm(self, boundary):
++        # TS: Compression & chunked mode not supported yet
+         if self._timer:
+             self._reactor.removeTimer(self._timer)
+             self._timer = None
+@@ -210,6 +329,20 @@
+         if self.request['Method'] == 'GET':
+             self.finalize()
+         elif self.request['Method'] == 'POST':
++            # Determine Content-Encoding in request, if any.
++            if self._decodeRequestBody is None and 'Content-Encoding' in self.request['Headers']:
++                contentEncoding = parseContentEncoding(self.request['Headers']['Content-Encoding'])
++                if len(contentEncoding) != 1 or contentEncoding[0] not in SUPPORTED_CONTENT_ENCODINGS:
++                    if self._timer:
++                        self._reactor.removeTimer(self._timer)
++                        self._timer = None
++                    self._badRequest()
++                    return
++                contentEncoding = contentEncoding[0]
++
++                self._decodeRequestBody = SUPPORTED_CONTENT_ENCODINGS[contentEncoding]['decode']()
++
++            # Not chunked
+             if 'Content-Length' in self.request['Headers']:
+                 contentLength = int(self.request['Headers']['Content-Length'])
+ 
+@@ -221,8 +354,14 @@
+                     self._reactor.removeTimer(self._timer)
+                     self._timer = None
+ 
+-                self.request['Body'] = self._dataBuffer
++                if self._decodeRequestBody is not None:
++                    self.request['Body'] = self._decodeRequestBody.decompress(self._dataBuffer)
++                    self.request['Body'] += self._decodeRequestBody.flush()
++                else:
++                    self.request['Body'] = self._dataBuffer
+                 self.finalize()
++
++            # Chunked - means HTTP/1.1
+             elif 'Transfer-Encoding' in self.request['Headers'] and self.request['Headers']['Transfer-Encoding'] == 'chunked':
+                 self.setCallDealer(self._readChunk)
+             else:
+@@ -245,6 +384,8 @@
+ 
+     def _readChunkBody(self):
+         if self._chunkSize == 0:
++            if self._decodeRequestBody is not None:
++                self.request['Body'] += self._decodeRequestBody.flush()
+             self.finalize()
+         else:
+             if len(self._dataBuffer) < self._chunkSize + CRLF_LEN:
+@@ -254,16 +395,33 @@
+             if self._timer:
+                 self._reactor.removeTimer(self._timer)
+                 self._timer = None
+-            self.request['Body'] += self._dataBuffer[:self._chunkSize]
++            if self._decodeRequestBody is not None:
++                self.request['Body'] += self._decodeRequestBody.decompress(self._dataBuffer[:self._chunkSize])
++            else:
++                self.request['Body'] += self._dataBuffer[:self._chunkSize]
+             self._dataBuffer = self._dataBuffer[self._chunkSize + CRLF_LEN:]
+             self.setCallDealer(self._readChunk)
+ 
++    def _determineContentEncoding(self):
++        if 'Accept-Encoding' not in self.request['Headers']:
++            return None
++        acceptEncodings = parseAcceptEncoding(self.request['Headers']['Accept-Encoding'])
++        for encoding in acceptEncodings:
++            if encoding in SUPPORTED_CONTENT_ENCODINGS:
++                return encoding
++        return None
++
+     def _finalize(self, finalizeMethod):
+         del self.request['_headers']
++
++        encoding = None
++        if self._compressResponse == True:
++            encoding = self._determineContentEncoding()
++
+         self.request['Client'] = self._sok.getpeername()
+         self._handler = finalizeMethod(**self.request)
+         self._reactor.removeReader(self._sok)
+-        self._reactor.addWriter(self._sok, self._writeResponse().next, prio=self._prio)
++        self._reactor.addWriter(self._sok, self._writeResponse(encoding=encoding).next, prio=self._prio)
+ 
+     def finalize(self):
+         self._finalize(self._generatorFactory)
+@@ -275,8 +433,11 @@
+         self._sok.close()
+ 
+     @identify
+-    def _writeResponse(self):
++    def _writeResponse(self, encoding=None):
+         this = yield
++        endHeader = False
++        headers = ''
++        encodeResponseBody = SUPPORTED_CONTENT_ENCODINGS[encoding]['encode']() if encoding is not None else None
+         while True:
+             yield
+             try:
+@@ -293,12 +454,44 @@
+                         continue
+                     if type(data) is unicode:
+                         data = data.encode(self._defaultEncoding)
++                if encodeResponseBody is not None:
++                    if endHeader is False:
++                        headers += data
++                        match = REGEXP.RESPONSE.match(headers)
++                        if match:
++                            endHeader = True
++                            try:
++                                _statusLineAndHeaders, _bodyStart = updateResponseHeaders(
++                                        headers, match,
++                                        addHeaders={'Content-Encoding': encoding},
++                                        removeHeaders=['Content-Length'],
++                                        requireAbsent=['Content-Encoding'])
++                            except ValueError:
++                                # Don't interfere with an existing content-encoding
++                                encodeResponseBody = None
++                                data = headers
++                            else:
++                                data = _statusLineAndHeaders + encodeResponseBody.compress(_bodyStart)
++                        else:
++                            continue
++                    else:
++                        data = encodeResponseBody.compress(data)
++
+                 sent = self._sok.send(data, MSG_DONTWAIT)
+                 if sent < len(data):
+                     self._rest = data[sent:]
+                 else:
+                     self._rest = None
+             except StopIteration:
++                if encodeResponseBody:
++                    self._rest = encodeResponseBody.flush()
++                    while self._rest:
++                        data = self._rest
++                        sent = self._sok.send(data, MSG_DONTWAIT)
++                        if sent < len(data):
++                            self._rest = data[sent:]
++                        else:
++                            self._rest = None
+                 self._closeConnection()
+                 yield
+             except:
