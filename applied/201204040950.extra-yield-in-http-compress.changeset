@@ -1,0 +1,50 @@
+Changeset created on Wed Apr 04 09:50:38 UTC 2012 by Seecr (Seek You Too B.V.)
+
+Description: Extra yield in http compress
+
+    When using gzip compression data was not completely sent. An
+    extra yield in the HttpServer fixes this problem.
+
+Baseline version: https://weightless.svn.sourceforge.net/svnroot/weightless/weightless-core/workingsets/0.7.4-Edurep/version_0
+
+diff --unidirectional-new-file --recursive --unified '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' version_0/test/http/httpservertest.py /home/thijs/development/sf/weightless/weightless-core/workingsets/0.7.4-Edurep/version_1/test/http/httpservertest.py
+--- version_0/test/http/httpservertest.py	2012-04-04 11:13:59.000000000 +0200
++++ version_1/test/http/httpservertest.py	2012-04-04 11:50:37.000000000 +0200
+@@ -49,7 +49,7 @@
+ 
+ class HttpServerTest(WeightlessTestCase):
+ 
+-    def sendRequestAndReceiveResponse(self, request, response='The Response', recvSize=4096, compressResponse=False):
++    def sendRequestAndReceiveResponse(self, request, response='The Response', recvSize=4096, compressResponse=False, extraStepAfterCompress=True):
+         self.responseCalled = False
+         @compose
+         def responseGenFunc(**kwargs):
+@@ -66,6 +66,8 @@
+         with self.stdout_replaced() as mockStdout:
+             while not self.responseCalled:
+                 self.reactor.step()
++            if compressResponse and extraStepAfterCompress: #not everythingSent???: 
++                self.reactor.step()
+         stdoutValue = mockStdout.getvalue()
+         if stdoutValue:
+             print stdoutValue
+@@ -177,7 +179,7 @@
+         def rawResponser():
+             for c in rawResponse:
+                 yield c
+-        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
++        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True, extraStepAfterCompress=False)
+         self.assertEquals(rawResponse, response)
+ 
+     def testParseContentEncoding(self):
+diff --unidirectional-new-file --recursive --unified '--exclude=*.so' '--exclude=*.o' '--exclude=.svn' '--exclude=*.pyc' '--exclude=deps.d' '--exclude=applied' version_0/weightless/http/_httpserver.py /home/thijs/development/sf/weightless/weightless-core/workingsets/0.7.4-Edurep/version_1/weightless/http/_httpserver.py
+--- version_0/weightless/http/_httpserver.py	2012-04-04 11:13:59.000000000 +0200
++++ version_1/weightless/http/_httpserver.py	2012-04-04 11:50:37.000000000 +0200
+@@ -486,6 +486,7 @@
+                 if encodeResponseBody:
+                     self._rest = encodeResponseBody.flush()
+                     while self._rest:
++                        yield
+                         data = self._rest
+                         sent = self._sok.send(data, MSG_DONTWAIT)
+                         if sent < len(data):
