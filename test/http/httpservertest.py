@@ -49,7 +49,7 @@ def inmydir(p):
 
 class HttpServerTest(WeightlessTestCase):
 
-    def sendRequestAndReceiveResponse(self, request, response='The Response', recvSize=4096, compressResponse=False):
+    def sendRequestAndReceiveResponse(self, request, response='The Response', recvSize=4096, compressResponse=False, extraStepAfterCompress=True):
         self.responseCalled = False
         @compose
         def responseGenFunc(**kwargs):
@@ -65,6 +65,8 @@ class HttpServerTest(WeightlessTestCase):
         mockStdout = None
         with self.stdout_replaced() as mockStdout:
             while not self.responseCalled:
+                self.reactor.step()
+            if compressResponse and extraStepAfterCompress: #not everythingSent???: 
                 self.reactor.step()
         stdoutValue = mockStdout.getvalue()
         if stdoutValue:
@@ -177,7 +179,7 @@ class HttpServerTest(WeightlessTestCase):
         def rawResponser():
             for c in rawResponse:
                 yield c
-        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
+        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True, extraStepAfterCompress=False)
         self.assertEquals(rawResponse, response)
 
     def testParseContentEncoding(self):

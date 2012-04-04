@@ -486,6 +486,7 @@ class HttpHandler(object):
                 if encodeResponseBody:
                     self._rest = encodeResponseBody.flush()
                     while self._rest:
+                        yield
                         data = self._rest
                         sent = self._sok.send(data, MSG_DONTWAIT)
                         if sent < len(data):
