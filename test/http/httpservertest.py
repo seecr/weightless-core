@@ -340,6 +340,32 @@ class HttpServerTest(WeightlessTestCase):
         self.assertEquals('HTTP/1.0 400 Bad Request\r\n\r\n', response)
         self.assertEquals(1, len(timers))
 
+    def testTimersOnRead(self):
+        # problem in found in OAS, timers not removed properly when whole body hasnt been read yet
+        _httpserver.RECVSIZE = 1
+        reactor = Reactor()
+        timers = []
+        orgAddTimer = reactor.addTimer
+        def addTimerInterceptor(*timer):
+            timers.append(timer)
+            return orgAddTimer(*timer)
+        reactor.addTimer = addTimerInterceptor
+        server = HttpServer(reactor, self.port, lambda **kwargs: (x for x in []), timeout=0.01)
+        server.listen()
+        sok = socket()
+        sok.connect(('localhost', self.port))
+        sok.send('POST / HTTP/1.0\r\n')
+        sok.send('Content-Length: 10\r\n')
+        sok.send('\r\n')
+        for i in xrange(10):
+            sok.send(".")
+            sleep(0.04)
+        while select([sok],[], [], 0) != ([sok], [], []):
+            reactor.step()
+        print sok.recv(1024)
+
+
+
     def testInvalidRequestWithHalfHeader(self):
         reactor = Reactor()
         server = HttpServer(reactor, self.port, None, timeout=0.1)
