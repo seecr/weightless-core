@@ -258,9 +258,7 @@ class HttpHandler(object):
             if not self._timer:
                 self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
             return # for more data
-        if self._timer:
-            self._reactor.removeTimer(self._timer)
-            self._timer = None
+        self._removeTimer()
         self.request = match.groupdict()
         self.request['Body'] = ''
         self.request['Headers'] = parseHeaders(self.request['_headers'])
@@ -285,9 +283,7 @@ class HttpHandler(object):
 
     def _readMultiForm(self, boundary):
         # TS: Compression & chunked mode not supported yet
-        if self._timer:
-            self._reactor.removeTimer(self._timer)
-            self._timer = None
+        self._removeTimer()
         self._tempfile.write(self._dataBuffer)
 
         self._window += self._dataBuffer
@@ -325,6 +321,11 @@ class HttpHandler(object):
             return filename
         return parts[-1]
 
+    def _removeTimer(self):
+        if self._timer:
+            self._reactor.removeTimer(self._timer)
+            self._timer = None
+
     def _readBody(self):
         if self.request['Method'] == 'GET':
             self.finalize()
@@ -333,9 +334,7 @@ class HttpHandler(object):
             if self._decodeRequestBody is None and 'Content-Encoding' in self.request['Headers']:
                 contentEncoding = parseContentEncoding(self.request['Headers']['Content-Encoding'])
                 if len(contentEncoding) != 1 or contentEncoding[0] not in SUPPORTED_CONTENT_ENCODINGS:
-                    if self._timer:
-                        self._reactor.removeTimer(self._timer)
-                        self._timer = None
+                    self._removeTimer()
                     self._badRequest()
                     return
                 contentEncoding = contentEncoding[0]
@@ -350,9 +349,7 @@ class HttpHandler(object):
                     if not self._timer:
                         self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
                     return
-                if self._timer:
-                    self._reactor.removeTimer(self._timer)
-                    self._timer = None
+                self._removeTimer()
 
                 if self._decodeRequestBody is not None:
                     self.request['Body'] = self._decodeRequestBody.decompress(self._dataBuffer)
@@ -375,9 +372,7 @@ class HttpHandler(object):
             if not self._timer:
                 self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
             return # for more data
-        if self._timer:
-            self._reactor.removeTimer(self._timer)
-            self._timer = None
+        self._removeTimer()
         self._chunkSize = int(match.groupdict()['ChunkSize'], 16)
         self._dataBuffer = self._dataBuffer[match.end():]
         self.setCallDealer(self._readChunkBody)
@@ -392,9 +387,7 @@ class HttpHandler(object):
                 if not self._timer:
                     self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
                 return # for more data
-            if self._timer:
-                self._reactor.removeTimer(self._timer)
-                self._timer = None
+            self._removeTimer()
             if self._decodeRequestBody is not None:
                 self.request['Body'] += self._decodeRequestBody.decompress(self._dataBuffer[:self._chunkSize])
             else:
