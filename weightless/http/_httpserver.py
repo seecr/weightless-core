@@ -246,10 +246,8 @@ class HttpHandler(object):
             self._badRequest()
             return
         self._dataBuffer += part
-        self._removeTimer()
+        self._resetTimer()
         self._dealWithCall()
-        #if ???:
-        #    self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
 
     def setCallDealer(self, aMethod):
         self._dealWithCall = aMethod
@@ -258,7 +256,6 @@ class HttpHandler(object):
     def _readHeaders(self):
         match = REGEXP.REQUEST.match(self._dataBuffer)
         if not match:
-            self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
             return # for more data
         self.request = match.groupdict()
         self.request['Body'] = ''
@@ -314,7 +311,6 @@ class HttpHandler(object):
             return
 
         self._dataBuffer= ''
-        self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
 
     def _processFilename(self, filename):
         parts = filename.split('\\')
@@ -322,10 +318,10 @@ class HttpHandler(object):
             return filename
         return parts[-1]
 
-    def _removeTimer(self):
+    def _resetTimer(self):
         if self._timer:
             self._reactor.removeTimer(self._timer)
-            self._timer = None
+        self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
 
     def _readBody(self):
         # Determine Content-Encoding in request, if any.
@@ -349,7 +345,6 @@ class HttpHandler(object):
         contentLength = int(self.request['Headers']['Content-Length'])
 
         if len(self._dataBuffer) < contentLength:
-            self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
             return
 
         if self._decodeRequestBody is not None:
@@ -363,7 +358,6 @@ class HttpHandler(object):
     def _readChunk(self):
         match = REGEXP.CHUNK_SIZE_LINE.match(self._dataBuffer)
         if not match:
-            self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
             return # for more data
         self._chunkSize = int(match.groupdict()['ChunkSize'], 16)
         self._dataBuffer = self._dataBuffer[match.end():]
@@ -376,7 +370,6 @@ class HttpHandler(object):
             return self.finalize()
 
         if len(self._dataBuffer) < self._chunkSize + CRLF_LEN:
-            self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
             return # for more data
         if self._decodeRequestBody is not None:
             self.request['Body'] += self._decodeRequestBody.decompress(self._dataBuffer[:self._chunkSize])
@@ -403,6 +396,8 @@ class HttpHandler(object):
 
         self.request['Client'] = self._sok.getpeername()
         self._handler = finalizeMethod(**self.request)
+        if self._timer:
+            self._reactor.removeTimer(self._timer)
         self._reactor.removeReader(self._sok)
         self._reactor.addWriter(self._sok, self._writeResponse(encoding=encoding).next, prio=self._prio)
 
