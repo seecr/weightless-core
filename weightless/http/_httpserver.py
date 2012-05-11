@@ -246,7 +246,10 @@ class HttpHandler(object):
             self._badRequest()
             return
         self._dataBuffer += part
+        self._removeTimer()
         self._dealWithCall()
+        #if ???:
+        #    self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
 
     def setCallDealer(self, aMethod):
         self._dealWithCall = aMethod
@@ -258,7 +261,7 @@ class HttpHandler(object):
             if not self._timer:
                 self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
             return # for more data
-        self._removeTimer()
+        #self._removeTimer()
         self.request = match.groupdict()
         self.request['Body'] = ''
         self.request['Headers'] = parseHeaders(self.request['_headers'])
@@ -277,9 +280,11 @@ class HttpHandler(object):
 
         if self._reactor.getOpenConnections() > self._maxConnections:
             self.request['ResponseCode'] = 503
-            self._finalize(self._errorHandler)
-        else:
+            return self._finalize(self._errorHandler)
+        if self.request['Method'] == 'POST':
             self.setCallDealer(self._readBody)
+        else:
+            self.finalize()
 
     def _readMultiForm(self, boundary):
         # TS: Compression & chunked mode not supported yet
@@ -327,44 +332,39 @@ class HttpHandler(object):
             self._timer = None
 
     def _readBody(self):
-        if self.request['Method'] == 'GET':
-            self.finalize()
-        elif self.request['Method'] == 'POST':
-            # Determine Content-Encoding in request, if any.
-            if self._decodeRequestBody is None and 'Content-Encoding' in self.request['Headers']:
-                contentEncoding = parseContentEncoding(self.request['Headers']['Content-Encoding'])
-                if len(contentEncoding) != 1 or contentEncoding[0] not in SUPPORTED_CONTENT_ENCODINGS:
-                    self._removeTimer()
-                    self._badRequest()
-                    return
-                contentEncoding = contentEncoding[0]
-
-                self._decodeRequestBody = SUPPORTED_CONTENT_ENCODINGS[contentEncoding]['decode']()
-
-            # Not chunked
-            if 'Content-Length' in self.request['Headers']:
-                contentLength = int(self.request['Headers']['Content-Length'])
-
-                if len(self._dataBuffer) < contentLength:
-                    if not self._timer:
-                        self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
-                    return
+        # Determine Content-Encoding in request, if any.
+        if self._decodeRequestBody is None and 'Content-Encoding' in self.request['Headers']:
+            contentEncoding = parseContentEncoding(self.request['Headers']['Content-Encoding'])
+            if len(contentEncoding) != 1 or contentEncoding[0] not in SUPPORTED_CONTENT_ENCODINGS:
                 self._removeTimer()
+                self._badRequest()
+                return
+            contentEncoding = contentEncoding[0]
 
-                if self._decodeRequestBody is not None:
-                    self.request['Body'] = self._decodeRequestBody.decompress(self._dataBuffer)
-                    self.request['Body'] += self._decodeRequestBody.flush()
-                else:
-                    self.request['Body'] = self._dataBuffer
-                self.finalize()
+            self._decodeRequestBody = SUPPORTED_CONTENT_ENCODINGS[contentEncoding]['decode']()
 
-            # Chunked - means HTTP/1.1
-            elif 'Transfer-Encoding' in self.request['Headers'] and self.request['Headers']['Transfer-Encoding'] == 'chunked':
-                self.setCallDealer(self._readChunk)
-            else:
-                self.finalize()
+        # Chunked - means HTTP/1.1
+        if 'Transfer-Encoding' in self.request['Headers'] and self.request['Headers']['Transfer-Encoding'] == 'chunked':
+            return self.setCallDealer(self._readChunk)
+
+        # Not chunked
+        if 'Content-Length' not in self.request['Headers']:
+            return self.finalize()
+
+        contentLength = int(self.request['Headers']['Content-Length'])
+
+        self._removeTimer()
+        if len(self._dataBuffer) < contentLength:
+            self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
+            return
+
+        if self._decodeRequestBody is not None:
+            self.request['Body'] = self._decodeRequestBody.decompress(self._dataBuffer)
+            self.request['Body'] += self._decodeRequestBody.flush()
         else:
-            self.finalize()
+            self.request['Body'] = self._dataBuffer
+
+        self.finalize()
 
     def _readChunk(self):
         match = REGEXP.CHUNK_SIZE_LINE.match(self._dataBuffer)
@@ -381,19 +381,19 @@ class HttpHandler(object):
         if self._chunkSize == 0:
             if self._decodeRequestBody is not None:
                 self.request['Body'] += self._decodeRequestBody.flush()
-            self.finalize()
+            return self.finalize()
+
+        if len(self._dataBuffer) < self._chunkSize + CRLF_LEN:
+            if not self._timer:
+                self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
+            return # for more data
+        self._removeTimer()
+        if self._decodeRequestBody is not None:
+            self.request['Body'] += self._decodeRequestBody.decompress(self._dataBuffer[:self._chunkSize])
         else:
-            if len(self._dataBuffer) < self._chunkSize + CRLF_LEN:
-                if not self._timer:
-                    self._timer = self._reactor.addTimer(self._timeout, self._badRequest)
-                return # for more data
-            self._removeTimer()
-            if self._decodeRequestBody is not None:
-                self.request['Body'] += self._decodeRequestBody.decompress(self._dataBuffer[:self._chunkSize])
-            else:
-                self.request['Body'] += self._dataBuffer[:self._chunkSize]
-            self._dataBuffer = self._dataBuffer[self._chunkSize + CRLF_LEN:]
-            self.setCallDealer(self._readChunk)
+            self.request['Body'] += self._dataBuffer[:self._chunkSize]
+        self._dataBuffer = self._dataBuffer[self._chunkSize + CRLF_LEN:]
+        self.setCallDealer(self._readChunk)
 
     def _determineContentEncoding(self):
         if 'Accept-Encoding' not in self.request['Headers']:

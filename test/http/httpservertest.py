@@ -320,7 +320,7 @@ class HttpServerTest(WeightlessTestCase):
         self.assertEquals(oneStringLength * 6000, len(fragment))
         self.assertTrue("some t\xc3\xa9xt" in fragment, fragment)
 
-    def testInvalidRequestStartsOnlyOneTimer(self):
+    def testInvalidGETRequestStartsOnlyOneTimer(self):
         _httpserver.RECVSIZE = 3
         reactor = Reactor()
         timers = []
@@ -340,7 +340,7 @@ class HttpServerTest(WeightlessTestCase):
         self.assertEquals('HTTP/1.0 400 Bad Request\r\n\r\n', response)
         self.assertEquals(1, len(timers))
 
-    def testTimersOnRead(self):
+    def testInvalidPOSTRequestStartsOnlyOneTimer(self):
         # problem in found in OAS, timers not removed properly when whole body hasnt been read yet
         _httpserver.RECVSIZE = 1
         reactor = Reactor()
@@ -354,15 +354,17 @@ class HttpServerTest(WeightlessTestCase):
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
-        sok.send('POST / HTTP/1.0\r\n')
-        sok.send('Content-Length: 10\r\n')
-        sok.send('\r\n')
-        for i in xrange(10):
-            sok.send(".")
-            sleep(0.04)
+        sok.send('POST / HTTP/1.0\r\nContent-Length: 10\r\n\r\n')
+        reactor.step()
+        sok.send(".")
+        sleep(0.1)
+        reactor.step()
+        sok.send(".")
+        reactor.step()
+        sleep(0.1)
         while select([sok],[], [], 0) != ([sok], [], []):
             reactor.step()
-        print sok.recv(1024)
+        self.assertEquals(2, len(timers))
 
 
 
