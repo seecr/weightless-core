@@ -969,6 +969,12 @@ class _ComposeTest(TestCase):
         c = compose(compose(f()))
         self.assertTrue(c)
 
+    def testCollectInComposeObject(self):
+        def f():
+            gc.collect()
+            yield
+        list(compose(compose(f())))
+
     def testYieldComposeCloseAndThrow(self):
         def f():
             try:
