@@ -970,10 +970,11 @@ class _ComposeTest(TestCase):
         self.assertTrue(c)
 
     def testCollectInComposeObject(self):
+        from sys import getrefcount
         def f():
             gc.collect()
             yield
-        list(compose(compose(f())))
+        compose(f()).next()
 
     def testYieldComposeCloseAndThrow(self):
         def f():

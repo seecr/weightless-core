@@ -350,7 +350,6 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
 
     while(self->generators_top > self->generators_base) {
         PyObject* generator = *(self->generators_top - 1); // take over ownership from stack
-        Py_INCREF(generator);
         PyObject* response = NULL;
         PyObject* message = NULL;
 
@@ -386,19 +385,16 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
 
                 if(generator_invalid(response)) {
                     PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
-                    Py_DECREF(generator);
                     Py_CLEAR(response);
                     continue;
                 }
 
                 if(!generators_push(self, response)) {
-                    Py_DECREF(generator);
                     Py_CLEAR(response);
                     return NULL;
                 }
 
                 if(self->stepping) {
-                    Py_DECREF(generator);
                     Py_CLEAR(response);
                     self->paused_on_step = 1;
                     Py_INCREF(&PyYield_Type);
@@ -408,11 +404,9 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
 
             } else if(response != Py_None || messages_empty(self)) {
                 self->expect_data = response == Py_None;
-                Py_DECREF(generator);
                 return response;
             }
 
-            Py_DECREF(generator);
             Py_CLEAR(response);
 
         } else { // exception thrown
@@ -429,7 +423,6 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
                     PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
             }
 
-            Py_DECREF(generator);
             Py_CLEAR(generator);
         }
     }
@@ -469,8 +462,10 @@ static PyObject* _compose_go_with_frame(PyComposeObject* self, PyObject* exc_typ
     Py_INCREF(self->frame->f_back);
     tstate->frame = self->frame;
     *(self->frame->f_stacktop++) = (PyObject*) self;
+    Py_INCREF(self);
     PyObject* response = _compose_go(self, exc_type, exc_value, exc_tb);
     self->frame->f_stacktop--;
+    Py_DECREF(self);
     Py_CLEAR(self->frame->f_back);
     tstate->frame = tstate_frame;
     return response;
