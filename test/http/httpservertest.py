@@ -93,6 +93,13 @@ class HttpServerTest(WeightlessTestCase):
         reactor.step() # call onRequest for response data
         self.assertEquals(True, self.req)
 
+    def testConnectBindAddress(self):
+        reactor = CallTrace()
+        server = HttpServer(reactor, self.port, lambda **kwargs: None, bindAddress='127.0.0.1')
+        server.listen()
+        self.assertEquals(('127.0.0.1', self.port), server._acceptor._sok.getsockname())
+
+
     def testSendHeader(self):
         self.kwargs = None
         def response(**kwargs):

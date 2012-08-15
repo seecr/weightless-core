@@ -26,6 +26,7 @@
 
 from unittest import TestCase
 from random import randint
+from seecr.test import CallTrace
 
 from weightless.io import Reactor
 from weightless.http import HttpsServer
@@ -66,3 +67,10 @@ class HttpsServerTest(TestCase):
         reactor.step()
         self.assertEquals(1, len(popenStdout))
         self.assertEquals(serverResponse, popenStdout[0])
+
+    def testConnectBindAddress(self):
+        reactor = CallTrace()
+        port = randint(15000, 16000)
+        server = HttpsServer(reactor, port, lambda **kwargs: None, bindAddress='127.0.0.1', keyfile='ssl/server.pkey', certfile='ssl/server.cert')
+        self.assertEquals(('127.0.0.1', port), server._sok.getsockname())
+

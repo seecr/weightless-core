@@ -112,3 +112,16 @@ class AcceptorTest(TestCase):
         client.connect(('127.0.0.1', port))
         acceptor._accept()
         self.assertEquals(5, reactor.calledMethods[0].kwargs['prio'])
+
+    def testBindAddress_DefaultsTo_0_0_0_0(self):
+        reactor = CallTrace()
+        port = randint(2**10, 2**16)
+        acceptor = Acceptor(reactor, port, lambda sok: None, prio=5)
+        self.assertEquals(('0.0.0.0', port), acceptor._sok.getsockname())
+
+    def testBindAddressCustom(self):
+        reactor = CallTrace()
+        port = randint(2**10, 2**16)
+        acceptor = Acceptor(reactor, port, lambda sok: None, bindAddress='127.0.0.1', prio=5)
+        self.assertEquals(('127.0.0.1', port), acceptor._sok.getsockname())
+        

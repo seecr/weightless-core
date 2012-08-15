@@ -53,9 +53,10 @@ CRLF_LEN = 2
 
 class HttpServer(object):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
-    def __init__(self, reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, compressResponse=False):
+    def __init__(self, reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, compressResponse=False, bindAddress=None):
         self._reactor = reactor
         self._port = port
+        self._bindAddress = bindAddress
         self._generatorFactory = generatorFactory
         self._timeout = timeout
         self._recvSize = recvSize
@@ -66,12 +67,23 @@ class HttpServer(object):
         self._compressResponse = compressResponse
 
     def listen(self):
-        self._acceptor = Acceptor(self._reactor, self._port, 
-                lambda sok: HttpHandler(self._reactor, sok, self._generatorFactory, self._timeout, 
-                    self._recvSize, prio=self._prio, maxConnections=self._maxConnections, 
+        self._acceptor = Acceptor(
+                self._reactor, 
+                self._port, 
+                lambda sok: HttpHandler(
+                    self._reactor, 
+                    sok, 
+                    self._generatorFactory, 
+                    self._timeout, 
+                    self._recvSize, 
+                    prio=self._prio, 
+                    maxConnections=self._maxConnections, 
                     errorHandler=self._errorHandler,
-                    compressResponse=self._compressResponse),
-                prio=self._prio, sok=self._sok)
+                    compressResponse=self._compressResponse
+                ),
+                prio=self._prio, 
+                sok=self._sok,
+                bindAddress=self._bindAddress)
 
 
     def setMaxConnections(self, m):
@@ -80,7 +92,7 @@ class HttpServer(object):
     def shutdown(self):
         self._acceptor.shutdown()
 
-def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, compressResponse=False, certfile='', keyfile=''):
+def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, compressResponse=False, certfile='', keyfile='', bindAddress=None):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
     if sok == None:
         def verify_cb(conn, cert, errnum, depth, ok):
@@ -100,7 +112,7 @@ def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, p
         sok = SSL.Connection(ctx, socket())
         sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         sok.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
-        sok.bind(('0.0.0.0', port))
+        sok.bind(('0.0.0.0' if bindAddress is None else bindAddress, port))
         sok.listen(127)
 
     return Acceptor(reactor, port, lambda s: HttpsHandler(reactor, s, generatorFactory, timeout, recvSize, prio=prio, maxConnections=maxConnections, errorHandler=errorHandler, compressResponse=compressResponse), prio=prio, sok=sok)
