@@ -32,7 +32,7 @@ from random import randint
 
 from weightlesstestcase import WeightlessTestCase
 
-from weightless.io import Reactor, Acceptor, Gio, giopen
+from weightless.io import Reactor, Gio, giopen
 from weightless.io._gio import Context, SocketContext, Timer, TimeoutException
 
 class GioTest(WeightlessTestCase):
