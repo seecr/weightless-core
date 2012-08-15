@@ -32,7 +32,7 @@ from subprocess import Popen, PIPE
 
 from weightless.udp import Acceptor
 
-class AcceptorTest(TestCase):
+class UdpAcceptorTest(TestCase):
 
     def testStartListening(self):
         reactor = CallTrace()
