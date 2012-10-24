@@ -155,11 +155,13 @@ TypeError: an integer is required
 
         target = ('127.0.0.255', 9876, '/')
         clientget('localhost', self.port, '/')
+        print "E"
         exceptions = []
         while not exceptions:
             orgout = sys.stderr
-            sys.stderr = StringIO()
+            #sys.stderr = StringIO()
             try:
+                print "stap "
                 self.reactor.step()
             finally:
                 sys.stderr = orgout

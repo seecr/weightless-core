@@ -24,7 +24,7 @@
 # 
 ## end license ##
 
-from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_CORK, TCP_NODELAY, AF_INET, SOCK_DGRAM
+from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, AF_INET, SOCK_DGRAM
 from struct import pack
 
 def createSocket(port):

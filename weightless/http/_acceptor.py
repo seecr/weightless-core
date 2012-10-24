@@ -24,7 +24,13 @@
 # 
 ## end license ##
 
-from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_CORK, TCP_NODELAY
+import platform
+if platform.uname()[0] == 'Darwin':
+    Apple = True
+else:
+    from socket import TCP_CORK
+    Apple = False
+from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_NODELAY
 from struct import pack
 
 def createSocket(port, bindAddress=None):
@@ -52,7 +58,8 @@ class Acceptor(object):
 
     def _accept(self):
         newConnection, address = self._sok.accept()
-        newConnection.setsockopt(SOL_TCP, TCP_CORK, 1)
+	if not Apple:
+	        newConnection.setsockopt(SOL_TCP, TCP_CORK, 1)
         #newConnection.setsockopt(SOL_TCP, TCP_NODELAY, 1)
         self._reactor.addReader(newConnection,
             self._sinkFactory(newConnection), prio=self._prio)

@@ -50,6 +50,7 @@ else:
     from core.composeschedulingtest import ComposeSchedulingCTest
 from core.localtest import LocalTest
 from core.observabletest import ObservableTest
+from core.observabletest import ObservableCTest
 from core.observabledirectedmessagingtest import ObservableDirectedMessagingTest
 from core.utilstest import UtilsTest
 

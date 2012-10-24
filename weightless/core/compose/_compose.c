@@ -95,7 +95,7 @@ static int generators_empty(PyComposeObject* self) {
 }
 
 static int generators_push(PyComposeObject* self, PyObject* generator) {
-    int current_stack_use = self->generators_top - self->generators_base;
+    long current_stack_use = self->generators_top - self->generators_base;
 
     if(current_stack_use >= self->generators_allocated) {
         if(self->generators_allocated >= MAX_STACK_SIZE) {
@@ -129,9 +129,9 @@ static int messages_empty(PyComposeObject* self) {
 }
 
 
-static int _messages_size(PyComposeObject* self) {
+static long _messages_size(PyComposeObject* self) {
     // only reliable if and when the queue is NOT full !!
-    int size = self->messages_end - self->messages_start;
+    long size = self->messages_end - self->messages_start;
     return size < 0 ? size + QUEUE_SIZE : size;
 }
 
@@ -258,7 +258,7 @@ static void _compose_initialize(PyComposeObject* cmps) {
 
 
 static PyObject* compose_new(PyObject* type, PyObject* args, PyObject* kwargs) {
-    static char* argnames[] = {"initial", "stepping"};
+    static char* argnames[] = {"initial", "stepping", NULL};
     PyObject* initial = NULL;
     PyObject* stepping = Py_False;
 
@@ -294,7 +294,7 @@ static int _compose_handle_stopiteration(PyComposeObject* self, PyObject* exc_va
                      : NULL;
 
     if(args && PyTuple_CheckExact(args) && PyObject_IsTrue(args)) {
-        int i;
+        long i;
 
         for(i = PyTuple_Size(args) - 1; i >= 0; i--)
             if(!messages_insert(self, PyTuple_GET_ITEM(args, i))) {
@@ -434,7 +434,7 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
     }
 
     // if any messages are left, 'return' them by StopIteration
-    int n = _messages_size(self);
+    long n = _messages_size(self);
 
     if(n) {
         PyObject* args = PyTuple_New(n); // new ref
@@ -827,8 +827,7 @@ PyMODINIT_FUNC init_compose_c(void) {
 void assertTrue(const int condition, const char* msg) {
     if(!condition) {
         printf("Self-test (%s) FAIL: ", __FILE__);
-        printf(msg);
-        printf("\n");
+        printf("%s", msg);
     }
 }
 

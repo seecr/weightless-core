@@ -39,6 +39,7 @@ setup(
         'weightless', 
         'weightless.core', 
         'weightless.core.compose', 
+        'weightless.core.observable',
         'weightless.core.utils',
         'weightless.http', 
         'weightless.httpng', 
@@ -59,10 +60,8 @@ Weightless presents a way to implement data-processing programs, such as web-ser
     license='GNU Public License',
     platforms=['cpython'],
     ext_modules=[
-        Extension("weightless.core.compose._compose_c", [
-            "weightless/core/compose/_compose.c"
-            ],
-        )
+        Extension("weightless.core.compose._compose_c"      , ["weightless/core/compose/_compose.c"]),
+        Extension("weightless.core.observable._observable_c", ["weightless/core/observable/_observable.c"]),
     ],
     classifiers=[
         'Development Status :: 3 - Alpha',

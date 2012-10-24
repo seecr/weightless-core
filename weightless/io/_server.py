@@ -24,7 +24,13 @@
 ## end license ##
 
 from __future__ import with_statement
-from socket import socket, SHUT_RDWR, SOL_SOCKET, SOL_TCP, SO_REUSEADDR, SO_LINGER, TCP_CORK, SO_ERROR
+import platform
+if platform.uname()[0] == 'Darwin':
+    Apple = True
+else:
+    from socket import TCP_CORK
+    Apple = False
+from socket import socket, SHUT_RDWR, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_NODELAY, SO_ERROR
 from struct import pack
 from weightless.core import Observable
 from weightless.io import Gio, SocketContext
@@ -46,7 +52,8 @@ class Server(Observable):
 
     def connect(self):
         connection, address = self._ear.accept()
-        connection.setsockopt(SOL_TCP, TCP_CORK, 1)
+        if not Apple:
+        	connection.setsockopt(SOL_TCP, TCP_CORK, 1)
         Gio(self._reactor, self.processConnection(SocketContext(connection)))
 
     def processConnection(self, connection):

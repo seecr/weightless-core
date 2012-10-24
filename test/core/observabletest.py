@@ -35,10 +35,17 @@ from inspect import isframe, getframeinfo
 from types import GeneratorType
 from functools import partial
 from weightless.core import compose, Yield, Observable, Transparent, be, tostring, NoneOfTheObserversRespond, DeclineMessage
-from weightless.core._observable import AllMessage, AnyMessage, DoMessage, OnceMessage
+from weightless.core.observable import AllMessage, AnyMessage, DoMessage, OnceMessage
 from unittest import TestCase
 from seecr.test import CallTrace
 
+class ObservableCTest(TestCase):
+    def testCreateObservable(self):
+        from weightless.core.observable._observable_c import Observable as ObservableC
+        observable = ObservableC()
+        x = object()
+        observable.addObserver(x)
+        self.assertEquals('?', observable.observers())
 
 class ObservableTest(TestCase):
     def testAllWithoutImplementers(self):
