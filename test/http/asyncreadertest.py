@@ -159,9 +159,8 @@ TypeError: an integer is required
         exceptions = []
         while not exceptions:
             orgout = sys.stderr
-            #sys.stderr = StringIO()
+            sys.stderr = StringIO()
             try:
-                print "stap "
                 self.reactor.step()
             finally:
                 sys.stderr = orgout

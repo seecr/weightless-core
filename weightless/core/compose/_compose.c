@@ -41,9 +41,7 @@ typedef struct {
     int        started;
     int        stepping;
     int        paused_on_step;
-    PyObject** generators_base;
-    PyObject** generators_top;
-    int        generators_allocated;
+    MyList     generators;
     MyList     messages;
     PyFrameObject* frame;
     PyObject*  weakreflist;
@@ -84,39 +82,7 @@ static PyTypeObject PyYield_Type = {
 
 
 ////////// Generator Stack //////////
-
 #define INITIAL_STACK_SIZE 10
-#define MAX_STACK_SIZE 1000
-
-static int generators_empty(PyComposeObject* self) {
-    return self->generators_top == self->generators_base;
-}
-
-static int generators_push(PyComposeObject* self, PyObject* generator) {
-    long current_stack_use = self->generators_top - self->generators_base;
-
-    if(current_stack_use >= self->generators_allocated) {
-        if(self->generators_allocated >= MAX_STACK_SIZE) {
-            PyErr_SetString(PyExc_RuntimeError, "maximum recursion depth exceeded (compose)");
-            return 0;
-        }
-
-        self->generators_allocated *= 2;
-
-        if(self->generators_allocated > MAX_STACK_SIZE)
-            self->generators_allocated = MAX_STACK_SIZE;
-
-        PyObject** newstack = realloc(self->generators_base, self->generators_allocated * sizeof(PyObject*));
-        self->generators_base = newstack;
-        self->generators_top = newstack + current_stack_use;
-    }
-
-    *self->generators_top++ = generator;
-    Py_INCREF(generator);
-    return 1;
-}
-
-
 
 ////////// Messages Queue //////////
 #define QUEUE_SIZE 10
@@ -124,24 +90,15 @@ static int generators_push(PyComposeObject* self, PyObject* generator) {
 ////////// Garbage Collector Support //////////
 
 static int compose_traverse(PyComposeObject* self, visitproc visit, void* arg) {
-    PyObject** p;
-
-    for(p = self->generators_base; p < self->generators_top; p++)
-        Py_VISIT(*p);
-
+    List.gc_visit(&self->generators, visit, arg);
     List.gc_visit(&self->messages, visit, arg);
-
     Py_VISIT(self->frame);
     return 0;
 }
 
 
 static int compose_clear(PyComposeObject* self) {
-    while(self->generators_base && --self->generators_top >= self->generators_base)
-        Py_CLEAR(*self->generators_top);
-
-    free(self->generators_base);
-    self->generators_base = NULL;
+    List.gc_clear(&self->generators);
     List.gc_clear(&self->messages);
     Py_CLEAR(self->frame);
     return 0;
@@ -174,9 +131,7 @@ static void _compose_initialize(PyComposeObject* cmps) {
     cmps->started = 0;
     cmps->stepping = 0;
     cmps->paused_on_step = 0;
-    cmps->generators_allocated = INITIAL_STACK_SIZE;
-    cmps->generators_base = (PyObject**) malloc(cmps->generators_allocated * sizeof(PyObject*));
-    cmps->generators_top = cmps->generators_base;
+    List.init(&cmps->generators, INITIAL_STACK_SIZE);
     List.init(&cmps->messages, QUEUE_SIZE);
     cmps->weakreflist = NULL;
     cmps->frame = PyFrame_New(PyThreadState_GET(), py_code, PyEval_GetGlobals(), NULL);
@@ -208,7 +163,7 @@ static PyObject* compose_new(PyObject* type, PyObject* args, PyObject* kwargs) {
     if(stepping)
         cmps->stepping = stepping == Py_True;
 
-    if(!generators_push(cmps, initial)) return NULL;
+    if(!List.push(&cmps->generators, initial)) return NULL;
 
     PyObject_GC_Track(cmps);
     return (PyObject*) cmps;
@@ -231,7 +186,7 @@ static int _compose_handle_stopiteration(PyComposeObject* self, PyObject* exc_va
 
         Py_CLEAR(args);
 
-    } else if(!generators_empty(self))
+    } else if(!List.empty(&self->generators))
         List.insert(&self->messages, Py_None);
 
     return 1;
@@ -275,8 +230,9 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
 
     self->paused_on_step = 0;
 
-    while(self->generators_top > self->generators_base) {
-        PyObject* generator = *(self->generators_top - 1); // take over ownership from stack
+    while(!List.empty(&self->generators)) {
+        //PyObject* generator = *(self->generators._end - 1); // take over ownership from stack
+        PyObject* generator = List.top(&self->generators);
         PyObject* response = NULL;
         PyObject* message = NULL;
 
@@ -308,6 +264,7 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
         }
     
         if(response) { // normal response
+            Py_DECREF(generator);
             if(PyGen_Check(response) || PyCompose_Check(response)) {
 
                 if(generator_invalid(response)) {
@@ -316,7 +273,7 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
                     continue;
                 }
 
-                if(!generators_push(self, response)) {
+                if(!List.push(&self->generators, response)) {
                     Py_CLEAR(response);
                     return NULL;
                 }
@@ -337,7 +294,8 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
             Py_CLEAR(response);
 
         } else { // exception thrown
-            *self->generators_top-- = NULL;
+            //*self->generators._end-- = NULL;
+            Py_DECREF(List.pop(&self->generators));
             PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
 
             if(PyErr_GivenExceptionMatches(exc_type, PyExc_StopIteration)) {
@@ -460,9 +418,9 @@ PyObject* find_local_in_locals(PyFrameObject* frame, PyObject* name);
 
 
 PyObject* find_local_in_compose(PyComposeObject* cmps, PyObject* name) {
-    PyObject** generator = cmps->generators_top;
+    PyObject** generator = cmps->generators._end;
 
-    while(--generator >= cmps->generators_base) {
+    while(--generator >= cmps->generators._base) {
         if(PyGen_Check(*generator)) {
             PyObject* result = find_local_in_locals(((PyGenObject*) * generator)->gi_frame, name);
 
@@ -570,9 +528,9 @@ PyObject* tostring(PyObject* self, PyObject* gen) {
     } else if(gen->ob_type == &PyCompose_Type) {
         PyComposeObject* cmps = (PyComposeObject*) gen;
         PyObject* result = NULL;
-        PyObject** generator = cmps->generators_base;
+        PyObject** generator = cmps->generators._base;
 
-        while(generator < cmps->generators_top) {
+        while(generator < cmps->generators._end) {
             PyObject* s = tostring(NULL, *generator++);
 
             if(!result)
@@ -647,7 +605,7 @@ PyTypeObject PyCompose_Type = {
     compose_methods,                        /* tp_methods */
     0,                                      /* tp_members */
     0,                                      /* tp_getset */
-    0,                                      /* tp_base */
+    0,                                      /* tp._base */
     0,                                      /* tp_dict */
     0,                                      /* tp_descr_get */
     0,                                      /* tp_descr_set */
@@ -657,7 +615,7 @@ PyTypeObject PyCompose_Type = {
     (newfunc)compose_new,                   /* tp_new */
     0,                                      /* tp_free */
     0,                                      /* tp_is_gc */
-    0,                                      /* tp_bases */
+    0,                                      /* tp._bases */
     0,                                      /* tp_mro */
     0,                                      /* tp_cache */
     0,                                      /* tp_subclasses */
@@ -763,22 +721,22 @@ static PyObject* _selftest(PyObject* self, PyObject* null) {
     PyComposeObject c;
     _compose_initialize(&c);
     // test initial state of generator stack
-    assertTrue(c.generators_base != NULL, "generator stack not allocated");
-    assertTrue(c.generators_top == c.generators_base, "generator top of stack invalid");
-    assertTrue(c.generators_allocated == INITIAL_STACK_SIZE, "invalid allocated stack size");
+    assertTrue(c.generators._base != NULL, "generator stack not allocated");
+    assertTrue(c.generators._end == c.generators._base, "generator top of stack invalid");
+    assertTrue(c.generators._size == INITIAL_STACK_SIZE, "invalid allocated stack size");
     // test pushing to generator stack
     Py_ssize_t refcount = Py_None->ob_refcnt;
-    assertTrue(generators_push(&c, Py_None) == 1, "generators_push must return 1");
+    assertTrue(List.push(&c.generators, Py_None) == 1, "generators_push must return 1");
     assertTrue(Py_None->ob_refcnt == refcount + 1, "refcount not increased");
-    assertTrue(c.generators_top == c.generators_base + 1, "stack top not increased");
-    assertTrue(c.generators_base[0] == Py_None, "top of stack must be Py_None");
+    assertTrue(c.generators._end == c.generators._base + 1, "stack top not increased");
+    assertTrue(c.generators._base[0] == Py_None, "top of stack must be Py_None");
     int i;
 
     for(i = 0; i < INITIAL_STACK_SIZE * 3; i++)
-        generators_push(&c, Py_None);
+        List.push(&c.generators, Py_None);
 
-    assertTrue(c.generators_top - c.generators_base == 3 * INITIAL_STACK_SIZE + 1, "extending stack failed");
-    assertTrue(c.generators_allocated == 2 * 2 * INITIAL_STACK_SIZE, "stack allocation failed");
+    assertTrue(c.generators._end - c.generators._base == 3 * INITIAL_STACK_SIZE + 1, "extending stack failed");
+    assertTrue(c.generators._size == 2 * 2 * INITIAL_STACK_SIZE, "stack allocation failed");
     // test messages queue initial state
     assertTrue(List.empty(&c.messages), "messages not empty");
     assertTrue(0 == List.size(&c.messages), "initial queue size must be 0");

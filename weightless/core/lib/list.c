@@ -2,19 +2,19 @@
 
 static void List_init(MyList* self, int size) {
     self->_base = (PyObject**) calloc(size, sizeof(PyObject*));
-    self->_start = self->_base;
+    self->_begin = self->_base;
     self->_end = self->_base;
     self->_size = size;
 }
 
 static int List_size(MyList* self) {
     // only reliable if and when the queue is NOT full !!
-    int size = self->_end - self->_start;
+    int size = self->_end - self->_begin;
     return size < 0 ? size + self->_size : size;
 }
 
 static int List_empty(MyList* self) {
-    return self->_start == self->_end;
+    return self->_begin == self->_end;
 }
 
 static PyObject* List_next(MyList* self) {
@@ -23,11 +23,11 @@ static PyObject* List_next(MyList* self) {
         return NULL;
     }
 
-    PyObject* result = *self->_start;
-    *self->_start++ = NULL;
+    PyObject* result = *self->_begin;
+    *self->_begin++ = NULL;
 
-    if(self->_start == self->_base + self->_size)
-        self->_start = self->_base;
+    if(self->_begin == self->_base + self->_size)
+        self->_begin = self->_base;
 
     return result;
 }
@@ -55,25 +55,81 @@ static int List_insert(MyList* self, PyObject* message) {
         return 0;
     }
 
-    if(self->_start == self->_base)
-        self->_start = self->_base + self->_size;
+    if(self->_begin == self->_base)
+        self->_begin = self->_base + self->_size;
 
-    *--self->_start = message;
+    *--self->_begin = message;
     Py_INCREF(message);
     return 1;
 }
 
+#define MAX_STACK_SIZE 1000
+
+static int List_push(MyList* self, PyObject* generator) {
+    long current_stack_use = self->_end - self->_base;
+
+    if(current_stack_use >= self->_size) {
+        if(self->_size >= MAX_STACK_SIZE) {
+            PyErr_SetString(PyExc_RuntimeError, "maximum recursion depth exceeded (compose)");
+            return 0;
+        }
+
+        self->_size *= 2;
+
+        if(self->_size > MAX_STACK_SIZE)
+            self->_size = MAX_STACK_SIZE;
+
+        int offset_begin = self->_begin - self->_base;
+        PyObject** newstack = realloc(self->_base, self->_size * sizeof(PyObject*));
+        self->_base = newstack;
+        self->_begin = newstack + offset_begin;
+        self->_end = newstack + current_stack_use;
+    }
+
+    *self->_end++ = generator;
+    Py_INCREF(generator);
+    return 1;
+}
+
+
+static PyObject* List_top(MyList* self) {
+    PyObject* result = *(self->_end - 1);
+    Py_INCREF(result);
+    return result;
+}
+
+
+static PyObject* List_pop(MyList* self) {
+    PyObject* result = *(--self->_end);
+    *self->_end = NULL;
+    return result;
+}
+
+
 static int List_gc_visit(MyList* self, visitproc visit, void* arg) {
     PyObject** p;
-    for(p = self->_base; p < self->_base + self->_size; p++)
-        Py_VISIT(*p);
+    if(self->_end >= self->_begin) // buffer is circular
+        for(p = self->_begin; p < self->_end; p++)
+            Py_VISIT(*p);
+    else {
+        for(p = self->_begin; p < self->_base + self->_size; p++)
+            Py_VISIT(*p);
+        for(p = self->_base; p < self->_end; p++)
+            Py_VISIT(*p);
+    }
     return 0;
 }
 
 static int List_gc_clear(MyList* self) {
-    while(self->_base && !List_empty(self)) {
-        PyObject* p = List_next(self);
-        Py_DECREF(p); 
+    PyObject** p;
+    if(self->_end >= self->_begin) // buffer is circular
+        for(p = self->_begin; p < self->_end; p++)
+            Py_DECREF(*p);
+    else {
+        for(p = self->_begin; p < self->_base + self->_size; p++)
+            Py_DECREF(*p);
+        for(p = self->_base; p < self->_end; p++)
+            Py_DECREF(*p);
     }
     free(self->_base);
     self->_base = NULL;
@@ -87,7 +143,10 @@ _ListType List = {
     List_next,
     List_append,
     List_insert,
+    List_push,
+    List_top,
+    List_pop,
     List_gc_visit,
-    List_gc_clear
+    List_gc_clear,
 };  
 
