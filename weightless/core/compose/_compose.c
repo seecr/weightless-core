@@ -31,7 +31,7 @@
 #include <frameobject.h>
 #include <structmember.h>
 
-
+#include "../lib/list.h"
 
 ////////// Python Object and Type structures //////////
 
@@ -44,9 +44,7 @@ typedef struct {
     PyObject** generators_base;
     PyObject** generators_top;
     int        generators_allocated;
-    PyObject** messages_base;
-    PyObject** messages_start;
-    PyObject** messages_end;
+    MyList     messages;
     PyFrameObject* frame;
     PyObject*  weakreflist;
 } PyComposeObject;
@@ -121,68 +119,7 @@ static int generators_push(PyComposeObject* self, PyObject* generator) {
 
 
 ////////// Messages Queue //////////
-
 #define QUEUE_SIZE 10
-
-static int messages_empty(PyComposeObject* self) {
-    return self->messages_start == self->messages_end;
-}
-
-
-static long _messages_size(PyComposeObject* self) {
-    // only reliable if and when the queue is NOT full !!
-    long size = self->messages_end - self->messages_start;
-    return size < 0 ? size + QUEUE_SIZE : size;
-}
-
-
-static PyObject* messages_next(PyComposeObject* self) {
-    if(messages_empty(self)) {
-        PyErr_SetString(PyExc_RuntimeError, "internal error: empty messages queue (compose)");
-        return NULL;
-    }
-
-    PyObject* result = *self->messages_start;
-    *self->messages_start++ = NULL;
-
-    if(self->messages_start == self->messages_base + QUEUE_SIZE)
-        self->messages_start = self->messages_base;
-
-    return result;
-}
-
-
-static int messages_append(PyComposeObject* self, PyObject* message) {
-    if(_messages_size(self) >= QUEUE_SIZE - 1) {   // keep on entry free at all times
-        PyErr_SetString(PyExc_RuntimeError, "maximum return values exceeded (compose)");
-        return 0;
-    }
-
-    *self->messages_end++ = message;
-    Py_INCREF(message);
-
-    if(self->messages_end == self->messages_base + QUEUE_SIZE)
-        self->messages_end = self->messages_base;
-
-    return 1;
-}
-
-
-static int messages_insert(PyComposeObject* self, PyObject* message) {
-    if(_messages_size(self) >= QUEUE_SIZE - 1) {
-        PyErr_SetString(PyExc_RuntimeError, "maximum return values exceeded (compose)");
-        return 0;
-    }
-
-    if(self->messages_start == self->messages_base)
-        self->messages_start = self->messages_base + QUEUE_SIZE;
-
-    *--self->messages_start = message;
-    Py_INCREF(message);
-    return 1;
-}
-
-
 
 ////////// Garbage Collector Support //////////
 
@@ -192,8 +129,7 @@ static int compose_traverse(PyComposeObject* self, visitproc visit, void* arg) {
     for(p = self->generators_base; p < self->generators_top; p++)
         Py_VISIT(*p);
 
-    for(p = self->messages_base; p < self->messages_base + QUEUE_SIZE; p++)
-        Py_VISIT(*p);
+    List.gc_visit(&self->messages, visit, arg);
 
     Py_VISIT(self->frame);
     return 0;
@@ -206,14 +142,7 @@ static int compose_clear(PyComposeObject* self) {
 
     free(self->generators_base);
     self->generators_base = NULL;
-
-    while(self->messages_base && !messages_empty(self)) {
-        PyObject* p = messages_next(self);
-        Py_DECREF(p);
-    }
-
-    free(self->messages_base);
-    self->messages_base = NULL;
+    List.gc_clear(&self->messages);
     Py_CLEAR(self->frame);
     return 0;
 }
@@ -248,9 +177,7 @@ static void _compose_initialize(PyComposeObject* cmps) {
     cmps->generators_allocated = INITIAL_STACK_SIZE;
     cmps->generators_base = (PyObject**) malloc(cmps->generators_allocated * sizeof(PyObject*));
     cmps->generators_top = cmps->generators_base;
-    cmps->messages_base = (PyObject**) calloc(QUEUE_SIZE, sizeof(PyObject*));
-    cmps->messages_start = cmps->messages_base;
-    cmps->messages_end = cmps->messages_base;
+    List.init(&cmps->messages, QUEUE_SIZE);
     cmps->weakreflist = NULL;
     cmps->frame = PyFrame_New(PyThreadState_GET(), py_code, PyEval_GetGlobals(), NULL);
     Py_CLEAR(cmps->frame->f_back);
@@ -297,7 +224,7 @@ static int _compose_handle_stopiteration(PyComposeObject* self, PyObject* exc_va
         long i;
 
         for(i = PyTuple_Size(args) - 1; i >= 0; i--)
-            if(!messages_insert(self, PyTuple_GET_ITEM(args, i))) {
+            if(!List.insert(&self->messages, PyTuple_GET_ITEM(args, i))) {
                 Py_CLEAR(args);
                 return 0;
             }
@@ -305,7 +232,7 @@ static int _compose_handle_stopiteration(PyComposeObject* self, PyObject* exc_va
         Py_CLEAR(args);
 
     } else if(!generators_empty(self))
-        messages_insert(self, Py_None);
+        List.insert(&self->messages, Py_None);
 
     return 1;
 }
@@ -375,7 +302,7 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
             Py_CLEAR(exc_tb);
 
         } else { // normal message
-            message = messages_next(self); // new ref
+            message = List.next(&self->messages); // new ref
             response = PyObject_CallMethod(generator, "send", "(O)", message); // new ref
             Py_CLEAR(message);
         }
@@ -400,9 +327,9 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
                     Py_INCREF(&PyYield_Type);
                     return (PyObject*) &PyYield_Type;
                 }
-                messages_insert(self, Py_None);
+                List.insert(&self->messages, Py_None);
 
-            } else if(response != Py_None || messages_empty(self)) {
+            } else if(response != Py_None || List.empty(&self->messages)) {
                 self->expect_data = response == Py_None;
                 return response;
             }
@@ -434,14 +361,14 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
     }
 
     // if any messages are left, 'return' them by StopIteration
-    long n = _messages_size(self);
+    long n = List.size(&self->messages);
 
     if(n) {
         PyObject* args = PyTuple_New(n); // new ref
         int i;
 
         for(i = 0; i < n; i++) {
-            PyTuple_SetItem(args, i, messages_next(self)); // steals ref
+            PyTuple_SetItem(args, i, List.next(&self->messages)); // steals ref
         }
 
         PyObject* sie = PyObject_Call(PyExc_StopIteration, args, NULL); // new ref
@@ -482,7 +409,7 @@ static PyObject* compose_send(PyComposeObject* self, PyObject* message) {
         exc_val = PyString_FromString("Cannot accept data. First send None.");
         exc_type = PyExc_AssertionError;
     } else
-        messages_insert(self, message);
+        List.insert(&self->messages, message);
     PyObject* response = _compose_go_with_frame(self, exc_type, exc_val, NULL);
     Py_CLEAR(exc_val);
     return response;
@@ -853,73 +780,73 @@ static PyObject* _selftest(PyObject* self, PyObject* null) {
     assertTrue(c.generators_top - c.generators_base == 3 * INITIAL_STACK_SIZE + 1, "extending stack failed");
     assertTrue(c.generators_allocated == 2 * 2 * INITIAL_STACK_SIZE, "stack allocation failed");
     // test messages queue initial state
-    assertTrue(messages_empty(&c), "messages not empty");
-    assertTrue(0 == _messages_size(&c), "initial queue size must be 0");
+    assertTrue(List.empty(&c.messages), "messages not empty");
+    assertTrue(0 == List.size(&c.messages), "initial queue size must be 0");
     // test append to messages queue
     refcount = Py_None->ob_refcnt;
-    messages_append(&c, Py_None);
-    assertTrue(1 == _messages_size(&c), "now queue size must be 1");
+    List.append(&c.messages, Py_None);
+    assertTrue(1 == List.size(&c.messages), "now queue size must be 1");
     assertTrue(Py_None->ob_refcnt == refcount + 1, "messages_append did not increase ref count");
-    assertTrue(!messages_empty(&c), "messages must not be empty");
-    assertTrue(Py_None == messages_next(&c), "incorrect value from queue");
+    assertTrue(!List.empty(&c.messages), "messages must not be empty");
+    assertTrue(Py_None == List.next(&c.messages), "incorrect value from queue");
     // test next on messages queue
-    assertTrue(0 == _messages_size(&c), "now queue size must be 0 again");
-    assertTrue(messages_empty(&c), "messages must be empty again");
-    messages_append(&c, PyInt_FromLong(5));
-    messages_append(&c, PyInt_FromLong(6));
-    assertTrue(2 == _messages_size(&c), "now queue size must be 2");
-    assertTrue(PyInt_AsLong(messages_next(&c)) == 5, "incorrect value from queue");
-    assertTrue(PyInt_AsLong(messages_next(&c)) == 6, "incorrect value from queue");
+    assertTrue(0 == List.size(&c.messages), "now queue size must be 0 again");
+    assertTrue(List.empty(&c.messages), "messages must be empty again");
+    List.append(&c.messages, PyInt_FromLong(5));
+    List.append(&c.messages, PyInt_FromLong(6));
+    assertTrue(2 == List.size(&c.messages), "now queue size must be 2");
+    assertTrue(PyInt_AsLong(List.next(&c.messages)) == 5, "incorrect value from queue");
+    assertTrue(PyInt_AsLong(List.next(&c.messages)) == 6, "incorrect value from queue");
     // test wrap around on append
     compose_clear(&c);
     _compose_initialize(&c);
 
     for(i = 0; i < QUEUE_SIZE - 2; i++)                                     // 8
-        messages_append(&c, PyInt_FromLong(i));
+        List.append(&c.messages, PyInt_FromLong(i));
 
-    assertTrue(i == _messages_size(&c), "queue must be equals to i");
-    int status = messages_append(&c, PyInt_FromLong(i));                    // 9
-    assertTrue(i + 1 == _messages_size(&c), "queue must be equals to i+1");
+    assertTrue(i == List.size(&c.messages), "queue must be equals to i");
+    int status = List.append(&c.messages, PyInt_FromLong(i));                    // 9
+    assertTrue(i + 1 == List.size(&c.messages), "queue must be equals to i+1");
     assertTrue(status == 1, "status must be ok");
-    status = messages_append(&c, PyInt_FromLong(i));                        // full!
+    status = List.append(&c.messages, PyInt_FromLong(i));                        // full!
     assertTrue(status == 0, "status of append must 0 (no room)");
     assertTrue(PyExc_RuntimeError == PyErr_Occurred(), "runtime exception must be set");
     PyErr_Clear();
-    status = messages_insert(&c, PyInt_FromLong(99));
+    status = List.insert(&c.messages, PyInt_FromLong(99));
     assertTrue(status == 0, "status of insert must 0 (no room)");
     assertTrue(PyExc_RuntimeError == PyErr_Occurred(), "runtime exception must be set");
     PyErr_Clear();
     // test wrap around on insert
     compose_clear(&c);
     _compose_initialize(&c);
-    status = messages_insert(&c, PyInt_FromLong(42));
-    assertTrue(1 == _messages_size(&c), "after insert queue must be equals to 1");
+    status = List.insert(&c.messages, PyInt_FromLong(42));
+    assertTrue(1 == List.size(&c.messages), "after insert queue must be equals to 1");
     assertTrue(status == 1, "status after first insert must be ok");
-    status = messages_insert(&c, PyInt_FromLong(42));
-    assertTrue(2 == _messages_size(&c), "after insert queue must be equals to 2");
+    status = List.insert(&c.messages, PyInt_FromLong(42));
+    assertTrue(2 == List.size(&c.messages), "after insert queue must be equals to 2");
     assertTrue(status == 1, "status after second insert must be ok");
 
     for(i = 0; i < QUEUE_SIZE - 3; i++)
-        status = messages_insert(&c, PyInt_FromLong(i));
+        status = List.insert(&c.messages, PyInt_FromLong(i));
 
-    assertTrue(9 == _messages_size(&c), "after insert queue must be equals to 9");
+    assertTrue(9 == List.size(&c.messages), "after insert queue must be equals to 9");
     assertTrue(status == 1, "status after 9 inserts must be ok");
-    status = messages_insert(&c, PyInt_FromLong(4242));
+    status = List.insert(&c.messages, PyInt_FromLong(4242));
     assertTrue(status == 0, "status after 10 inserts must be error");
     assertTrue(PyExc_RuntimeError == PyErr_Occurred(), "runtime exception must be set here too");
     PyErr_Clear();
     // test wrap around on next
     compose_clear(&c);
     _compose_initialize(&c);
-    messages_insert(&c, PyInt_FromLong(1000)); // wrap backward
-    messages_append(&c, PyInt_FromLong(1001)); // wrap forward
-    PyObject* o = messages_next(&c);           // end
+    List.insert(&c.messages, PyInt_FromLong(1000)); // wrap backward
+    List.append(&c.messages, PyInt_FromLong(1001)); // wrap forward
+    PyObject* o = List.next(&c.messages);           // end
     assertTrue(1000 == PyInt_AsLong(o), "expected 1000");
     assertTrue(2 == o->ob_refcnt, "refcount on next must be 2");
-    o = messages_next(&c);                     // wrap
+    o = List.next(&c.messages);                     // wrap
     assertTrue(1001 == PyInt_AsLong(o), "expected 1001");
     assertTrue(2 == o->ob_refcnt, "refcount on next must be 2");
-    o = messages_next(&c);
+    o = List.next(&c.messages);
     assertTrue(NULL == o, "error condition on next: empty");
     assertTrue(PyExc_RuntimeError == PyErr_Occurred(), "no runtime exception no next on empty queue");
     PyErr_Clear();
