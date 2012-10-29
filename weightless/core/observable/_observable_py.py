@@ -56,8 +56,9 @@ class _DeclineMessage(Exception):
     aesthetics this single instance is named as a class."""
 DeclineMessage = _DeclineMessage()
 
+from collections import defaultdict
 
-class Defer(object):
+class Defer(defaultdict):
     def __init__(self, observers, msgclass):
         __slots__ = ('_observers', '_msgclass')
         self._observers = tuple(observers)
@@ -68,10 +69,12 @@ class Defer(object):
         setattr(self, attr, msg)
         return msg
 
-    def __getitem__(self, target):
+    def __missing__(self, target):
         observers = (o for o in self._observers
             if hasattr(o, "observable_name") and o.observable_name() == target)
-        return Defer(observers, self._msgclass)
+        d = Defer(observers, self._msgclass)
+        self[target] = d
+        return d
 
     def unknown(self, message, *args, **kwargs):
         try:
@@ -89,19 +92,17 @@ class MessageBase(object):
 
     def candidates(self, observers):
         for observer in observers:
-            try: method = getattr(observer, self._message)
+            try: 
+                yield getattr(observer, self._message)
             except AttributeError:
                 try: 
-                    method = partial(getattr(observer, self.altname), self._message)
-                    method.im_self = observer
+                    yield partial(getattr(observer, self.altname), self._message)
                 except AttributeError:
                     continue 
-            yield method
 
     def all(self, *args, **kwargs):
         for method in self._methods:
             try:
-                #yield method(*args, **kwargs)
                 result = method(*args, **kwargs)
                 self.verifyMethodResult(method, result)
                 _ = yield result
