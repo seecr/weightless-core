@@ -155,7 +155,6 @@ TypeError: an integer is required
 
         target = ('127.0.0.255', 9876, '/')
         clientget('localhost', self.port, '/')
-        print "E"
         exceptions = []
         while not exceptions:
             orgout = sys.stderr

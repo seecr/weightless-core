@@ -163,7 +163,7 @@ static PyObject* compose_new(PyObject* type, PyObject* args, PyObject* kwargs) {
     if(stepping)
         cmps->stepping = stepping == Py_True;
 
-    if(!List.push(&cmps->generators, initial)) return NULL;
+    if(!List.append(&cmps->generators, initial)) return NULL;
 
     PyObject_GC_Track(cmps);
     return (PyObject*) cmps;
@@ -231,7 +231,6 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
     self->paused_on_step = 0;
 
     while(!List.empty(&self->generators)) {
-        //PyObject* generator = *(self->generators._end - 1); // take over ownership from stack
         PyObject* generator = List.top(&self->generators);
         PyObject* response = NULL;
         PyObject* message = NULL;
@@ -273,7 +272,7 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
                     continue;
                 }
 
-                if(!List.push(&self->generators, response)) {
+                if(!List.append(&self->generators, response)) {
                     Py_CLEAR(response);
                     return NULL;
                 }
@@ -294,7 +293,6 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
             Py_CLEAR(response);
 
         } else { // exception thrown
-            //*self->generators._end-- = NULL;
             Py_DECREF(List.pop(&self->generators));
             PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
 
@@ -554,12 +552,14 @@ PyObject* tostring(PyObject* self, PyObject* gen) {
 ////////// compose Python Type //////////
 
 static PyObject* _selftest(PyObject* self, PyObject* null);
+extern PyObject* List_selftest(PyObject* self, PyObject* null);
 
 
 static PyMethodDef compose_functionslist[] = {
     {"local", local, METH_O, "Finds a local variable on the call stack including compose'd generators."},
     {"tostring", tostring, METH_O, "Returns a string representation of a genarator."},
     {"_selftest", _selftest, METH_NOARGS, "runs self test"},
+    {"List_selftest", List_selftest, METH_NOARGS, "self test for List"},
     {NULL} /* Sentinel */
 };
 
@@ -709,10 +709,10 @@ PyMODINIT_FUNC init_compose_c(void) {
 
 ////////// Testing support //////////
 
-void assertTrue(const int condition, const char* msg) {
+static void assertTrue(const int condition, const char* msg) {
     if(!condition) {
         printf("Self-test (%s) FAIL: ", __FILE__);
-        printf("%s", msg);
+        printf("%s\n", msg);
     }
 }
 
@@ -726,14 +726,14 @@ static PyObject* _selftest(PyObject* self, PyObject* null) {
     assertTrue(c.generators._size == INITIAL_STACK_SIZE, "invalid allocated stack size");
     // test pushing to generator stack
     Py_ssize_t refcount = Py_None->ob_refcnt;
-    assertTrue(List.push(&c.generators, Py_None) == 1, "generators_push must return 1");
+    assertTrue(List.append(&c.generators, Py_None) == 1, "generators_push must return 1");
     assertTrue(Py_None->ob_refcnt == refcount + 1, "refcount not increased");
     assertTrue(c.generators._end == c.generators._base + 1, "stack top not increased");
     assertTrue(c.generators._base[0] == Py_None, "top of stack must be Py_None");
     int i;
 
     for(i = 0; i < INITIAL_STACK_SIZE * 3; i++)
-        List.push(&c.generators, Py_None);
+        List.append(&c.generators, Py_None);
 
     assertTrue(c.generators._end - c.generators._base == 3 * INITIAL_STACK_SIZE + 1, "extending stack failed");
     assertTrue(c.generators._size == 2 * 2 * INITIAL_STACK_SIZE, "stack allocation failed");
@@ -759,19 +759,19 @@ static PyObject* _selftest(PyObject* self, PyObject* null) {
     compose_clear(&c);
     _compose_initialize(&c);
 
-    for(i = 0; i < QUEUE_SIZE - 2; i++)                                     // 8
+    for(i = 0; i < 1001 - 2; i++)                                     // 8
         List.append(&c.messages, PyInt_FromLong(i));
 
     assertTrue(i == List.size(&c.messages), "queue must be equals to i");
     int status = List.append(&c.messages, PyInt_FromLong(i));                    // 9
     assertTrue(i + 1 == List.size(&c.messages), "queue must be equals to i+1");
-    assertTrue(status == 1, "status must be ok");
+    assertTrue(status == 1, "0. status must be ok");
     status = List.append(&c.messages, PyInt_FromLong(i));                        // full!
-    assertTrue(status == 0, "status of append must 0 (no room)");
+    assertTrue(status == 0, "1. status of append must 0 (no room)");
     assertTrue(PyExc_RuntimeError == PyErr_Occurred(), "runtime exception must be set");
     PyErr_Clear();
     status = List.insert(&c.messages, PyInt_FromLong(99));
-    assertTrue(status == 0, "status of insert must 0 (no room)");
+    assertTrue(status == 0, "2. status of insert must 0 (no room)");
     assertTrue(PyExc_RuntimeError == PyErr_Occurred(), "runtime exception must be set");
     PyErr_Clear();
     // test wrap around on insert
@@ -784,11 +784,14 @@ static PyObject* _selftest(PyObject* self, PyObject* null) {
     assertTrue(2 == List.size(&c.messages), "after insert queue must be equals to 2");
     assertTrue(status == 1, "status after second insert must be ok");
 
-    for(i = 0; i < QUEUE_SIZE - 3; i++)
+    assertTrue(2 == List.size(&c.messages), "start condition for next test");
+    for(i = 2; i < 1000; i++) {
+        assertTrue(i == List.size(&c.messages), "size must equal inserts");
         status = List.insert(&c.messages, PyInt_FromLong(i));
+    }
 
-    assertTrue(9 == List.size(&c.messages), "after insert queue must be equals to 9");
-    assertTrue(status == 1, "status after 9 inserts must be ok");
+    assertTrue(1000 == List.size(&c.messages), "after insert queue must be equals to 1001");
+    assertTrue(status == 1, "status after 1000 inserts must be ok");
     status = List.insert(&c.messages, PyInt_FromLong(4242));
     assertTrue(status == 0, "status after 10 inserts must be error");
     assertTrue(PyExc_RuntimeError == PyErr_Occurred(), "runtime exception must be set here too");

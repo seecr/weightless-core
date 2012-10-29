@@ -12,9 +12,9 @@ typedef struct {
     int       (*size)    (MyList* self);
     int       (*empty)   (MyList* self);
     PyObject* (*next)    (MyList* self);
-    int       (*append)  (MyList* self, PyObject* o);
+    PyObject* (*get)     (MyList* self, int index);
     int       (*insert)  (MyList* self, PyObject* o);
-    int       (*push)    (MyList* self, PyObject* o);
+    int       (*append)  (MyList* self, PyObject* o);
     PyObject* (*top)     (MyList* self);
     PyObject* (*pop)     (MyList* self);
     int       (*gc_visit)(MyList* self, visitproc visit, void* arg);

@@ -1211,7 +1211,7 @@ class ComposeCTest(_ComposeTest):
         _ComposeTest.setUp(self)
 
     def testQueueSize(self):
-        testrange = 9 #QUEUE SIZE = 10
+        testrange = 1000 #MAX_QUEUE SIZE = 1001
         def f():
             raise StopIteration(*xrange(testrange))
             yield 'f done'
@@ -1226,7 +1226,7 @@ class ComposeCTest(_ComposeTest):
         self.assertEquals([range(testrange)], list(c))
 
     def testQueueSizeExceeded(self):
-        testrange = 10 #QUEUE SIZE = 10
+        testrange = 1001 #QUEUE SIZE = 1001
         def f():
             raise StopIteration(*xrange(testrange))
             yield
