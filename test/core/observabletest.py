@@ -196,26 +196,19 @@ class ObservableTest(TestCase):
             self.assertTrue("> returned '1'" in str(e), str(e))
 
     def testOnceAssertsRecursivenessGivesNoReturnValue(self):
-        # This will normally never happen.
+        '''This basically tests if _callonce does not return anything....'''
         class AnObservable(Observable):
             def g(self):
-                raise StopIteration(1)
+                return
                 yield
-        class MockedOnceMessageSelf(OnceMessage):
-            pass
-        def retvalGen(*args, **kwargs):
-            raise StopIteration(1)
-            yield
-        oncedObservable = AnObservable()
-        mockedSelf = MockedOnceMessageSelf(defer=oncedObservable.once, message='noRelevantMethodHere')
-        mockedSelf._callonce = retvalGen
-
-        composed = compose(OnceMessage._callonce(mockedSelf, observers=[AnObservable()], args=(), kwargs={}, done=set()))
+        root = Observable()
+        o = AnObservable()
+        root.addObserver(o)
+        composed = compose(root.once.g())
         try:
             composed.next()
-            self.fail("Should not happen")
-        except AssertionError, e:
-            self.assertEquals("OnceMessage of AnObservable(name=None) returned '1', but must always be None", str(e))
+        except StopIteration, e:
+            self.assertEquals((), e.args)
 
     def testAnyOrCallCallsFirstImplementer(self):
         class A(object):
@@ -698,7 +691,12 @@ class ObservableTest(TestCase):
         class MyObserver(Observable):
             def __init__(self):
                 Observable.__init__(self)
-                self.generatorReturningCallable = partial(lambda arg: (x for x in 'a'), arg='partialed')
+                #self.generatorReturningCallable = partial(lambda arg: (x for x in 'a'), arg='partialed')
+
+            def acallable(self):
+                return (x for x in 'a')
+
+            generatorReturningCallable = acallable
 
             def noGeneratorFunction(self):
                 callLog.append('function called')
