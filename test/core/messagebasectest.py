@@ -26,11 +26,46 @@
 from unittest import TestCase
 from time import time
 from weightless.core import Observable, be, compose
+from weightless.core.observable._observable_py import MessageBaseC
 
-class ListCTest(TestCase):
+from gctestcase import GCTestCase
+
+class MessageBaseCTest(GCTestCase):
+
     def testSelftest(self):
         from weightless.core.compose._compose_c import List_selftest
         List_selftest()
+
+    def testCreate(self):
+        self.assertEquals(
+                "<class 'weightless.core.observable._observable_py.MessageBaseC'>",
+                str(MessageBaseC))
+        observer = "A"
+        msg = MessageBaseC([observer, object()], 'strip')
+        methods = msg.candidates()
+        self.assertEquals((observer.strip,), methods)
+
+    def testSubclass(self):
+        class MsgA(MessageBaseC):
+            altname = "alt_name"
+        self.assertEquals("<class 'core.messagebasectest.MsgA'>", str(MsgA))
+        class A(object):
+            def alt_name(self, message):
+                return "this is alt_name for " + message
+        a = A()
+        msg = MsgA([a], 'f')
+        methods = msg.candidates()
+        self.assertEquals("this is alt_name for f", methods[0]())
+
+    def testAllInC(self):
+        class A(object):
+            def f(self):
+                return 1
+        class B(object):
+            def f(self):
+                return 2
+        msg = MessageBaseC([A(),B()], "f")
+        self.assertEquals([1,2], list(msg.all()))
 
     def testPerformance(self):
         class Top(Observable):
@@ -63,7 +98,7 @@ class ListCTest(TestCase):
         # Defer with static tuple of observers: 0.23
         # Caching method in Defer.__getattr__: 0.21
         # Without checking resuls in MessageBase.all: 0.19 ==> C: 0.068
-        self.assertTrue(t1-t0 < 0.001, t1-t0)
+        self.assertTrue(t1-t0 < 0.1, t1-t0)
 
     def testPerformanceOfLabelledInvocation(self):
         class Top(Observable):
@@ -89,5 +124,5 @@ class ListCTest(TestCase):
         for _ in range(10000):
             list(compose(s.all['three'].f()))
         t1 = time()
-        self.assertTrue(t1-t0 < 0.001, t1-t0)
+        self.assertTrue(t1-t0 < 0.08, t1-t0)
 

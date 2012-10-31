@@ -30,8 +30,6 @@ from functools import partial
 
 from weightless.core.compose import isGeneratorOrComposed
 
-from _observable_c import Observable as ObservableC
-
 class NoneOfTheObserversRespond(Exception):
     """Must not be thrown anywhere outside of the Observable
     implementation. It is exposed only so that it can be caught in 
@@ -82,23 +80,30 @@ class Defer(defaultdict):
         except:
             c, v, t = exc_info(); raise c, v, t.tb_next
 
+def candidates(observers, method_name, alt_method_name):
+    for observer in observers:
+        try:
+            yield getattr(observer, method_name)
+        except AttributeError:
+            try:
+                yield partial(getattr(observer, alt_method_name), method_name)
+            except AttributeError:
+                continue
+
+from _observable_c import _MessageBaseC
+class MessageBaseC(_MessageBaseC):
+    altname = ""
+    def __init__(self, observers, message):
+        methods = candidates(observers, message, self.altname)
+        super(MessageBaseC, self).__init__(tuple(methods), message)
+
 
 class MessageBase(object):
     def __init__(self, observers, message):
         __slot__ = ('_message', '_methods', '_nrOfObservers')
         self._message = message
-        self._methods = tuple(self.candidates(observers))
+        self._methods = tuple(candidates(observers, message, self.altname))
         self._nrOfObservers = len(tuple(observers))
-
-    def candidates(self, observers):
-        for observer in observers:
-            try: 
-                yield getattr(observer, self._message)
-            except AttributeError:
-                try: 
-                    yield partial(getattr(observer, self.altname), self._message)
-                except AttributeError:
-                    continue 
 
     def all(self, *args, **kwargs):
         for method in self._methods:
@@ -164,6 +169,7 @@ class DoMessage(MessageBase):
         assert result is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), result)
 
 class OnceMessage(MessageBase):
+    altname = ""
 
     def __init__(self, observers, *args, **kwargs):
         self._observers = observers

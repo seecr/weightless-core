@@ -53,7 +53,7 @@ from core.observabletest import ObservableTest
 from core.observabletest import ObservableCTest
 from core.observabledirectedmessagingtest import ObservableDirectedMessagingTest
 from core.utilstest import UtilsTest
-from core.listctest import ListCTest
+from core.messagebasectest import MessageBaseCTest
 
 from http.acceptortest import AcceptorTest
 from http.httpreadertest import HttpReaderTest
