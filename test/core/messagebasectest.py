@@ -59,13 +59,13 @@ class MessageBaseCTest(GCTestCase):
 
     def testAllInC(self):
         class A(object):
-            def f(self):
-                return 1
+            def f(self, a, b=None):
+                return "A" + a + b
         class B(object):
-            def f(self):
-                return 2
+            def f(self, a, b=None):
+                return "B" + a + b
         msg = MessageBaseC([A(),B()], "f")
-        self.assertEquals([1,2], list(msg.all()))
+        self.assertEquals(["Aab", "Bab"], list(msg.all("a", b="b")))
 
     def testPerformance(self):
         class Top(Observable):
