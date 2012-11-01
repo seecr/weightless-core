@@ -130,19 +130,18 @@ PyObject* messagebasec_candidates(PyMessageBaseCObject* self, PyObject* _) {
 PyObject* messagebasec_all(PyMessageBaseCObject* self, PyObject* args, PyObject* kwargs) {
     PyAllGeneratorObject* iter = PyObject_New(PyAllGeneratorObject, &PyAllGenerator_Type);
     if (!iter) return NULL;
+    PyObject_Init(iter, &PyAllGenerator_Type);
     iter->_methods = self->_methods;
     iter->_args = args;
     iter->_kwargs = kwargs;
     iter->_i = 0;
     Py_INCREF(iter->_methods);
     Py_INCREF(iter->_args);
-    Py_INCREF(iter->_kwargs);
+    if(kwargs)
+        Py_INCREF(iter->_kwargs);
     return (PyObject*) iter;
 }
 
-
-static void messagebasec_del(PyObject* self) {
-}
 
 /// AllGenerator Methods ///
 
@@ -161,27 +160,42 @@ static PyObject* allgenerator_iter(PyObject *self) {
     return self;
 }
 
+PyObject* Exc_DeclineMessage;
+
 static PyObject* allgenerator_iternext(PyAllGeneratorObject* self) {
-    if(self->_i >= PyTuple_GET_SIZE(self->_methods)) {
-        PyErr_SetNone(PyExc_StopIteration);
-        return NULL;
-    } else {
+    while(self->_i < PyTuple_GET_SIZE(self->_methods)) {
         PyObject* m = PyTuple_GET_ITEM(self->_methods, self->_i);  // borrowed ref
         PyObject* r = PyObject_Call(m, self->_args, self->_kwargs);  // new ref
         self->_i++;
+        if(!r && PyErr_ExceptionMatches(Exc_DeclineMessage))
+            continue;
         return r;
     }
+    PyErr_SetNone(PyExc_StopIteration);
+    return NULL;
 }
+
+static PyObject* allgenerator_send(PyAllGeneratorObject* self, PyObject* arg) {
+    if(arg != Py_None) {
+        if(self->_i == 0)
+            return PyErr_Format(PyExc_TypeError, "can't send non-None value to a just-started generator");
+        PyObject* pa = PyObject_Str(PyTuple_GET_ITEM(self->_methods, self->_i-1));
+        PyObject* pb = PyObject_Str(arg);
+        PyObject* r = PyErr_Format(PyExc_AssertionError, "%s returned '%s'",
+                PyString_AsString(pa), PyString_AsString(pb));
+        Py_DECREF(pa);
+        Py_DECREF(pb);
+        return r;
+    }
+    return allgenerator_iternext(self);
+}
+
 // Send and Throw !!!
 
 
 ////////// Python Types //////////
 
 /// MessageBaseC_Type ///
-
-static PyMethodDef messagebasec_functionslist[] = {
-    {NULL} /* Sentinel */
-};
 
 static PyMethodDef messagebasec_methods[] = {
     {"candidates", (PyCFunction) messagebasec_candidates,  METH_NOARGS,
@@ -245,6 +259,11 @@ PyTypeObject PyMessageBaseC_Type = {
 
 /// AllGenerator ///
 
+static PyMethodDef allgenerator_methods[] = {
+    {"send", (PyCFunction) allgenerator_send,  METH_O, "generator send" },
+    {NULL}
+};
+
 PyTypeObject PyAllGenerator_Type = {
     PyObject_HEAD_INIT(&PyType_Type)
     0,                         /*ob_size*/
@@ -274,7 +293,7 @@ PyTypeObject PyAllGenerator_Type = {
     0,  /* tp_weaklistoffset */
     allgenerator_iter,  /* tp_iter: __iter__() method */
     allgenerator_iternext,  /* tp_iternext: next() method */
-    0,                     /* tp_methods */
+    allgenerator_methods,                     /* tp_methods */
     0,                                      /* tp_members */
     0,                                      /* tp_getset */
     0,                                      /* tp_base */
@@ -293,12 +312,40 @@ PyTypeObject PyAllGenerator_Type = {
 
 PyMODINIT_FUNC init_observable_c(void) {
 
+    PyObject* weightlesscore = PyImport_ImportModule("weightless.core.observable._observable_py"); // new ref
+
+    if(!weightlesscore) {
+        PyErr_Print();
+        return;
+    }
+
+    PyObject* dict = PyModule_GetDict(weightlesscore); // borrowed ref
+
+    if(!dict) {
+        Py_CLEAR(weightlesscore);
+        PyErr_Print();
+        return;
+    }
+
+    Exc_DeclineMessage = PyMapping_GetItemString(dict, "_DeclineMessage"); // new ref
+
+    if(!Exc_DeclineMessage) {
+        Py_CLEAR(weightlesscore);
+        PyErr_Print();
+        return;
+    }
+    
     if(PyType_Ready(&PyMessageBaseC_Type) < 0) {
         PyErr_Print();
         return;
     }
 
-    PyObject* module = Py_InitModule3("_observable_c", messagebasec_functionslist, "fast MessageBaseC");
+    if(PyType_Ready(&PyAllGenerator_Type) < 0) {
+        PyErr_Print();
+        return;
+    }
+
+    PyObject* module = Py_InitModule3("_observable_c", NULL, "fast MessageBaseC");
 
     if(!module) {
         PyErr_Print();

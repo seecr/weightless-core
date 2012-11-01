@@ -26,7 +26,7 @@
 from unittest import TestCase
 from time import time
 from weightless.core import Observable, be, compose
-from weightless.core.observable._observable_py import MessageBaseC
+from weightless.core.observable._observable_py import MessageBaseC, DeclineMessage
 
 from gctestcase import GCTestCase
 
@@ -66,6 +66,43 @@ class MessageBaseCTest(GCTestCase):
                 return "B" + a + b
         msg = MessageBaseC([A(),B()], "f")
         self.assertEquals(["Aab", "Bab"], list(msg.all("a", b="b")))
+
+    def testAllGeneratorHandlesFirstSend(self):
+        msg = MessageBaseC([], "")
+        a = msg.all()
+        try:
+            a.send(None)
+            self.fail()
+        except StopIteration:
+            pass
+        try:
+            msg.all().send("not allowed")
+            self.fail('fails here')
+        except TypeError, e:
+            self.assertEquals("can't send non-None value to a just-started generator", str(e))
+
+    def testAllGeneratorChecksForIllegalDataSend(self):
+        class A(object):
+            def f(self):
+                yield
+        a = A()
+        msg = MessageBaseC([a], "f")
+        g = msg.all()
+        g.next()
+        try:
+            g.send("not allowed")
+        except AssertionError, e:
+            self.assertEquals(str(a.f) + " returned 'not allowed'", str(e))
+
+    def testDeclineMessage(self):
+        class A(object):
+            def f(self):
+                raise DeclineMessage
+        class B(object):
+            def f(self):
+                return 42
+        g = MessageBaseC([A(), B()], "f").all()
+        self.assertEquals([42], list(g))
 
     def testPerformance(self):
         class Top(Observable):

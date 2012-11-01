@@ -97,7 +97,6 @@ class MessageBaseC(_MessageBaseC):
         methods = candidates(observers, message, self.altname)
         super(MessageBaseC, self).__init__(tuple(methods), message)
 
-
 class MessageBase(object):
     def __init__(self, observers, message):
         __slot__ = ('_message', '_methods', '_nrOfObservers')
