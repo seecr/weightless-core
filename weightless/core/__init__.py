@@ -64,6 +64,11 @@ else:
     from weightless.core.core_c import _MessageBaseC
     ComposeType = _compose
 
+from types import GeneratorType
+def is_generator(o):
+    return type(o) == GeneratorType
+from _observable_py import Observable, Transparent, be, methodOrMethodPartialStr, NoneOfTheObserversRespond, DeclineMessage, AllMessage, AnyMessage, DoMessage, OnceMessage
+
 from types import FunctionType
 def compose(X, *args, **kwargs):
     if type(X) == FunctionType: # compose used as decorator

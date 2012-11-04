@@ -4,7 +4,7 @@
 #include "compose/_compose.h"
 #include "observable/_observable.h"
 
-PyObject* is_generator(PyObject* o) {
+PyObject* is_generator(PyObject* _, PyObject* o) {
     if(PyCompose_Check(o) || PyGen_Check(o) /* || PyAllMessage_Check(o)*/)
         Py_RETURN_TRUE;
     Py_RETURN_FALSE;
