@@ -29,6 +29,7 @@
 
 #include <Python.h>
 #include <structmember.h>
+#include "../core.h"
 
 ////////// Python Object and Type declarations //////////
 
@@ -130,7 +131,7 @@ PyObject* messagebasec_candidates(PyMessageBaseCObject* self, PyObject* _) {
 PyObject* messagebasec_all(PyMessageBaseCObject* self, PyObject* args, PyObject* kwargs) {
     PyAllGeneratorObject* iter = PyObject_New(PyAllGeneratorObject, &PyAllGenerator_Type);
     if (!iter) return NULL;
-    PyObject_Init(iter, &PyAllGenerator_Type);
+    PyObject_Init((PyObject*) iter, &PyAllGenerator_Type);
     iter->_methods = self->_methods;
     iter->_args = args;
     iter->_kwargs = kwargs;
@@ -162,10 +163,18 @@ static PyObject* allgenerator_iter(PyObject *self) {
 
 PyObject* Exc_DeclineMessage;
 
-static PyObject* allgenerator_iternext(PyAllGeneratorObject* self) {
+static PyObject* allgenerator_iternext(PyObject* _self) {
+    PyAllGeneratorObject* self = (PyAllGeneratorObject*) _self;
     while(self->_i < PyTuple_GET_SIZE(self->_methods)) {
         PyObject* m = PyTuple_GET_ITEM(self->_methods, self->_i);  // borrowed ref
         PyObject* r = PyObject_Call(m, self->_args, self->_kwargs);  // new ref
+        if(r && is_generator(r)) {
+            PyObject* mstr = PyObject_Str(m);
+            PyErr_Format(PyExc_AssertionError, "%s should have resulted in a generator",
+                    PyString_AsString(mstr));
+            Py_DECREF(mstr);
+            return NULL;
+        }
         self->_i++;
         if(!r && PyErr_ExceptionMatches(Exc_DeclineMessage))
             continue;
@@ -187,7 +196,7 @@ static PyObject* allgenerator_send(PyAllGeneratorObject* self, PyObject* arg) {
         Py_DECREF(pb);
         return r;
     }
-    return allgenerator_iternext(self);
+    return allgenerator_iternext((PyObject*)self);
 }
 
 // Send and Throw !!!
@@ -266,101 +275,80 @@ static PyMethodDef allgenerator_methods[] = {
 
 PyTypeObject PyAllGenerator_Type = {
     PyObject_HEAD_INIT(&PyType_Type)
-    0,                         /*ob_size*/
-    "_AllGenerator",            /*tp_name*/
+    0,                                  /*ob_size*/
+    "_AllGenerator",                    /*tp_name*/
     sizeof(PyAllGeneratorObject),       /*tp_basicsize*/
-    0,                         /*tp_itemsize*/
-    (destructor)allgenerator_dealloc,                         /*tp_dealloc*/
-    0,                         /*tp_print*/
-    0,                         /*tp_getattr*/
-    0,                         /*tp_setattr*/
-    0,                         /*tp_compare*/
-    0,                         /*tp_repr*/
-    0,                         /*tp_as_number*/
-    0,                         /*tp_as_sequence*/
-    0,                         /*tp_as_mapping*/
-    0,                         /*tp_hash */
-    0,                         /*tp_call*/
-    0,                         /*tp_str*/
-    0,                         /*tp_getattro*/
-    0,                         /*tp_setattro*/
-    0,                         /*tp_as_buffer*/
+    0,                                  /*tp_itemsize*/
+    (destructor)allgenerator_dealloc,   /*tp_dealloc*/
+    0,                                  /*tp_print*/
+    0,                                  /*tp_getattr*/
+    0,                                  /*tp_setattr*/
+    0,                                  /*tp_compare*/
+    0,                                  /*tp_repr*/
+    0,                                  /*tp_as_number*/
+    0,                                  /*tp_as_sequence*/
+    0,                                  /*tp_as_mapping*/
+    0,                                  /*tp_hash */
+    0,                                  /*tp_call*/
+    0,                                  /*tp_str*/
+    0,                                  /*tp_getattro*/
+    0,                                  /*tp_setattro*/
+    0,                                  /*tp_as_buffer*/
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_HAVE_ITER,
-    "Internal all-iterator object.",           /* tp_doc */
-    (traverseproc)allgenerator_traverse,  /* tp_traverse */
-    (inquiry)allgenerator_clear,  /* tp_clear */
-    0,  /* tp_richcompare */
-    0,  /* tp_weaklistoffset */
-    allgenerator_iter,  /* tp_iter: __iter__() method */
-    allgenerator_iternext,  /* tp_iternext: next() method */
-    allgenerator_methods,                     /* tp_methods */
-    0,                                      /* tp_members */
-    0,                                      /* tp_getset */
-    0,                                      /* tp_base */
-    0,                                      /* tp_dict */
-    0,                                      /* tp_descr_get */
-    0,                                      /* tp_descr_set */
-    0,                                      /* tp_dictoffset */
-    0,            /* tp_init */
-    0, /*PyType_GenericAlloc,*/                      /* tp_alloc */
-    (newfunc)allgenerator_new,                /* tp_new */
-    0,                                      /* tp_free */
+    "Internal all-iterator object.",    /*tp_doc */
+    (traverseproc)allgenerator_traverse,/*tp_traverse */
+    (inquiry)allgenerator_clear,        /*tp_clear */
+    0,                                  /* tp_richcompare */
+    0,                                  /* tp_weaklistoffset */
+    allgenerator_iter,                  /* tp_iter: __iter__() method */
+    allgenerator_iternext,              /* tp_iternext: next() method */
+    allgenerator_methods,               /* tp_methods */
+    0,                                  /* tp_members */
+    0,                                  /* tp_getset */
+    0,                                  /* tp_base */
+    0,                                  /* tp_dict */
+    0,                                  /* tp_descr_get */
+    0,                                  /* tp_descr_set */
+    0,                                  /* tp_dictoffset */
+    0,                                  /* tp_init */
+    0, /*PyType_GenericAlloc,*/         /* tp_alloc */
+    (newfunc)allgenerator_new,          /* tp_new */
+    0,                                  /* tp_free */
 };
 
 
 ////////// Module initialization //////////
 
-PyMODINIT_FUNC init_observable_c(void) {
+int init_observable_c(PyObject* module) {
 
-    PyObject* weightlesscore = PyImport_ImportModule("weightless.core.observable._observable_py"); // new ref
-
-    if(!weightlesscore) {
-        PyErr_Print();
-        return;
-    }
-
-    PyObject* dict = PyModule_GetDict(weightlesscore); // borrowed ref
-
-    if(!dict) {
-        Py_CLEAR(weightlesscore);
-        PyErr_Print();
-        return;
-    }
-
-    Exc_DeclineMessage = PyMapping_GetItemString(dict, "_DeclineMessage"); // new ref
-
+    Exc_DeclineMessage = PyErr_NewException("weightless.core._DeclineMessage", NULL, NULL);
     if(!Exc_DeclineMessage) {
-        Py_CLEAR(weightlesscore);
         PyErr_Print();
-        return;
+        return 1;
     }
     
     if(PyType_Ready(&PyMessageBaseC_Type) < 0) {
         PyErr_Print();
-        return;
-    }
-
-    if(PyType_Ready(&PyAllGenerator_Type) < 0) {
-        PyErr_Print();
-        return;
-    }
-
-    PyObject* module = Py_InitModule3("_observable_c", NULL, "fast MessageBaseC");
-
-    if(!module) {
-        PyErr_Print();
-        return;
+        return 1;
     }
 
     Py_INCREF(&PyMessageBaseC_Type);
     if(PyModule_AddObject(module, "_MessageBaseC", (PyObject*) &PyMessageBaseC_Type) < 0) {
         PyErr_Print();
-        return;
+        return 1;
     };
+
+    if(PyType_Ready(&PyAllGenerator_Type) < 0) {
+        PyErr_Print();
+        return 1;
+    }
+
     Py_INCREF(&PyAllGenerator_Type);
     if(PyModule_AddObject(module, "_AllGenerator", (PyObject*) &PyAllGenerator_Type) < 0) {;
         PyErr_Print();
-        return;
+        return 1;
     };
+
+    return 0;
 }
 

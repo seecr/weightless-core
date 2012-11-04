@@ -23,3 +23,4 @@ typedef struct {
 
 extern _ListType List;
 
+PyObject* List_selftest(PyObject* self, PyObject* null);

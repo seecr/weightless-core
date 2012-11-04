@@ -28,17 +28,16 @@ from sys import stdout, exc_info, getrecursionlimit, version_info
 import gc
 from weakref import ref
 from types import GeneratorType
-from weightless.core import autostart, cpython
-from weightless.core.compose._local_py import local as pyLocal
-from weightless.core.compose._compose_py import compose as pyCompose
-from weightless.core.compose._tostring_py import tostring as pyTostring
-try:
-    from weightless.core.compose._compose_c import local as cLocal, compose as cCompose
-    from weightless.core.compose._compose_c import tostring as cTostring
-except ImportError:
-    pass
+from weightless.core import autostart, cpython, python_only
+if python_only:
+    from weightless.core.compose._local_py import local as pyLocal
+    from weightless.core.compose._compose_py import compose as pyCompose
+    from weightless.core.compose._tostring_py import tostring as pyTostring
+else:
+    from weightless.core.core_c import local as cLocal, compose as cCompose
+    from weightless.core.core_c import tostring as cTostring
 
-from weightless.core.compose import isGeneratorOrComposed
+from weightless.core import is_generator
 from inspect import currentframe
 from traceback import format_exc
 
@@ -1027,7 +1026,7 @@ class _ComposeTest(TestCase):
         self.assertEquals((2,), si.args)
 
     def testComposeType(self):
-        from weightless.core.compose import ComposeType
+        from weightless.core import ComposeType
         self.assertEquals(type, type(ComposeType))
         self.assertEquals(ComposeType, type(compose((n for n in []))))
 
@@ -1104,10 +1103,10 @@ class _ComposeTest(TestCase):
         def f():
             yield
 
-        self.assertTrue(isGeneratorOrComposed(f()))
-        self.assertTrue(isGeneratorOrComposed(compose(f())))
-        self.assertFalse(isGeneratorOrComposed(lambda: None))
-        self.assertFalse(isGeneratorOrComposed(None))
+        self.assertTrue(is_generator(f()))
+        self.assertTrue(is_generator(compose(f())))
+        self.assertFalse(is_generator(lambda: None))
+        self.assertFalse(is_generator(None))
 
     def testUnsuitableGeneratorTraceback(self):
         def f():

@@ -31,6 +31,7 @@
 #include <frameobject.h>
 #include <structmember.h>
 
+#include "../core.h"
 #include "../lib/list.h"
 
 ////////// Python Object and Type structures //////////
@@ -119,7 +120,7 @@ static void compose_dealloc(PyComposeObject* self) {
 
 ////////// Compose Methods //////////
 
-static int PyCompose_Check(PyObject* obj) {
+int PyCompose_Check(PyObject* obj) {
     return PyObject_Type(obj) == (PyObject*) &PyCompose_Type;
 }
 
@@ -551,19 +552,6 @@ PyObject* tostring(PyObject* self, PyObject* gen) {
 
 ////////// compose Python Type //////////
 
-static PyObject* _selftest(PyObject* self, PyObject* null);
-extern PyObject* List_selftest(PyObject* self, PyObject* null);
-
-
-static PyMethodDef compose_functionslist[] = {
-    {"local", local, METH_O, "Finds a local variable on the call stack including compose'd generators."},
-    {"tostring", tostring, METH_O, "Returns a string representation of a genarator."},
-    {"_selftest", _selftest, METH_NOARGS, "runs self test"},
-    {"List_selftest", List_selftest, METH_NOARGS, "self test for List"},
-    {NULL} /* Sentinel */
-};
-
-
 static PyMethodDef compose_methods[] = {
     {"send", (PyCFunction) compose_send,  METH_O,       "Send arg into composed generator." },
     {"throw", (PyCFunction) compose_throw, METH_VARARGS, "Raise GeneratorExit in composed generator."},
@@ -647,12 +635,13 @@ static PyCodeObject* create_empty_code(void) {
     return code;
 }
 
-PyMODINIT_FUNC init_compose_c(void) {
+int init_compose_c(PyObject* module) {
+
     PyObject* linecache = PyImport_ImportModule("linecache"); // new ref
 
     if(!linecache) {
         PyErr_Print();
-        return;
+        return 1;
     }
 
     PyObject* dict = PyModule_GetDict(linecache); // borrowed ref
@@ -660,7 +649,7 @@ PyMODINIT_FUNC init_compose_c(void) {
     if(!dict) {
         Py_CLEAR(linecache);
         PyErr_Print();
-        return;
+        return 1;
     }
 
     py_getline = PyMapping_GetItemString(dict, "getline"); // new ref
@@ -668,7 +657,7 @@ PyMODINIT_FUNC init_compose_c(void) {
     if(!py_getline) {
         Py_CLEAR(linecache);
         PyErr_Print();
-        return;
+        return 1;
     }
 
     py_code = create_empty_code();
@@ -677,7 +666,7 @@ PyMODINIT_FUNC init_compose_c(void) {
         Py_CLEAR(linecache);
         Py_CLEAR(py_getline);
         PyErr_Print();
-        return;
+        return 1;
     }
 
     if(PyType_Ready(&PyCompose_Type) < 0) {
@@ -685,17 +674,7 @@ PyMODINIT_FUNC init_compose_c(void) {
         Py_CLEAR(py_getline);
         Py_CLEAR(py_code);
         PyErr_Print();
-        return;
-    }
-
-    PyObject* module = Py_InitModule3("_compose_c", compose_functionslist, "fast compose");
-
-    if(!module) {
-        Py_CLEAR(linecache);
-        Py_CLEAR(py_getline);
-        Py_CLEAR(py_code);
-        PyErr_Print();
-        return;
+        return 1;
     }
 
     Py_INCREF(&PyCompose_Type);
@@ -703,6 +682,8 @@ PyMODINIT_FUNC init_compose_c(void) {
 
     Py_INCREF(&PyYield_Type);
     PyModule_AddObject(module, "Yield", (PyObject*) &PyYield_Type);
+
+    return 0;
 }
 
 
@@ -717,7 +698,7 @@ static void assertTrue(const int condition, const char* msg) {
 }
 
 
-static PyObject* _selftest(PyObject* self, PyObject* null) {
+PyObject* compose_selftest(PyObject* self, PyObject* null) {
     PyComposeObject c;
     _compose_initialize(&c);
     // test initial state of generator stack

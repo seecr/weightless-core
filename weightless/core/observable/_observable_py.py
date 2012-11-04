@@ -28,7 +28,7 @@
 from sys import exc_info
 from functools import partial
 
-from weightless.core.compose import isGeneratorOrComposed
+from weightless.core import is_generator
 
 class NoneOfTheObserversRespond(Exception):
     """Must not be thrown anywhere outside of the Observable
@@ -90,12 +90,16 @@ def candidates(observers, method_name, alt_method_name):
             except AttributeError:
                 continue
 
-from _observable_c import _MessageBaseC
-class MessageBaseC(_MessageBaseC):
-    altname = ""
-    def __init__(self, observers, message):
-        methods = candidates(observers, message, self.altname)
-        super(MessageBaseC, self).__init__(tuple(methods), message)
+#from weightless.core.core_c import _MessageBaseC
+
+class MessageBaseC(object):
+    pass
+
+#class MessageBaseC(_MessageBaseC):
+#    altname = ""
+#    def __init__(self, observers, message):
+#        methods = candidates(observers, message, self.altname)
+#        super(MessageBaseC, self).__init__(tuple(methods), message)
 
 class MessageBase(object):
     def __init__(self, observers, message):
@@ -130,7 +134,7 @@ class MessageBase(object):
                 unansweredMessage=self._message, nrOfObservers=self._nrOfObservers)
 
     def verifyMethodResult(self, method, result):
-        assert isGeneratorOrComposed(result), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)
+        assert is_generator(result), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)
 
 class AllMessage(MessageBase):
     altname = 'all_unknown'
@@ -188,7 +192,7 @@ class OnceMessage(MessageBase):
                 pass
             else:
                 _ = methodResult = method(*args, **kwargs)
-                if isGeneratorOrComposed(methodResult):
+                if is_generator(methodResult):
                     _ = yield methodResult
                 assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
             if isinstance(observer, Observable):

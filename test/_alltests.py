@@ -39,21 +39,20 @@ for path in glob('../deps.d/*'):                  #DO_NOT_DISTRIBUTE
 sysPath.insert(0,'..')                            #DO_NOT_DISTRIBUTE
 
 from unittest import main
-from types import GeneratorType
 
-from weightless.core.compose import ComposeType
-if ComposeType == GeneratorType:
+from weightless.core import python_only
+if python_only:
     from core.composetest import ComposePyTest
     from core.composeschedulingtest import ComposeSchedulingPyTest
 else:
     from core.composetest import ComposeCTest
     from core.composeschedulingtest import ComposeSchedulingCTest
+    from core.messagebasectest import MessageBaseCTest
 from core.localtest import LocalTest
 from core.observabletest import ObservableTest
 from core.observabletest import ObservableCTest
 from core.observabledirectedmessagingtest import ObservableDirectedMessagingTest
 from core.utilstest import UtilsTest
-from core.messagebasectest import MessageBaseCTest
 
 from http.acceptortest import AcceptorTest
 from http.httpreadertest import HttpReaderTest

@@ -33,7 +33,7 @@ from gctestcase import GCTestCase
 class MessageBaseCTest(GCTestCase):
 
     def testSelftest(self):
-        from weightless.core.compose._compose_c import List_selftest
+        from weightless.core.core_c import List_selftest
         List_selftest()
 
     def testCreate(self):
@@ -51,21 +51,21 @@ class MessageBaseCTest(GCTestCase):
         self.assertEquals("<class 'core.messagebasectest.MsgA'>", str(MsgA))
         class A(object):
             def alt_name(self, message):
-                return "this is alt_name for " + message
+                yield "this is alt_name for " + message
         a = A()
         msg = MsgA([a], 'f')
         methods = msg.candidates()
-        self.assertEquals("this is alt_name for f", methods[0]())
+        self.assertEquals("this is alt_name for f", methods[0]().next())
 
     def testAllInC(self):
         class A(object):
             def f(self, a, b=None):
-                return "A" + a + b
+                yield "A" + a + b
         class B(object):
             def f(self, a, b=None):
-                return "B" + a + b
-        msg = MessageBaseC([A(),B()], "f")
-        self.assertEquals(["Aab", "Bab"], list(msg.all("a", b="b")))
+                yield "B" + a + b
+        a = MessageBaseC([A(),B()], "f").all("a", b="b")
+        self.assertEquals(["Aab", "Bab"], list(g.next() for g in a))
 
     def testAllGeneratorHandlesFirstSend(self):
         msg = MessageBaseC([], "")
@@ -100,9 +100,26 @@ class MessageBaseCTest(GCTestCase):
                 raise DeclineMessage
         class B(object):
             def f(self):
-                return 42
+                yield 42
         g = MessageBaseC([A(), B()], "f").all()
-        self.assertEquals([42], list(g))
+        self.assertEquals([42], list(g.next() for g in g))
+
+    def testAssertOnResultType(self):
+        class A(object):
+            def f(self):
+                return 'not a generator'
+        a = A()
+        try:
+            list(MessageBaseC([a], 'f').all())
+            self.fail()
+        except AssertionError, e:
+            self.assertEquals(str(a.f) + " should have resulted in a generator", str(e))
+
+    def testGeneratorCanAlsoBeCompose(self):
+        class A(object):
+            def f(self):
+                return compose(x for x in [1])
+        self.assertEquals("?", list(MessageBaseC([A()], 'f').all()))
 
     def testPerformance(self):
         class Top(Observable):
