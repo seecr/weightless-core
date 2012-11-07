@@ -25,8 +25,8 @@
 
 from unittest import TestCase
 from time import time
-from weightless.core import Observable, be, compose
-from weightless.core.observable._observable_py import MessageBaseC, DeclineMessage
+from weightless.core import Observable, be, compose, is_generator
+from weightless.core import MessageBase, DeclineMessage
 
 from gctestcase import GCTestCase
 
@@ -38,15 +38,15 @@ class MessageBaseCTest(GCTestCase):
 
     def testCreate(self):
         self.assertEquals(
-                "<class 'weightless.core.observable._observable_py.MessageBaseC'>",
-                str(MessageBaseC))
+                "<class 'weightless.core.MessageBase'>",
+                str(MessageBase))
         observer = "A"
-        msg = MessageBaseC([observer, object()], 'strip')
+        msg = MessageBase([observer, object()], 'strip')
         methods = msg.candidates()
         self.assertEquals((observer.strip,), methods)
 
     def testSubclass(self):
-        class MsgA(MessageBaseC):
+        class MsgA(MessageBase):
             altname = "alt_name"
         self.assertEquals("<class 'core.messagebasectest.MsgA'>", str(MsgA))
         class A(object):
@@ -64,11 +64,15 @@ class MessageBaseCTest(GCTestCase):
         class B(object):
             def f(self, a, b=None):
                 yield "B" + a + b
-        a = MessageBaseC([A(),B()], "f").all("a", b="b")
+        a = MessageBase([A(),B()], "f").all("a", b="b")
         self.assertEquals(["Aab", "Bab"], list(g.next() for g in a))
 
+    def testGeneratorIsRecognized(self):
+        g = MessageBase([], "_").all()
+        self.assertTrue(is_generator(g))
+
     def testAllGeneratorHandlesFirstSend(self):
-        msg = MessageBaseC([], "")
+        msg = MessageBase([], "")
         a = msg.all()
         try:
             a.send(None)
@@ -86,7 +90,7 @@ class MessageBaseCTest(GCTestCase):
             def f(self):
                 yield
         a = A()
-        msg = MessageBaseC([a], "f")
+        msg = MessageBase((a,), "f")
         g = msg.all()
         g.next()
         try:
@@ -101,7 +105,7 @@ class MessageBaseCTest(GCTestCase):
         class B(object):
             def f(self):
                 yield 42
-        g = MessageBaseC([A(), B()], "f").all()
+        g = MessageBase([A(), B()], "f").all()
         self.assertEquals([42], list(g.next() for g in g))
 
     def testAssertOnResultType(self):
@@ -110,7 +114,7 @@ class MessageBaseCTest(GCTestCase):
                 return 'not a generator'
         a = A()
         try:
-            list(MessageBaseC([a], 'f').all())
+            list(MessageBase([a], 'f').all())
             self.fail()
         except AssertionError, e:
             self.assertEquals(str(a.f) + " should have resulted in a generator", str(e))
@@ -119,7 +123,7 @@ class MessageBaseCTest(GCTestCase):
         class A(object):
             def f(self):
                 return compose(x for x in [1])
-        self.assertEquals("?", list(MessageBaseC([A()], 'f').all()))
+        self.assertTrue("<compose object at 0x" in str(MessageBase([A()], 'f').all().next()))
 
     def testPerformance(self):
         class Top(Observable):

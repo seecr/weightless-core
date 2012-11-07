@@ -30,9 +30,9 @@ from weakref import ref
 from types import GeneratorType
 from weightless.core import autostart, cpython, python_only
 if python_only:
-    from weightless.core.compose._local_py import local as pyLocal
-    from weightless.core.compose._compose_py import compose as pyCompose
-    from weightless.core.compose._tostring_py import tostring as pyTostring
+    from weightless.core._local_py import local as pyLocal
+    from weightless.core._compose_py import compose as pyCompose
+    from weightless.core._tostring_py import tostring as pyTostring
 else:
     from weightless.core.core_c import local as cLocal, compose as cCompose
     from weightless.core.core_c import tostring as cTostring
@@ -1025,11 +1025,6 @@ class _ComposeTest(TestCase):
         si.args = [2] # not a tuple. VM turns this into tuple
         self.assertEquals((2,), si.args)
 
-    def testComposeType(self):
-        from weightless.core import ComposeType
-        self.assertEquals(type, type(ComposeType))
-        self.assertEquals(ComposeType, type(compose((n for n in []))))
-
     def testRaiseStopIterationWithRemainingMessages(self):
         def f0():
             raise StopIteration()
@@ -1282,8 +1277,8 @@ class ComposeCTest(_ComposeTest):
             self.assertEquals("Generator already used.", str(e))
 
     def testSelftest(self):
-        from weightless.core.compose._compose_c import _selftest
-        _selftest()
+        from weightless.core.core_c import Compose_selftest
+        Compose_selftest()
 
 
 def gettypeerrormsg():

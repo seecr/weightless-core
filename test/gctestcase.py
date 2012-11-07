@@ -1,7 +1,7 @@
 from unittest import TestCase
 import gc
 from weightless.core import compose
-from weightless.core.observable import AllMessage, AnyMessage, DoMessage, OnceMessage
+from weightless.core import AllMessage, AnyMessage, DoMessage, OnceMessage
 from types import GeneratorType
 
 class GCTestCase(TestCase):

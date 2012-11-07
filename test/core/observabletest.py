@@ -34,7 +34,7 @@ from inspect import isframe, getframeinfo
 from types import GeneratorType
 from functools import partial
 from weightless.core import compose, Yield, Observable, Transparent, be, tostring, NoneOfTheObserversRespond, DeclineMessage
-from weightless.core.observable import AllMessage, AnyMessage, DoMessage, OnceMessage
+from weightless.core import AllMessage, AnyMessage, DoMessage, OnceMessage
 from unittest import TestCase
 from seecr.test import CallTrace
 
