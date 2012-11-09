@@ -1,5 +1,8 @@
 #include <Python.h>
 
+#ifndef __list_h__
+#define __list_h__
+
 typedef struct {
      PyObject** _base;
      PyObject** _begin;
@@ -24,3 +27,5 @@ typedef struct {
 extern _ListType List;
 
 PyObject* List_selftest(PyObject* self, PyObject* null);
+
+#endif

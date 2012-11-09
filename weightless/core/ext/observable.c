@@ -29,7 +29,7 @@
 
 #include <Python.h>
 #include <structmember.h>
-#include "../core.h"
+#include "observable.h"
 
 ////////// Python Object and Type declarations //////////
 
@@ -116,8 +116,8 @@ static PyObject* messagebasec_new(PyTypeObject* type, PyObject* args, PyObject* 
 
 static int messagebasec_init(PyMessageBaseCObject* self, PyObject* args, PyObject* kwargs) {
     static char* argnames[] = {"methods", "message", NULL};
-    if(!PyArg_ParseTupleAndKeywords(args, kwargs, "OS:_MessageBaseC.__new__",
-                argnames, &self->_methods, &self->_message)) return 1;
+    if(!PyArg_ParseTupleAndKeywords(args, kwargs, "O!S:_MessageBaseC.__init__",
+                argnames, &PyTuple_Type, &self->_methods, &self->_message)) return 1;
     Py_INCREF(self->_methods);
     Py_INCREF(self->_message);
     return 0;
@@ -143,8 +143,55 @@ PyObject* messagebasec_all(PyMessageBaseCObject* self, PyObject* args, PyObject*
     return (PyObject*) iter;
 }
 
+PyObject* Exc_DeclineMessage;
+PyObject* Exc_NoneOfTheObserversRespond;
+
+PyObject* _get_next_value(int* i, PyObject* methods, PyObject* args, PyObject* kwargs) {
+    while(*i < PyTuple_GET_SIZE(methods)) {
+        PyObject* m = PyTuple_GET_ITEM(methods, *i);  // borrowed ref
+        PyObject* r = PyObject_Call(m, args, kwargs);  // new ref
+        if(r && is_generator(NULL, r) == Py_False) {
+            PyObject* mstr = PyObject_Str(m);
+            PyErr_Format(PyExc_AssertionError, "%s should have resulted in a generator",
+                    PyString_AsString(mstr));
+            Py_DECREF(mstr);
+            return NULL;
+        }
+        (*i)++;
+        if(!r && PyErr_ExceptionMatches(Exc_DeclineMessage)) {
+            PyErr_Clear();
+            continue;
+        }
+        return r;
+    }
+    PyErr_SetNone(PyExc_StopIteration);
+    return NULL;
+}
+
+PyObject* messagebasec_any(PyMessageBaseCObject* self, PyObject* args, PyObject* kwargs) {
+    int i = 0;
+    PyObject* g = _get_next_value(&i, self->_methods, args, kwargs);
+    PyObject* r = PyObject_CallMethod(g, "next", ""); // new ref
+    Py_DECREF(g);
+    if(PyErr_ExceptionMatches(PyExc_StopIteration))
+        return NULL;
+    PyObject *exctype, *excvalue, *exctb;
+    PyErr_Fetch(&exctype, &excvalue, &exctb);
+    if(r)
+        PyErr_SetObject(PyExc_StopIteration, r);
+    else if(PyErr_ExceptionMatches(PyExc_StopIteration)) {
+        PyErr_Clear();
+        PyErr_SetString(Exc_NoneOfTheObserversRespond, "no one?");
+    }
+    return NULL;
+}
+
 
 /// AllGenerator Methods ///
+
+int PyAllGenerator_Check(PyObject* obj) {
+    return PyObject_Type(obj) == (PyObject*) &PyAllGenerator_Type;
+}
 
 static PyObject* allgenerator_new(PyTypeObject* type, PyObject* args, PyObject* kwargs) {
     PyAllGeneratorObject* obj = (PyAllGeneratorObject*) type->tp_alloc(type, 0);
@@ -161,27 +208,9 @@ static PyObject* allgenerator_iter(PyObject *self) {
     return self;
 }
 
-PyObject* Exc_DeclineMessage;
-
 static PyObject* allgenerator_iternext(PyObject* _self) {
     PyAllGeneratorObject* self = (PyAllGeneratorObject*) _self;
-    while(self->_i < PyTuple_GET_SIZE(self->_methods)) {
-        PyObject* m = PyTuple_GET_ITEM(self->_methods, self->_i);  // borrowed ref
-        PyObject* r = PyObject_Call(m, self->_args, self->_kwargs);  // new ref
-        if(r && is_generator(r)) {
-            PyObject* mstr = PyObject_Str(m);
-            PyErr_Format(PyExc_AssertionError, "%s should have resulted in a generator",
-                    PyString_AsString(mstr));
-            Py_DECREF(mstr);
-            return NULL;
-        }
-        self->_i++;
-        if(!r && PyErr_ExceptionMatches(Exc_DeclineMessage))
-            continue;
-        return r;
-    }
-    PyErr_SetNone(PyExc_StopIteration);
-    return NULL;
+    return _get_next_value(&self->_i, self->_methods, self->_args, self->_kwargs);
 }
 
 static PyObject* allgenerator_send(PyAllGeneratorObject* self, PyObject* arg) {
@@ -211,6 +240,8 @@ static PyMethodDef messagebasec_methods[] = {
         "Returns filtered methods." },
     {"all", (PyCFunction) messagebasec_all,  METH_VARARGS | METH_KEYWORDS,
         "Return generator with call to all observers" },
+    {"any", (PyCFunction) messagebasec_any, METH_VARARGS | METH_KEYWORDS,
+        "Return one result from on of the observers" },
     {NULL}	/* Sentinel */
 };
 
@@ -319,21 +350,42 @@ PyTypeObject PyAllGenerator_Type = {
 
 ////////// Module initialization //////////
 
+int module_add_object(PyObject* module, const char* name, PyObject* obj) {
+    Py_INCREF(obj);
+    if(PyModule_AddObject(module, name, obj)) {
+        PyErr_Print();
+        return 1;
+    }
+    return 0;
+}
+    
 int init_observable_c(PyObject* module) {
 
-    Exc_DeclineMessage = PyErr_NewException("weightless.core._DeclineMessage", NULL, NULL);
+    Exc_DeclineMessage = PyErr_NewException("weightless.core.core_c._DeclineMessage", NULL, NULL);
     if(!Exc_DeclineMessage) {
         PyErr_Print();
         return 1;
     }
-    
+
+    if(module_add_object(module, "DeclineMessage", Exc_DeclineMessage))
+        return 1;
+
+    Exc_NoneOfTheObserversRespond = PyErr_NewException("weightless.core.core_c._NoneOfTheObserversRespond", NULL, NULL);
+    if(!Exc_NoneOfTheObserversRespond) {
+        PyErr_Print();
+        return 1;
+    }
+
+    if(module_add_object(module, "NoneOfTheObserversRespond", Exc_NoneOfTheObserversRespond))
+        return 1;
+
     if(PyType_Ready(&PyMessageBaseC_Type) < 0) {
         PyErr_Print();
         return 1;
     }
 
     Py_INCREF(&PyMessageBaseC_Type);
-    if(PyModule_AddObject(module, "_MessageBaseC", (PyObject*) &PyMessageBaseC_Type) < 0) {
+    if(PyModule_AddObject(module, "MessageBaseC", (PyObject*) &PyMessageBaseC_Type) < 0) {
         PyErr_Print();
         return 1;
     };
@@ -344,7 +396,7 @@ int init_observable_c(PyObject* module) {
     }
 
     Py_INCREF(&PyAllGenerator_Type);
-    if(PyModule_AddObject(module, "_AllGenerator", (PyObject*) &PyAllGenerator_Type) < 0) {;
+    if(PyModule_AddObject(module, "AllGenerator", (PyObject*) &PyAllGenerator_Type) < 0) {;
         PyErr_Print();
         return 1;
     };

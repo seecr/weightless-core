@@ -1,11 +1,14 @@
 #include <Python.h>
 
-#include "lib/list.h"
-#include "compose/_compose.h"
-#include "observable/_observable.h"
+#include <assert.h>
+
+#include "list.h"
+#include "compose.h"
+#include "observable.h"
 
 PyObject* is_generator(PyObject* _, PyObject* o) {
-    if(PyCompose_Check(o) || PyGen_Check(o) /* || PyAllMessage_Check(o)*/)
+    assert(_ == NULL);
+    if(PyCompose_Check(o) || PyGen_Check(o) || PyAllGenerator_Check(o))
         Py_RETURN_TRUE;
     Py_RETURN_FALSE;
 };

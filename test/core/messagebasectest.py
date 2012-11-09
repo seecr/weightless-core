@@ -26,7 +26,7 @@
 from unittest import TestCase
 from time import time
 from weightless.core import Observable, be, compose, is_generator
-from weightless.core import MessageBase, DeclineMessage
+from weightless.core import MessageBase, DeclineMessage, NoneOfTheObserversRespond
 
 from gctestcase import GCTestCase
 
@@ -124,6 +124,32 @@ class MessageBaseCTest(GCTestCase):
             def f(self):
                 return compose(x for x in [1])
         self.assertTrue("<compose object at 0x" in str(MessageBase([A()], 'f').all().next()))
+
+    def XXXtestAny(self):
+        class A(object):
+            def f(self):
+                raise StopIteration("Hello")
+                yield
+        m = MessageBase([A()], "f")
+        try:
+            m.any()
+            self.fail()
+        except StopIteration, e:
+            self.assertEquals("Hello", e.args[0])
+
+    def XXXtestNooneAnswersToAny(self):
+        class A(object):
+            def f(self):
+                pass
+        class B(object):
+            def g(self):
+                pass
+        m = MessageBase([A(), B()], "X")
+        try:
+            m.any()
+            self.fail()
+        except NoneOfTheObserversRespond:
+            pass
 
     def testPerformance(self):
         class Top(Observable):

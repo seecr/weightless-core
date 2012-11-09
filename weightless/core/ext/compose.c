@@ -31,8 +31,8 @@
 #include <frameobject.h>
 #include <structmember.h>
 
-#include "../core.h"
-#include "../lib/list.h"
+#include "compose.h"
+#include "core.h" // for is_generator
 
 ////////// Python Object and Type structures //////////
 
@@ -149,7 +149,8 @@ static PyObject* compose_new(PyObject* type, PyObject* args, PyObject* kwargs) {
                 args, kwargs, "O|O:compose", argnames,
                 &initial, &stepping)) return NULL;
 
-    if(!PyGen_Check(initial) && !PyCompose_Check(initial)) {
+//    if(!PyGen_Check(initial) && !PyCompose_Check(initial)) {
+    if(!is_generator(NULL, initial)) {
         PyErr_SetString(PyExc_TypeError, "compose() argument 1 must be generator");
         return NULL;
     }

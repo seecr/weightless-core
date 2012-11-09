@@ -53,21 +53,15 @@ if getenv('WEIGHTLESS_COMPOSE_TEST') == 'PYTHON':
 else:
     python_only = False
 
-from utils import identify, autostart
+## Compose ###
+from utils import identify, autostart, candidates
 
 if python_only:
-    from compose import compose as _compose, local, tostring, is_generator, Yield
-    from types import GeneratorType
-    ComposeType = GeneratorType
+    from _compose_py import compose as _compose, Yield
+    from _local_py import local
+    from _tostring_py import tostring
 else:
-    from core_c  import compose as _compose, local, tostring, is_generator, Yield
-    from weightless.core.core_c import _MessageBaseC
-    ComposeType = _compose
-
-from types import GeneratorType
-def is_generator(o):
-    return type(o) == GeneratorType
-from _observable_py import Observable, Transparent, be, methodOrMethodPartialStr, NoneOfTheObserversRespond, DeclineMessage, AllMessage, AnyMessage, DoMessage, OnceMessage
+    from core_c  import compose as _compose, Yield, local, tostring
 
 from types import FunctionType
 def compose(X, *args, **kwargs):
@@ -75,10 +69,36 @@ def compose(X, *args, **kwargs):
         def helper(*args, **kwargs):
             return _compose(X(*args, **kwargs))
         return helper
-    elif type(X) in (GeneratorType, ComposeType):
+    elif is_generator(X):
         return _compose(X, *args, **kwargs)
     raise TypeError("compose() expects generator, got %s" % repr(X))
 
+## Observable ##
+if python_only:
+    from _messagebase_py import MessageBase, DeclineMessage, is_generator, NoneOfTheObserversRespond
+else:
+    from core_c import MessageBaseC, DeclineMessage, is_generator, NoneOfTheObserversRespond
+    from sys import exc_info
+    class MessageBase(MessageBaseC):
+        altname = ''
+        def __init__(self, observers, message):
+            self._message = message
+            self._nrOfObservers = len(observers)
+            methods = candidates(observers, message, self.altname)
+            super(MessageBase, self).__init__(tuple(methods), message)
+        def any(self, *args, **kwargs):
+            try:
+                for r in self.all(*args, **kwargs):
+                    try:
+                        result = yield r
+                        raise StopIteration(result)
+                    except DeclineMessage:
+                        continue
+            except:
+                c, v, t = exc_info(); raise c, v, t.tb_next
+            raise NoneOfTheObserversRespond(self._message, self._nrOfObservers)
 
-from observable import Observable, Transparent, be, methodOrMethodPartialStr, NoneOfTheObserversRespond, DeclineMessage
+
+from _observable_py import Observable, Transparent, be
+from _observable_py import AllMessage, AnyMessage, DoMessage, OnceMessage
 
