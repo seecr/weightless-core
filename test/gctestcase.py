@@ -4,6 +4,8 @@ from weightless.core import compose
 from weightless.core import AllMessage, AnyMessage, DoMessage, OnceMessage
 from types import GeneratorType
 
+#gc.set_debug(gc.DEBUG_LEAK)
+
 class GCTestCase(TestCase):
 
     def setUp(self):

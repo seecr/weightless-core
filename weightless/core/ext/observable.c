@@ -29,7 +29,10 @@
 
 #include <Python.h>
 #include <structmember.h>
+#include <limits.h>
 #include "observable.h"
+
+int debug = 0;
 
 ////////// Python Object and Type declarations //////////
 
@@ -38,7 +41,6 @@ typedef struct {
     PyObject_HEAD
     PyObject*   _methods;
     PyObject*   _message;
-    PyObject*   _weakreflist;
 } PyMessageBaseCObject;
 
 PyAPI_DATA(PyTypeObject) PyMessageBaseC_Type;
@@ -73,30 +75,30 @@ static int messagebasec_clear(PyMessageBaseCObject* self) {
 
 static void messagebasec_dealloc(PyMessageBaseCObject* self) {
     messagebasec_clear(self);
-    if(self->_weakreflist != NULL)
-        PyObject_ClearWeakRefs((PyObject*) self);
     self->ob_type->tp_free((PyObject*) self);
 }
 
 /// AllGenerator ///
 
-static int allgenerator_traverse(PyAllGeneratorObject* self, visitproc visit, void* arg) {
-    Py_VISIT(self->_methods);
-    Py_VISIT(self->_args);
-    Py_VISIT(self->_kwargs);
+static int allgenerator_traverse(PyObject* self, visitproc visit, void* arg) {
+    Py_VISIT(((PyAllGeneratorObject*)self)->_methods);
+    Py_VISIT(((PyAllGeneratorObject*)self)->_args);
+    if(((PyAllGeneratorObject*)self)->_kwargs) Py_VISIT(((PyAllGeneratorObject*)self)->_kwargs);
     return 0;
 }
 
-static int allgenerator_clear(PyAllGeneratorObject* self) {
+static int allgenerator_clear(PyObject* _self) {
+    PyAllGeneratorObject* self = (PyAllGeneratorObject*) _self;
     Py_CLEAR(self->_methods);
     Py_CLEAR(self->_args);
     Py_CLEAR(self->_kwargs);
     return 0;
 }
 
-static void allgenerator_dealloc(PyAllGeneratorObject* self) {
+static void allgenerator_dealloc(PyObject* self) {
+    PyObject_GC_UnTrack(self);
     allgenerator_clear(self);
-    PyObject_Del(self);
+    PyObject_GC_Del(self);
 }
 
 
@@ -106,18 +108,20 @@ static void allgenerator_dealloc(PyAllGeneratorObject* self) {
 
 static PyObject* messagebasec_new(PyTypeObject* type, PyObject* args, PyObject* kwargs) {
     PyMessageBaseCObject* obj = (PyMessageBaseCObject*) type->tp_alloc(type, 0);
-    if(obj == NULL) return NULL;
+    if(obj == NULL)
+        return NULL;
     obj->_methods = NULL;
     obj->_message = NULL;
-    obj->_weakreflist = NULL;
     return (PyObject*) obj;
 }
 
 
-static int messagebasec_init(PyMessageBaseCObject* self, PyObject* args, PyObject* kwargs) {
+static int messagebasec_init(PyObject* _self, PyObject* args, PyObject* kwargs) {
     static char* argnames[] = {"methods", "message", NULL};
+    PyMessageBaseCObject* self = (PyMessageBaseCObject*) _self;
     if(!PyArg_ParseTupleAndKeywords(args, kwargs, "O!S:_MessageBaseC.__init__",
-                argnames, &PyTuple_Type, &self->_methods, &self->_message)) return 1;
+                argnames, &PyTuple_Type, &self->_methods, &self->_message))
+        return -1;
     Py_INCREF(self->_methods);
     Py_INCREF(self->_message);
     return 0;
@@ -129,9 +133,9 @@ PyObject* messagebasec_candidates(PyMessageBaseCObject* self, PyObject* _) {
 }
 
 PyObject* messagebasec_all(PyMessageBaseCObject* self, PyObject* args, PyObject* kwargs) {
-    PyAllGeneratorObject* iter = PyObject_New(PyAllGeneratorObject, &PyAllGenerator_Type);
+    PyAllGeneratorObject* iter = PyObject_GC_New(PyAllGeneratorObject, &PyAllGenerator_Type);
     if (!iter) return NULL;
-    PyObject_Init((PyObject*) iter, &PyAllGenerator_Type);
+    if(!PyObject_Init((PyObject*) iter, &PyAllGenerator_Type)) return NULL;
     iter->_methods = self->_methods;
     iter->_args = args;
     iter->_kwargs = kwargs;
@@ -140,6 +144,7 @@ PyObject* messagebasec_all(PyMessageBaseCObject* self, PyObject* args, PyObject*
     Py_INCREF(iter->_args);
     if(kwargs)
         Py_INCREF(iter->_kwargs);
+    PyObject_GC_Track(iter);
     return (PyObject*) iter;
 }
 
@@ -147,22 +152,16 @@ PyObject* Exc_DeclineMessage;
 PyObject* Exc_NoneOfTheObserversRespond;
 
 PyObject* _get_next_value(int* i, PyObject* methods, PyObject* args, PyObject* kwargs) {
-    while(*i < PyTuple_GET_SIZE(methods)) {
+    while(methods && (*i < PyTuple_GET_SIZE(methods))) {
         PyObject* m = PyTuple_GET_ITEM(methods, *i);  // borrowed ref
         PyObject* r = PyObject_Call(m, args, kwargs);  // new ref
-        if(r && is_generator(NULL, r) == Py_False) {
-            PyObject* mstr = PyObject_Str(m);
-            PyErr_Format(PyExc_AssertionError, "%s should have resulted in a generator",
-                    PyString_AsString(mstr));
-            Py_DECREF(mstr);
-            return NULL;
-        }
         (*i)++;
-        if(!r && PyErr_ExceptionMatches(Exc_DeclineMessage)) {
+        if(r)
+            return r;
+        if(PyErr_ExceptionMatches(Exc_DeclineMessage))
             PyErr_Clear();
-            continue;
-        }
-        return r;
+        else
+            return NULL;
     }
     PyErr_SetNone(PyExc_StopIteration);
     return NULL;
@@ -193,16 +192,6 @@ int PyAllGenerator_Check(PyObject* obj) {
     return PyObject_Type(obj) == (PyObject*) &PyAllGenerator_Type;
 }
 
-static PyObject* allgenerator_new(PyTypeObject* type, PyObject* args, PyObject* kwargs) {
-    PyAllGeneratorObject* obj = (PyAllGeneratorObject*) type->tp_alloc(type, 0);
-    if(obj == NULL) return NULL;
-    obj->_methods = NULL;
-    obj->_args = NULL;
-    obj->_kwargs = NULL;
-    obj->_i       = 0;
-    return (PyObject*) obj;
-}
-
 static PyObject* allgenerator_iter(PyObject *self) {
     Py_INCREF(self);
     return self;
@@ -210,7 +199,13 @@ static PyObject* allgenerator_iter(PyObject *self) {
 
 static PyObject* allgenerator_iternext(PyObject* _self) {
     PyAllGeneratorObject* self = (PyAllGeneratorObject*) _self;
-    return _get_next_value(&self->_i, self->_methods, self->_args, self->_kwargs);
+    PyObject* r = _get_next_value(&self->_i, self->_methods, self->_args, self->_kwargs);
+    if(r && !is_generator(r)) {
+        Py_DECREF(r);
+        return MyErr_Format(PyExc_AssertionError, "%s should have resulted in a generator",
+                PyTuple_GET_ITEM(self->_methods, self->_i-1));
+    }
+    return r;
 }
 
 static PyObject* allgenerator_send(PyAllGeneratorObject* self, PyObject* arg) {
@@ -228,7 +223,19 @@ static PyObject* allgenerator_send(PyAllGeneratorObject* self, PyObject* arg) {
     return allgenerator_iternext((PyObject*)self);
 }
 
-// Send and Throw !!!
+static PyObject* allgenerator_throw(PyAllGeneratorObject* self, PyObject* arg) {
+    if(self->_i == 0) {
+        PyErr_SetNone(arg);
+        return NULL;
+    }
+    return allgenerator_iternext((PyObject*) self);
+}
+
+static PyObject* allgenerator_close(PyAllGeneratorObject* self) {
+    //allgenerator_clear(self);
+    //self->_i = 0;
+    Py_RETURN_NONE;
+}
 
 
 ////////// Python Types //////////
@@ -272,7 +279,7 @@ PyTypeObject PyMessageBaseC_Type = {
     (traverseproc)messagebasec_traverse,      /* tp_traverse */
     (inquiry)messagebasec_clear,              /* tp_clear */
     0,                                      /* tp_richcompare */
-    offsetof(PyMessageBaseCObject, _weakreflist), /* tp_weaklistoffset */
+    0,                                      /* tp_weaklistoffset */
     0,                                      /* tp_iter */
     0,                                      /* tp_iternext */
     messagebasec_methods,                     /* tp_methods */
@@ -283,17 +290,9 @@ PyTypeObject PyMessageBaseC_Type = {
     0,                                      /* tp_descr_get */
     0,                                      /* tp_descr_set */
     0,                                      /* tp_dictoffset */
-    (initproc)messagebasec_init,            /* tp_init */
+    messagebasec_init,            /* tp_init */
     0, /*PyType_GenericAlloc,*/                      /* tp_alloc */
     (newfunc)messagebasec_new,                /* tp_new */
-    0,                                      /* tp_free */
-    0,                                      /* tp_is_gc */
-    0,                                      /* tp_bases */
-    0,                                      /* tp_mro */
-    0,                                      /* tp_cache */
-    0,                                      /* tp_subclasses */
-    0,                                      /* tp_weaklist */
-    0, /*messagebasec_del,*/                         /* tp_del */
 };
 
 
@@ -301,6 +300,8 @@ PyTypeObject PyMessageBaseC_Type = {
 
 static PyMethodDef allgenerator_methods[] = {
     {"send", (PyCFunction) allgenerator_send,  METH_O, "generator send" },
+    {"throw", (PyCFunction) allgenerator_throw,  METH_O, "generator throw" },
+    {"close", (PyCFunction) allgenerator_close,  METH_NOARGS, "generator close" },
     {NULL}
 };
 
@@ -327,24 +328,13 @@ PyTypeObject PyAllGenerator_Type = {
     0,                                  /*tp_as_buffer*/
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_HAVE_ITER,
     "Internal all-iterator object.",    /*tp_doc */
-    (traverseproc)allgenerator_traverse,/*tp_traverse */
+    allgenerator_traverse,/*tp_traverse */
     (inquiry)allgenerator_clear,        /*tp_clear */
     0,                                  /* tp_richcompare */
     0,                                  /* tp_weaklistoffset */
     allgenerator_iter,                  /* tp_iter: __iter__() method */
     allgenerator_iternext,              /* tp_iternext: next() method */
     allgenerator_methods,               /* tp_methods */
-    0,                                  /* tp_members */
-    0,                                  /* tp_getset */
-    0,                                  /* tp_base */
-    0,                                  /* tp_dict */
-    0,                                  /* tp_descr_get */
-    0,                                  /* tp_descr_set */
-    0,                                  /* tp_dictoffset */
-    0,                                  /* tp_init */
-    0, /*PyType_GenericAlloc,*/         /* tp_alloc */
-    (newfunc)allgenerator_new,          /* tp_new */
-    0,                                  /* tp_free */
 };
 
 
@@ -384,22 +374,16 @@ int init_observable_c(PyObject* module) {
         return 1;
     }
 
-    Py_INCREF(&PyMessageBaseC_Type);
-    if(PyModule_AddObject(module, "MessageBaseC", (PyObject*) &PyMessageBaseC_Type) < 0) {
-        PyErr_Print();
+    if(module_add_object(module, "MessageBaseC", (PyObject*) &PyMessageBaseC_Type) < 0)
         return 1;
-    };
 
     if(PyType_Ready(&PyAllGenerator_Type) < 0) {
         PyErr_Print();
         return 1;
     }
 
-    Py_INCREF(&PyAllGenerator_Type);
-    if(PyModule_AddObject(module, "AllGenerator", (PyObject*) &PyAllGenerator_Type) < 0) {;
-        PyErr_Print();
+    if(module_add_object(module, "AllGenerator", (PyObject*) &PyAllGenerator_Type) < 0)
         return 1;
-    };
 
     return 0;
 }

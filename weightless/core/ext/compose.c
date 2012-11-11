@@ -149,8 +149,7 @@ static PyObject* compose_new(PyObject* type, PyObject* args, PyObject* kwargs) {
                 args, kwargs, "O|O:compose", argnames,
                 &initial, &stepping)) return NULL;
 
-//    if(!PyGen_Check(initial) && !PyCompose_Check(initial)) {
-    if(!is_generator(NULL, initial)) {
+    if(!is_generator(initial)) {
         PyErr_SetString(PyExc_TypeError, "compose() argument 1 must be generator");
         return NULL;
     }

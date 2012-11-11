@@ -30,6 +30,20 @@ from weightless.core import MessageBase, DeclineMessage, NoneOfTheObserversRespo
 
 from gctestcase import GCTestCase
 
+class A(object):
+    def f(self, *args, **kwargs):
+        yield "A:" + str(args) + str(kwargs)
+    def g(self):
+        #normally, this would be a generator, but this test works without compose
+        raise DeclineMessage
+    def h(self):
+        return "not a generator"
+class B(object):
+    def f(self, *args, **kwargs):
+        yield "B:" + str(args) + str(kwargs)
+    def g(self):
+        yield 42
+
 class MessageBaseCTest(GCTestCase):
 
     def testSelftest(self):
@@ -58,14 +72,8 @@ class MessageBaseCTest(GCTestCase):
         self.assertEquals("this is alt_name for f", methods[0]().next())
 
     def testAllInC(self):
-        class A(object):
-            def f(self, a, b=None):
-                yield "A" + a + b
-        class B(object):
-            def f(self, a, b=None):
-                yield "B" + a + b
         a = MessageBase([A(),B()], "f").all("a", b="b")
-        self.assertEquals(["Aab", "Bab"], list(g.next() for g in a))
+        self.assertEquals(["A:('a',){'b': 'b'}", "B:('a',){'b': 'b'}"], list(g.next() for g in a))
 
     def testGeneratorIsRecognized(self):
         g = MessageBase([], "_").all()
@@ -74,11 +82,7 @@ class MessageBaseCTest(GCTestCase):
     def testAllGeneratorHandlesFirstSend(self):
         msg = MessageBase([], "")
         a = msg.all()
-        try:
-            a.send(None)
-            self.fail()
-        except StopIteration:
-            pass
+        self.assertRaises(StopIteration, lambda: a.send(None))
         try:
             msg.all().send("not allowed")
             self.fail('fails here')
@@ -86,44 +90,56 @@ class MessageBaseCTest(GCTestCase):
             self.assertEquals("can't send non-None value to a just-started generator", str(e))
 
     def testAllGeneratorChecksForIllegalDataSend(self):
-        class A(object):
-            def f(self):
-                yield
         a = A()
-        msg = MessageBase((a,), "f")
-        g = msg.all()
+        g = MessageBase((a,), "f").all()
         g.next()
         try:
             g.send("not allowed")
+            self.fail()
         except AssertionError, e:
             self.assertEquals(str(a.f) + " returned 'not allowed'", str(e))
 
     def testDeclineMessage(self):
-        class A(object):
-            def f(self):
-                raise DeclineMessage
-        class B(object):
-            def f(self):
-                yield 42
-        g = MessageBase([A(), B()], "f").all()
+        g = MessageBase([A(), B()], "g").all()
         self.assertEquals([42], list(g.next() for g in g))
 
     def testAssertOnResultType(self):
-        class A(object):
-            def f(self):
-                return 'not a generator'
         a = A()
         try:
-            list(MessageBase([a], 'f').all())
+            list(MessageBase([a], 'h').all())
             self.fail()
         except AssertionError, e:
-            self.assertEquals(str(a.f) + " should have resulted in a generator", str(e))
+            self.assertEquals(str(a.h) + " should have resulted in a generator", str(e))
 
     def testGeneratorCanAlsoBeCompose(self):
         class A(object):
             def f(self):
                 return compose(x for x in [1])
         self.assertTrue("<compose object at 0x" in str(MessageBase([A()], 'f').all().next()))
+
+    def testThrowOnAllGenerator(self):
+        g = MessageBase([A(), B()], 'f').all()
+        self.assertRaises(DeclineMessage, lambda: g.throw(DeclineMessage))
+        self.assertRaises(Exception, lambda: g.throw(Exception))
+        g = MessageBase([A(), B()], 'f').all()
+        self.assertEquals("A:(){}", g.next().next())
+        self.assertEquals("B:(){}", g.throw(DeclineMessage).next())
+        self.assertRaises(StopIteration, lambda: g.throw(Exception))
+        self.assertRaises(Exception, lambda: g.throw(Exception))
+
+    def testCloseOnAllGenerator(self):
+        # see http://docs.python.org/2/whatsnew/2.5.html
+        ok = []
+        class X(object):
+            def x(self):
+                try:
+                    pass
+                except GeneratorExit:
+                    ok.append(1)
+        m = MessageBase([X()], 'x')
+        g = m.all()
+        g.close()
+        self.assertEquals([1], ok)
 
     def XXXtestAny(self):
         class A(object):
@@ -151,7 +167,7 @@ class MessageBaseCTest(GCTestCase):
         except NoneOfTheObserversRespond:
             pass
 
-    def testPerformance(self):
+    def XXXtestPerformance(self):
         class Top(Observable):
             pass
 
@@ -184,7 +200,7 @@ class MessageBaseCTest(GCTestCase):
         # Without checking resuls in MessageBase.all: 0.19 ==> C: 0.068
         self.assertTrue(t1-t0 < 0.1, t1-t0)
 
-    def testPerformanceOfLabelledInvocation(self):
+    def XXXtestPerformanceOfLabelledInvocation(self):
         class Top(Observable):
             pass
 
