@@ -555,17 +555,22 @@ class HttpsHandler(HttpHandler):
         except (SSL.WantReadError, SSL.WantWriteError, SSL.WantX509LookupError):
             pass
         except Exception, e:
-            self._closeDuringRead()
+            self._closeConnection()
         else:
             self._dataBuffer += part
+            self._resetTimer()
             self._dealWithCall()
 
-    def _closeDuringRead(self):
-        self._reactor.removeReader(self._sok)
-        self._sok.shutdown()
+    def _closeConnection(self):
+        self._reactor.cleanup(self._sok)
+
+        try:
+            self._sok.shutdown()  # No self._sok.shutdown(SHUT_RDWR) for some reason
+        except SocketError, e:
+            code, message = e.args
+            if code == 107:
+                pass # KVS: not well understood, not tested. It seems some quick (local) servers close the connection before this point is reached. It may happen more generally. In any case, it is based on a truely existing phenomomon
+            else:
+                raise
         self._sok.close()
 
-    def _closeConnection(self):
-        self._reactor.removeWriter(self._sok)
-        self._sok.shutdown()
-        self._sok.close()
