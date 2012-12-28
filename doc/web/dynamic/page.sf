@@ -1,10 +1,11 @@
 
-def header(**kwargs):
+def header(title=None, **kwargs):
+    title = " - %s" % title if title else ""
     yield '''<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html>
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-      <title>Weightless</title>
+      <title>Weightless I/O%(title)s</title>
       <link rel="stylesheet" type="text/css" href="/static/css/weightless.css"/>
       <link rel="stylesheet" href="http://seecr.nl/static/css/seecr-banner.css"/>
       <link rel="icon" href="/static/image/favicon-seecr.ico" type="image/x-icon"/>
@@ -13,7 +14,7 @@ def header(**kwargs):
 
   </head>
 <body>
-'''
+''' % locals()
 
 def footer(**kwargs):
     yield '''

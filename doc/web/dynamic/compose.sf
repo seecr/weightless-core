@@ -2,7 +2,7 @@
 import page, banner
 
 def main(**kwargs):
-    yield page.header(**kwargs)
+    yield page.header(title="Compose", **kwargs)
     yield banner.banner(**kwargs)
     yield '''
 <h1>Program Decomposition using Co-routines</h1>
