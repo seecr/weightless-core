@@ -2,8 +2,8 @@
 # 
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
 # 
-# Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
 # Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011 Seek You Too (CQ2) http://www.cq2.nl
 # 
 # This file is part of "Weightless"
 # 
@@ -23,8 +23,4 @@
 # 
 ## end license ##
 
-from pkgutil import extend_path
-__path__ = extend_path(__path__, __name__)
-
-from sys import getdefaultencoding as _getdefaultencoding
-assert _getdefaultencoding() == 'utf-8', 'Please ensure that the default encoding is utf-8'
+from _utils import identify, autostart, copyBytes, readRe, readAll, isgeneratorfunction

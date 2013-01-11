@@ -25,7 +25,7 @@ from __future__ import with_statement
 ## end license ##
 
 from socket import socketpair, socket
-from socket import socket, SOL_SOCKET, SO_REUSEADDR
+from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_CORK, TCP_NODELAY
 from struct import pack
 from time import sleep
 from random import randint

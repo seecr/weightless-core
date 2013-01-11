@@ -28,38 +28,96 @@
 from sys import exc_info
 from functools import partial
 
-from weightless.core import is_generator
-from weightless.core import MessageBase
-from weightless.core import NoneOfTheObserversRespond
-from weightless.core import DeclineMessage
-from utils import methodOrMethodPartialStr
+from weightless.core.compose import isGeneratorOrComposed
 
 
-from collections import defaultdict
+class NoneOfTheObserversRespond(Exception):
+    """Must not be thrown anywhere outside of the Observable
+    implementation. It is exposed only so that it can be caught in 
+    specific components, typically to be able to opt out of some 
+    received message by raising DeclineMessage."""
 
-class Defer(defaultdict):
-    def __init__(self, observers, msgclass):
-        __slots__ = ('_observers', '_msgclass')
-        self._observers = tuple(observers)
+    def __init__(self, unansweredMessage, nrOfObservers):
+        Exception.__init__(self, 'None of the %d observers respond to %s(...)' % (nrOfObservers, unansweredMessage))
+
+
+class _DeclineMessage(Exception):
+    """Should be thrown by a component that wishes to opt out of a 
+    message received through 'any' or 'call' that it can't or doesn't
+    wish to handle after all.
+    
+    One reason might be that none of this components' observers responds
+    to the message after being 'forwarded' (as signalled by a 
+    NoneOfTheObserversRespond exception). For an example, please refer
+    to the code of Transparent below.
+    
+    The exception only ever needs a single instance. For convenience and
+    aesthetics this single instance is named as a class."""
+DeclineMessage = _DeclineMessage()
+
+
+class Defer(object):
+    def __init__(self, observable, msgclass, filter=bool):
+        self._observable = observable
         self._msgclass = msgclass
+        self._filter = filter
+
+    def observers(self):
+        return (o for o in self._observable.observers() if self._filter(o))
 
     def __getattr__(self, attr):
-        msg = self._msgclass(self._observers, attr)
-        setattr(self, attr, msg)
-        return msg
+        return self._msgclass(self, attr)
 
-    def __missing__(self, target):
-        observers = (o for o in self._observers
-            if hasattr(o, "observable_name") and o.observable_name() == target)
-        d = Defer(observers, self._msgclass)
-        self[target] = d
-        return d
+    def __getitem__(self, target):
+        return Defer(self._observable, self._msgclass,
+                filter=lambda o: hasattr(o, "observable_name") and o.observable_name() == target)
 
     def unknown(self, message, *args, **kwargs):
         try:
-            return self._msgclass(self._observers, message)(*args, **kwargs)
+            return self._msgclass(self, message)(*args, **kwargs)
         except:
             c, v, t = exc_info(); raise c, v, t.tb_next
+
+
+class MessageBase(object):
+    def __init__(self, defer, message):
+        self._defer = defer
+        self._message = message
+
+    def all(self, *args, **kwargs):
+        for observer in self._defer.observers():
+            try: method = getattr(observer, self._message)
+            except AttributeError:
+                try: 
+                    method = partial(getattr(observer, self.altname), self._message)
+                except AttributeError:
+                    continue 
+            try:
+                result = method(*args, **kwargs)
+                self.verifyMethodResult(method, result)
+                _ = yield result
+            except _DeclineMessage:
+                continue
+            except:
+                c, v, t = exc_info(); raise c, v, t.tb_next
+            assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
+
+    def any(self, *args, **kwargs):
+        try:
+            for r in self.all(*args, **kwargs):
+                try:
+                    result = yield r
+                    raise StopIteration(result)
+                except _DeclineMessage:
+                    continue
+        except:
+            c, v, t = exc_info(); raise c, v, t.tb_next
+        raise NoneOfTheObserversRespond(
+                unansweredMessage=self._message, 
+                nrOfObservers=len(list(self._defer.observers())))
+
+    def verifyMethodResult(self, method, result):
+        assert isGeneratorOrComposed(result), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)
 
 class AllMessage(MessageBase):
     altname = 'all_unknown'
@@ -97,15 +155,9 @@ class DoMessage(MessageBase):
         assert result is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), result)
 
 class OnceMessage(MessageBase):
-    altname = ""
-
-    def __init__(self, observers, *args, **kwargs):
-        self._observers = observers
-        super(OnceMessage, self).__init__(observers, *args, **kwargs)
-
     def once(self, *args, **kwargs):
         done = set()
-        return self._callonce(self._observers, args, kwargs, done)
+        return self._callonce(self._defer.observers(), args, kwargs, done)
     __call__ = once
 
     def _callonce(self, observers, args, kwargs, done):
@@ -117,26 +169,23 @@ class OnceMessage(MessageBase):
                 pass
             else:
                 _ = methodResult = method(*args, **kwargs)
-                if is_generator(methodResult):
+                if isGeneratorOrComposed(methodResult):
                     _ = yield methodResult
                 assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
             if isinstance(observer, Observable):
                 _ = yield self._callonce(observer._observers, args, kwargs, done)
+                assert _ is None, "OnceMessage of %s returned '%s', but must always be None" % (self._defer._observable, _)
 
 
 class Observable(object):
     def __init__(self, name=None):
-        __slots__ = ('_name', '_observers', 'all', 'any', 'do', 'call', 'once')
         self._name = name
         self._observers = []
-        self.init_defers()
-
-    def init_defers(self):
-        self.all = Defer(self._observers, AllMessage)
-        self.any = Defer(self._observers, AnyMessage)
-        self.do = Defer(self._observers, DoMessage)
-        self.call = Defer(self._observers, CallMessage)
-        self.once = Defer(self._observers, OnceMessage)
+        self.all = Defer(self, AllMessage)
+        self.any = Defer(self, AnyMessage)
+        self.do = Defer(self, DoMessage)
+        self.call = Defer(self, CallMessage)
+        self.once = Defer(self, OnceMessage)
 
     def observers(self):
         for observer in self._observers:
@@ -151,12 +200,10 @@ class Observable(object):
 
     def addObserver(self, observer):
         self._observers.append(observer)
-        self.init_defers()
 
     def addStrand(self, strand, helicesDone):
         for helix in strand:
             self.addObserver(_beRecursive(helix, helicesDone))
-        self.init_defers()
 
     def printTree(self, depth=0):
         def printInColor(ident, color, text):
@@ -202,4 +249,9 @@ def _beRecursive(helix, helicesDone):
         component.addStrand(strand, helicesDone)
         helicesDone.add(helix)
     return component
+
+def methodOrMethodPartialStr(f):
+    if type(f) == partial:
+        f = f.func
+    return str(f)
 

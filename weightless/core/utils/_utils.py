@@ -23,23 +23,9 @@
 # 
 ## end license ##
 
+from linecache import getline
 from re import compile
-from functools import partial
-
-def methodOrMethodPartialStr(f):
-    if type(f) == partial:
-        f = f.func
-    return str(f)
-
-def candidates(observers, method_name, alt_method_name):
-    for observer in observers:
-        try:
-            yield getattr(observer, method_name)
-        except AttributeError:
-            try:
-                yield partial(getattr(observer, alt_method_name), method_name)
-            except AttributeError:
-                continue
+from types import GeneratorType
 
 try:
     from inspect import isgeneratorfunction
