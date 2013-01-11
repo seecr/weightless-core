@@ -1,0 +1,324 @@
+Changeset created on Fri Jan 11 12:24:24 UTC 2013 by Seecr (Seek You Too B.V.)
+
+Description: HttpsServer compliant with HttpServer
+
+    The code for HttpsServer is now compliant with the latest refactorings
+    for HttpServer
+    
+
+Baseline version: 0.7.8
+
+From 528ef5703749106360ea79a43867ac8a1bb5cd0b Mon Sep 17 00:00:00 2001
+From: Tom van der Sommen <tom@seecr.nl>
+Date: Thu, 20 Dec 2012 14:40:18 +0100
+Subject: [PATCH 1/4] TS: updated HttpsServer to be a little bit more modern.
+
+---
+ test/http/httpsservertest.py   |   27 +++++----
+ weightless/http/_httpserver.py |  122 +++++++++++++++++++++++++++-------------
+ 2 files changed, 98 insertions(+), 51 deletions(-)
+
+diff --git a/test/http/httpsservertest.py b/test/http/httpsservertest.py
+index 700b979..8a525f9 100644
+--- a/test/http/httpsservertest.py
++++ b/test/http/httpsservertest.py
+@@ -52,25 +52,30 @@ class HttpsServerTest(TestCase):
+ 
+         port = randint(15000, 16000)
+         reactor = Reactor()
+-        server = HttpsServer(reactor, port, onRequest, keyfile='ssl/server.pkey', certfile='ssl/server.cert')
++        try:
++            server = HttpsServer(reactor, port, onRequest, keyfile='ssl/server.pkey', certfile='ssl/server.cert')
++            server.listen()
+ 
+-        p = Popen('wget -O - --no-check-certificate --quiet https://localhost:%s' % port, shell=True, stdout=PIPE)
++            p = Popen('wget -O - --no-check-certificate --quiet https://localhost:%s' % port, shell=True, stdout=PIPE)
+ 
+-        popenStdout = []
+-        def readPopenStdout():
+-            popenStdout.append(p.stdout.read())
+-        reactor.addReader(p.stdout, readPopenStdout)
++            popenStdout = []
++            def readPopenStdout():
++                popenStdout.append(p.stdout.read())
++            reactor.addReader(p.stdout, readPopenStdout)
+ 
+-        while not self.req:
+-           reactor.step()
++            while not self.req:
++               reactor.step()
+ 
+-        reactor.step()
+-        self.assertEquals(1, len(popenStdout))
+-        self.assertEquals(serverResponse, popenStdout[0])
++            reactor.step()
++            self.assertEquals(1, len(popenStdout))
++            self.assertEquals(serverResponse, popenStdout[0])
++        finally:
++            server.shutdown()
+ 
+     def testConnectBindAddress(self):
+         reactor = CallTrace()
+         port = randint(15000, 16000)
+         server = HttpsServer(reactor, port, lambda **kwargs: None, bindAddress='127.0.0.1', keyfile='ssl/server.pkey', certfile='ssl/server.cert')
++        server.listen()
+         self.assertEquals(('127.0.0.1', port), server._sok.getsockname())
+ 
+diff --git a/weightless/http/_httpserver.py b/weightless/http/_httpserver.py
+index 1d2e53c..dd5413b 100644
+--- a/weightless/http/_httpserver.py
++++ b/weightless/http/_httpserver.py
+@@ -53,6 +53,7 @@ CRLF_LEN = 2
+ 
+ class HttpServer(object):
+     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
++
+     def __init__(self, reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, compressResponse=False, bindAddress=None):
+         self._reactor = reactor
+         self._port = port
+@@ -68,23 +69,22 @@ class HttpServer(object):
+ 
+     def listen(self):
+         self._acceptor = Acceptor(
+-                self._reactor, 
+-                self._port, 
+-                lambda sok: HttpHandler(
+-                    self._reactor, 
+-                    sok, 
+-                    self._generatorFactory, 
+-                    self._timeout, 
+-                    self._recvSize, 
+-                    prio=self._prio, 
+-                    maxConnections=self._maxConnections, 
+-                    errorHandler=self._errorHandler,
+-                    compressResponse=self._compressResponse
+-                ),
+-                prio=self._prio, 
+-                sok=self._sok,
+-                bindAddress=self._bindAddress)
+-
++            reactor=self._reactor,
++            port=self._port,
++            sinkFactory=lambda sok: HttpHandler(
++                reactor=self._reactor,
++                sok=sok,
++                generatorFactory=self._generatorFactory,
++                timeout=self._timeout,
++                recvSize=self._recvSize,
++                prio=self._prio,
++                maxConnections=self._maxConnections,
++                errorHandler=self._errorHandler,
++                compressResponse=self._compressResponse
++            ),
++            prio=self._prio,
++            sok=self._sok,
++            bindAddress=self._bindAddress)
+ 
+     def setMaxConnections(self, m):
+         self._maxConnections = m
+@@ -92,30 +92,72 @@ class HttpServer(object):
+     def shutdown(self):
+         self._acceptor.shutdown()
+ 
+-def HttpsServer(reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, compressResponse=False, certfile='', keyfile='', bindAddress=None):
++
++class HttpsServer(object):
+     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
+-    if sok == None:
+-        def verify_cb(conn, cert, errnum, depth, ok):
+-            # This obviously has to be updated
+-            print 'Got certificate: %s' % cert.get_subject()
+-            return ok
+-
+-        # Initialize context
+-        ctx = SSL.Context(SSL.SSLv23_METHOD)
+-        ctx.set_session_id('weightless:%s:%s' % (time(), randint(1024,4096)))
+-        ctx.set_options(SSL.OP_NO_SSLv2)
+-        ctx.set_verify(SSL.VERIFY_PEER, verify_cb) # Demand a certificate
+-        ctx.use_privatekey_file (keyfile)
+-        ctx.use_certificate_file(certfile)
+-
+-        # Set up server
+-        sok = SSL.Connection(ctx, socket())
+-        sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+-        sok.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
+-        sok.bind(('0.0.0.0' if bindAddress is None else bindAddress, port))
+-        sok.listen(127)
+-
+-    return Acceptor(reactor, port, lambda s: HttpsHandler(reactor, s, generatorFactory, timeout, recvSize, prio=prio, maxConnections=maxConnections, errorHandler=errorHandler, compressResponse=compressResponse), prio=prio, sok=sok)
++
++    def __init__(self, reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, certfile='', keyfile='', maxConnections=None, errorHandler=None, compressResponse=False, bindAddress=None):
++        self._reactor = reactor
++        self._port = port
++        self._bindAddress = bindAddress
++        self._generatorFactory = generatorFactory
++        self._timeout = timeout
++        self._recvSize = recvSize
++        self._prio = prio
++        self._sok = sok
++        self._certfile = certfile
++        self._keyfile = keyfile
++        self._maxConnections = maxConnections
++        self._errorHandler = errorHandler
++        self._compressResponse = compressResponse
++
++    def listen(self):
++        # This should have been a SSLAcceptor ...
++        if self._sok == None:
++            def verify_cb(conn, cert, errnum, depth, ok):
++                # This obviously has to be updated
++                print 'Got certificate: %s' % cert.get_subject()
++                return ok
++
++            # Initialize context
++            ctx = SSL.Context(SSL.SSLv23_METHOD)
++            ctx.set_session_id('weightless:%s:%s' % (time(), randint(1024,4096)))
++            ctx.set_options(SSL.OP_NO_SSLv2)
++            ctx.set_verify(SSL.VERIFY_PEER, verify_cb) # Demand a certificate
++            ctx.use_privatekey_file(self._keyfile)
++            ctx.use_certificate_file(self._certfile)
++
++            # Set up server
++            self._sok = SSL.Connection(ctx, socket())
++            self._sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
++            self._sok.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
++            self._sok.bind(('0.0.0.0' if self._bindAddress is None else self._bindAddress, self._port))
++            self._sok.listen(127)
++
++        self._acceptor = Acceptor(
++            reactor=self._reactor,
++            port=self._port,
++            sinkFactory=lambda sok: HttpsHandler(
++                reactor=self._reactor,
++                sok=sok,
++                generatorFactory=self._generatorFactory,
++                timeout=self._timeout,
++                recvSize=self._recvSize,
++                prio=self._prio,
++                maxConnections=self._maxConnections,
++                errorHandler=self._errorHandler,
++                compressResponse=self._compressResponse
++            ),
++            prio=self._prio,
++            sok=self._sok,
++            bindAddress=self._bindAddress)
++
++    def setMaxConnections(self, m):
++        self._maxConnections = m
++
++    def shutdown(self):
++        self._acceptor.shutdown()
++
+ 
+ from sys import stdout
+ from resource import getrlimit, RLIMIT_NOFILE
+-- 
+1.7.2.5
+
+
+From bed2802639039ef0546988cffbb48016e541036e Mon Sep 17 00:00:00 2001
+From: Tom van der Sommen <tom@seecr.nl>
+Date: Thu, 20 Dec 2012 15:04:47 +0100
+Subject: [PATCH 2/4] TS: fixed HttpsHandler's __call__; other minor improvements
+
+---
+ weightless/http/_httpserver.py |   21 +++++++++++++--------
+ 1 files changed, 13 insertions(+), 8 deletions(-)
+
+diff --git a/weightless/http/_httpserver.py b/weightless/http/_httpserver.py
+index dd5413b..eaea88b 100644
+--- a/weightless/http/_httpserver.py
++++ b/weightless/http/_httpserver.py
+@@ -555,17 +555,22 @@ class HttpsHandler(HttpHandler):
+         except (SSL.WantReadError, SSL.WantWriteError, SSL.WantX509LookupError):
+             pass
+         except Exception, e:
+-            self._closeDuringRead()
++            self._closeConnection()
+         else:
+             self._dataBuffer += part
++            self._resetTimer()
+             self._dealWithCall()
+ 
+-    def _closeDuringRead(self):
+-        self._reactor.removeReader(self._sok)
+-        self._sok.shutdown()
+-        self._sok.close()
+-
+     def _closeConnection(self):
+-        self._reactor.removeWriter(self._sok)
+-        self._sok.shutdown()
++        self._reactor.cleanup(self._sok)
++
++        try:
++            self._sok.shutdown()  # No self._sok.shutdown(SHUT_RDWR) for some reason
++        except SocketError, e:
++            code, message = e.args
++            if code == 107:
++                pass # KVS: not well understood, not tested. It seems some quick (local) servers close the connection before this point is reached. It may happen more generally. In any case, it is based on a truely existing phenomomon
++            else:
++                raise
+         self._sok.close()
++
+-- 
+1.7.2.5
+
+
+From d801d6a3cd3c1ff1716599ef9d90f812eb64d1af Mon Sep 17 00:00:00 2001
+From: Tom van der Sommen <tom@seecr.nl>
+Date: Thu, 20 Dec 2012 15:17:50 +0100
+Subject: [PATCH 3/4] TS: added Git detection to are-we-in-dev-mode (a.k.a. rebuild C-extension when not present).
+
+---
+ .gitignore                          |    2 ++
+ weightless/core/compose/__init__.py |    4 +++-
+ 2 files changed, 5 insertions(+), 1 deletions(-)
+ create mode 100644 .gitignore
+
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..a57cf92
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,2 @@
++build
++weightless/core/compose/_compose_c.so
+diff --git a/weightless/core/compose/__init__.py b/weightless/core/compose/__init__.py
+index 0588468..564bd10 100644
+--- a/weightless/core/compose/__init__.py
++++ b/weightless/core/compose/__init__.py
+@@ -28,7 +28,9 @@ from types import GeneratorType, FunctionType
+ from os.path import dirname, abspath, isdir, join            #DO_NOT_DISTRIBUTE
+ from sys import version_info                                 #DO_NOT_DISTRIBUTE
+ pycmd = "python%s.%s" % version_info[:2]                     #DO_NOT_DISTRIBUTE
+-if isdir(join(abspath(dirname(__file__)), '.svn')):          #DO_NOT_DISTRIBUTE
++_mydir = abspath(dirname(__file__))                          #DO_NOT_DISTRIBUTE
++_projectdir = dirname(dirname(dirname(_mydir)))              #DO_NOT_DISTRIBUTE
++if isdir(join(_mydir, '.svn')) or isdir(join(_projectdir, '.git')):  #DO_NOT_DISTRIBUTE
+     from os import system                                    #DO_NOT_DISTRIBUTE
+     status = system(                                         #DO_NOT_DISTRIBUTE
+         "cd %s/../../..; %s setup.py build_ext --inplace"    #DO_NOT_DISTRIBUTE
+-- 
+1.7.2.5
+
+
+From 3eaf2603267beb93928bcf51300eee1e9483ef10 Mon Sep 17 00:00:00 2001
+From: Tom van der Sommen <tom@seecr.nl>
+Date: Sat, 5 Jan 2013 12:42:45 +0100
+Subject: [PATCH 4/4] TS: added ignore on deps.d
+
+---
+ .gitignore |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/.gitignore b/.gitignore
+index a57cf92..9b1df25 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,2 +1,3 @@
+ build
+ weightless/core/compose/_compose_c.so
++deps.d
+-- 
+1.7.2.5
+
