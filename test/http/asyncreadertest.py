@@ -4,7 +4,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
 # 
 # Copyright (C) 2010-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
 # 
 # This file is part of "Weightless"
 # 
@@ -26,7 +26,7 @@
 
 from __future__ import with_statement
 import sys
-from sys import exc_info
+from sys import exc_info, version_info
 from StringIO import StringIO
 from traceback import format_exception
 from time import sleep
@@ -43,6 +43,7 @@ from weightless.http._httprequest import _httpRequest
 from weightless.http import _httprequest as httpRequestModule
 
 from weightlesstestcase import WeightlessTestCase
+PYVERSION = '%s.%s' % version_info[:2]
 
 def clientget(host, port, path):
     client = socket()
@@ -124,6 +125,20 @@ class AsyncReaderTest(WeightlessTestCase):
   File "%(httprequest.py)s", line 35, in _do
     sok.connect((host, port))
   File "<string>", line 1, in connect
+TypeError: an integer is required
+       """ % fileDict)
+        if PYVERSION == "2.7":
+            expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+  File "%(__file__)s", line 85, in failingserver
+    response = yield httpget(*target)
+  File "%(httprequest.py)s", line 78, in httpget
+    result = s.getResult()
+  File "%(suspend.py)s", line 34, in __call__
+    self._doNext(self)
+  File "%(httprequest.py)s", line 35, in _do
+    sok.connect((host, port))
+  File "/usr/lib/python2.7/socket.py", line [#], in meth
+    return getattr(self._sock,name)(*args)
 TypeError: an integer is required
        """ % fileDict)
         self.assertEquals(TypeError, exceptions[0][0])

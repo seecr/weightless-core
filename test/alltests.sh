@@ -3,7 +3,7 @@
 # 
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
 # 
-# Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
 # Copyright (C) 2011 Seek You Too (CQ2) http://www.cq2.nl
 # 
 # This file is part of "Weightless"
@@ -29,6 +29,9 @@ export PYTHONPATH=.:"$PYTHONPATH"
 
 option=$1
 pyversions="python2.6"
+if [ -e /usr/bin/python2.7 ]; then
+    pyversions="$pyversions python2.7"
+fi
 if [ "${option:0:10}" == "--python2." ]; then
     shift
     pyversions="${option:2}"
