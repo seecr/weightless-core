@@ -2,7 +2,6 @@
 # 
 # "Seecr Test" provides test tools. 
 # 
-# Copyright (C) 2005-2009 Seek You Too (CQ2) http://www.cq2.nl
 # Copyright (C) 2012 Seecr (Seek You Too B.V.) http://seecr.nl
 # 
 # This file is part of "Seecr Test"
@@ -23,25 +22,43 @@
 # 
 ## end license ##
 
-# Module test.pystone may interfere with default test package
-# With this code we temporarily move the beginning of the PYTHON_PATH aside to
-# import the good test module.
-from sys import path
-import sys
-temppath = []
-while len(path) > 0:
-    try:
-        if 'test' in sys.modules:
-            del sys.modules['test']
-        from test.pystone import pystones
-        break
-    except ImportError:
-        temppath.append(path[0])
-        del path[0]
-    
-T, p = pystones(loops=50000)
-print 'T=%.1fs' % T
+from __future__ import with_statement
 
-for temp in reversed(temppath):
-    path.insert(0, temp)
-del temppath
+import sys
+
+from StringIO import StringIO
+
+from contextlib import contextmanager
+
+
+@contextmanager
+def stderr_replaced():
+    oldstderr = sys.stderr
+    mockStderr = StringIO()
+    sys.stderr = mockStderr
+    try:
+        yield mockStderr
+    finally:
+        sys.stderr = oldstderr
+
+def stderr_replace_decorator(func):
+    def wrapper(*args, **kwargs):
+        with stderr_replaced():
+            return func(*args, **kwargs)
+    return wrapper
+
+@contextmanager
+def stdout_replaced():
+    oldstdout = sys.stdout
+    mockStdout = StringIO()
+    sys.stdout = mockStdout
+    try:
+        yield mockStdout
+    finally:
+        sys.stdout = oldstdout
+
+def stdout_replace_decorator(func):
+    def wrapper(*args, **kwargs):
+        with stdout_replaced():
+            return func(*args, **kwargs)
+    return wrapper

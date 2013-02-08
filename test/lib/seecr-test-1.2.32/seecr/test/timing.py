@@ -2,6 +2,7 @@
 # 
 # "Seecr Test" provides test tools. 
 # 
+# Copyright (C) 2005-2009 Seek You Too (CQ2) http://www.cq2.nl
 # Copyright (C) 2012 Seecr (Seek You Too B.V.) http://seecr.nl
 # 
 # This file is part of "Seecr Test"
@@ -22,5 +23,29 @@
 # 
 ## end license ##
 
-from calltrace import CallTrace
-from seecrtestcase import SeecrTestCase
+# Module test.pystone may interfere with default test package
+# With this code we temporarily move the beginning of the PYTHON_PATH aside to
+# import the good test module.
+from sys import path
+import sys
+temppath = []
+def pystones(*args, **kwargs):
+    from warnings import warn
+    warn("Python module 'test.pystone' not available. Will assume T=1.0")
+    return 1.0, "ignored"
+while len(path) > 0:
+    try:
+        if 'test' in sys.modules:
+            del sys.modules['test']
+        from test.pystone import pystones
+        break
+    except ImportError:
+        temppath.append(path[0])
+        del path[0]
+    
+T, p = pystones(loops=50000)
+print 'T=%.1fs' % T
+
+for temp in reversed(temppath):
+    path.insert(0, temp)
+del temppath

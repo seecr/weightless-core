@@ -42,6 +42,9 @@ class CallTrace:
         self.onlySpecifiedMethods = onlySpecifiedMethods
         self.emptyGeneratorMethods = emptyGeneratorMethods
 
+    def calledMethodNames(self):
+        return [m.name for m in self.calledMethods]
+
     def __getattr__(self, attrname):
         if attrname.startswith('__') and attrname.endswith('__') and not attrname in self.returnValues:
             return object.__getattr__(self, attrname)
