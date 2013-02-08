@@ -63,10 +63,10 @@ from http.asyncreadertest import AsyncReaderTest
 
 from udp.acceptortest import UdpAcceptorTest
 
-from io.reactortest import ReactorTest
-from io.giotest import GioTest
-from io.gutilstest import GutilsTest
-from io.servertest import ServerTest
+from wl_io.reactortest import ReactorTest
+from wl_io.giotest import GioTest
+from wl_io.gutilstest import GutilsTest
+from wl_io.servertest import ServerTest
 
 #from httpng.httpprotocolintegrationtest import HttpProtocolIntegrationTest
 #from httpng.httpprotocoltest import HttpProtocolTest
