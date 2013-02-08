@@ -1,0 +1,2 @@
+python-dev
+#wheezy:python2.6-dev
