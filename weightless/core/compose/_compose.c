@@ -827,7 +827,7 @@ PyMODINIT_FUNC init_compose_c(void) {
 void assertTrue(const int condition, const char* msg) {
     if(!condition) {
         printf("Self-test (%s) FAIL: ", __FILE__);
-        printf(msg);
+        printf("%s", msg);
         printf("\n");
     }
 }
