@@ -25,30 +25,28 @@
 ## end license ##
 
 set -o errexit
-
 rm -rf tmp build
+mydir=$(cd $(dirname $0); pwd)
+source /usr/share/seecr-test/functions
 
-python2.6 setup.py install --root tmp
+pyversions="2.6"
+if distro_is_debian_wheezy; then
+    pyversions="2.6 2.7"
+fi
 
 VERSION="x.y.z"
 
-find tmp -name '*.py' -exec sed -r -e \
-    "/DO_NOT_DISTRIBUTE/ d;
-    s/\\\$Version:[^\\\$]*\\\$/\\\$Version: ${VERSION}\\\$/" -i '{}' \;
-
-if [ -f /etc/debian_version ]; then
-    export PYTHONPATH=`pwd`/tmp/usr/local/lib/python2.6/dist-packages:${PYTHONPATH}
-else
-    export PYTHONPATH=`pwd`/tmp/usr/lib/python2.6/site-packages:${PYTHONPATH}
-fi
-
+for pyversion in $pyversions; do
+    definePythonVars $pyversion
+    echo "###### $pyversion, $PYTHON"
+    ${PYTHON} setup.py install --root tmp
+done
 cp -r test tmp/test
+removeDoNotDistribute tmp
+find tmp -name '*.py' -exec sed -r -e "
+    s/\\\$Version:[^\\\$]*\\\$/\\\$Version: ${VERSION}\\\$/;
+    " -i '{}' \;
 
-set +o errexit
-(
-cd tmp/test
-./alltests.sh 
-)
-set -o errexit
+runtests "$@"
 
 rm -rf tmp build
