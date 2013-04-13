@@ -26,6 +26,7 @@
 ## end license ##
 
 from sys import exc_info
+from traceback import format_exception
 from functools import partial
 
 from weightless.core.compose import isGeneratorOrComposed
@@ -79,6 +80,10 @@ class Defer(object):
             c, v, t = exc_info(); raise c, v, t.tb_next
 
 
+def handleNonGeneratorGeneratorExceptions(method, clazz, value, traceback):
+    excStr = format_exception(clazz, value, traceback)
+    raise AssertionError("Non-Generator %s should not have raised Generator-Exception:\n%s" % (methodOrMethodPartialStr(method), excStr))
+
 class MessageBase(object):
     def __init__(self, defer, message):
         self._defer = defer
@@ -93,7 +98,11 @@ class MessageBase(object):
                 except AttributeError:
                     continue 
             try:
-                result = method(*args, **kwargs)
+                try:
+                    result = method(*args, **kwargs)
+                except (StopIteration, GeneratorExit):  #fail on illogical method-results for non-Generators
+                    c, v, t = exc_info()
+                    result = handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
                 self.verifyMethodResult(method, result)
                 _ = yield result
             except _DeclineMessage:
@@ -168,12 +177,24 @@ class OnceMessage(MessageBase):
             except AttributeError:
                 pass
             else:
-                _ = methodResult = method(*args, **kwargs)
-                if isGeneratorOrComposed(methodResult):
-                    _ = yield methodResult
+                try:  # Added for framework off-the-stacktrace
+                    try:
+                        _ = methodResult = method(*args, **kwargs)
+                    except (StopIteration, GeneratorExit):  #fail on illogical method-results for non-Generators
+                        c, v, t = exc_info()
+                        result = handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
+                    if isGeneratorOrComposed(methodResult):
+                        _ = yield methodResult
+                except:
+                    c, v, t = exc_info(); raise c, v, t.tb_next
+                # assert outside of removal to keep raising-file-line in the trace (for clarity) [ok?]
                 assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
             if isinstance(observer, Observable):
-                _ = yield self._callonce(observer._observers, args, kwargs, done)
+                try:  # Added for framework off-the-stacktrace
+                    _ = yield self._callonce(observer._observers, args, kwargs, done)
+                except:
+                    c, v, t = exc_info(); raise c, v, t.tb_next
+                # assert outside of removal to keep raising-file-line in the trace (for clarity) [ok?]
                 assert _ is None, "OnceMessage of %s returned '%s', but must always be None" % (self._defer._observable, _)
 
 

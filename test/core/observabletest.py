@@ -975,6 +975,13 @@ class ObservableTest(TestCase):
         self.assertEquals([], [m.name for m in observer1.calledMethods])
         self.assertEquals(['message'], [m.name for m in observer2.calledMethods])
 
+    def testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages(self):
+        # any, all, do, call and once that is ...
+        self.fail('todo')
+
+    def testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce(self):
+        self.fail('todo')
+
     def assertFunctionsOnTraceback(self, *args):
         na, na, tb = exc_info()
         for functionName in args:
