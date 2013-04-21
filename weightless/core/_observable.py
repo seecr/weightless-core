@@ -102,7 +102,7 @@ class MessageBase(object):
                     result = method(*args, **kwargs)
                 except (StopIteration, GeneratorExit):  #fail on illogical method-results for non-Generators
                     c, v, t = exc_info()
-                    result = handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
+                    handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
                 self.verifyMethodResult(method, result)
                 _ = yield result
             except _DeclineMessage:
@@ -182,7 +182,7 @@ class OnceMessage(MessageBase):
                         _ = methodResult = method(*args, **kwargs)
                     except (StopIteration, GeneratorExit):  #fail on illogical method-results for non-Generators
                         c, v, t = exc_info()
-                        result = handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
+                        handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
                     if isGeneratorOrComposed(methodResult):
                         _ = yield methodResult
                 except:
