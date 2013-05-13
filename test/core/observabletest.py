@@ -1030,8 +1030,3 @@ class Responder(Observable):
     def all_unknown(self, message, *args, **kwargs):
         yield self._value
 
-class Unreachable(Observable):
-    def any_unknown(self, message, *args, **kwargs):
-        raise Exception("should not get here")
-        yield
-
