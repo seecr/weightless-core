@@ -40,6 +40,11 @@ from unittest import TestCase
 from seecr.test import CallTrace
 
 
+fileDict = {
+    '__file__' : __file__.replace(".pyc", ".py")
+}
+
+
 class ObservableTest(TestCase):
     def testAllWithoutImplementers(self):
         observable = Observable()
@@ -805,6 +810,113 @@ class ObservableTest(TestCase):
         list(compose(root.once.methodOnlyCalledOnce(collector)))
         self.assertEquals([ownobserverobserver], collector)
 
+    def testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce(self):
+        class OnceRaiser(object):
+            def raisesOnCall(self):
+                raise BaseException('Boom')
+            def raisesOnCallGenerator(self):
+                raise BaseException('Ka-Boom')
+                yield
+
+        dna = (Observable(),              # called-from
+            (Observable(),                # 1
+                (Observable(),            # 2
+                    (Observable(),        # 3
+                        (OnceRaiser(),),  # target
+                    )
+                )
+            )
+        )
+        root = be(dna)
+
+        try:
+            list(compose(root.once.raisesOnCallGenerator()))
+        except BaseException:
+            self.assertFunctionsOnTraceback('testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce', 'raisesOnCallGenerator')
+        else:
+            self.fail('Should not happen')
+
+        try:
+            list(compose(root.once.raisesOnCall()))
+        except BaseException:
+            self.assertFunctionsOnTraceback('testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce', 'raisesOnCall')
+        else:
+            self.fail('Should not happen')
+
+    def testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages(self):
+        # any, all, do, call and once
+        class OddObject(object):
+            def stopIter(self):
+                raise StopIteration('Stop!')
+            def genExit(self):
+                raise GeneratorExit('Exit!')
+
+        dna = (Observable(),
+            (Transparent(),
+                (OddObject(),),
+            )
+        )
+        root = be(dna)
+
+        # Verify traceback's and wrapped-exception text is ok
+        try: root.call.stopIter()
+        except AssertionError, e:
+            self.assertTrue(str(e).startswith('Non-Generator <bound method OddObject.stopIter of <core.observabletest.OddObject object at 0x'), str(e))
+            expected = ignoreLineNumbers('''>> should not have raised Generator-Exception:
+Traceback (most recent call last):
+  File "%(__file__)s", line [#], in stopIter
+    raise StopIteration('Stop!')
+StopIteration: Stop!
+''' % fileDict)
+            self.assertTrue(ignoreLineNumbers(str(e)).endswith(expected), str(e))
+            self.assertFunctionsOnTraceback(
+                'testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages',
+                'call_unknown',  # From Transparent, is supposed to be on the stack to aid retracing the path taken for a messages.
+                'handleNonGeneratorGeneratorExceptions')
+        else: self.fail('Should not happen')
+
+        try: root.call.genExit()
+        except AssertionError, e:
+            self.assertTrue(str(e).startswith('Non-Generator <bound method OddObject.genExit of <core.observabletest.OddObject object at 0x'), str(e))
+            expected = ignoreLineNumbers('''>> should not have raised Generator-Exception:
+Traceback (most recent call last):
+  File "%(__file__)s", line [#], in genExit
+    raise GeneratorExit('Exit!')
+GeneratorExit: Exit!
+''' % fileDict)
+            self.assertTrue(ignoreLineNumbers(str(e)).endswith(expected), str(e))
+            self.assertFunctionsOnTraceback(
+                'testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages',
+                'call_unknown',  # From Transparent, is supposed to be on the stack to aid retracing the path taken for a messages.
+                'handleNonGeneratorGeneratorExceptions')
+        else: self.fail('Should not happen')
+
+        # Verify logic implemented in all messages, with traceback-manipulation
+        for observableCallName, failMethod in [
+                    ('do', 'stopIter'),
+                    ('do', 'genExit'),
+                    ('any', 'stopIter'),
+                    ('any', 'genExit'),
+                    ('all', 'stopIter'),
+                    ('all', 'genExit'),
+                    ('once', 'stopIter'),
+                    ('once', 'genExit'),
+                ]:
+            try:
+                _ = getattr(getattr(root, observableCallName), failMethod)()
+                if observableCallName != 'do':
+                    list(compose(_))
+            except AssertionError, e:
+                self.assertTrue('should not have raised Generator-Exception:' in str(e), str(e))
+                expected = [
+                    'testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages',
+                    'handleNonGeneratorGeneratorExceptions',
+                ]
+                if observableCallName != 'once':
+                    expected[1:1] = '%s_unknown' % observableCallName,  # From Transparent, is supposed to be on the stack to aid retracing the path taken for a messages.
+                self.assertFunctionsOnTraceback(*expected)
+            else: self.fail('Should not happen')
+
     def testNoLeakingGeneratorsInCycle(self):
         class Responder(Observable):
             def message(self):
@@ -975,13 +1087,6 @@ class ObservableTest(TestCase):
         self.assertEquals([], [m.name for m in observer1.calledMethods])
         self.assertEquals(['message'], [m.name for m in observer2.calledMethods])
 
-    def testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages(self):
-        # any, all, do, call and once that is ...
-        self.fail('todo')
-
-    def testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce(self):
-        self.fail('todo')
-
     def assertFunctionsOnTraceback(self, *args):
         na, na, tb = exc_info()
         for functionName in args:
@@ -1029,4 +1134,9 @@ class Responder(Observable):
         return self._value
     def all_unknown(self, message, *args, **kwargs):
         yield self._value
+
+
+from re import sub
+def ignoreLineNumbers(s):
+    return sub("line \d+,", "line [#],", s)
 

@@ -81,7 +81,7 @@ class Defer(object):
 
 
 def handleNonGeneratorGeneratorExceptions(method, clazz, value, traceback):
-    excStr = format_exception(clazz, value, traceback)
+    excStr = ''.join(format_exception(clazz, value, traceback))
     raise AssertionError("Non-Generator %s should not have raised Generator-Exception:\n%s" % (methodOrMethodPartialStr(method), excStr))
 
 class MessageBase(object):
