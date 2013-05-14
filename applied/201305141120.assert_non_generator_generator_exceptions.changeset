@@ -1,0 +1,473 @@
+Changeset created on Tue May 14 11:20:53 UTC 2013 by Seecr (Seek You Too B.V.)
+
+Description: Assert Non-Generator Generator-Exceptions
+
+    In Observable's message-handling, when the called-method
+    raises a generator-ish exception (StopIteration or GeneratorExit),
+    and it is not a generator - raise an assertion.
+    This is to prevent hard to locate bugs and illogical behaviour
+    from occuring.
+
+Baseline version: 0.8.2.1
+
+From c5309f22b9a89fd2325155fc7858cf1ab00b8ae7 Mon Sep 17 00:00:00 2001
+From: Thijs Janssen <thijs@seecr.nl>
+Date: Fri, 15 Mar 2013 15:40:25 +0100
+Subject: [PATCH 1/6] TJ: setup for 2.6 and 2.7 on wheezy.
+
+---
+ testsetup.sh |   34 ++++++++++++++++------------------
+ 1 files changed, 16 insertions(+), 18 deletions(-)
+
+diff --git a/testsetup.sh b/testsetup.sh
+index 9e8d0b7..7947397 100755
+--- a/testsetup.sh
++++ b/testsetup.sh
+@@ -25,30 +25,28 @@
+ ## end license ##
+ 
+ set -o errexit
+-
+ rm -rf tmp build
++mydir=$(cd $(dirname $0); pwd)
++source /usr/share/seecr-test/functions
+ 
+-python2.6 setup.py install --root tmp
++pyversions="2.6"
++if distro_is_debian_wheezy; then
++    pyversions="2.6 2.7"
++fi
+ 
+ VERSION="x.y.z"
+ 
+-find tmp -name '*.py' -exec sed -r -e \
+-    "/DO_NOT_DISTRIBUTE/ d;
+-    s/\\\$Version:[^\\\$]*\\\$/\\\$Version: ${VERSION}\\\$/" -i '{}' \;
+-
+-if [ -f /etc/debian_version ]; then
+-    export PYTHONPATH=`pwd`/tmp/usr/local/lib/python2.6/dist-packages:${PYTHONPATH}
+-else
+-    export PYTHONPATH=`pwd`/tmp/usr/lib/python2.6/site-packages:${PYTHONPATH}
+-fi
+-
++for pyversion in $pyversions; do
++    definePythonVars $pyversion
++    echo "###### $pyversion, $PYTHON"
++    ${PYTHON} setup.py install --root tmp
++done
+ cp -r test tmp/test
++removeDoNotDistribute tmp
++find tmp -name '*.py' -exec sed -r -e "
++    s/\\\$Version:[^\\\$]*\\\$/\\\$Version: ${VERSION}\\\$/;
++    " -i '{}' \;
+ 
+-set +o errexit
+-(
+-cd tmp/test
+-./alltests.sh 
+-)
+-set -o errexit
++runtests "$@"
+ 
+ rm -rf tmp build
+-- 
+1.7.2.5
+
+
+From 7a152183054448a05991c8aee243e53d878c2373 Mon Sep 17 00:00:00 2001
+From: Tom van der Sommen <tom@seecr.nl>
+Date: Sat, 13 Apr 2013 15:49:24 +0200
+Subject: [PATCH 2/6] TS: being more delicate in handling Non-Generator returned Generator-Exceptions
+
+Being: StopIteration and GeneratorExit
+This is to prevent hard-to-debug behaviour and for all intents and purposes
+unwanted anyway.
+---
+ test/core/observabletest.py    |    7 +++++++
+ weightless/core/_observable.py |   31 ++++++++++++++++++++++++++-----
+ 2 files changed, 33 insertions(+), 5 deletions(-)
+
+diff --git a/test/core/observabletest.py b/test/core/observabletest.py
+index 5d4c2e0..db370f0 100644
+--- a/test/core/observabletest.py
++++ b/test/core/observabletest.py
+@@ -975,6 +975,13 @@ class ObservableTest(TestCase):
+         self.assertEquals([], [m.name for m in observer1.calledMethods])
+         self.assertEquals(['message'], [m.name for m in observer2.calledMethods])
+ 
++    def testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages(self):
++        # any, all, do, call and once that is ...
++        self.fail('todo')
++
++    def testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce(self):
++        self.fail('todo')
++
+     def assertFunctionsOnTraceback(self, *args):
+         na, na, tb = exc_info()
+         for functionName in args:
+diff --git a/weightless/core/_observable.py b/weightless/core/_observable.py
+index 2631404..463ddcf 100644
+--- a/weightless/core/_observable.py
++++ b/weightless/core/_observable.py
+@@ -26,6 +26,7 @@
+ ## end license ##
+ 
+ from sys import exc_info
++from traceback import format_exception
+ from functools import partial
+ 
+ from weightless.core.compose import isGeneratorOrComposed
+@@ -79,6 +80,10 @@ class Defer(object):
+             c, v, t = exc_info(); raise c, v, t.tb_next
+ 
+ 
++def handleNonGeneratorGeneratorExceptions(method, clazz, value, traceback):
++    excStr = format_exception(clazz, value, traceback)
++    raise AssertionError("Non-Generator %s should not have raised Generator-Exception:\n%s" % (methodOrMethodPartialStr(method), excStr))
++
+ class MessageBase(object):
+     def __init__(self, defer, message):
+         self._defer = defer
+@@ -93,7 +98,11 @@ class MessageBase(object):
+                 except AttributeError:
+                     continue 
+             try:
+-                result = method(*args, **kwargs)
++                try:
++                    result = method(*args, **kwargs)
++                except (StopIteration, GeneratorExit):  #fail on illogical method-results for non-Generators
++                    c, v, t = exc_info()
++                    result = handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
+                 self.verifyMethodResult(method, result)
+                 _ = yield result
+             except _DeclineMessage:
+@@ -168,12 +177,24 @@ class OnceMessage(MessageBase):
+             except AttributeError:
+                 pass
+             else:
+-                _ = methodResult = method(*args, **kwargs)
+-                if isGeneratorOrComposed(methodResult):
+-                    _ = yield methodResult
++                try:  # Added for framework off-the-stacktrace
++                    try:
++                        _ = methodResult = method(*args, **kwargs)
++                    except (StopIteration, GeneratorExit):  #fail on illogical method-results for non-Generators
++                        c, v, t = exc_info()
++                        result = handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
++                    if isGeneratorOrComposed(methodResult):
++                        _ = yield methodResult
++                except:
++                    c, v, t = exc_info(); raise c, v, t.tb_next
++                # assert outside of removal to keep raising-file-line in the trace (for clarity) [ok?]
+                 assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
+             if isinstance(observer, Observable):
+-                _ = yield self._callonce(observer._observers, args, kwargs, done)
++                try:  # Added for framework off-the-stacktrace
++                    _ = yield self._callonce(observer._observers, args, kwargs, done)
++                except:
++                    c, v, t = exc_info(); raise c, v, t.tb_next
++                # assert outside of removal to keep raising-file-line in the trace (for clarity) [ok?]
+                 assert _ is None, "OnceMessage of %s returned '%s', but must always be None" % (self._defer._observable, _)
+ 
+ 
+-- 
+1.7.2.5
+
+
+From d9e96a0b41c281fffacc1b068a341f7c7d51c732 Mon Sep 17 00:00:00 2001
+From: Tom van der Sommen <tom@seecr.nl>
+Date: Sun, 21 Apr 2013 16:51:33 +0200
+Subject: [PATCH 3/6] TS: removed ancient idea leftovers.
+
+---
+ weightless/core/_observable.py |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/weightless/core/_observable.py b/weightless/core/_observable.py
+index 463ddcf..a1f402f 100644
+--- a/weightless/core/_observable.py
++++ b/weightless/core/_observable.py
+@@ -102,7 +102,7 @@ class MessageBase(object):
+                     result = method(*args, **kwargs)
+                 except (StopIteration, GeneratorExit):  #fail on illogical method-results for non-Generators
+                     c, v, t = exc_info()
+-                    result = handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
++                    handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
+                 self.verifyMethodResult(method, result)
+                 _ = yield result
+             except _DeclineMessage:
+@@ -182,7 +182,7 @@ class OnceMessage(MessageBase):
+                         _ = methodResult = method(*args, **kwargs)
+                     except (StopIteration, GeneratorExit):  #fail on illogical method-results for non-Generators
+                         c, v, t = exc_info()
+-                        result = handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
++                        handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
+                     if isGeneratorOrComposed(methodResult):
+                         _ = yield methodResult
+                 except:
+-- 
+1.7.2.5
+
+
+From a02b8a9ca0bb6e7205ad27a7c533bb75766a54ba Mon Sep 17 00:00:00 2001
+From: Tom van der Sommen <tom@seecr.nl>
+Date: Mon, 13 May 2013 10:01:09 +0200
+Subject: [PATCH 4/6] TS: removed unused testing class
+
+---
+ test/core/observabletest.py |    5 -----
+ 1 files changed, 0 insertions(+), 5 deletions(-)
+
+diff --git a/test/core/observabletest.py b/test/core/observabletest.py
+index db370f0..ffcd63e 100644
+--- a/test/core/observabletest.py
++++ b/test/core/observabletest.py
+@@ -1030,8 +1030,3 @@ class Responder(Observable):
+     def all_unknown(self, message, *args, **kwargs):
+         yield self._value
+ 
+-class Unreachable(Observable):
+-    def any_unknown(self, message, *args, **kwargs):
+-        raise Exception("should not get here")
+-        yield
+-
+-- 
+1.7.2.5
+
+
+From 86506e3a5040ccde703c1ff49c8f6674befccd03 Mon Sep 17 00:00:00 2001
+From: Tom van der Sommen <tom@seecr.nl>
+Date: Tue, 14 May 2013 12:59:38 +0200
+Subject: [PATCH 5/6] TS: fixed handleNonGeneratorGeneratorExceptions original-exception string.
+
+Implemented tests for Observable:
+    - OnceMessage traceback fixing;
+    - Non-Generator, generator-exception handling in message-handling.
+---
+ test/core/observabletest.py    |  124 +++++++++++++++++++++++++++++++++++++--
+ weightless/core/_observable.py |    2 +-
+ 2 files changed, 118 insertions(+), 8 deletions(-)
+
+diff --git a/test/core/observabletest.py b/test/core/observabletest.py
+index ffcd63e..2188a5f 100644
+--- a/test/core/observabletest.py
++++ b/test/core/observabletest.py
+@@ -40,6 +40,11 @@ from unittest import TestCase
+ from seecr.test import CallTrace
+ 
+ 
++fileDict = {
++    '__file__' : __file__.replace(".pyc", ".py")
++}
++
++
+ class ObservableTest(TestCase):
+     def testAllWithoutImplementers(self):
+         observable = Observable()
+@@ -805,6 +810,113 @@ class ObservableTest(TestCase):
+         list(compose(root.once.methodOnlyCalledOnce(collector)))
+         self.assertEquals([ownobserverobserver], collector)
+ 
++    def testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce(self):
++        class OnceRaiser(object):
++            def raisesOnCall(self):
++                raise BaseException('Boom')
++            def raisesOnCallGenerator(self):
++                raise BaseException('Ka-Boom')
++                yield
++
++        dna = (Observable(),              # called-from
++            (Observable(),                # 1
++                (Observable(),            # 2
++                    (Observable(),        # 3
++                        (OnceRaiser(),),  # target
++                    )
++                )
++            )
++        )
++        root = be(dna)
++
++        try:
++            list(compose(root.once.raisesOnCallGenerator()))
++        except BaseException:
++            self.assertFunctionsOnTraceback('testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce', 'raisesOnCallGenerator')
++        else:
++            self.fail('Should not happen')
++
++        try:
++            list(compose(root.once.raisesOnCall()))
++        except BaseException:
++            self.assertFunctionsOnTraceback('testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce', 'raisesOnCall')
++        else:
++            self.fail('Should not happen')
++
++    def testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages(self):
++        # any, all, do, call and once
++        class OddObject(object):
++            def stopIter(self):
++                raise StopIteration('Stop!')
++            def genExit(self):
++                raise GeneratorExit('Exit!')
++
++        dna = (Observable(),
++            (Transparent(),
++                (OddObject(),),
++            )
++        )
++        root = be(dna)
++
++        # Verify traceback's and wrapped-exception text is ok
++        try: root.call.stopIter()
++        except AssertionError, e:
++            self.assertTrue(str(e).startswith('Non-Generator <bound method OddObject.stopIter of <core.observabletest.OddObject object at 0x'), str(e))
++            expected = ignoreLineNumbers('''>> should not have raised Generator-Exception:
++Traceback (most recent call last):
++  File "%(__file__)s", line [#], in stopIter
++    raise StopIteration('Stop!')
++StopIteration: Stop!
++''' % fileDict)
++            self.assertTrue(ignoreLineNumbers(str(e)).endswith(expected), str(e))
++            self.assertFunctionsOnTraceback(
++                'testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages',
++                'call_unknown',  # From Transparent, is supposed to be on the stack to aid retracing the path taken for a messages.
++                'handleNonGeneratorGeneratorExceptions')
++        else: self.fail('Should not happen')
++
++        try: root.call.genExit()
++        except AssertionError, e:
++            self.assertTrue(str(e).startswith('Non-Generator <bound method OddObject.genExit of <core.observabletest.OddObject object at 0x'), str(e))
++            expected = ignoreLineNumbers('''>> should not have raised Generator-Exception:
++Traceback (most recent call last):
++  File "%(__file__)s", line [#], in genExit
++    raise GeneratorExit('Exit!')
++GeneratorExit: Exit!
++''' % fileDict)
++            self.assertTrue(ignoreLineNumbers(str(e)).endswith(expected), str(e))
++            self.assertFunctionsOnTraceback(
++                'testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages',
++                'call_unknown',  # From Transparent, is supposed to be on the stack to aid retracing the path taken for a messages.
++                'handleNonGeneratorGeneratorExceptions')
++        else: self.fail('Should not happen')
++
++        # Verify logic implemented in all messages, with traceback-manipulation
++        for observableCallName, failMethod in [
++                    ('do', 'stopIter'),
++                    ('do', 'genExit'),
++                    ('any', 'stopIter'),
++                    ('any', 'genExit'),
++                    ('all', 'stopIter'),
++                    ('all', 'genExit'),
++                    ('once', 'stopIter'),
++                    ('once', 'genExit'),
++                ]:
++            try:
++                _ = getattr(getattr(root, observableCallName), failMethod)()
++                if observableCallName != 'do':
++                    list(compose(_))
++            except AssertionError, e:
++                self.assertTrue('should not have raised Generator-Exception:' in str(e), str(e))
++                expected = [
++                    'testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages',
++                    'handleNonGeneratorGeneratorExceptions',
++                ]
++                if observableCallName != 'once':
++                    expected[1:1] = '%s_unknown' % observableCallName,  # From Transparent, is supposed to be on the stack to aid retracing the path taken for a messages.
++                self.assertFunctionsOnTraceback(*expected)
++            else: self.fail('Should not happen')
++
+     def testNoLeakingGeneratorsInCycle(self):
+         class Responder(Observable):
+             def message(self):
+@@ -975,13 +1087,6 @@ class ObservableTest(TestCase):
+         self.assertEquals([], [m.name for m in observer1.calledMethods])
+         self.assertEquals(['message'], [m.name for m in observer2.calledMethods])
+ 
+-    def testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages(self):
+-        # any, all, do, call and once that is ...
+-        self.fail('todo')
+-
+-    def testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce(self):
+-        self.fail('todo')
+-
+     def assertFunctionsOnTraceback(self, *args):
+         na, na, tb = exc_info()
+         for functionName in args:
+@@ -1030,3 +1135,8 @@ class Responder(Observable):
+     def all_unknown(self, message, *args, **kwargs):
+         yield self._value
+ 
++
++from re import sub
++def ignoreLineNumbers(s):
++    return sub("line \d+,", "line [#],", s)
++
+diff --git a/weightless/core/_observable.py b/weightless/core/_observable.py
+index a1f402f..d526965 100644
+--- a/weightless/core/_observable.py
++++ b/weightless/core/_observable.py
+@@ -81,7 +81,7 @@ class Defer(object):
+ 
+ 
+ def handleNonGeneratorGeneratorExceptions(method, clazz, value, traceback):
+-    excStr = format_exception(clazz, value, traceback)
++    excStr = ''.join(format_exception(clazz, value, traceback))
+     raise AssertionError("Non-Generator %s should not have raised Generator-Exception:\n%s" % (methodOrMethodPartialStr(method), excStr))
+ 
+ class MessageBase(object):
+-- 
+1.7.2.5
+
+
+From e8934058199f57a8002e0e70bdf64a8ff5a4d0bc Mon Sep 17 00:00:00 2001
+From: Tom van der Sommen <tom@seecr.nl>
+Date: Tue, 14 May 2013 13:13:17 +0200
+Subject: [PATCH 6/6] TS: removed comments.
+
+---
+ weightless/core/_observable.py |   10 ++++------
+ 1 files changed, 4 insertions(+), 6 deletions(-)
+
+diff --git a/weightless/core/_observable.py b/weightless/core/_observable.py
+index d526965..dc6402a 100644
+--- a/weightless/core/_observable.py
++++ b/weightless/core/_observable.py
+@@ -100,7 +100,7 @@ class MessageBase(object):
+             try:
+                 try:
+                     result = method(*args, **kwargs)
+-                except (StopIteration, GeneratorExit):  #fail on illogical method-results for non-Generators
++                except (StopIteration, GeneratorExit):
+                     c, v, t = exc_info()
+                     handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
+                 self.verifyMethodResult(method, result)
+@@ -177,24 +177,22 @@ class OnceMessage(MessageBase):
+             except AttributeError:
+                 pass
+             else:
+-                try:  # Added for framework off-the-stacktrace
++                try:
+                     try:
+                         _ = methodResult = method(*args, **kwargs)
+-                    except (StopIteration, GeneratorExit):  #fail on illogical method-results for non-Generators
++                    except (StopIteration, GeneratorExit):
+                         c, v, t = exc_info()
+                         handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
+                     if isGeneratorOrComposed(methodResult):
+                         _ = yield methodResult
+                 except:
+                     c, v, t = exc_info(); raise c, v, t.tb_next
+-                # assert outside of removal to keep raising-file-line in the trace (for clarity) [ok?]
+                 assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
+             if isinstance(observer, Observable):
+-                try:  # Added for framework off-the-stacktrace
++                try:
+                     _ = yield self._callonce(observer._observers, args, kwargs, done)
+                 except:
+                     c, v, t = exc_info(); raise c, v, t.tb_next
+-                # assert outside of removal to keep raising-file-line in the trace (for clarity) [ok?]
+                 assert _ is None, "OnceMessage of %s returned '%s', but must always be None" % (self._defer._observable, _)
+ 
+ 
+-- 
+1.7.2.5
+
