@@ -100,7 +100,7 @@ class MessageBase(object):
             try:
                 try:
                     result = method(*args, **kwargs)
-                except (StopIteration, GeneratorExit):  #fail on illogical method-results for non-Generators
+                except (StopIteration, GeneratorExit):
                     c, v, t = exc_info()
                     handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
                 self.verifyMethodResult(method, result)
@@ -177,24 +177,22 @@ class OnceMessage(MessageBase):
             except AttributeError:
                 pass
             else:
-                try:  # Added for framework off-the-stacktrace
+                try:
                     try:
                         _ = methodResult = method(*args, **kwargs)
-                    except (StopIteration, GeneratorExit):  #fail on illogical method-results for non-Generators
+                    except (StopIteration, GeneratorExit):
                         c, v, t = exc_info()
                         handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
                     if isGeneratorOrComposed(methodResult):
                         _ = yield methodResult
                 except:
                     c, v, t = exc_info(); raise c, v, t.tb_next
-                # assert outside of removal to keep raising-file-line in the trace (for clarity) [ok?]
                 assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
             if isinstance(observer, Observable):
-                try:  # Added for framework off-the-stacktrace
+                try:
                     _ = yield self._callonce(observer._observers, args, kwargs, done)
                 except:
                     c, v, t = exc_info(); raise c, v, t.tb_next
-                # assert outside of removal to keep raising-file-line in the trace (for clarity) [ok?]
                 assert _ is None, "OnceMessage of %s returned '%s', but must always be None" % (self._defer._observable, _)
 
 
