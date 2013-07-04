@@ -1,28 +1,28 @@
 # -*- coding: utf-8 -*-
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2006-2010 Seek You Too (CQ2) http://www.cq2.nl
 # Copyright (C) 2011 Seecr http://seecr.nl
-# Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 from sys import exc_info
@@ -31,6 +31,7 @@ from functools import partial
 
 from weightless.core.compose import isGeneratorOrComposed
 
+from collections import defaultdict
 
 class NoneOfTheObserversRespond(Exception):
     """Must not be thrown anywhere outside of the Observable
@@ -57,25 +58,27 @@ class _DeclineMessage(Exception):
 DeclineMessage = _DeclineMessage()
 
 
-class Defer(object):
-    def __init__(self, observable, msgclass, filter=bool):
-        self._observable = observable
+class Defer(defaultdict):
+    def __init__(self, observers, msgclass, observable_repr):
+        __slots__ = ('_observers', '_msgclass')
+        self._observers = observers
         self._msgclass = msgclass
-        self._filter = filter
-
-    def observers(self):
-        return (o for o in self._observable.observers() if self._filter(o))
+        self._observable_repr = observable_repr
 
     def __getattr__(self, attr):
-        return self._msgclass(self, attr)
+        msg = self._msgclass(self._observers, attr, observable_repr=self._observable_repr)
+        setattr(self, attr, msg)
+        return msg
 
-    def __getitem__(self, target):
-        return Defer(self._observable, self._msgclass,
-                filter=lambda o: hasattr(o, "observable_name") and o.observable_name() == target)
+    def __missing__(self, target):
+        observers = (o for o in self._observers if hasattr(o, "observable_name") and o.observable_name() == target)
+        d = Defer(observers, self._msgclass, observable_repr=self._observable_repr)
+        self[target] = d
+        return d
 
     def unknown(self, message, *args, **kwargs):
         try:
-            return self._msgclass(self, message)(*args, **kwargs)
+            return self._msgclass(self._observers, message, observable_repr=self._observable_repr)(*args, **kwargs)
         except:
             c, v, t = exc_info(); raise c, v, t.tb_next
 
@@ -85,12 +88,13 @@ def handleNonGeneratorGeneratorExceptions(method, clazz, value, traceback):
     raise AssertionError("Non-Generator %s should not have raised Generator-Exception:\n%s" % (methodOrMethodPartialStr(method), excStr))
 
 class MessageBase(object):
-    def __init__(self, defer, message):
-        self._defer = defer
+    def __init__(self, observers, message, observable_repr):
+        self._observers = observers
         self._message = message
+        self._observable_repr = observable_repr
 
     def all(self, *args, **kwargs):
-        for observer in self._defer.observers():
+        for observer in self._observers:
             try: method = getattr(observer, self._message)
             except AttributeError:
                 try: 
@@ -123,7 +127,7 @@ class MessageBase(object):
             c, v, t = exc_info(); raise c, v, t.tb_next
         raise NoneOfTheObserversRespond(
                 unansweredMessage=self._message, 
-                nrOfObservers=len(list(self._defer.observers())))
+                nrOfObservers=len(list(self._observers)))
 
     def verifyMethodResult(self, method, result):
         assert isGeneratorOrComposed(result), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)
@@ -166,7 +170,7 @@ class DoMessage(MessageBase):
 class OnceMessage(MessageBase):
     def once(self, *args, **kwargs):
         done = set()
-        return self._callonce(self._defer.observers(), args, kwargs, done)
+        return self._callonce(self._observers, args, kwargs, done)
     __call__ = once
 
     def _callonce(self, observers, args, kwargs, done):
@@ -193,18 +197,21 @@ class OnceMessage(MessageBase):
                     _ = yield self._callonce(observer._observers, args, kwargs, done)
                 except:
                     c, v, t = exc_info(); raise c, v, t.tb_next
-                assert _ is None, "OnceMessage of %s returned '%s', but must always be None" % (self._defer._observable, _)
+                assert _ is None, "OnceMessage of %s returned '%s', but must always be None" % (self._observable_repr, _)
 
 
 class Observable(object):
     def __init__(self, name=None):
         self._name = name
         self._observers = []
-        self.all = Defer(self, AllMessage)
-        self.any = Defer(self, AnyMessage)
-        self.do = Defer(self, DoMessage)
-        self.call = Defer(self, CallMessage)
-        self.once = Defer(self, OnceMessage)
+        self.init_defers()
+
+    def init_defers(self):
+        self.all = Defer(self._observers, AllMessage, observable_repr=str(self))
+        self.any = Defer(self._observers, AnyMessage, observable_repr=str(self))
+        self.do = Defer(self._observers, DoMessage, observable_repr=str(self))
+        self.call = Defer(self._observers, CallMessage, observable_repr=str(self))
+        self.once = Defer(self._observers, OnceMessage, observable_repr=str(self))
 
     def observers(self):
         for observer in self._observers:
@@ -219,6 +226,7 @@ class Observable(object):
 
     def addObserver(self, observer):
         self._observers.append(observer)
+        self.init_defers()
 
     def addStrand(self, strand, helicesDone):
         for helix in strand:
