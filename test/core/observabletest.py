@@ -204,7 +204,7 @@ class ObservableTest(TestCase):
             raise StopIteration(1)
             yield
         oncedObservable = AnObservable()
-        mockedSelf = MockedOnceMessageSelf(observers=oncedObservable._observers, message='noRelevantMethodHere', observable_repr='AnObservableREPR(name=None)')
+        mockedSelf = MockedOnceMessageSelf(observers=oncedObservable._observers, message='noRelevantMethodHere', observable='AnObservableObject(name=None)')
         mockedSelf._callonce = retvalGen
 
         composed = compose(OnceMessage._callonce(mockedSelf, observers=[AnObservable()], args=(), kwargs={}, done=set()))
@@ -212,7 +212,7 @@ class ObservableTest(TestCase):
             composed.next()
             self.fail("Should not happen")
         except AssertionError, e:
-            self.assertEquals("OnceMessage of AnObservableREPR(name=None) returned '1', but must always be None", str(e))
+            self.assertEquals("OnceMessage of AnObservableObject(name=None) returned '1', but must always be None", str(e))
 
     def testAnyOrCallCallsFirstImplementer(self):
         class A(object):

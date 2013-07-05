@@ -59,26 +59,26 @@ DeclineMessage = _DeclineMessage()
 
 
 class Defer(defaultdict):
-    def __init__(self, observers, msgclass, observable_repr):
+    def __init__(self, observers, msgclass, observable):
         __slots__ = ('_observers', '_msgclass')
         self._observers = observers
         self._msgclass = msgclass
-        self._observable_repr = observable_repr
+        self._observable = observable
 
     def __getattr__(self, attr):
-        msg = self._msgclass(self._observers, attr, observable_repr=self._observable_repr)
+        msg = self._msgclass(self._observers, attr, observable=self._observable)
         setattr(self, attr, msg)
         return msg
 
     def __missing__(self, target):
         observers = (o for o in self._observers if hasattr(o, "observable_name") and o.observable_name() == target)
-        d = Defer(observers, self._msgclass, observable_repr=self._observable_repr)
+        d = Defer(observers, self._msgclass, observable=self._observable)
         self[target] = d
         return d
 
     def unknown(self, message, *args, **kwargs):
         try:
-            return self._msgclass(self._observers, message, observable_repr=self._observable_repr)(*args, **kwargs)
+            return self._msgclass(self._observers, message, observable=self._observable)(*args, **kwargs)
         except:
             c, v, t = exc_info(); raise c, v, t.tb_next
 
@@ -88,10 +88,10 @@ def handleNonGeneratorGeneratorExceptions(method, clazz, value, traceback):
     raise AssertionError("Non-Generator %s should not have raised Generator-Exception:\n%s" % (methodOrMethodPartialStr(method), excStr))
 
 class MessageBase(object):
-    def __init__(self, observers, message, observable_repr):
+    def __init__(self, observers, message, observable):
         self._observers = observers
         self._message = message
-        self._observable_repr = observable_repr
+        self._observable = observable
 
     def all(self, *args, **kwargs):
         for observer in self._observers:
@@ -197,7 +197,7 @@ class OnceMessage(MessageBase):
                     _ = yield self._callonce(observer._observers, args, kwargs, done)
                 except:
                     c, v, t = exc_info(); raise c, v, t.tb_next
-                assert _ is None, "OnceMessage of %s returned '%s', but must always be None" % (self._observable_repr, _)
+                assert _ is None, "OnceMessage of %s returned '%s', but must always be None" % (self._observable, _)
 
 
 class Observable(object):
@@ -207,11 +207,11 @@ class Observable(object):
         self.init_defers()
 
     def init_defers(self):
-        self.all = Defer(self._observers, AllMessage, observable_repr=str(self))
-        self.any = Defer(self._observers, AnyMessage, observable_repr=str(self))
-        self.do = Defer(self._observers, DoMessage, observable_repr=str(self))
-        self.call = Defer(self._observers, CallMessage, observable_repr=str(self))
-        self.once = Defer(self._observers, OnceMessage, observable_repr=str(self))
+        self.all = Defer(self._observers, AllMessage, observable=self)
+        self.any = Defer(self._observers, AnyMessage, observable=self)
+        self.do = Defer(self._observers, DoMessage, observable=self)
+        self.call = Defer(self._observers, CallMessage, observable=self)
+        self.once = Defer(self._observers, OnceMessage, observable=self)
 
     def observers(self):
         for observer in self._observers:
