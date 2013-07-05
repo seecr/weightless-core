@@ -33,10 +33,11 @@ from weightless.core.compose import isGeneratorOrComposed
 
 from collections import defaultdict
 
+
 class NoneOfTheObserversRespond(Exception):
     """Must not be thrown anywhere outside of the Observable
-    implementation. It is exposed only so that it can be caught in 
-    specific components, typically to be able to opt out of some 
+    implementation. It is exposed only so that it can be caught in
+    specific components, typically to be able to opt out of some
     received message by raising DeclineMessage."""
 
     def __init__(self, unansweredMessage, nrOfObservers):
@@ -44,15 +45,15 @@ class NoneOfTheObserversRespond(Exception):
 
 
 class _DeclineMessage(Exception):
-    """Should be thrown by a component that wishes to opt out of a 
+    """Should be thrown by a component that wishes to opt out of a
     message received through 'any' or 'call' that it can't or doesn't
     wish to handle after all.
-    
+
     One reason might be that none of this components' observers responds
-    to the message after being 'forwarded' (as signalled by a 
+    to the message after being 'forwarded' (as signalled by a
     NoneOfTheObserversRespond exception). For an example, please refer
     to the code of Transparent below.
-    
+
     The exception only ever needs a single instance. For convenience and
     aesthetics this single instance is named as a class."""
 DeclineMessage = _DeclineMessage()
@@ -60,7 +61,7 @@ DeclineMessage = _DeclineMessage()
 
 class Defer(defaultdict):
     def __init__(self, observers, msgclass, observable):
-        __slots__ = ('_observers', '_msgclass')
+        __slots__ = ('_observers', '_msgclass', '_observable')
         self._observers = observers
         self._msgclass = msgclass
         self._observable = observable
@@ -97,10 +98,10 @@ class MessageBase(object):
         for observer in self._observers:
             try: method = getattr(observer, self._message)
             except AttributeError:
-                try: 
+                try:
                     method = partial(getattr(observer, self.altname), self._message)
                 except AttributeError:
-                    continue 
+                    continue
             try:
                 try:
                     result = method(*args, **kwargs)
@@ -126,7 +127,7 @@ class MessageBase(object):
         except:
             c, v, t = exc_info(); raise c, v, t.tb_next
         raise NoneOfTheObserversRespond(
-                unansweredMessage=self._message, 
+                unansweredMessage=self._message,
                 nrOfObservers=len(list(self._observers)))
 
     def verifyMethodResult(self, method, result):
