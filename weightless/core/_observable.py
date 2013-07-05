@@ -71,7 +71,7 @@ class Defer(defaultdict):
         return msg
 
     def __missing__(self, target):
-        observers = (o for o in self._observers if hasattr(o, "observable_name") and o.observable_name() == target)
+        observers = [o for o in self._observers if hasattr(o, "observable_name") and o.observable_name() == target]
         d = Defer(observers, self._msgclass, observable=self._observable)
         self[target] = d
         return d

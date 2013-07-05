@@ -39,8 +39,9 @@ class ObservableDirectedMessagingTest(TestCase):
         observable.addObserver(A("name"))
 
         list(compose(observable.all["name"].method()))
+        list(compose(observable.all["name"].method()))
         
-        self.assertEquals(["A"], called)
+        self.assertEquals(["A", "A"], called)
 
     def testDeferredObjectsAreCached(self):
         observable = Observable()
