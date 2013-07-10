@@ -1118,6 +1118,24 @@ GeneratorExit: Exit!
         list(compose(observable.all.method()))
         self.assertEquals(['A', 'B'], called)
 
+    def testRelativeSpeedOfAll(self):
+        from time import time
+        class A(Observable):
+            def f(self):
+                raise StopIteration(None)
+                yield
+        root = Observable()
+        root.addObserver(A())
+        root.addObserver(A())
+        root.addObserver(A())
+        g = compose(root.all.f())
+        t0 = time()
+        for _ in g:
+            g.next()
+        t1 = time()
+        print t1 - t0
+        self.assertTrue((t1 - t0) < 1)
+
     def assertFunctionsOnTraceback(self, *args):
         na, na, tb = exc_info()
         for functionName in args:

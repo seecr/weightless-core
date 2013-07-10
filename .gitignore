@@ -1,3 +1,4 @@
 build
 weightless/core/compose/_compose_c.so
 deps.d
+*.pyo

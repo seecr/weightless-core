@@ -93,22 +93,28 @@ class MessageBase(object):
         self._observers = observers
         self._message = message
         self._observable = observable
+        self.findMethods(observers, message)
+
+    def findMethods(self, observers, msg):
+        methods = []
+        for o in observers:
+            try: method = getattr(o, msg)
+            except AttributeError:
+                try: method = partial(getattr(o, self.altname), msg)
+                except AttributeError: continue
+            methods.append(method)
+        self.methods = tuple(methods)
 
     def all(self, *args, **kwargs):
-        for observer in self._observers:
-            try: method = getattr(observer, self._message)
-            except AttributeError:
-                try:
-                    method = partial(getattr(observer, self.altname), self._message)
-                except AttributeError:
-                    continue
+        for method in self.methods:
             try:
                 try:
                     result = method(*args, **kwargs)
                 except (StopIteration, GeneratorExit):
                     c, v, t = exc_info()
                     handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
-                self.verifyMethodResult(method, result)
+                if __debug__:
+                    self.verifyMethodResult(method, result)
                 _ = yield result
             except _DeclineMessage:
                 continue
