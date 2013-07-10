@@ -1125,16 +1125,33 @@ GeneratorExit: Exit!
                 raise StopIteration(None)
                 yield
         root = Observable()
-        root.addObserver(A())
-        root.addObserver(A())
-        root.addObserver(A())
-        g = compose(root.all.f())
-        t0 = time()
-        for _ in g:
-            g.next()
-        t1 = time()
-        print t1 - t0
-        self.assertTrue((t1 - t0) < 1)
+        connector = Transparent()
+        root.addObserver(connector)
+        connector.addObserver(A())
+        connector.addObserver(A())
+        connector.addObserver(A())
+        connector.addObserver(A())
+        connector.addObserver(A())
+        connector.addObserver(A())
+        connector.addObserver(A())
+        t = 0.0
+        for _ in xrange(10000):
+            g = compose(root.all.f())
+            t0 = time()
+            for _ in g:
+                g.next()
+            t1 = time()
+            t += t1 - t0
+        print t
+
+        def f():
+            for _ in xrange(10000):
+                g = compose(root.all.f())
+                for _ in g:
+                    g.next()
+        #from hotshot import Profile
+        #p = Profile("profile.prof", lineevents=1, linetimings=1)
+        #p.runcall(f)
 
     def assertFunctionsOnTraceback(self, *args):
         na, na, tb = exc_info()

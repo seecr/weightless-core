@@ -65,6 +65,7 @@ class Defer(defaultdict):
         self._observers = observers
         self._msgclass = msgclass
         self._observable = observable
+        self._unknown_method_cache = {}
 
     def __getattr__(self, attr):
         msg = self._msgclass(self._observers, attr, observable=self._observable)
@@ -79,7 +80,12 @@ class Defer(defaultdict):
 
     def unknown(self, message, *args, **kwargs):
         try:
-            return self._msgclass(self._observers, message, observable=self._observable)(*args, **kwargs)
+            method = self._unknown_method_cache[message]
+        except KeyError:
+            method = self._msgclass(self._observers, message, observable=self._observable)
+            self._unknown_method_cache[message] = method
+        try:
+            return method(*args, **kwargs)
         except:
             c, v, t = exc_info(); raise c, v, t.tb_next
 
