@@ -34,9 +34,9 @@ from weightless.core._compose_py import compose as pyCompose
 from weightless.core._compose_py import Yield as pyYield
 from weightless.core._tostring_py import tostring as pyTostring
 try:
-    from weightless.core._compose_c import compose as cCompose
-    from weightless.core._compose_c import tostring as cTostring
-    from weightless.core._compose_c import Yield as cYield
+    from weightless.core.ext import compose as cCompose
+    from weightless.core.ext import tostring as cTostring
+    from weightless.core.ext import Yield as cYield
 except ImportError:
     pass
 

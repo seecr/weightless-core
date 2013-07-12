@@ -33,8 +33,8 @@ from weightless.core._local_py import local as pyLocal
 from weightless.core._compose_py import compose as pyCompose
 from weightless.core._tostring_py import tostring as pyTostring
 try:
-    from weightless.core._compose_c import local as cLocal, compose as cCompose
-    from weightless.core._compose_c import tostring as cTostring
+    from weightless.core.ext import local as cLocal, compose as cCompose
+    from weightless.core.ext import tostring as cTostring
 except ImportError:
     pass
 
@@ -1283,7 +1283,7 @@ class ComposeCTest(_ComposeTest):
             self.assertEquals("Generator already used.", str(e))
 
     def testSelftest(self):
-        from weightless.core._compose_c import _selftest
+        from weightless.core.ext import _selftest
         _selftest()
 
 

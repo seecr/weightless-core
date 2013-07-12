@@ -27,15 +27,16 @@ VERSION='$Version: x.y.z$'[9:-1].strip() # Modified by package scripts
 
 from types import GeneratorType, FunctionType
 
+print "Importing CORE"
 from os.path import dirname, abspath, isdir, join            #DO_NOT_DISTRIBUTE
 from sys import version_info                                 #DO_NOT_DISTRIBUTE
 pycmd = "python%s.%s" % version_info[:2]                     #DO_NOT_DISTRIBUTE
 _mydir = abspath(dirname(__file__))                          #DO_NOT_DISTRIBUTE
-_projectdir = dirname(dirname(dirname(_mydir)))              #DO_NOT_DISTRIBUTE
+_projectdir = dirname(dirname(_mydir))                       #DO_NOT_DISTRIBUTE
 if isdir(join(_mydir, '.svn')) or isdir(join(_projectdir, '.git')):  #DO_NOT_DISTRIBUTE
     from os import system                                    #DO_NOT_DISTRIBUTE
     status = system(                                         #DO_NOT_DISTRIBUTE
-        "cd %s/../../..; %s setup.py build_ext --inplace"    #DO_NOT_DISTRIBUTE
+        "cd %s/../..; %s setup.py build_ext --inplace"       #DO_NOT_DISTRIBUTE
         % (abspath(dirname(__file__)), pycmd))               #DO_NOT_DISTRIBUTE
     if status > 0:                                           #DO_NOT_DISTRIBUTE
         import sys                                           #DO_NOT_DISTRIBUTE
@@ -53,9 +54,10 @@ try:
     from os import getenv
     if getenv('WEIGHTLESS_COMPOSE_TEST') == 'PYTHON':
         raise ImportError('Python compose for testing purposes')
-    from _compose_c import compose as _compose, local, tostring, Yield
+    from ext import compose as _compose, local, tostring, Yield
     ComposeType = _compose
-except ImportError:
+except ImportError, e:
+    print e
     from warnings import warn
     warn("Using Python version of compose(), local() and tostring()", stacklevel=2)
     from _compose_py import compose as _compose, Yield

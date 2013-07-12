@@ -762,7 +762,7 @@ static PyCodeObject* create_empty_code(void) {
     return code;
 }
 
-PyMODINIT_FUNC init_compose_c(void) {
+PyMODINIT_FUNC initext(void) {
     PyObject* linecache = PyImport_ImportModule("linecache"); // new ref
 
     if(!linecache) {
@@ -803,7 +803,7 @@ PyMODINIT_FUNC init_compose_c(void) {
         return;
     }
 
-    PyObject* module = Py_InitModule3("_compose_c", compose_functionslist, "fast compose");
+    PyObject* module = Py_InitModule3("ext", compose_functionslist, "c compose and observable");
 
     if(!module) {
         Py_CLEAR(linecache);
