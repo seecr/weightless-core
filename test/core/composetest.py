@@ -1283,8 +1283,8 @@ class ComposeCTest(_ComposeTest):
             self.assertEquals("Generator already used.", str(e))
 
     def testSelftest(self):
-        from weightless.core.ext import _selftest
-        _selftest()
+        from weightless.core.ext import Compose_selftest
+        Compose_selftest()
 
 
 def gettypeerrormsg():

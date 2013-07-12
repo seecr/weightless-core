@@ -60,7 +60,9 @@ Weightless presents a way to implement data-processing programs, such as web-ser
     platforms=['cpython'],
     ext_modules=[
         Extension("weightless.core.ext", [
-            "weightless/core/_compose.c"
+            "weightless/core/_core.c",
+            "weightless/core/_compose.c",
+            "weightless/core/_observable.c"
             ],
         )
     ],
