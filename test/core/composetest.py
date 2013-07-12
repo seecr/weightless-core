@@ -38,7 +38,7 @@ try:
 except ImportError:
     pass
 
-from weightless.core import isGeneratorOrComposed
+from weightless.core import is_generator
 from inspect import currentframe
 from traceback import format_exc
 
@@ -1104,10 +1104,10 @@ class _ComposeTest(TestCase):
         def f():
             yield
 
-        self.assertTrue(isGeneratorOrComposed(f()))
-        self.assertTrue(isGeneratorOrComposed(compose(f())))
-        self.assertFalse(isGeneratorOrComposed(lambda: None))
-        self.assertFalse(isGeneratorOrComposed(None))
+        self.assertTrue(is_generator(f()))
+        self.assertTrue(is_generator(compose(f())))
+        self.assertFalse(is_generator(lambda: None))
+        self.assertFalse(is_generator(None))
 
     def testUnsuitableGeneratorTraceback(self):
         def f():

@@ -8,6 +8,10 @@ def m2():
     return "m2"
 def m3():
     raise DeclineMessage
+def m4(i, a=None):
+    return i
+def m5(i, a=None):
+    return a
 
 class Observable_C_Test(TestCase):
 
@@ -98,4 +102,9 @@ class Observable_C_Test(TestCase):
         g = AllGenerator((m1, m3, m2), (), {})
         r = list(g)
         self.assertEquals(["m1", "m2"], r)
+
+    def testArgs(self):
+        g = AllGenerator((m4, m5), (1,), {"a": "A"})
+        r = list(g)
+        self.assertEquals([1, "A"], r)
 

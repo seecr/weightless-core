@@ -29,7 +29,7 @@ from sys import exc_info
 from traceback import format_exception
 from functools import partial
 
-from weightless.core import isGeneratorOrComposed
+from weightless.core import is_generator
 
 from collections import defaultdict
 
@@ -143,7 +143,7 @@ class MessageBase(object):
                 nrOfObservers=len(list(self._observers)))
 
     def verifyMethodResult(self, method, result):
-        assert isGeneratorOrComposed(result), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)
+        assert is_generator(result), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)
 
 class AllMessage(MessageBase):
     altname = 'all_unknown'
@@ -200,7 +200,7 @@ class OnceMessage(MessageBase):
                     except (StopIteration, GeneratorExit):
                         c, v, t = exc_info()
                         handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
-                    if isGeneratorOrComposed(methodResult):
+                    if is_generator(methodResult):
                         _ = yield methodResult
                 except:
                     c, v, t = exc_info(); raise c, v, t.tb_next

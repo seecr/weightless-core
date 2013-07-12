@@ -54,26 +54,24 @@ try:
     from os import getenv
     if getenv('WEIGHTLESS_COMPOSE_TEST') == 'PYTHON':
         raise ImportError('Python compose for testing purposes')
-    from ext import compose as _compose, local, tostring, Yield
+    from ext import compose as _compose, local, tostring, Yield, is_generator
     ComposeType = _compose
 except ImportError, e:
-    print e
     from warnings import warn
     warn("Using Python version of compose(), local() and tostring()", stacklevel=2)
     from _compose_py import compose as _compose, Yield
     from _local_py import local
     from _tostring_py import tostring
     ComposeType = GeneratorType
-
-def isGeneratorOrComposed(o):
-    return type(o) is GeneratorType or type(o) is ComposeType
+    def is_generator(o):
+        return type(o) is GeneratorType
 
 def compose(X, *args, **kwargs):
     if type(X) == FunctionType: # compose used as decorator
         def helper(*args, **kwargs):
             return _compose(X(*args, **kwargs))
         return helper
-    elif type(X) in (GeneratorType, ComposeType):
+    elif is_generator(X):
         return _compose(X, *args, **kwargs)
     raise TypeError("compose() expects generator, got %s" % repr(X))
 
