@@ -29,14 +29,14 @@ from sys import stdout, exc_info, getrecursionlimit, version_info
 from types import GeneratorType
 
 from weightless.core import autostart, cpython
-from weightless.core.compose._compose_py import __file__ as  _compose_py_module_file
-from weightless.core.compose._compose_py import compose as pyCompose
-from weightless.core.compose._compose_py import Yield as pyYield
-from weightless.core.compose._tostring_py import tostring as pyTostring
+from weightless.core._compose_py import __file__ as  _compose_py_module_file
+from weightless.core._compose_py import compose as pyCompose
+from weightless.core._compose_py import Yield as pyYield
+from weightless.core._tostring_py import tostring as pyTostring
 try:
-    from weightless.core.compose._compose_c import compose as cCompose
-    from weightless.core.compose._compose_c import tostring as cTostring
-    from weightless.core.compose._compose_c import Yield as cYield
+    from weightless.core._compose_c import compose as cCompose
+    from weightless.core._compose_c import tostring as cTostring
+    from weightless.core._compose_c import Yield as cYield
 except ImportError:
     pass
 
@@ -374,7 +374,7 @@ class ComposeSchedulingPyTest(_ComposeSchedulingTest):
     def testYieldSentinel_Py(self):
         self.assertTrue(Yield is Yield)
         self.assertTrue(Yield == Yield)
-        self.assertEquals("<class 'weightless.core.compose._compose_py.Yield'>", repr(Yield))
+        self.assertEquals("<class 'weightless.core._compose_py.Yield'>", repr(Yield))
         self.assertEquals(type, type(Yield))
         try:
             Yield()

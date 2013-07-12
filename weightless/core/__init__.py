@@ -2,8 +2,8 @@
 # 
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
 # 
+# Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
 # Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# Copyright (C) 2011 Seek You Too (CQ2) http://www.cq2.nl
 # 
 # This file is part of "Weightless"
 # 
@@ -25,6 +25,22 @@
 
 VERSION='$Version: x.y.z$'[9:-1].strip() # Modified by package scripts
 
+from types import GeneratorType, FunctionType
+
+from os.path import dirname, abspath, isdir, join            #DO_NOT_DISTRIBUTE
+from sys import version_info                                 #DO_NOT_DISTRIBUTE
+pycmd = "python%s.%s" % version_info[:2]                     #DO_NOT_DISTRIBUTE
+_mydir = abspath(dirname(__file__))                          #DO_NOT_DISTRIBUTE
+_projectdir = dirname(dirname(dirname(_mydir)))              #DO_NOT_DISTRIBUTE
+if isdir(join(_mydir, '.svn')) or isdir(join(_projectdir, '.git')):  #DO_NOT_DISTRIBUTE
+    from os import system                                    #DO_NOT_DISTRIBUTE
+    status = system(                                         #DO_NOT_DISTRIBUTE
+        "cd %s/../../..; %s setup.py build_ext --inplace"    #DO_NOT_DISTRIBUTE
+        % (abspath(dirname(__file__)), pycmd))               #DO_NOT_DISTRIBUTE
+    if status > 0:                                           #DO_NOT_DISTRIBUTE
+        import sys                                           #DO_NOT_DISTRIBUTE
+        sys.exit(status)                                     #DO_NOT_DISTRIBUTE
+
 import platform
 if hasattr(platform, 'python_implementation'):
     cpython = platform.python_implementation() == "CPython"
@@ -33,7 +49,33 @@ elif hasattr(platform, 'system'):
 else:
     cpython = False
 
-from compose import compose, local, tostring, Yield
+try:
+    from os import getenv
+    if getenv('WEIGHTLESS_COMPOSE_TEST') == 'PYTHON':
+        raise ImportError('Python compose for testing purposes')
+    from _compose_c import compose as _compose, local, tostring, Yield
+    ComposeType = _compose
+except ImportError:
+    from warnings import warn
+    warn("Using Python version of compose(), local() and tostring()", stacklevel=2)
+    from _compose_py import compose as _compose, Yield
+    from _local_py import local
+    from _tostring_py import tostring
+    ComposeType = GeneratorType
+
+def isGeneratorOrComposed(o):
+    return type(o) is GeneratorType or type(o) is ComposeType
+
+def compose(X, *args, **kwargs):
+    if type(X) == FunctionType: # compose used as decorator
+        def helper(*args, **kwargs):
+            return _compose(X(*args, **kwargs))
+        return helper
+    elif type(X) in (GeneratorType, ComposeType):
+        return _compose(X, *args, **kwargs)
+    raise TypeError("compose() expects generator, got %s" % repr(X))
+
+#from compose import compose, local, tostring, Yield
 from utils import identify, autostart
 from _observable import Observable, Transparent, be, methodOrMethodPartialStr, NoneOfTheObserversRespond, DeclineMessage
 

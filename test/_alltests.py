@@ -41,7 +41,7 @@ sysPath.insert(0,'..')                            #DO_NOT_DISTRIBUTE
 from unittest import main
 from types import GeneratorType
 
-from weightless.core.compose import ComposeType
+from weightless.core import ComposeType
 if ComposeType == GeneratorType:
     from core.composetest import ComposePyTest
     from core.composeschedulingtest import ComposeSchedulingPyTest

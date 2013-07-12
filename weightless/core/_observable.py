@@ -29,7 +29,7 @@ from sys import exc_info
 from traceback import format_exception
 from functools import partial
 
-from weightless.core.compose import isGeneratorOrComposed
+from weightless.core import isGeneratorOrComposed
 
 from collections import defaultdict
 
