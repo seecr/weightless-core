@@ -31,7 +31,7 @@
 #include <frameobject.h>
 #include <structmember.h>
 
-
+#include "_core.h"
 
 ////////// Python Object and Type structures //////////
 
@@ -266,7 +266,7 @@ static PyObject* compose_new(PyObject* type, PyObject* args, PyObject* kwargs) {
                 args, kwargs, "O|O:compose", argnames,
                 &initial, &stepping)) return NULL;
 
-    if(!PyGen_Check(initial) && !PyCompose_Check(initial)) {
+    if(!is_generator(initial)) {
         PyErr_SetString(PyExc_TypeError, "compose() argument 1 must be generator");
         return NULL;
     }
@@ -319,7 +319,7 @@ static int generator_invalid(PyObject* gen) {
         frame = ((PyComposeObject*)gen)->frame;
         started = ((PyComposeObject*)gen)->started;
 
-    } else { // PyGenObject
+    } else { // PyGenObject TODO: add AllGenerator type!
         frame = ((PyGenObject*)gen)->gi_frame;
         started = frame && frame->f_lasti != -1;
     }
@@ -381,7 +381,7 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
         }
     
         if(response) { // normal response
-            if(PyGen_Check(response) || PyCompose_Check(response)) {
+            if(is_generator(response)) {
 
                 if(generator_invalid(response)) {
                     PyErr_Fetch(&exc_type, &exc_value, &exc_tb); // new refs
