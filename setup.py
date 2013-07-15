@@ -38,7 +38,6 @@ setup(
     packages=[
         'weightless', 
         'weightless.core', 
-        'weightless.core.compose', 
         'weightless.core.utils',
         'weightless.http', 
         'weightless.httpng', 
