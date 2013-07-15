@@ -108,3 +108,18 @@ class Observable_C_Test(TestCase):
         r = list(g)
         self.assertEquals([1, "A"], r)
 
+    def testAllGeneratorIsCallable(self):
+        g = AllGenerator((m1,), (), {})
+        r = g()
+        self.assertEquals("m1", r)
+        
+
+    def testAllGeneratorWithCompose(self):
+        from weightless.core import compose
+        def f1():
+            yield 3
+        def f2():
+            yield f1()
+        g = AllGenerator((f2,), (), {})
+        c = compose(g)
+        self.assertEquals([3], list(c))

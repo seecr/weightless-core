@@ -319,9 +319,13 @@ static int generator_invalid(PyObject* gen) {
         frame = ((PyComposeObject*)gen)->frame;
         started = ((PyComposeObject*)gen)->started;
 
-    } else { // PyGenObject TODO: add AllGenerator type!
+    } else if(PyGen_Check(gen)) {
         frame = ((PyGenObject*)gen)->gi_frame;
         started = frame && frame->f_lasti != -1;
+
+    } else { // AllGenerator
+        frame = 0x1; // fake
+        started = 0; //((PyAllGeneratorObject*)gen)->_i > 0;
     }
 
     if(!frame) {
@@ -670,8 +674,8 @@ PyObject* tostring(PyObject* self, PyObject* gen) {
 
 static PyMethodDef compose_methods[] = {
     {"send", (PyCFunction) compose_send,  METH_O,       "Send arg into composed generator." },
-    {"throw", (PyCFunction) compose_throw, METH_VARARGS, "Raise GeneratorExit in composed generator."},
-    {"close", (PyCFunction) compose_close, METH_NOARGS,  "Throws exception in composed generator."},
+    {"throw", (PyCFunction) compose_throw, METH_VARARGS, "Throws exception in composed generator."},
+    {"close", (PyCFunction) compose_close, METH_NOARGS,  "Raise GeneratorExit in composed gener    ator."},
     {NULL}	/* Sentinel */
 };
 

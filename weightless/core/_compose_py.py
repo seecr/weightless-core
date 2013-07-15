@@ -25,7 +25,7 @@
 
 from types import GeneratorType
 from sys import exc_info
-from weightless.core import cpython
+from weightless.core import cpython, is_generator
 
 """
 Wrt exceptions, see http://www.python.org/doc/2.5.4/lib/module-exceptions.html for Python 2.5:
@@ -64,7 +64,7 @@ class Yield(object):
         raise TypeError("cannot create 'Yield' instances")
 
 def compose(initial, stepping=False):
-    if type(initial) != GeneratorType:
+    if not is_generator(initial):
         raise TypeError("compose() expects generator")
     return _compose(initial, stepping)
 
@@ -99,7 +99,7 @@ def _compose(initial, stepping):
             else:
                 message = messages.pop(0)
                 response = generator.send(message)
-            if type(response) is GeneratorType:
+            if is_generator(response):
                 generators.append(response)
                 frame = response.gi_frame
                 if cpython: assert frame, 'Generator is exhausted.' 

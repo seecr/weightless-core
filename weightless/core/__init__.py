@@ -59,12 +59,12 @@ try:
 except ImportError, e:
     from warnings import warn
     warn("Using Python version of compose(), local() and tostring()", stacklevel=2)
+    def is_generator(o):
+        return type(o) is GeneratorType
     from _compose_py import compose as _compose, Yield
     from _local_py import local
     from _tostring_py import tostring
     ComposeType = GeneratorType
-    def is_generator(o):
-        return type(o) is GeneratorType
 
 def compose(X, *args, **kwargs):
     if type(X) == FunctionType: # compose used as decorator

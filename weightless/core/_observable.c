@@ -117,6 +117,10 @@ static PyObject* allgenerator_iternext(PyObject* _self) {
     return r;
 }
 
+static PyObject* allgenerator_call(PyObject* self, PyObject* args, PyObject* kwargs) {
+    return allgenerator_iternext(self);
+}
+
 static PyObject* allgenerator_send(PyAllGeneratorObject* self, PyObject* arg) {
     if(arg != Py_None) {
         if(self->_i == 0)
@@ -133,16 +137,26 @@ static PyObject* allgenerator_send(PyAllGeneratorObject* self, PyObject* arg) {
 }
 
 static PyObject* allgenerator_throw(PyAllGeneratorObject* self, PyObject* arg) {
-    if (PyErr_GivenExceptionMatches(arg, Exc_DeclineMessage)) {
+    PyObject* exc_type = NULL, *exc_value = NULL, *exc_tb = NULL;
+
+    if(!PyArg_ParseTuple(arg, "O|OO", &exc_type, &exc_value, &exc_tb)) //borrowed refs
+        return NULL;
+
+    if(PyExceptionInstance_Check(exc_type)) { // e.g. throw(Exception())
+        exc_value = exc_type;
+        exc_type = PyExceptionInstance_Class(exc_type); // borrowed ref
+    }
+
+    if (PyErr_GivenExceptionMatches(exc_type, Exc_DeclineMessage)) {
         self->_i++;
         return allgenerator_iternext((PyObject*) self);
     }
-    PyErr_SetObject(PyObject_Type(arg), arg);
+    PyErr_SetObject(exc_type, exc_value);
     return NULL;
 }
 
 static PyObject* allgenerator_close(PyAllGeneratorObject* self) {
-    allgenerator_clear(self);
+    allgenerator_clear((PyObject*)self);
     self->_i = 0;
     Py_RETURN_NONE;
 }
@@ -181,7 +195,7 @@ static PyObject* allgenerator_new(PyObject* type, PyObject* args, PyObject* kwar
 
 static PyMethodDef allgenerator_methods[] = {
     {"send", (PyCFunction) allgenerator_send,  METH_O, "generator send" },
-    {"throw", (PyCFunction) allgenerator_throw,  METH_O, "generator throw" },
+    {"throw", (PyCFunction) allgenerator_throw,  METH_VARARGS, "generator throw" },
     {"close", (PyCFunction) allgenerator_close,  METH_NOARGS, "generator close" },
     {NULL}
 };
@@ -202,7 +216,7 @@ PyTypeObject PyAllGenerator_Type = {
     0,                                  /*tp_as_sequence*/
     0,                                  /*tp_as_mapping*/
     0,                                  /*tp_hash */
-    0,                                  /*tp_call*/
+    allgenerator_call,                  /*tp_call*/
     0,                                  /*tp_str*/
     0,                                  /*tp_getattro*/
     0,                                  /*tp_setattro*/
