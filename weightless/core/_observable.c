@@ -160,6 +160,20 @@ static PyObject* allgenerator_close(PyAllGeneratorObject* self) {
     Py_RETURN_NONE;
 }
 
+static PyObject* _allgenerator_new(PyObject* methods, PyObject* args, PyObject* kwargs) {
+    PyAllGeneratorObject* all = PyObject_GC_New(PyAllGeneratorObject, &PyAllGenerator_Type);
+
+    if(all == NULL)
+        return NULL;
+
+    all->_methods = methods; Py_INCREF(all->_methods);
+    all->_args = args; Py_INCREF(all->_args);
+    all->_kwargs = kwargs; Py_INCREF(all->_kwargs);
+    all->_i = -1;
+
+    PyObject_GC_Track(all);
+    return (PyObject*) all;
+}
 
 static PyObject* allgenerator_new(PyObject* type, PyObject* args, PyObject* kwargs) {
     static char* argnames[] = {"methods", "args", "kwargs", NULL};
@@ -173,19 +187,7 @@ static PyObject* allgenerator_new(PyObject* type, PyObject* args, PyObject* kwar
                 &PyTuple_Type, &all_args,
                 &PyDict_Type, &all_kwargs)) return NULL;
 
-    PyAllGeneratorObject* all = PyObject_GC_New(PyAllGeneratorObject, &PyAllGenerator_Type);
-
-    if(all == NULL)
-        return NULL;
-
-
-    all->_methods = methods; Py_INCREF(all->_methods);
-    all->_args = all_args; Py_INCREF(all->_args);
-    all->_kwargs = all_kwargs; Py_INCREF(all->_kwargs);
-    all->_i = -1;
-
-    PyObject_GC_Track(all);
-    return (PyObject*) all;
+    return _allgenerator_new(methods, all_args, all_kwargs);
 }
 
 ////////// Python Types //////////

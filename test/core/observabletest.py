@@ -1182,9 +1182,9 @@ GeneratorExit: Exit!
                 g = compose(root.all.f())
                 for _ in g:
                     g.next()
-        #from hotshot import Profile
-        #p = Profile("profile.prof", lineevents=1, linetimings=1)
-        #p.runcall(f)
+        from hotshot import Profile
+        p = Profile("profile.prof", lineevents=1, linetimings=1)
+        p.runcall(f)
 
     def assertFunctionsOnTraceback(self, *args):
         na, na, tb = exc_info()
