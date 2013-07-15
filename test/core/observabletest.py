@@ -34,16 +34,23 @@ from traceback import format_tb
 from inspect import isframe, getframeinfo
 from types import GeneratorType
 from functools import partial
-from weightless.core import compose, Yield, Observable, Transparent, be, tostring, NoneOfTheObserversRespond, DeclineMessage
+from weightless.core import compose, Yield, Observable, Transparent, be, tostring, NoneOfTheObserversRespond, DeclineMessage, cextension
 from weightless.core._observable import AllMessage, AnyMessage, DoMessage, OnceMessage
 from unittest import TestCase
 from seecr.test import CallTrace
-
 
 fileDict = {
     '__file__' : __file__.replace(".pyc", ".py")
 }
 
+class Noop(object):
+    pass
+
+def skip_if(condition):
+    def do_not_skip(test): return test
+    def do_skip(test): 
+        return Noop()
+    return do_skip if condition else do_not_skip
 
 class ObservableTest(TestCase):
     def testAllWithoutImplementers(self):
@@ -109,6 +116,7 @@ class ObservableTest(TestCase):
         r = compose(root.all.unknownmessage(1, two=2)).next()
         self.assertEquals((('unknownmessage', 1), {'two': 2}), r)
 
+    @skip_if(cextension)
     def testAllAssertsNoneReturnValues(self):
         class A(object):
             def f(self):
@@ -133,6 +141,7 @@ class ObservableTest(TestCase):
             self.assertTrue("<bound method A.all_unknown of <core.observabletest.A object at 0x" in str(e), str(e))
             self.assertTrue(">> returned '2'" in str(e), str(e))
 
+    @skip_if(cextension)
     def testAllAssertsResultOfCallIsGeneratorOrComposed(self):
         class A(object):
             def f(self):
@@ -157,6 +166,7 @@ class ObservableTest(TestCase):
             self.assertTrue("<bound method A.all_unknown of <core.observabletest.A object at 0x" in str(e), str(e))
             self.assertTrue(">> should have resulted in a generator." in str(e), str(e))
 
+    @skip_if(cextension)
     def testOnceAssertsNoneReturnValues(self):
         # OnceMessage assertion on None: #1a "normal object"
         class AnObject(object):
@@ -269,6 +279,7 @@ class ObservableTest(TestCase):
         except StopIteration, e:
             self.assertEquals(('retval',), e.args)
 
+    @skip_if(cextension)
     def testAnyAssertsResultOfCallIsGeneratorOrComposed(self):
         class A(object):
             def f(self):
@@ -334,6 +345,7 @@ class ObservableTest(TestCase):
         root.do.f()
         self.assertEquals([('f', (), {})], called)
 
+    @skip_if(cextension)
     def testDoAssertsIndividualCallsReturnNone(self):
         class A(object):
             def f(self):
@@ -522,6 +534,7 @@ class ObservableTest(TestCase):
         except StopIteration, e:
             self.assertEquals((5,), e.args)
 
+    @skip_if(cextension)
     def testTransparentUnknownImplementationIsVisibleOnTraceback(self):
         class Leaf(Observable):
             def aCall(self):
@@ -843,6 +856,7 @@ class ObservableTest(TestCase):
         else:
             self.fail('Should not happen')
 
+    @skip_if(cextension)
     def testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages(self):
         # any, all, do, call and once
         class OddObject(object):
@@ -1020,6 +1034,25 @@ GeneratorExit: Exit!
             self.fail("should not get here")
         except AttributeError, e:
             self.assertEquals("'GetAttr' object has no attribute 'doesnotexist'", str(e))
+
+    def testThrow(self):
+        class A(Observable):
+            def f1(self):
+                yield "A:f1-1"
+                yield "A:f1-2"
+                yield "A:f1-3"
+        class B(Observable):
+            def f1(self):
+                yield "B:f1-1"
+                yield "B:f1-2"
+                yield "B:f1-3"
+        root = Observable()
+        root.addObserver(A())
+        root.addObserver(B())
+        g = compose(root.all.f1())
+        g.next()
+        r = g.throw(DeclineMessage)
+        self.assertEquals("B:f1-1", r)
 
     def testRaisingDeclineMessageResultsInCallOnNextObservable(self):
         class SemiTransparent(Observable):

@@ -29,7 +29,10 @@ from sys import exc_info
 from traceback import format_exception
 from functools import partial
 
-from weightless.core import is_generator
+from weightless.core import is_generator, DeclineMessage, cextension
+
+if cextension:
+    from weightless.core.ext import AllGenerator
 
 from collections import defaultdict
 
@@ -42,22 +45,6 @@ class NoneOfTheObserversRespond(Exception):
 
     def __init__(self, unansweredMessage, nrOfObservers):
         Exception.__init__(self, 'None of the %d observers respond to %s(...)' % (nrOfObservers, unansweredMessage))
-
-
-class _DeclineMessage(Exception):
-    """Should be thrown by a component that wishes to opt out of a
-    message received through 'any' or 'call' that it can't or doesn't
-    wish to handle after all.
-
-    One reason might be that none of this components' observers responds
-    to the message after being 'forwarded' (as signalled by a
-    NoneOfTheObserversRespond exception). For an example, please refer
-    to the code of Transparent below.
-
-    The exception only ever needs a single instance. For convenience and
-    aesthetics this single instance is named as a class."""
-DeclineMessage = _DeclineMessage()
-
 
 class Defer(defaultdict):
     def __init__(self, observers, msgclass, observable):
@@ -111,22 +98,27 @@ class MessageBase(object):
             methods.append(method)
         self.methods = tuple(methods)
 
-    def all(self, *args, **kwargs):
-        for method in self.methods:
-            try:
+    if cextension:
+        def all(self, *args, **kwargs):
+            return AllGenerator(self.methods, args, kwargs)
+
+    else:
+        def all(self, *args, **kwargs):
+            for method in self.methods:
                 try:
-                    result = method(*args, **kwargs)
-                except (StopIteration, GeneratorExit):
-                    c, v, t = exc_info()
-                    handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
-                if __debug__:
-                    self.verifyMethodResult(method, result)
-                _ = yield result
-            except _DeclineMessage:
-                continue
-            except:
-                c, v, t = exc_info(); raise c, v, t.tb_next
-            assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
+                    try:
+                        result = method(*args, **kwargs)
+                    except (StopIteration, GeneratorExit):
+                        c, v, t = exc_info()
+                        handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
+                    if __debug__:
+                        self.verifyMethodResult(method, result)
+                    _ = yield result
+                except DeclineMessage:
+                    continue
+                except:
+                    c, v, t = exc_info(); raise c, v, t.tb_next
+                assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
 
     def any(self, *args, **kwargs):
         try:
@@ -134,7 +126,7 @@ class MessageBase(object):
                 try:
                     result = yield r
                     raise StopIteration(result)
-                except _DeclineMessage:
+                except DeclineMessage:
                     continue
         except:
             c, v, t = exc_info(); raise c, v, t.tb_next

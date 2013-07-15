@@ -96,6 +96,7 @@ class Observable_C_Test(TestCase):
 
     def testDeclineMessage(self):
         g = AllGenerator((m1, m2), (), {})
+        g.next()
         r = g.throw(DeclineMessage) # effectively skips one result
         self.assertEquals("m2", r)
 

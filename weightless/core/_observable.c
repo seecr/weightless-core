@@ -80,10 +80,10 @@ static void allgenerator_dealloc(PyObject* self) {
 PyObject* Exc_DeclineMessage;
 
 PyObject* _get_next_value(int* i, PyObject* methods, PyObject* args, PyObject* kwargs) {
-    while(methods && (*i < PyTuple_GET_SIZE(methods))) {
+    while(methods && ((*i)++ < PyTuple_GET_SIZE(methods) -1)) {
         PyObject* m = PyTuple_GET_ITEM(methods, *i);  // borrowed ref
         PyObject* r = PyObject_Call(m, args, kwargs);  // new ref
-        (*i)++;
+        //(*i)++;
         if(r)
             return r;
         if(PyErr_ExceptionMatches(Exc_DeclineMessage))
@@ -123,9 +123,9 @@ static PyObject* allgenerator_call(PyObject* self, PyObject* args, PyObject* kwa
 
 static PyObject* allgenerator_send(PyAllGeneratorObject* self, PyObject* arg) {
     if(arg != Py_None) {
-        if(self->_i == 0)
+        if(self->_i == -1)
             return PyErr_Format(PyExc_TypeError, "can't send non-None value to a just-started generator");
-        PyObject* pa = PyObject_Str(PyTuple_GET_ITEM(self->_methods, self->_i-1));
+        PyObject* pa = PyObject_Str(PyTuple_GET_ITEM(self->_methods, self->_i));
         PyObject* pb = PyObject_Str(arg);
         PyObject* r = PyErr_Format(PyExc_AssertionError, "%s returned '%s'",
                 PyString_AsString(pa), PyString_AsString(pb));
@@ -148,7 +148,6 @@ static PyObject* allgenerator_throw(PyAllGeneratorObject* self, PyObject* arg) {
     }
 
     if (PyErr_GivenExceptionMatches(exc_type, Exc_DeclineMessage)) {
-        self->_i++;
         return allgenerator_iternext((PyObject*) self);
     }
     PyErr_SetObject(exc_type, exc_value);
@@ -157,7 +156,7 @@ static PyObject* allgenerator_throw(PyAllGeneratorObject* self, PyObject* arg) {
 
 static PyObject* allgenerator_close(PyAllGeneratorObject* self) {
     allgenerator_clear((PyObject*)self);
-    self->_i = 0;
+    self->_i = -1;
     Py_RETURN_NONE;
 }
 
@@ -183,7 +182,7 @@ static PyObject* allgenerator_new(PyObject* type, PyObject* args, PyObject* kwar
     all->_methods = methods; Py_INCREF(all->_methods);
     all->_args = all_args; Py_INCREF(all->_args);
     all->_kwargs = all_kwargs; Py_INCREF(all->_kwargs);
-    all->_i = 0;
+    all->_i = -1;
 
     PyObject_GC_Track(all);
     return (PyObject*) all;
@@ -203,7 +202,7 @@ static PyMethodDef allgenerator_methods[] = {
 PyTypeObject PyAllGenerator_Type = {
     PyObject_HEAD_INIT(&PyType_Type)
     0,                                  /*ob_size*/
-    "_AllGenerator",                    /*tp_name*/
+    "AllGenerator",                    /*tp_name*/
     sizeof(PyAllGeneratorObject),       /*tp_basicsize*/
     0,                                  /*tp_itemsize*/
     (destructor)allgenerator_dealloc,   /*tp_dealloc*/
@@ -256,7 +255,7 @@ int module_add_object(PyObject* module, const char* name, PyObject* obj) {
     
 int init_observable(PyObject* module) {
 
-    Exc_DeclineMessage = PyErr_NewException("weightless.core._DeclineMessage", NULL, NULL);
+    Exc_DeclineMessage = PyErr_NewException("weightless.core.DeclineMessage", NULL, NULL);
     if(!Exc_DeclineMessage) {
         PyErr_Print();
         return 1;

@@ -54,16 +54,20 @@ try:
     from os import getenv
     if getenv('WEIGHTLESS_COMPOSE_TEST') == 'PYTHON':
         raise ImportError('Python compose for testing purposes')
-    from ext import compose as _compose, local, tostring, Yield, is_generator
+    from ext import compose as _compose, local, tostring, Yield, is_generator, DeclineMessage
+    cextension = True
     ComposeType = _compose
 except ImportError, e:
     from warnings import warn
     warn("Using Python version of compose(), local() and tostring()", stacklevel=2)
     def is_generator(o):
         return type(o) is GeneratorType
+    class DeclineMessage(Exception):
+        pass
     from _compose_py import compose as _compose, Yield
     from _local_py import local
     from _tostring_py import tostring
+    cextension = False
     ComposeType = GeneratorType
 
 def compose(X, *args, **kwargs):
@@ -77,5 +81,5 @@ def compose(X, *args, **kwargs):
 
 #from compose import compose, local, tostring, Yield
 from utils import identify, autostart
-from _observable import Observable, Transparent, be, methodOrMethodPartialStr, NoneOfTheObserversRespond, DeclineMessage
+from _observable import Observable, Transparent, be, methodOrMethodPartialStr, NoneOfTheObserversRespond
 

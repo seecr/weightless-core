@@ -325,7 +325,7 @@ static int generator_invalid(PyObject* gen) {
 
     } else { // AllGenerator
         frame = 0x1; // fake
-        started = 0; //((PyAllGeneratorObject*)gen)->_i > 0;
+        started = 0; // ((PyAllGeneratorObject*)gen)->_i > -1;
     }
 
     if(!frame) {
