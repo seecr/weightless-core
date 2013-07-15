@@ -150,7 +150,13 @@ static PyObject* allgenerator_throw(PyAllGeneratorObject* self, PyObject* arg) {
     if (PyErr_GivenExceptionMatches(exc_type, Exc_DeclineMessage)) {
         return allgenerator_iternext((PyObject*) self);
     }
-    PyErr_Restore(exc_type, exc_value, exc_tb);
+    if(exc_tb) {
+        Py_INCREF(exc_type);
+        Py_INCREF(exc_value);
+        Py_INCREF(exc_tb);
+        PyErr_Restore(exc_type, exc_value, exc_tb); // steals object refs
+    } else
+        PyErr_SetObject(exc_type, exc_value);
     return NULL;
 }
 
