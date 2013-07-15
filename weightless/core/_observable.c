@@ -150,7 +150,7 @@ static PyObject* allgenerator_throw(PyAllGeneratorObject* self, PyObject* arg) {
     if (PyErr_GivenExceptionMatches(exc_type, Exc_DeclineMessage)) {
         return allgenerator_iternext((PyObject*) self);
     }
-    PyErr_SetObject(exc_type, exc_value);
+    PyErr_Restore(exc_type, exc_value, exc_tb);
     return NULL;
 }
 

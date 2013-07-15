@@ -43,13 +43,11 @@ fileDict = {
     '__file__' : __file__.replace(".pyc", ".py")
 }
 
-class Noop(object):
-    pass
 
 def skip_if(condition):
+    class Noop(object): pass
     def do_not_skip(test): return test
-    def do_skip(test): 
-        return Noop()
+    def do_skip(test): return Noop()
     return do_skip if condition else do_not_skip
 
 class ObservableTest(TestCase):
@@ -116,7 +114,6 @@ class ObservableTest(TestCase):
         r = compose(root.all.unknownmessage(1, two=2)).next()
         self.assertEquals((('unknownmessage', 1), {'two': 2}), r)
 
-    @skip_if(cextension)
     def testAllAssertsNoneReturnValues(self):
         class A(object):
             def f(self):
@@ -138,8 +135,9 @@ class ObservableTest(TestCase):
             g.next()
             self.fail("Should not happen")
         except AssertionError, e:
-            self.assertTrue("<bound method A.all_unknown of <core.observabletest.A object at 0x" in str(e), str(e))
-            self.assertTrue(">> returned '2'" in str(e), str(e))
+            self.assertTrue("> returned '2'" in str(e), str(e))
+            if not cextension:
+                self.assertTrue("<bound method A.all_unknown of <core.observabletest.A object at 0x" in str(e), str(e))
 
     @skip_if(cextension)
     def testAllAssertsResultOfCallIsGeneratorOrComposed(self):
@@ -166,7 +164,6 @@ class ObservableTest(TestCase):
             self.assertTrue("<bound method A.all_unknown of <core.observabletest.A object at 0x" in str(e), str(e))
             self.assertTrue(">> should have resulted in a generator." in str(e), str(e))
 
-    @skip_if(cextension)
     def testOnceAssertsNoneReturnValues(self):
         # OnceMessage assertion on None: #1a "normal object"
         class AnObject(object):
@@ -534,7 +531,6 @@ class ObservableTest(TestCase):
         except StopIteration, e:
             self.assertEquals((5,), e.args)
 
-    @skip_if(cextension)
     def testTransparentUnknownImplementationIsVisibleOnTraceback(self):
         class Leaf(Observable):
             def aCall(self):
@@ -1182,9 +1178,9 @@ GeneratorExit: Exit!
                 g = compose(root.all.f())
                 for _ in g:
                     g.next()
-        from hotshot import Profile
-        p = Profile("profile.prof", lineevents=1, linetimings=1)
-        p.runcall(f)
+        #from hotshot import Profile
+        #p = Profile("profile.prof", lineevents=1, linetimings=1)
+        #p.runcall(f)
 
     def assertFunctionsOnTraceback(self, *args):
         na, na, tb = exc_info()
