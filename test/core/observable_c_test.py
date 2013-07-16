@@ -1,6 +1,8 @@
 from unittest import TestCase
 from types import GeneratorType
+from weightless.core import Observable, compose, local
 from weightless.core.ext import AllGenerator, DeclineMessage
+
 
 def m1():
     return "m1"
@@ -124,3 +126,19 @@ class Observable_C_Test(TestCase):
         g = AllGenerator((f2,), (), {})
         c = compose(g)
         self.assertEquals([3], list(c))
+
+    def testAllGeneratorWithLocal(self):
+        class B(Observable):
+            def f(self):
+                aLocal = 42
+                yield self.all.f()
+        class A(Observable):
+            def f(self):
+                v = local("aLocal")
+                yield v
+        a = A()
+        b = B()
+        b.addObserver(a)
+        g = compose(b.f())
+        r = list(g)
+        self.assertEquals([42], r)

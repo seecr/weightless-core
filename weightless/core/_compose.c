@@ -540,6 +540,8 @@ PyObject* find_local_in_compose(PyComposeObject* cmps, PyObject* name) {
     PyObject** generator = cmps->generators_top;
 
     while(--generator >= cmps->generators_base) {
+        if(PyAllGenerator_Check(*generator))
+            continue;
         if(PyGen_Check(*generator)) {
             PyObject* result = find_local_in_locals(((PyGenObject*) * generator)->gi_frame, name);
 
