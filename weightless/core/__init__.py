@@ -27,7 +27,6 @@ VERSION='$Version: x.y.z$'[9:-1].strip() # Modified by package scripts
 
 from types import GeneratorType, FunctionType
 
-print "Importing CORE"
 from os.path import dirname, abspath, isdir, join            #DO_NOT_DISTRIBUTE
 from sys import version_info                                 #DO_NOT_DISTRIBUTE
 pycmd = "python%s.%s" % version_info[:2]                     #DO_NOT_DISTRIBUTE
