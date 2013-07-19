@@ -245,12 +245,12 @@ class Reactor(object):
             try:
                 select([sok], [], [], 0)
             except:
-                del self._readers[sok]
+                self._readers.pop(sok).callback()
                 return
         for sok in self._writers:
             try:
                 select([], [sok], 0)
             except:
-                del self._writers[sok]
+                self._writers.pop(sok).callback()
                 return
 

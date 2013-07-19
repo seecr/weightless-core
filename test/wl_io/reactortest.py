@@ -313,9 +313,9 @@ class ReactorTest(WeightlessTestCase):
         self.timeout = False
         def timeout():
             self.timeout = True
-        reactor.addReader(99, None) # broken
-        reactor.addWriter(99, None) # broken
-        reactor.addReader(BadSocket(), None) # even more broken
+        reactor.addReader(99, lambda: None) # broken
+        reactor.addWriter(99, lambda: None) # broken
+        reactor.addReader(BadSocket(), lambda: None) # even more broken
         reactor.addTimer(0.01, timeout)
         with self.stderr_replaced() as s:
             for i in range(10):
@@ -332,15 +332,21 @@ class ReactorTest(WeightlessTestCase):
         reactor = Reactor()
         sok = socket()
         sok.close()
-        reactor.addReader(sok, None)
+        callbacks = []
+        def callback():
+            callbacks.append(True)
+        reactor.addReader(sok, callback)
+        reactor.addWriter(sok, callback)
         with self.stderr_replaced() as s:
+            reactor.step()
             reactor.step()
             self.assertTrue("Bad file descriptor" in s.getvalue(), s.getvalue())
         self.assertEquals({}, reactor._readers)
+        self.assertEquals([True, True], callbacks)
 
     def testDoNotDieButLogOnProgrammingErrors(self):
         reactor = Reactor()
-        reactor.addReader('not a sok', None)
+        reactor.addReader('not a sok', lambda: None)
         try:
             sys.stderr = StringIO()
             reactor.step()
