@@ -1147,7 +1147,7 @@ GeneratorExit: Exit!
         list(compose(observable.all.method()))
         self.assertEquals(['A', 'B'], called)
 
-    def testRelativeSpeedOfAll(self):
+    def xxtestRelativeSpeedOfAll(self):
         from time import time
         class A(Observable):
             def f(self):

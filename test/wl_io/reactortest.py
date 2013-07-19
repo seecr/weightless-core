@@ -1,26 +1,26 @@
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 #
@@ -37,7 +37,7 @@ from StringIO import StringIO
 from weightlesstestcase import WeightlessTestCase
 from weightless.core.utils import identify
 from weightless.io import Reactor
-from socket import socketpair, error
+from socket import socketpair, error, socket
 
 class ReactorTest(WeightlessTestCase):
 
@@ -327,6 +327,16 @@ class ReactorTest(WeightlessTestCase):
         self.assertEquals({}, reactor._readers)
         self.assertEquals({}, reactor._writers)
         self.assertEquals([], reactor._timers)
+
+    def testGetRidOfClosedSocket(self):
+        reactor = Reactor()
+        sok = socket()
+        sok.close()
+        reactor.addReader(sok, None)
+        with self.stderr_replaced() as s:
+            reactor.step()
+            self.assertTrue("Bad file descriptor" in s.getvalue(), s.getvalue())
+        self.assertEquals({}, reactor._readers)
 
     def testDoNotDieButLogOnProgrammingErrors(self):
         reactor = Reactor()
