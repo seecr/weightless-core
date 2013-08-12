@@ -52,11 +52,6 @@ class Timer(Context):
         assert seconds >= 0, 'Timeout must be >= 0. It was %s.' % seconds
         self.time = time() + seconds
 
-    def __cmp__(self, rhs):
-        if not rhs:
-            return 1
-        return cmp(self.time, rhs.time)
-
 
 class Reactor(object):
     """This Reactor allows applications to be notified of read, write or time events.  The callbacks being executed can contain instructions to modify the reader, writers and timers in the reactor.  Additions of new events are effective with the next step() call, removals are effective immediately, even if the actual event was already trigger, but the handler wat not called yet."""
@@ -96,7 +91,7 @@ class Reactor(object):
         """Add a timer that calls callback() after the specified number of seconds. Afterwards, the timer is deleted.  It returns a token for removeTimer()."""
         timer = Timer(seconds, callback)
         self._timers.append(timer)
-        self._timers.sort()
+        self._timers.sort(cmp=lambda lhs, rhs: 1 if not rhs else cmp(lhs.time, rhs.time))
         return timer
 
     def removeReader(self, sok):
@@ -136,9 +131,9 @@ class Reactor(object):
 
     def shutdown(self):
         for contextDict in [
-            self._readers, 
-            self._writers, 
-            self._processes, 
+            self._readers,
+            self._writers,
+            self._processes,
             self._suspended
         ]:
             for handle in contextDict.keys():

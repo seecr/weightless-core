@@ -167,6 +167,17 @@ class ReactorTest(WeightlessTestCase):
         reactor.removeTimer(token2)
         self.assertEquals([token1, token3], reactor._timers)
 
+    def testRemoveTimerWithSameTimestamp(self):
+        reactor = Reactor()
+        token1 = reactor.addTimer(1, lambda: None)
+        token2 = reactor.addTimer(1, lambda: None)
+        token2.time = token1.time
+
+        reactor.removeTimer(token2)
+        self.assertEquals([id(token1)], [id(t) for t in reactor._timers])
+        reactor.removeTimer(token1)
+        self.assertEquals([], reactor._timers)
+
     def testExceptionInTimeoutCallback(self):
         sys.stderr = StringIO()
         try:
