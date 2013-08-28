@@ -1,4 +1,3 @@
-source /usr/share/seecr-test/_distro  # from seecr-tools/share/functions.d/distro
 
 function runtests() {
     local tests_to_run=$1
