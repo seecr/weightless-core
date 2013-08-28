@@ -27,7 +27,8 @@
 set -o errexit
 rm -rf tmp build
 mydir=$(cd $(dirname $0); pwd)
-source /usr/share/seecr-test/functions
+source ${mydir}/test/lib/seecr-test-1.2.50/share/_distro
+source ${mydir}/test/lib/seecr-test-1.2.50/share/functions
 
 pyversions="2.6"
 if distro_is_debian_wheezy; then
