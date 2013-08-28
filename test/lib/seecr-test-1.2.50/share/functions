@@ -1,0 +1,71 @@
+source /usr/share/seecr-test/_distro  # from seecr-tools/share/functions.d/distro
+
+function runtests() {
+    local tests_to_run=$1
+    if [ -z "$tests_to_run" ]; then
+        tests_to_run=$(cd test; ls *.sh)
+    else
+        shift
+    fi
+
+    echo "Will now run the tests:"
+    for test_to_run in $tests_to_run; do
+        echo " - $test_to_run"
+    done
+    if [ -z "$SEECRTEST_SKIP_PRESS_ENTER" ]; then
+        echo "Press [ENTER] to continue"
+        read
+    fi
+
+    for test_to_run in $tests_to_run; do
+        (   
+            cd tmp/test/$(dirname $test_to_run)
+            ./$(basename $test_to_run) "$@"
+        )   
+        if [ -z "$SEECRTEST_SKIP_PRESS_ENTER" ]; then
+            echo "Finished $test_to_run. Press [ENTER] to continue"
+            read
+        fi
+    done
+}
+
+function removeDoNotDistribute() {
+    local tmpDir=$1; shift 1
+    find $tmpDir -type f -exec sed -e \
+        "/DO_NOT_DISTRIBUTE/d;" -i {} \;
+}
+
+function definePythonVars() {
+    if distro_is_debian_lenny; then
+        export PYTHON=python2.5
+        export SITEPACKAGES=`pwd`/tmp/usr/lib/python2.5/site-packages
+        export SEECRTEST_USR_BIN=`pwd`/tmp/usr/bin
+    elif distro_is_debian_squeeze; then 
+        export PYTHON=python2.6
+        export SITEPACKAGES=`pwd`/tmp/usr/local/lib/python2.6/dist-packages
+        export SEECRTEST_USR_BIN=`pwd`/tmp/usr/local/bin
+    elif distro_is_debian_wheezy; then
+        version=2.7
+        if [ ! -z "$1" ]; then
+            version=$1
+        fi
+        export PYTHON=python${version}
+        export SITEPACKAGES=`pwd`/tmp/usr/local/lib/python${version}/dist-packages
+        export SEECRTEST_USR_BIN=`pwd`/tmp/usr/local/bin
+    elif distro_is_centos_5; then
+        export PYTHON=python2.5
+        export SITEPACKAGES=`pwd`/tmp/usr/lib/python2.5/site-packages
+        export SEECRTEST_USR_BIN=`pwd`/tmp/usr/bin
+    elif distro_is_centos_6; then 
+        export PYTHON=python2.6
+        export SITEPACKAGES=`pwd`/tmp/usr/lib/python2.6/site-packages
+        export SEECRTEST_USR_BIN=`pwd`/tmp/usr/bin
+    else
+        echo "This distro is not supported."
+        exit 1
+    fi 
+
+    export PYTHONPATH=${SITEPACKAGES}:${PYTHONPATH}
+}
+
+# vim: syn=sh

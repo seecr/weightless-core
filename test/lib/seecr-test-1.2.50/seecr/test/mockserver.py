@@ -1,25 +1,25 @@
 ## begin license ##
-# 
-# "Seecr Test" provides test tools. 
-# 
+#
+# "Seecr Test" provides test tools.
+#
 # Copyright (C) 2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+#
 # This file is part of "Seecr Test"
-# 
+#
 # "Seecr Test" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Seecr Test" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Seecr Test"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 from sys import stdout
@@ -38,6 +38,7 @@ from _httpspec import REGEXP, parseHeaders
 class MockServer(Thread):
     def __init__(self, port, ipAddress='0.0.0.0', hangupConnectionTimeout=None):
         Thread.__init__(self)
+        self.daemon = True
         address = (ipAddress, port)
         self.socket = socket()
         self.socket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
@@ -67,11 +68,22 @@ class MockServer(Thread):
                     sleep(self.hangupConnectionTimeout)
                     c.close()
                     continue
+                contentLength = None
                 request = c.recv(4096)
-                if 'Content-Length' in request:
-                    header, body = request.split('\r\n\r\n')
-                    if not body:
+                while True:
+                    if not '\r\n\r\n' in request:
                         request += c.recv(4096)
+                        continue
+                    if contentLength:
+                        if contentLength > len(body):
+                            request += c.recv(contentLength - len(body))
+                        break
+                    header, body = request.split('\r\n\r\n')
+                    for h in header.split('\r\n'):
+                        if h.startswith('Content-Length'):
+                            contentLength = int(h.split(':')[1])
+                    if not contentLength:
+                        break
 
                 self.requests.append(request)
 
@@ -86,8 +98,8 @@ class MockServer(Thread):
                 Headers = parseHeaders(match.group('_headers'))
 
                 response = self.buildResponse(
-                    request=request, 
-                    RequestURI=RequestURI, 
+                    request=request,
+                    RequestURI=RequestURI,
                     scheme=scheme,
                     netloc=netloc,
                     Host=Host,

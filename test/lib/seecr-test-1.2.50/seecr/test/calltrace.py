@@ -50,7 +50,7 @@ class CallTrace:
             return object.__getattr__(self, attrname)
         if attrname in self.ignoredAttributes:
             raise AttributeError("'CallTrace' is instructed to not have an attribute called '%s'" % attrname)
-        if self.onlySpecifiedMethods and not attrname in (self.returnValues.keys() + self.methods.keys()):
+        if self.onlySpecifiedMethods and not attrname in (self.returnValues.keys() + self.methods.keys() + self.emptyGeneratorMethods):
             raise AttributeError("'CallTrace' does not support '%s' as it is instructed to only allow specified methods." % attrname) 
         return CallTraceMethod(attrname, self)
 

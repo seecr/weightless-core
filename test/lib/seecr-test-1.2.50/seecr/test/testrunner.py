@@ -23,7 +23,7 @@
 ## end license ##
 
 import types
-from sys import stdout, stderr
+from sys import stdout, stderr, exit
 from time import time
 from traceback import print_exc
 from unittest import TestSuite as UnitTestTestSuite, TestLoader as UnitTestTestLoader, TestResult as UnitTestResult, TestCase
@@ -162,6 +162,8 @@ class TestRunner(object):
                 group.tearDown()
         timeTaken = time() - t0
         testResult.printResult(timeTaken)
+        exit(not testResult.wasSuccessful())
+
 
 class TestSuite(UnitTestTestSuite):
 
