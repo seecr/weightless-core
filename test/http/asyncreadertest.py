@@ -33,7 +33,7 @@ from socket import socket, gaierror as SocketGaiError
 from random import randint
 from re import sub
 from httpreadertest import server as testserver
-from weightless.http import HttpServer, httpget, httppost
+from weightless.http import HttpServer, httpget, httppost, httpspost, httpsget
 from weightless.io import Reactor, Suspend
 from weightless.core import compose
 
@@ -54,6 +54,7 @@ fileDict = {
     'suspend.py': Suspend.__call__.func_code.co_filename,
     'httprequest.py': httpget.func_code.co_filename,
 }
+
 
 class AsyncReaderTest(WeightlessTestCase):
 
@@ -222,7 +223,7 @@ RuntimeError: Boom!""" % fileDict)
         finally:
             httpRequestModule._httpRequest = originalHttpRequest
 
-    def testPost(self):
+    def testHttpPost(self):
         post_request = []
         port = self.port + 1
         self.referenceHttpServer(port, post_request)
@@ -247,7 +248,7 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEquals(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n'], headers)
         self.assertEquals(body, post_request[0]['body'])
 
-    def testPostWithoutHeaders(self):
+    def testHttpPostWithoutHeaders(self):
         post_request = []
         port = self.port + 1
         self.referenceHttpServer(port, post_request)
@@ -270,7 +271,32 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEquals(['Content-Length: 100000\r\n'], headers)
         self.assertEquals(body, post_request[0]['body'])
 
-    def testGet(self):
+    def testHttpsPost(self):
+        post_request = []
+        port = self.port + 1
+        self.referenceHttpServer(port, post_request, ssl=True)
+        body = u"BÖDY" * 20000
+        done = []
+        def posthandler(*args, **kwargs):
+            response = yield httpspost('localhost', port, '/path', body,
+                    headers={'Content-Type': 'text/plain'}
+            )
+            yield response
+            done.append(response)
+        self.handler = posthandler
+        clientget('localhost', self.port, '/')
+        with self.loopingReactor():
+            while not done:
+                pass
+
+        self.assertTrue("POST RESPONSE" in done[0], done[0])
+        self.assertEquals('POST', post_request[0]['command'])
+        self.assertEquals('/path', post_request[0]['path'])
+        headers = post_request[0]['headers'].headers
+        self.assertEquals(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n'], headers)
+        self.assertEquals(body, post_request[0]['body'])
+
+    def testHttpGet(self):
         get_request = []
         port = self.port + 1
         self.referenceHttpServer(port, get_request)
@@ -294,6 +320,29 @@ RuntimeError: Boom!""" % fileDict)
         headers = get_request[0]['headers'].headers
         self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
 
+    def testHttpsGet(self):
+        get_request = []
+        port = self.port + 1
+        self.referenceHttpServer(port, get_request, ssl=True)
+
+        done = []
+        def gethandler(*args, **kwargs):
+            response = yield httpsget('localhost', port, '/path',
+                    headers={'Content-Type': 'text/plain', 'Content-Length': 0}
+            )
+            yield response
+            done.append(response)
+        self.handler = gethandler
+        clientget('localhost', self.port, '/')
+        with self.loopingReactor():
+            while not done:
+                pass
+
+        self.assertTrue("GET RESPONSE" in done[0], done[0])
+        self.assertEquals('GET', get_request[0]['command'])
+        self.assertEquals('/path', get_request[0]['path'])
+        headers = get_request[0]['headers'].headers
+        self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
 
 def ignoreLineNumbers(s):
     return sub("line \d+,", "line [#],", s)

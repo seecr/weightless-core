@@ -1,33 +1,35 @@
 # encoding: utf-8
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2006-2009 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 from contextlib import contextmanager
 from socket import socket
 from random import randint
 from time import time
+
+from os.path import join, dirname, abspath
 from StringIO import StringIO
 import sys, string, os
 from tempfile import mkdtemp, mkstemp
@@ -37,9 +39,12 @@ from unittest import TestCase
 from threading import Thread
 from weightless.io import Reactor
 
-from threading import Thread
 from BaseHTTPServer import BaseHTTPRequestHandler
-from SocketServer import TCPServer
+from SocketServer import TCPServer, ThreadingMixIn, BaseServer
+from ssl import wrap_socket
+
+mydir = dirname(abspath(__file__))
+sslDir = join(mydir, 'ssl')
 
 class WeightlessTestCase(TestCase):
 
@@ -154,7 +159,7 @@ class WeightlessTestCase(TestCase):
         finally:
             sys.stdout = oldstdout
 
-    def referenceHttpServer(self, port, request):
+    def referenceHttpServer(self, port, request, ssl=False):
         def server(httpd):
             httpd.serve_forever()
         class Handler(BaseHTTPRequestHandler):
@@ -176,7 +181,10 @@ class WeightlessTestCase(TestCase):
                     'body': self.rfile.read(int(self.headers["Content-Length"]))})
                 self.send_response(200, "POST RESPONSE")
 
-        self.httpd = TCPServer(("", port), Handler)
+        if ssl:
+            self.httpd = MySSLTCPServer(("", port), Handler)
+        else:
+            self.httpd = TCPServer(("", port), Handler)
         thread=Thread(None, lambda: server(self.httpd))
         thread.start()
 
@@ -187,6 +195,23 @@ class MatchAll(object):
         return False
     def __repr__(self):
         return '*MatchAll*'
+
+class MySSLTCPServer(ThreadingMixIn, TCPServer):
+    def __init__(self, server_address, RequestHandlerClass, bind_and_activate=True):
+        pem = join(sslDir, 'server.pkey')
+        cert = join(sslDir, 'server.cert')
+
+        BaseServer.__init__(self, server_address, RequestHandlerClass)
+        self.socket = wrap_socket(
+                    socket(self.address_family, self.socket_type),
+                    server_side=True,
+                    certfile=cert,
+                    keyfile=pem,
+                )
+
+        if bind_and_activate:
+            self.server_bind()
+            self.server_activate()
 
 MATCHALL = MatchAll()
 

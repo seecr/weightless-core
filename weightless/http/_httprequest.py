@@ -44,6 +44,10 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False):
             raise
 
     if ssl:
+        suspend._reactor.addWriter(sok, this.next)
+        yield
+        suspend._reactor.removeWriter(sok)
+
         sok = wrap_socket(sok, do_handshake_on_connect=False)
         while True:
             try:
