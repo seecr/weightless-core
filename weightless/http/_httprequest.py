@@ -28,9 +28,10 @@ from weightless.io import Suspend
 from weightless.core import identify
 from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR
 from errno import EINPROGRESS
+from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
 
 @identify
-def _do(method, host, port, request, body=None, headers=None):
+def _do(method, host, port, request, body=None, headers=None, ssl=False):
     headers = headers or {}
     this = yield # this generator, from @identify
     suspend = yield # suspend object, from Suspend.__call__
@@ -41,6 +42,23 @@ def _do(method, host, port, request, body=None, headers=None):
     except SocketError, (errno, msg):
         if errno != EINPROGRESS:
             raise
+
+    if ssl:
+        sok = wrap_socket(sok, do_handshake_on_connect=False)
+        while True:
+            try:
+                sok.do_handshake()
+                break
+            except SSLError as err:
+                if err.args[0] == SSL_ERROR_WANT_READ:
+                    suspend._reactor.addReader(sok, this.next)
+                    yield
+                    suspend._reactor.removeReader(sok)
+                elif err.args[0] == SSL_ERROR_WANT_WRITE:
+                    suspend._reactor.addWriter(sok, this.next)
+                    yield
+                    suspend._reactor.removeWriter(sok)
+
     suspend._reactor.addWriter(sok, this.next)
     yield
     try:
@@ -96,6 +114,18 @@ def httpget(host, port, request, headers=None):
 
 def httppost(host, port, request, body, headers=None):
     s = Suspend(_do('POST', host, port, request, body, headers=headers).send)
+    yield s
+    result = s.getResult()
+    raise StopIteration(result)
+
+def httpsget(host, port, request, headers=None):
+    s = Suspend(_do('GET', host, port, request, headers=headers, ssl=True).send)
+    yield s
+    result = s.getResult()
+    raise StopIteration(result)
+
+def httpspost(host, port, request, body, headers=None):
+    s = Suspend(_do('POST', host, port, request, body, headers=headers, ssl=True).send)
     yield s
     result = s.getResult()
     raise StopIteration(result)
