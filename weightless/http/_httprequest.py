@@ -26,9 +26,8 @@
 from sys import exc_info, getdefaultencoding
 from weightless.io import Suspend
 from weightless.core import identify
-from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_WR, SHUT_RD
+from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR
 from errno import EINPROGRESS
-from warnings import warn
 
 @identify
 def _do(method, host, port, request, body=None, headers=None):
@@ -59,7 +58,6 @@ def _do(method, host, port, request, body=None, headers=None):
             headers.update({'Content-Length': len(data)})
         _sendHttpHeaders(sok, method, request, headers)
         if body:
-            sentBytes = 0
             suspend._reactor.addWriter(sok, this.next)
             while data != "":
                 size = sok.send(data)
@@ -77,7 +75,7 @@ def _do(method, host, port, request, body=None, headers=None):
         suspend._reactor.removeReader(sok)
         sok.close()
         suspend.resume(''.join(responses))
-    except Exception, e:
+    except Exception:
         suspend.throw(*exc_info())
     yield
 
