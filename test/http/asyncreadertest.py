@@ -1,27 +1,27 @@
 # -*- coding: utf-8 -*-
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2010-2011 Seek You Too (CQ2) http://www.cq2.nl
 # Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 from __future__ import with_statement
@@ -29,16 +29,14 @@ import sys
 from sys import exc_info, version_info
 from StringIO import StringIO
 from traceback import format_exception
-from time import sleep
 from socket import socket, gaierror as SocketGaiError
 from random import randint
 from re import sub
-from seecr.test import CallTrace
 from httpreadertest import server as testserver
 from weightless.http import HttpServer, httpget, httppost
 from weightless.io import Reactor, Suspend
 from weightless.core import compose
- 
+
 from weightless.http._httprequest import _httpRequest
 from weightless.http import _httprequest as httpRequestModule
 
@@ -56,7 +54,7 @@ fileDict = {
     'suspend.py': Suspend.__call__.func_code.co_filename,
     'httprequest.py': httpget.func_code.co_filename,
 }
- 
+
 class AsyncReaderTest(WeightlessTestCase):
 
     def dispatch(self, *args, **kwargs):
@@ -101,7 +99,7 @@ class AsyncReaderTest(WeightlessTestCase):
         def failingserver(*args, **kwarg):
             try:
                 response = yield httpget(*target)
-            except Exception, e:
+            except Exception:
                 exceptions.append(exc_info())
         self.handler = failingserver
 
@@ -112,7 +110,7 @@ class AsyncReaderTest(WeightlessTestCase):
                 with self.loopingReactor():
                     while not exceptions:
                         pass
-        except Exception, e:
+        except Exception:
             pass
 
         expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
@@ -191,7 +189,7 @@ TypeError: an integer is required
         def failingserver(*args, **kwarg):
             try:
                 response = yield httpget(*target)
-            except Exception, e:
+            except Exception:
                 exceptions.append(exc_info())
         self.handler = failingserver
 
@@ -231,8 +229,7 @@ RuntimeError: Boom!""" % fileDict)
         body = u"BÖDY" * 20000
         done = []
         def posthandler(*args, **kwargs):
-            request = kwargs['RequestURI']
-            response = yield httppost('localhost', port, '/path', body, 
+            response = yield httppost('localhost', port, '/path', body,
                     headers={'Content-Type': 'text/plain'}
             )
             yield response
@@ -250,6 +247,29 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEquals(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n'], headers)
         self.assertEquals(body, post_request[0]['body'])
 
+    def testPostWithoutHeaders(self):
+        post_request = []
+        port = self.port + 1
+        self.referenceHttpServer(port, post_request)
+        body = u"BÖDY" * 20000
+        done = []
+        def posthandler(*args, **kwargs):
+            response = yield httppost('localhost', port, '/path', body)
+            yield response
+            done.append(response)
+        self.handler = posthandler
+        clientget('localhost', self.port, '/')
+        with self.loopingReactor():
+            while not done:
+                pass
+
+        self.assertTrue("POST RESPONSE" in done[0], done[0])
+        self.assertEquals('POST', post_request[0]['command'])
+        self.assertEquals('/path', post_request[0]['path'])
+        headers = post_request[0]['headers'].headers
+        self.assertEquals(['Content-Length: 100000\r\n'], headers)
+        self.assertEquals(body, post_request[0]['body'])
+
     def testGet(self):
         get_request = []
         port = self.port + 1
@@ -257,8 +277,7 @@ RuntimeError: Boom!""" % fileDict)
 
         done = []
         def gethandler(*args, **kwargs):
-            request = kwargs['RequestURI']
-            response = yield httpget('localhost', port, '/path',  
+            response = yield httpget('localhost', port, '/path',
                     headers={'Content-Type': 'text/plain', 'Content-Length': 0}
             )
             yield response
