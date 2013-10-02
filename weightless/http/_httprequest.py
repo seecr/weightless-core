@@ -90,7 +90,12 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False):
         responses = []
         while True:
             yield
-            response = sok.recv(4096) # error checking
+            try:
+                response = sok.recv(4096) # error checking
+            except SSLError as e:
+                if e.errno != SSL_ERROR_WANT_READ:
+                    raise
+                continue
             if response == '':
                 break
             responses.append(response)
