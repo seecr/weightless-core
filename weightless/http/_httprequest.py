@@ -25,12 +25,13 @@
 
 from sys import exc_info, getdefaultencoding
 from weightless.io import Suspend
-from weightless.core import identify
+from weightless.core import compose, identify
 from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR
 from errno import EINPROGRESS
 from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
 
 @identify
+@compose
 def _do(method, host, port, request, body=None, headers=None, ssl=False, callback=None):
     headers = headers or {}
     this = yield # this generator, from @identify
@@ -71,20 +72,17 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, callbac
             suspend._reactor.removeWriter(sok)
             raise IOError(err)
         yield
-        suspend._reactor.removeWriter(sok)
         # error checking
         if body:
             data = body
             if type(data) is unicode:
                 data = data.encode(getdefaultencoding())
             headers.update({'Content-Length': len(data)})
-        _sendHttpHeaders(sok, method, request, headers)
-        if body:
-            suspend._reactor.addWriter(sok, this.next)
-            while data != "":
-                size = sok.send(data)
-                data = data[size:]
-                yield
+        try:
+            yield _sendHttpHeaders(sok, method, request, headers)
+            if body:
+                yield _asyncSend(sok, data)
+        finally:
             suspend._reactor.removeWriter(sok)
         suspend._reactor.addReader(sok, this.next)
         responses = []
@@ -113,11 +111,18 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, callbac
 def _httpRequest(method, request):
     return "%s %s HTTP/1.0\r\n" % (method, request)
 
+def _asyncSend(sok, data):
+    while data != "":
+        size = sok.send(data)
+        data = data[size:]
+        yield
+
 def _sendHttpHeaders(sok, method, request, headers):
-    sok.send(_httpRequest(method, request))
+    data = _httpRequest(method, request)
     if headers:
-        sok.send(''.join('%s: %s\r\n' % i for i in headers.items()))
-    sok.send('\r\n')
+        data += ''.join('%s: %s\r\n' % i for i in headers.items())
+    data += '\r\n'
+    yield _asyncSend(sok, data)
 
 def httpget(host, port, request, headers=None, callback=None):
     s = Suspend(_do('GET', host, port, request, headers=headers, callback=callback).send)

@@ -206,15 +206,15 @@ TypeError: an integer is required
                 self.reactor.step()
 
             expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
-  File "%(__file__)s", line 144, in failingserver
+  File "%(__file__)s", line 192, in failingserver
     response = yield httpget(*target)
-  File "%(httprequest.py)s", line 80, in httpget
+  File "%(httprequest.py)s", line 129, in httpget
     result = s.getResult()
-  File "%(httprequest.py)s", line 51, in _do
-    _sendHttpHeaders(sok, method, request, headers)
-  File "%(httprequest.py)s", line 82, in _sendHttpHeaders
-    sok.send(_httpRequest(method, request))
-  File "%(__file__)s", line 150, in httpRequest
+  File "%(httprequest.py)s", line 83, in _do
+    yield _sendHttpHeaders(sok, method, request, headers)
+  File "%(httprequest.py)s", line 121, in _sendHttpHeaders
+    data = _httpRequest(method, request)
+  File "%(__file__)s", line 198, in httpRequest
     raise RuntimeError("Boom!")
 RuntimeError: Boom!""" % fileDict)
             resultingTraceback = ''.join(format_exception(*exceptions[0]))
@@ -319,6 +319,38 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEquals('/path', get_request[0]['path'])
         headers = get_request[0]['headers'].headers
         self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
+
+    def testHttpGetWithReallyLargeHeaders(self):
+        get_request = []
+        port = self.port + 1
+        self.referenceHttpServer(port, get_request)
+
+        done = []
+        headersOrig = {'Accept': 'text/plain'}
+        headersOrig.update([
+            ('X-Really-Largely-Large-%s' % i, 'aLargelyLargeValue')
+            for i in range(10000)
+        ])
+        def gethandler(*args, **kwargs):
+            response = yield httpget('localhost', port, '/path',
+                    headers=headersOrig,
+            )
+            yield response
+            done.append(response)
+        self.handler = gethandler
+        clientget('localhost', self.port, '/')
+        with self.loopingReactor():
+            while not done:
+                pass
+
+        headers = get_request[0]['headers'].headers
+        headersAsDict = dict([tuple(h.strip().split(': ', 1)) for h in headers])
+        self.assertEquals(len(headersOrig), len(headersAsDict))
+        self.assertEquals(headersOrig, headersAsDict)
+
+        self.assertTrue("GET RESPONSE" in done[0], done[0])
+        self.assertEquals('GET', get_request[0]['command'])
+        self.assertEquals('/path', get_request[0]['path'])
 
     def testHttpGetStreaming(self):
         get_request = []
