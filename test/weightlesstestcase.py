@@ -25,8 +25,9 @@
 ## end license ##
 
 from contextlib import contextmanager
-from socket import socket
+from operator import xor
 from random import randint
+from socket import socket
 from time import time
 
 from os.path import join, dirname, abspath
@@ -36,7 +37,7 @@ from tempfile import mkdtemp, mkstemp
 from shutil import rmtree
 
 from unittest import TestCase
-from threading import Thread
+from threading import Thread, Event
 from weightless.io import Reactor
 
 from BaseHTTPServer import BaseHTTPRequestHandler
@@ -159,7 +160,7 @@ class WeightlessTestCase(TestCase):
         finally:
             sys.stdout = oldstdout
 
-    def referenceHttpServer(self, port, request, ssl=False):
+    def referenceHttpServer(self, port, request, ssl=False, streamingData=None):
         def server(httpd):
             httpd.serve_forever()
         class Handler(BaseHTTPRequestHandler):
@@ -171,7 +172,17 @@ class WeightlessTestCase(TestCase):
                     'command': self.command,
                     'path': self.path,
                     'headers': self.headers})
-                self.send_response(200, "GET RESPONSE")
+                self.send_response(200, "OK")
+                self.end_headers()
+
+                if not streamingData:
+                    self.wfile.write('GET RESPONSE')
+                    self.wfile.flush()
+                    return
+
+                for dataFragment in streamingData:
+                    self.wfile.write(dataFragment)
+                    self.wfile.flush()
 
             def do_POST(self, *args, **kwargs):
                 request.append({
@@ -179,7 +190,10 @@ class WeightlessTestCase(TestCase):
                     'path': self.path,
                     'headers': self.headers,
                     'body': self.rfile.read(int(self.headers["Content-Length"]))})
-                self.send_response(200, "POST RESPONSE")
+                self.send_response(200, "OK")
+                self.end_headers()
+                self.wfile.write('POST RESPONSE')
+                self.wfile.flush()
 
         if ssl:
             self.httpd = MySSLTCPServer(("", port), Handler)
@@ -188,6 +202,7 @@ class WeightlessTestCase(TestCase):
         thread=Thread(None, lambda: server(self.httpd))
         thread.start()
 
+
 class MatchAll(object):
     def __eq__(self, other):
         return True
@@ -195,6 +210,7 @@ class MatchAll(object):
         return False
     def __repr__(self):
         return '*MatchAll*'
+
 
 class MySSLTCPServer(ThreadingMixIn, TCPServer):
     def __init__(self, server_address, RequestHandlerClass, bind_and_activate=True):
@@ -212,6 +228,41 @@ class MySSLTCPServer(ThreadingMixIn, TCPServer):
         if bind_and_activate:
             self.server_bind()
             self.server_activate()
+
+
+class StreamingData(object):
+    def __init__(self, data=None, timeout=2.0):
+        self._data = data
+        self._timeout = timeout
+        self._event = Event()
+
+        self._event.clear()
+        self._streamingIntent = False
+
+    def next(self):
+        self._event.wait(timeout=self._timeout)
+        if not self._event.is_set():
+            raise AssertionError('Timeout reached')
+        self._event.clear()
+        if not self._data:
+            raise StopIteration()
+        return self._data.pop(0)
+
+    def __iter__(self):
+        self._streamingIntent = True
+        return self
+
+    def doNext(self, data=None):
+        # Explicitly call .doNext() in tests; typically after end-of-headers.
+        if logical_xor(self._data, data):
+            if not self._data:
+                self._data = [data]
+        self._event.set()
+
+
+def logical_xor(a, b):
+    return xor(bool(a), bool(b))
+
 
 MATCHALL = MatchAll()
 

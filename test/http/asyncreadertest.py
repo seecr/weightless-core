@@ -40,7 +40,7 @@ from weightless.core import compose
 from weightless.http._httprequest import _httpRequest
 from weightless.http import _httprequest as httpRequestModule
 
-from weightlesstestcase import WeightlessTestCase
+from weightlesstestcase import WeightlessTestCase, StreamingData
 PYVERSION = '%s.%s' % version_info[:2]
 
 def clientget(host, port, path):
@@ -319,6 +319,39 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEquals('/path', get_request[0]['path'])
         headers = get_request[0]['headers'].headers
         self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
+
+    def testHttpGetStreaming(self):
+        get_request = []
+        port = self.port + 1
+        streamingData = StreamingData(data=[c for c in "STREAMING GET RESPONSE"])
+        self.referenceHttpServer(port, get_request, streamingData=streamingData)
+
+        dataHandled = []
+        def handleDataFragment(data):
+            dataHandled.append(data)
+            if '\r\n\r\n' in ''.join(dataHandled):
+                streamingData.doNext()
+
+        done = []
+        def gethandler(*args, **kwargs):
+            response = yield httpget('localhost', port, '/path',
+                    headers={'Accept': 'text/plain'},
+                    callback=handleDataFragment,
+            )
+            done.append(response)
+        self.handler = gethandler
+        clientget('localhost', self.port, '/')
+        with self.loopingReactor():
+            while not done:
+                pass
+
+        self.assertEquals([None], done)
+        self.assertTrue("STREAMING GET RESPONSE" in ''.join(dataHandled), dataHandled)
+        self.assertTrue(len(dataHandled) > len("STREAMING GET RESPONSE"), dataHandled)
+        self.assertEquals('GET', get_request[0]['command'])
+        self.assertEquals('/path', get_request[0]['path'])
+        headers = get_request[0]['headers'].headers
+        self.assertEquals(['Accept: text/plain\r\n'], headers)
 
     def testHttpsGet(self):
         get_request = []
