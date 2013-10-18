@@ -31,7 +31,7 @@ from errno import EINPROGRESS
 from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
 
 @identify
-def _do(method, host, port, request, body=None, headers=None, ssl=False):
+def _do(method, host, port, request, body=None, headers=None, ssl=False, callback=None):
     headers = headers or {}
     this = yield # this generator, from @identify
     suspend = yield # suspend object, from Suspend.__call__
@@ -98,10 +98,14 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False):
                 continue
             if response == '':
                 break
-            responses.append(response)
+
+            if callback:
+                callback(response)
+            else:
+                responses.append(response)
         suspend._reactor.removeReader(sok)
         sok.close()
-        suspend.resume(''.join(responses))
+        suspend.resume(None if callback else ''.join(responses))
     except Exception:
         suspend.throw(*exc_info())
     yield
@@ -115,8 +119,8 @@ def _sendHttpHeaders(sok, method, request, headers):
         sok.send(''.join('%s: %s\r\n' % i for i in headers.items()))
     sok.send('\r\n')
 
-def httpget(host, port, request, headers=None):
-    s = Suspend(_do('GET', host, port, request, headers=headers).send)
+def httpget(host, port, request, headers=None, callback=None):
+    s = Suspend(_do('GET', host, port, request, headers=headers, callback=callback).send)
     yield s
     result = s.getResult()
     raise StopIteration(result)
