@@ -539,7 +539,7 @@ class HttpHandler(object):
         except SocketError, e:
             code, message = e.args
             if code == 107:
-                pass # KVS: not well understood, not tested. It seems some quick (local) servers close the connection before this point is reached. It may happen more generally. In any case, it is based on a truely existing phenomomon
+                pass # KVS: not well understood, not tested. It seems some quick (local) servers close the connection before this point is reached. It may happen more generally. In any case, it is based on a truely existing phenomenon
             else:
                 raise
         self._sok.close()
@@ -569,7 +569,7 @@ class HttpsHandler(HttpHandler):
         except SocketError, e:
             code, message = e.args
             if code == 107:
-                pass # KVS: not well understood, not tested. It seems some quick (local) servers close the connection before this point is reached. It may happen more generally. In any case, it is based on a truely existing phenomomon
+                pass # KVS: not well understood, not tested. It seems some quick (local) servers close the connection before this point is reached. It may happen more generally. In any case, it is based on a truely existing phenomenon
             else:
                 raise
         self._sok.close()
