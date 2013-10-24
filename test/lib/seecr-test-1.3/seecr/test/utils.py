@@ -1,26 +1,26 @@
 # -*- encoding: utf-8 -*-
 ## begin license ##
-# 
-# "Seecr Test" provides test tools. 
-# 
+#
+# "Seecr Test" provides test tools.
+#
 # Copyright (C) 2012-2013 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+#
 # This file is part of "Seecr Test"
-# 
+#
 # "Seecr Test" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Seecr Test" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Seecr Test"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 from re import DOTALL, compile, sub
@@ -49,10 +49,10 @@ def parseHtmlAsXml(body):
             newBody = newBody.replace(entity, replacement)
         newBody = _scriptTagRegex.sub('', newBody)
         return newBody
-    try: 
+    try:
         return parse_xml(StringIO(forceXml(body)))
     except XMLSyntaxError:
-        print body 
+        print body
         raise
 
 def getPage(port, path, arguments=None, expectedStatus="200", sessionId=None):
@@ -60,10 +60,10 @@ def getPage(port, path, arguments=None, expectedStatus="200", sessionId=None):
     if sessionId:
         additionalHeaders['Cookie'] = 'session=' + sessionId
     header, body = getRequest(
-        port, 
-        path, 
-        arguments, 
-        parse=False, 
+        port,
+        path,
+        arguments,
+        parse=False,
         additionalHeaders=additionalHeaders)
     assertHttpOK(header, body, expectedStatus=expectedStatus)
     return header, body
@@ -74,14 +74,14 @@ def postToPage(port, path, data, expectedStatus="302", sessionId=None):
         additionalHeaders['Cookie'] = 'session=' + sessionId
     postBody = urlencode(data, doseq=True)
     header, body = postRequest(
-        port, 
-        path, 
-        data=postBody, 
-        contentType='application/x-www-form-urlencoded', 
-        parse=False, 
+        port,
+        path,
+        data=postBody,
+        contentType='application/x-www-form-urlencoded',
+        parse=False,
         additionalHeaders=additionalHeaders)
     assertHttpOK(header, body, expectedStatus=expectedStatus)
-    return header, body 
+    return header, body
 
 def assertHttpOK(header, body, expectedStatus="200"):
     try:
@@ -93,11 +93,11 @@ def assertHttpOK(header, body, expectedStatus="200"):
 
 def assertSubstring(value, s):
     if not value in s:
-        raise AssertionError("assertSubstring fails: %s must occur in %s" % (value, s))
+        raise AssertionError("assertSubstring fails: '%s' must occur in '%s'" % (value, s))
 
 def assertNotSubstring(value, s):
     if value in s:
-        raise AssertionError("assertNotSubstring fails: %s must not occur in %s" % (value, s))
+        raise AssertionError("assertNotSubstring fails: '%s' must not occur in '%s'" % (value, s))
 
 
 def _socket(port, timeOutInSeconds):
@@ -141,11 +141,11 @@ def postMultipartForm(port, path, formValues, parse=True, timeOutInSeconds=None)
     boundary = '-=-=-=-=-=-=-=-=TestBoundary1234567890'
     body = createPostMultipartForm(boundary, formValues)
     return postRequest(
-        port, 
-        path, 
-        body, 
-        contentType='multipart/form-data; boundary=' + boundary, 
-        parse=parse, 
+        port,
+        path,
+        body,
+        contentType='multipart/form-data; boundary=' + boundary,
+        parse=parse,
         timeOutInSeconds=timeOutInSeconds)
 
 def createPostMultipartForm(boundary, formValues):
@@ -208,7 +208,7 @@ def splitHttpHeaderBody(response):
 
 def headerToDict(header):
    return dict(
-       tuple(s.strip() for s in line.split(':')) 
+       tuple(s.strip() for s in line.split(':'))
        for line in header.split('\r\n')
        if ':' in line
    )

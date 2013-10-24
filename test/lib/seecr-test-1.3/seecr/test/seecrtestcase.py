@@ -45,8 +45,8 @@ from lxml.etree import tostring, parse, Comment, PI, Entity
 class SeecrTestCase(TestCase):
     def setUp(self):
         TestCase.setUp(self)
-        self.tempdir = mkdtemp()
-        fd, self.tempfile = mkstemp()
+        self.tempdir = mkdtemp(prefix='test.%s.' % self.id())
+        fd, self.tempfile = mkstemp(prefix='test.%s.' % self.id())
         osClose(fd)
         self.vmsize = self._getVmSize()
 
