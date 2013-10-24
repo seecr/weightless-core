@@ -131,6 +131,7 @@ class WeightlessTestCase(TestCase):
                     try: self.reactor.removeTimer(t)
                     except ValueError: pass
         thread = Thread(None, loop)
+        thread.daemon = True
         thread.start()
         try:
             yield
@@ -200,6 +201,7 @@ class WeightlessTestCase(TestCase):
         else:
             self.httpd = TCPServer(("", port), Handler)
         thread=Thread(None, lambda: server(self.httpd))
+        thread.daemon = True
         thread.start()
 
 
@@ -237,7 +239,6 @@ class StreamingData(object):
         self._event = Event()
 
         self._event.clear()
-        self._streamingIntent = False
 
     def next(self):
         self._event.wait(timeout=self._timeout)
@@ -249,7 +250,6 @@ class StreamingData(object):
         return self._data.pop(0)
 
     def __iter__(self):
-        self._streamingIntent = True
         return self
 
     def doNext(self, data=None):

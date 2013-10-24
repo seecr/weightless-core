@@ -26,13 +26,14 @@
 from sys import exc_info, getdefaultencoding
 from weightless.io import Suspend
 from weightless.core import compose, identify
-from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR
+from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_RDWR
 from errno import EINPROGRESS
 from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
 
+
 @identify
 @compose
-def _do(method, host, port, request, body=None, headers=None, ssl=False, callback=None):
+def _do(method, host, port, request, body=None, headers=None, ssl=False, processPartialResponse=None):
     headers = headers or {}
     this = yield # this generator, from @identify
     suspend = yield # suspend object, from Suspend.__call__
@@ -44,41 +45,23 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, callbac
         if errno != EINPROGRESS:
             raise
 
-    if ssl:
-        suspend._reactor.addWriter(sok, this.next)
-        yield
-        suspend._reactor.removeWriter(sok)
-
-        sok = wrap_socket(sok, do_handshake_on_connect=False)
-        while True:
-            try:
-                sok.do_handshake()
-                break
-            except SSLError as err:
-                if err.args[0] == SSL_ERROR_WANT_READ:
-                    suspend._reactor.addReader(sok, this.next)
-                    yield
-                    suspend._reactor.removeReader(sok)
-                elif err.args[0] == SSL_ERROR_WANT_WRITE:
-                    suspend._reactor.addWriter(sok, this.next)
-                    yield
-                    suspend._reactor.removeWriter(sok)
-
-    suspend._reactor.addWriter(sok, this.next)
-    yield
     try:
-        err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
-        if err != 0:    # connection created succesfully?
-            suspend._reactor.removeWriter(sok)
-            raise IOError(err)
-        yield
-        # error checking
-        if body:
-            data = body
-            if type(data) is unicode:
-                data = data.encode(getdefaultencoding())
-            headers.update({'Content-Length': len(data)})
+        if ssl:
+            sok = yield _sslHandshake(sok, this, suspend)
+
+        suspend._reactor.addWriter(sok, this.next)
         try:
+            yield
+            err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
+            if err != 0:    # connection created succesfully?
+                raise IOError(err)
+            yield
+            # error checking
+            if body:
+                data = body
+                if type(data) is unicode:
+                    data = data.encode(getdefaultencoding())
+                headers.update({'Content-Length': len(data)})
             yield _sendHttpHeaders(sok, method, request, headers)
             if body:
                 yield _asyncSend(sok, data)
@@ -86,30 +69,55 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, callbac
             suspend._reactor.removeWriter(sok)
         suspend._reactor.addReader(sok, this.next)
         responses = []
-        while True:
-            yield
-            try:
-                response = sok.recv(4096) # error checking
-            except SSLError as e:
-                if e.errno != SSL_ERROR_WANT_READ:
-                    raise
-                continue
-            if response == '':
-                break
+        try:
+            while True:
+                yield
+                try:
+                    response = sok.recv(4096) # error checking
+                except SSLError as e:
+                    if e.errno != SSL_ERROR_WANT_READ:
+                        raise
+                    continue
+                if response == '':
+                    break
 
-            if callback:
-                callback(response)
-            else:
-                responses.append(response)
-        suspend._reactor.removeReader(sok)
+                if processPartialResponse:
+                    processPartialResponse(response)
+                else:
+                    responses.append(response)
+        finally:
+            suspend._reactor.removeReader(sok)
+        sok.shutdown(SHUT_RDWR)
         sok.close()
-        suspend.resume(None if callback else ''.join(responses))
+        suspend.resume(None if processPartialResponse else ''.join(responses))
     except Exception:
         suspend.throw(*exc_info())
+    # Uber finally: sok.close() from line 108
     yield
 
 def _httpRequest(method, request):
     return "%s %s HTTP/1.0\r\n" % (method, request)
+
+def _sslHandshake(sok, this, suspend):
+    suspend._reactor.addWriter(sok, this.next)
+    yield
+    suspend._reactor.removeWriter(sok)
+
+    sok = wrap_socket(sok, do_handshake_on_connect=False)
+    while True:
+        try:
+            sok.do_handshake()
+            break
+        except SSLError as err:
+            if err.args[0] == SSL_ERROR_WANT_READ:
+                suspend._reactor.addReader(sok, this.next)
+                yield
+                suspend._reactor.removeReader(sok)
+            elif err.args[0] == SSL_ERROR_WANT_WRITE:
+                suspend._reactor.addWriter(sok, this.next)
+                yield
+                suspend._reactor.removeWriter(sok)
+    raise StopIteration(sok)
 
 def _asyncSend(sok, data):
     while data != "":
@@ -124,8 +132,8 @@ def _sendHttpHeaders(sok, method, request, headers):
     data += '\r\n'
     yield _asyncSend(sok, data)
 
-def httpget(host, port, request, headers=None, callback=None):
-    s = Suspend(_do('GET', host, port, request, headers=headers, callback=callback).send)
+def httpget(host, port, request, headers=None, processPartialResponse=None):
+    s = Suspend(_do('GET', host, port, request, headers=headers, processPartialResponse=processPartialResponse).send)
     yield s
     result = s.getResult()
     raise StopIteration(result)
