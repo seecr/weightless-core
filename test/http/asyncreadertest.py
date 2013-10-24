@@ -38,7 +38,7 @@ from weightless.http import HttpServer, httpget, httppost, httpspost, httpsget
 from weightless.io import Reactor, Suspend
 from weightless.core import compose
 
-from weightless.http._httprequest import _httpRequest
+from weightless.http._httprequest import _requestLine
 from weightless.http import _httprequest as httpRequestModule
 
 from weightlesstestcase import WeightlessTestCase, StreamingData
@@ -61,8 +61,8 @@ class AsyncReaderTest(WeightlessTestCase):
         WeightlessTestCase.tearDown(self)
 
     def testHttpRequest(self):
-        self.assertEquals('GET / HTTP/1.0\r\n', _httpRequest('GET', '/'))
-        self.assertEquals('POST / HTTP/1.0\r\n', _httpRequest('POST', '/'))
+        self.assertEquals('GET / HTTP/1.0\r\n', _requestLine('GET', '/'))
+        self.assertEquals('POST / HTTP/1.0\r\n', _requestLine('POST', '/'))
 
     def testPassRequestThruToBackOfficeServer(self):
         backofficeport = self.port + 1
@@ -95,7 +95,7 @@ class AsyncReaderTest(WeightlessTestCase):
       yield self.handler(*args, **kwargs)
   File "%(__file__)s", line 85, in failingserver
     response = yield httpget(*target)
-  File "%(httprequest.py)s", line 78, in httpget
+  File "%(httprequest.py)s", line 78, in _httpRequest
     result = s.getResult()
   File "%(suspend.py)s", line 34, in __call__
     self._doNext(self)
@@ -110,7 +110,7 @@ TypeError: an integer is required
       yield self.handler(*args, **kwargs)
   File "%(__file__)s", line 85, in failingserver
     response = yield httpget(*target)
-  File "%(httprequest.py)s", line 78, in httpget
+  File "%(httprequest.py)s", line 78, in _httpRequest
     result = s.getResult()
   File "%(suspend.py)s", line 34, in __call__
     self._doNext(self)
@@ -150,12 +150,12 @@ TypeError: an integer is required
             response = yield httpget(*target)
         self.handler = failingserver
 
-        def httpRequest(self, *args, **kwargs):
+        def requestLine(self, *args, **kwargs):
             raise RuntimeError("Boom!")
 
         try:
-            originalHttpRequest = httpRequestModule._httpRequest
-            httpRequestModule._httpRequest = httpRequest
+            originalRequestLine = httpRequestModule._requestLine
+            httpRequestModule._requestLine = requestLine
 
             clientget('localhost', self.port, '/')
             with stderr_replaced():
@@ -166,20 +166,20 @@ TypeError: an integer is required
       yield self.handler(*args, **kwargs)
   File "%(__file__)s", line 192, in failingserver
     response = yield httpget(*target)
-  File "%(httprequest.py)s", line 129, in httpget
+  File "%(httprequest.py)s", line 129, in _httpRequest
     result = s.getResult()
   File "%(httprequest.py)s", line 83, in _do
     yield _sendHttpHeaders(sok, method, request, headers)
   File "%(httprequest.py)s", line 121, in _sendHttpHeaders
-    data = _httpRequest(method, request)
-  File "%(__file__)s", line 198, in httpRequest
+    data = _requestLine(method, request)
+  File "%(__file__)s", line 198, in requestLine
     raise RuntimeError("Boom!")
 RuntimeError: Boom!""" % fileDict)
             resultingTraceback = ''.join(format_exception(*self.error))
             self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(resultingTraceback))
 
         finally:
-            httpRequestModule._httpRequest = originalHttpRequest
+            httpRequestModule._requestLine = originalRequestLine
 
     def testHttpPost(self):
         post_request = []
@@ -304,39 +304,41 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEquals('GET', get_request[0]['command'])
         self.assertEquals('/path', get_request[0]['path'])
 
-    def testHttpGetStreaming(self):
-        get_request = []
-        port = self.port + 1
-        streamingData = StreamingData(data=[c for c in "STREAMING GET RESPONSE"])
-        self.referenceHttpServer(port, get_request, streamingData=streamingData)
+    def testHttpAndHttpsGetStreaming(self):
+        for useSsl in [False, True]:
+            get_request = []
+            port = self.port + 1 + useSsl
+            streamingData = StreamingData(data=[c for c in "STREAMING GET RESPONSE"])
+            self.referenceHttpServer(port, get_request, ssl=useSsl, streamingData=streamingData)
 
-        dataHandled = []
-        def handleDataFragment(data):
-            dataHandled.append(data)
-            if '\r\n\r\n' in ''.join(dataHandled):
-                streamingData.doNext()
+            dataHandled = []
+            def handleDataFragment(data):
+                dataHandled.append(data)
+                if '\r\n\r\n' in ''.join(dataHandled):
+                    streamingData.doNext()
 
-        responses = []
-        def gethandler(*args, **kwargs):
-            response = 'no response yet'
-            try:
-                response = yield httpget('localhost', port, '/path',
-                    headers={'Accept': 'text/plain'},
-                    processPartialResponse=handleDataFragment,
-                )
-            finally:
-                responses.append(response)
-        self.handler = gethandler
-        clientget('localhost', self.port, '/')
-        self._loopReactorUntilDone()
+            responses = []
+            def gethandler(*args, **kwargs):
+                f = httpsget if useSsl else httpget
+                response = 'no response yet'
+                try:
+                    response = yield f('localhost', port, '/path',
+                        headers={'Accept': 'text/plain'},
+                        processPartialResponse=handleDataFragment,
+                    )
+                finally:
+                    responses.append(response)
+            self.handler = gethandler
+            clientget('localhost', self.port, '/')
+            self._loopReactorUntilDone()
 
-        self.assertEquals([None], responses)
-        self.assertTrue("STREAMING GET RESPONSE" in ''.join(dataHandled), dataHandled)
-        self.assertTrue(len(dataHandled) > len("STREAMING GET RESPONSE"), dataHandled)
-        self.assertEquals('GET', get_request[0]['command'])
-        self.assertEquals('/path', get_request[0]['path'])
-        headers = get_request[0]['headers'].headers
-        self.assertEquals(['Accept: text/plain\r\n'], headers)
+            self.assertEquals([None], responses)
+            self.assertTrue("STREAMING GET RESPONSE" in ''.join(dataHandled), dataHandled)
+            self.assertTrue(len(dataHandled) > len("STREAMING GET RESPONSE"), dataHandled)
+            self.assertEquals('GET', get_request[0]['command'])
+            self.assertEquals('/path', get_request[0]['path'])
+            headers = get_request[0]['headers'].headers
+            self.assertEquals(['Accept: text/plain\r\n'], headers)
 
     def testHttpsGet(self):
         get_request = []
@@ -389,7 +391,7 @@ def clientget(host, port, path):
 fileDict = {
     '__file__': clientget.func_code.co_filename,
     'suspend.py': Suspend.__call__.func_code.co_filename,
-    'httprequest.py': httpget.func_code.co_filename,
+    'httprequest.py': _requestLine.func_code.co_filename,
 }
 
 def ignoreLineNumbers(s):

@@ -24,12 +24,32 @@
 ## end license ##
 
 from sys import exc_info, getdefaultencoding
-from weightless.io import Suspend
-from weightless.core import compose, identify
 from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_RDWR
 from errno import EINPROGRESS
 from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
 
+from weightless.io import Suspend
+from weightless.core import compose, identify
+
+
+def httpget(host, port, request, headers=None, processPartialResponse=None):
+    return _httpRequest(method='GET', host=host, port=port, request=request, headers=headers, processPartialResponse=processPartialResponse)
+
+def httppost(host, port, request, body, headers=None, processPartialResponse=None):
+    return _httpRequest(method='POST', host=host, port=port, request=request, body=body, headers=headers, processPartialResponse=processPartialResponse)
+
+def httpsget(host, port, request, headers=None, processPartialResponse=None):
+    return _httpRequest(method='GET', host=host, port=port, request=request, headers=headers, processPartialResponse=processPartialResponse, ssl=True)
+
+def httpspost(host, port, request, body, headers=None, processPartialResponse=None):
+    return _httpRequest(method='POST', host=host, port=port, request=request, body=body, headers=headers, processPartialResponse=processPartialResponse, ssl=True)
+
+
+def _httpRequest(host, port, request, body=None, headers=None, ssl=False, processPartialResponse=None, method='GET'):
+    s = Suspend(_do(method, host=host, port=port, request=request, headers=headers, body=body, ssl=ssl, processPartialResponse=processPartialResponse).send)
+    yield s
+    result = s.getResult()
+    raise StopIteration(result)
 
 @identify
 @compose
@@ -95,7 +115,7 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, process
     # Uber finally: sok.close() from line 108
     yield
 
-def _httpRequest(method, request):
+def _requestLine(method, request):
     return "%s %s HTTP/1.0\r\n" % (method, request)
 
 def _sslHandshake(sok, this, suspend):
@@ -126,32 +146,9 @@ def _asyncSend(sok, data):
         yield
 
 def _sendHttpHeaders(sok, method, request, headers):
-    data = _httpRequest(method, request)
+    data = _requestLine(method, request)
     if headers:
         data += ''.join('%s: %s\r\n' % i for i in headers.items())
     data += '\r\n'
     yield _asyncSend(sok, data)
 
-def httpget(host, port, request, headers=None, processPartialResponse=None):
-    s = Suspend(_do('GET', host, port, request, headers=headers, processPartialResponse=processPartialResponse).send)
-    yield s
-    result = s.getResult()
-    raise StopIteration(result)
-
-def httppost(host, port, request, body, headers=None):
-    s = Suspend(_do('POST', host, port, request, body, headers=headers).send)
-    yield s
-    result = s.getResult()
-    raise StopIteration(result)
-
-def httpsget(host, port, request, headers=None):
-    s = Suspend(_do('GET', host, port, request, headers=headers, ssl=True).send)
-    yield s
-    result = s.getResult()
-    raise StopIteration(result)
-
-def httpspost(host, port, request, body, headers=None):
-    s = Suspend(_do('POST', host, port, request, body, headers=headers, ssl=True).send)
-    yield s
-    result = s.getResult()
-    raise StopIteration(result)
