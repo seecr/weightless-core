@@ -258,7 +258,8 @@ RuntimeError: Boom!""" % fileDict)
             response = 'no response yet'
             try:
                 response = yield httpget('localhost', port, '/path',
-                        headers={'Content-Type': 'text/plain', 'Content-Length': 0}
+                        headers={'Content-Type': 'text/plain', 'Content-Length': 0},
+                        prio=4
                 )
             finally:
                 responses.append(response)
@@ -324,7 +325,7 @@ RuntimeError: Boom!""" % fileDict)
                 try:
                     response = yield f('localhost', port, '/path',
                         headers={'Accept': 'text/plain'},
-                        processPartialResponse=handleDataFragment,
+                        handlePartialResponse=handleDataFragment,
                     )
                 finally:
                     responses.append(response)

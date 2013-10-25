@@ -24,41 +24,43 @@
 ## end license ##
 
 from sys import exc_info, getdefaultencoding
-from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_RDWR
+from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_RDWR, SOL_TCP, TCP_KEEPINTVL, TCP_KEEPIDLE, TCP_KEEPCNT, SO_KEEPALIVE
 from errno import EINPROGRESS
 from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
+from functools import partial
 
 from weightless.io import Suspend
 from weightless.core import compose, identify
 
 
-def httpget(host, port, request, headers=None, processPartialResponse=None):
-    return _httpRequest(method='GET', host=host, port=port, request=request, headers=headers, processPartialResponse=processPartialResponse)
+def httpget(host, port, request, headers=None, body=None, ssl=False, prio=None, handlePartialResponse=None):
+    return _httpRequest(method='GET', host=host, port=port, request=request, body=body, headers=headers, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse)
 
-def httppost(host, port, request, body, headers=None, processPartialResponse=None):
-    return _httpRequest(method='POST', host=host, port=port, request=request, body=body, headers=headers, processPartialResponse=processPartialResponse)
+def httppost(host, port, request, body, headers=None, ssl=False, prio=None, handlePartialResponse=None):
+    return _httpRequest(method='POST', host=host, port=port, request=request, body=body, headers=headers, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse)
 
-def httpsget(host, port, request, headers=None, processPartialResponse=None):
-    return _httpRequest(method='GET', host=host, port=port, request=request, headers=headers, processPartialResponse=processPartialResponse, ssl=True)
-
-def httpspost(host, port, request, body, headers=None, processPartialResponse=None):
-    return _httpRequest(method='POST', host=host, port=port, request=request, body=body, headers=headers, processPartialResponse=processPartialResponse, ssl=True)
+httpsget = partial(httpget, ssl=True)
+httpspost = partial(httppost, ssl=True)
 
 
-def _httpRequest(host, port, request, body=None, headers=None, ssl=False, processPartialResponse=None, method='GET'):
-    s = Suspend(_do(method, host=host, port=port, request=request, headers=headers, body=body, ssl=ssl, processPartialResponse=processPartialResponse).send)
+def _httpRequest(host, port, request, body=None, headers=None, ssl=False, prio=None, handlePartialResponse=None, method='GET'):
+    s = Suspend(_do(method, host=host, port=port, request=request, headers=headers, body=body, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse).send)
     yield s
     result = s.getResult()
     raise StopIteration(result)
 
 @identify
 @compose
-def _do(method, host, port, request, body=None, headers=None, ssl=False, processPartialResponse=None):
+def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=None, handlePartialResponse=None):
     headers = headers or {}
     this = yield # this generator, from @identify
     suspend = yield # suspend object, from Suspend.__call__
     sok = socket()
     sok.setblocking(0)
+    sok.setsockopt(SOL_SOCKET, SO_KEEPALIVE, 1)
+    sok.setsockopt(SOL_TCP, TCP_KEEPIDLE, 60*10)
+    sok.setsockopt(SOL_TCP, TCP_KEEPINTVL, 75)
+    sok.setsockopt(SOL_TCP, TCP_KEEPCNT, 9)    
     try:
         sok.connect((host, port))
     except SocketError, (errno, msg):
@@ -67,9 +69,9 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, process
 
     try:
         if ssl:
-            sok = yield _sslHandshake(sok, this, suspend)
+            sok = yield _sslHandshake(sok, this, suspend, prio)
 
-        suspend._reactor.addWriter(sok, this.next)
+        suspend._reactor.addWriter(sok, this.next, prio=prio)
         try:
             yield
             err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
@@ -87,7 +89,7 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, process
                 yield _asyncSend(sok, data)
         finally:
             suspend._reactor.removeWriter(sok)
-        suspend._reactor.addReader(sok, this.next)
+        suspend._reactor.addReader(sok, this.next, prio=prio)
         responses = []
         try:
             while True:
@@ -101,15 +103,15 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, process
                 if response == '':
                     break
 
-                if processPartialResponse:
-                    processPartialResponse(response)
+                if handlePartialResponse:
+                    handlePartialResponse(response)
                 else:
                     responses.append(response)
         finally:
             suspend._reactor.removeReader(sok)
         sok.shutdown(SHUT_RDWR)
         sok.close()
-        suspend.resume(None if processPartialResponse else ''.join(responses))
+        suspend.resume(None if handlePartialResponse else ''.join(responses))
     except Exception:
         suspend.throw(*exc_info())
     # Uber finally: sok.close() from line 108
@@ -118,8 +120,8 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, process
 def _requestLine(method, request):
     return "%s %s HTTP/1.0\r\n" % (method, request)
 
-def _sslHandshake(sok, this, suspend):
-    suspend._reactor.addWriter(sok, this.next)
+def _sslHandshake(sok, this, suspend, prio):
+    suspend._reactor.addWriter(sok, this.next, prio=prio)
     yield
     suspend._reactor.removeWriter(sok)
 
@@ -130,11 +132,11 @@ def _sslHandshake(sok, this, suspend):
             break
         except SSLError as err:
             if err.args[0] == SSL_ERROR_WANT_READ:
-                suspend._reactor.addReader(sok, this.next)
+                suspend._reactor.addReader(sok, this.next, prio=prio)
                 yield
                 suspend._reactor.removeReader(sok)
             elif err.args[0] == SSL_ERROR_WANT_WRITE:
-                suspend._reactor.addWriter(sok, this.next)
+                suspend._reactor.addWriter(sok, this.next, prio=prio)
                 yield
                 suspend._reactor.removeWriter(sok)
     raise StopIteration(sok)
