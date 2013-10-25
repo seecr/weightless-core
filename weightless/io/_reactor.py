@@ -114,20 +114,30 @@ class Reactor(object):
         self._suspended.pop(sok, None)
 
     def suspend(self):
-        self._readers.pop(self.currenthandle, None)
-        self._writers.pop(self.currenthandle, None)
-        self._processes.pop(self.currenthandle, None)
+        context = self._readers.pop(self.currenthandle, None)
+        if context:
+            context._event = self._readers
+        context = self._writers.pop(self.currenthandle, None)
+        if context:
+            context._event = self._writers
+        context = self._processes.pop(self.currenthandle, None)
+        if context:
+            context._event = self._processes
         self._suspended[self.currenthandle] = self.currentcontext
         return self.currenthandle
 
-    def resumeReader(self, handle):
-        self._readers[handle] = self._suspended.pop(handle)
+    def resume(self, handle):
+        context = self._suspended.pop(handle)
+        context._event[handle] = context
 
-    def resumeWriter(self, handle):
-        self._writers[handle] = self._suspended.pop(handle)
+    #def resumeReader(self, handle):
+    #    self._readers[handle] = self._suspended.pop(handle)
 
-    def resumeProcess(self, handle):
-        self._processes[handle] = self._suspended.pop(handle)
+    #def resumeWriter(self, handle):
+    #    self._writers[handle] = self._suspended.pop(handle)
+
+    #def resumeProcess(self, handle):
+    #    self._processes[handle] = self._suspended.pop(handle)
 
     def shutdown(self):
         for contextDict in [

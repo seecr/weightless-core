@@ -44,6 +44,8 @@ class Suspend(object):
 
     def resume(self, response=None):
         self._response = response
+        if self._handle:
+            self._reactor.resume(self._handle)
         self._whenDone()
 
     def throw(self, exc_type, exc_value=None, exc_traceback=None):

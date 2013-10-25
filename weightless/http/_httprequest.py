@@ -33,25 +33,25 @@ from weightless.io import Suspend
 from weightless.core import compose, identify
 
 
-def httpget(host, port, request, headers=None, body=None, ssl=False, prio=None, handlePartialResponse=None):
-    return _httpRequest(method='GET', host=host, port=port, request=request, body=body, headers=headers, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse)
+def httpget(host, port, request, headers=None, body=None, ssl=False, prio=None, handler=None):
+    return _httpRequest(method='GET', host=host, port=port, request=request, body=body, headers=headers, ssl=ssl, prio=prio, handler=handler)
 
-def httppost(host, port, request, body, headers=None, ssl=False, prio=None, handlePartialResponse=None):
-    return _httpRequest(method='POST', host=host, port=port, request=request, body=body, headers=headers, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse)
+def httppost(host, port, request, body, headers=None, ssl=False, prio=None, handler=None):
+    return _httpRequest(method='POST', host=host, port=port, request=request, body=body, headers=headers, ssl=ssl, prio=prio, handler=handler)
 
 httpsget = partial(httpget, ssl=True)
 httpspost = partial(httppost, ssl=True)
 
 
-def _httpRequest(host, port, request, body=None, headers=None, ssl=False, prio=None, handlePartialResponse=None, method='GET'):
-    s = Suspend(_do(method, host=host, port=port, request=request, headers=headers, body=body, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse).send)
+def _httpRequest(host, port, request, body=None, headers=None, ssl=False, prio=None, handler=None, method='GET'):
+    s = Suspend(_do(method, host=host, port=port, request=request, headers=headers, body=body, ssl=ssl, prio=prio, handler=handler).send)
     yield s
     result = s.getResult()
     raise StopIteration(result)
 
 @identify
 @compose
-def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=None, handlePartialResponse=None):
+def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=None, handler=None):
     headers = headers or {}
     this = yield # this generator, from @identify
     suspend = yield # suspend object, from Suspend.__call__
@@ -103,18 +103,18 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=No
                 if response == '':
                     break
 
-                if handlePartialResponse:
-                    handlePartialResponse(response)
+                if handler:
+                    msg = handler.send(response)
+                    
                 else:
                     responses.append(response)
         finally:
             suspend._reactor.removeReader(sok)
         sok.shutdown(SHUT_RDWR)
         sok.close()
-        suspend.resume(None if handlePartialResponse else ''.join(responses))
+        suspend.resume(None if handler else ''.join(responses))
     except Exception:
         suspend.throw(*exc_info())
-    # Uber finally: sok.close() from line 108
     yield
 
 def _requestLine(method, request):

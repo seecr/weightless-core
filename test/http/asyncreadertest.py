@@ -36,7 +36,7 @@ from re import sub
 from httpreadertest import server as testserver
 from weightless.http import HttpServer, httpget, httppost, httpspost, httpsget
 from weightless.io import Reactor, Suspend
-from weightless.core import compose
+from weightless.core import compose, autostart
 
 from weightless.http._httprequest import _requestLine
 from weightless.http import _httprequest as httpRequestModule
@@ -60,7 +60,7 @@ class AsyncReaderTest(WeightlessTestCase):
         self.reactor.shutdown()
         WeightlessTestCase.tearDown(self)
 
-    def testHttpRequest(self):
+    def testRequestLine(self):
         self.assertEquals('GET / HTTP/1.0\r\n', _requestLine('GET', '/'))
         self.assertEquals('POST / HTTP/1.0\r\n', _requestLine('POST', '/'))
 
@@ -313,19 +313,22 @@ RuntimeError: Boom!""" % fileDict)
             self.referenceHttpServer(port, get_request, ssl=useSsl, streamingData=streamingData)
 
             dataHandled = []
-            def handleDataFragment(data):
-                dataHandled.append(data)
-                if '\r\n\r\n' in ''.join(dataHandled):
-                    streamingData.doNext()
+            @autostart
+            def handleDataFragment():
+                while True:
+                    dataHandled.append((yield))
+                    if '\r\n\r\n' in ''.join(dataHandled):
+                        streamingData.doNext()
 
             responses = []
+
             def gethandler(*args, **kwargs):
-                f = httpsget if useSsl else httpget
+                httpget_ = httpsget if useSsl else httpget
                 response = 'no response yet'
                 try:
-                    response = yield f('localhost', port, '/path',
+                    response = yield httpget_('localhost', port, '/path',
                         headers={'Accept': 'text/plain'},
-                        handlePartialResponse=handleDataFragment,
+                        handler=handleDataFragment(),
                     )
                 finally:
                     responses.append(response)
