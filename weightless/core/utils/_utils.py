@@ -26,6 +26,7 @@
 from linecache import getline
 from re import compile
 from types import GeneratorType
+from weightless.core import compose
 
 try:
     from inspect import isgeneratorfunction
@@ -35,6 +36,18 @@ except ImportError:
             return bool(func.func_code.co_flags & 0x20)
         except AttributeError:
             return False
+
+def retval(generator):
+    g = compose(generator)
+    try:
+        while True:
+            g.next()
+    except StopIteration, e:
+        return e.args[0] if e.args else None
+
+def consume(generator):
+    for _ in compose(generator):
+        pass
 
 def identify(generator):
     def helper(*args, **kwargs):
