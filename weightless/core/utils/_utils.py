@@ -49,6 +49,12 @@ def consume(generator):
     for _ in compose(generator):
         pass
 
+def asList(g):
+    return list(compose(g))
+
+def asString(g):
+    return ''.join(compose(g))
+
 def identify(generator):
     def helper(*args, **kwargs):
         g = generator(*args, **kwargs)
