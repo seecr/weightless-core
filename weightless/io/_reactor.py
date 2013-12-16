@@ -168,9 +168,6 @@ class Reactor(object):
         else:
             timeout = None
 
-        if self._processes:
-            timeout = 0
-
         try:
             readers = self._readers.keys() + [self._processReadPipe]
             rReady, wReady, ignored = self._select(readers, self._writers.keys(), [], timeout)
