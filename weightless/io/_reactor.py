@@ -30,6 +30,7 @@ from socket import error as socket_error
 from time import time
 from errno import EBADF, EINTR
 from weightless.core import local
+from os import pipe, close, write, read
 
 def reactor():
     return local('__reactor__')
@@ -67,6 +68,10 @@ class Reactor(object):
         self._timers = []
         self._select = select_func
         self._prio = -1
+        self._processReadPipe, self._processWritePipe = pipe()
+
+    def __del__(self):
+        self._closeProcessPipe()
 
     def addReader(self, sok, sink, prio=None):
         """Adds a socket and calls sink() when the socket becomes readable. It remains at the readers list."""
@@ -86,6 +91,7 @@ class Reactor(object):
         if process in self._processes:
             raise ValueError('Process is already in processes')
         self._processes[process] = Context(process, prio)
+        write(self._processWritePipe, 'x')
 
     def addTimer(self, seconds, callback):
         """Add a timer that calls callback() after the specified number of seconds. Afterwards, the timer is deleted.  It returns a token for removeTimer()."""
@@ -103,6 +109,7 @@ class Reactor(object):
     def removeProcess(self, process=None):
         if process is None:
             process = self.currentcontext.callback
+        read(self._processReadPipe, 1)
         del self._processes[process]
 
     def removeTimer(self, token):
@@ -143,6 +150,7 @@ class Reactor(object):
                     handle.close()
                 else:
                     print 'Reactor shutdown: terminating %s' % handle
+        self._closeProcessPipe()
 
     def loop(self):
         try:
@@ -164,7 +172,8 @@ class Reactor(object):
             timeout = 0
 
         try:
-            rReady, wReady, ignored = self._select(self._readers.keys(), self._writers.keys(), [], timeout)
+            readers = self._readers.keys() + [self._processReadPipe]
+            rReady, wReady, ignored = self._select(readers, self._writers.keys(), [], timeout)
         except TypeError:
             print_exc()
             self._findAndRemoveBadFd()
@@ -181,7 +190,6 @@ class Reactor(object):
         except KeyboardInterrupt:
             self.shutdown()
             raise
-
 
         self._timerCallbacks(self._timers)
         self._callbacks(rReady, self._readers)
@@ -249,3 +257,14 @@ class Reactor(object):
                 self._writers.pop(sok).callback()
                 return
 
+    def _closeProcessPipe(self):
+        try:
+            close(self._processReadPipe)
+        except:
+            pass
+        try:
+            close(self._processWritePipe)
+        except:
+            pass
+        self._processReadPipe = None
+        self._processWritePipe = None

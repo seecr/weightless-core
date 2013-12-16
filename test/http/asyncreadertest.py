@@ -25,10 +25,8 @@
 ## end license ##
 
 from __future__ import with_statement
-import sys
 from sys import exc_info, version_info
 from time import sleep
-from StringIO import StringIO
 from traceback import format_exception
 from socket import socket, gaierror as SocketGaiError
 from random import randint
@@ -42,7 +40,7 @@ from weightless.http._httprequest import _requestLine
 from weightless.http import _httprequest as httpRequestModule
 
 from weightlesstestcase import WeightlessTestCase, StreamingData
-from seecr.test.io import stderr_replaced
+from seecr.test.io import stderr_replaced, stdout_replaced
 
 PYVERSION = '%s.%s' % version_info[:2]
 
@@ -57,7 +55,6 @@ class AsyncReaderTest(WeightlessTestCase):
 
     def tearDown(self):
         self.httpserver.shutdown()
-        self.reactor.shutdown()
         WeightlessTestCase.tearDown(self)
 
     def testHttpRequest(self):
@@ -139,6 +136,7 @@ TypeError: an integer is required
         self.assertEquals(IOError, self.error[0])
         self.assertEquals('111', str(self.error[1]))
 
+    @stdout_replaced
     def testTracebackPreservedAcrossSuspend(self):
         backofficeport = self.port + 1
         expectedrequest = ''

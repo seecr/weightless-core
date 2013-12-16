@@ -27,8 +27,7 @@
 from __future__ import with_statement
 
 from time import time, sleep
-from traceback import format_exc
-from signal import signal, SIGALRM, alarm, pause
+from signal import signal, SIGALRM, alarm
 from select import error as ioerror
 import os, sys
 from tempfile import mkstemp
@@ -38,6 +37,7 @@ from weightlesstestcase import WeightlessTestCase
 from weightless.core.utils import identify
 from weightless.io import Reactor
 from socket import socketpair, error, socket
+from threading import Thread
 
 class ReactorTest(WeightlessTestCase):
 
@@ -319,13 +319,13 @@ class ReactorTest(WeightlessTestCase):
     def testGetRidOfBadFileDescriptors(self):
         reactor = Reactor()
         class BadSocket(object):
-            def fileno(self): return 88
+            def fileno(self): return 188
             def close(self): raise Exception('hell breaks loose')
         self.timeout = False
         def timeout():
             self.timeout = True
-        reactor.addReader(99, lambda: None) # broken
-        reactor.addWriter(99, lambda: None) # broken
+        reactor.addReader(199, lambda: None) # broken
+        reactor.addWriter(199, lambda: None) # broken
         reactor.addReader(BadSocket(), lambda: None) # even more broken
         reactor.addTimer(0.01, timeout)
         with self.stderr_replaced() as s:
@@ -736,6 +736,24 @@ class ReactorTest(WeightlessTestCase):
         except RuntimeError, e:
             self.assertEquals('The Error', str(e))
             self.assertEquals([], reactor._processes.keys())
+
+    def testAddProcessFromThread(self):
+        processCallback = []
+        timerCallback = []
+        reactor = Reactor()
+        reactor.addTimer(1, lambda: None)
+        t = Thread(target=reactor.step)
+        t.start()
+        proc = lambda: processCallback.append(True)
+        reactor.addProcess(proc)
+        t.join()
+        self.assertEquals([True], processCallback)
+
+        reactor.removeProcess(proc)
+        reactor.addTimer(0.1, lambda: timerCallback.append(True))
+        reactor.step()
+        self.assertEquals([True], processCallback)
+        self.assertEquals([True], timerCallback)
 
     def withSTDOUTRedirected(self, function, expectedOutput=None):
         stream = StringIO()

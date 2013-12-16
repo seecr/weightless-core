@@ -72,6 +72,7 @@ class WeightlessTestCase(TestCase):
                 % (t.time-t0, cb.func_name, code.co_filename, code.co_firstlineno)
         self.assertEquals([], self.reactor._timers)
         self.reactor.shutdown()
+        self.mockreactor.shutdown()
         rmtree(self.tempdir)
         os.remove(self.tempfile)
 
