@@ -33,7 +33,7 @@ from random import randint
 from weightlesstestcase import WeightlessTestCase
 
 from weightless.io import Reactor, Gio, giopen
-from weightless.io._gio import Context, SocketContext, Timer, TimeoutException
+from weightless.io._gio import Context, SocketContext, Timer, TimeoutException, ThreadContext
 
 class GioTest(WeightlessTestCase):
 
@@ -269,3 +269,20 @@ class GioTest(WeightlessTestCase):
         self.assertEquals([False], done)
         self.assertEquals([], self.mockreactor._timers)
         self.assertEquals([], g._contextstack)
+
+    def XXXtestWithThread(self):
+        done = []
+        def code():
+            print "A"
+            done.append(0)
+            with ThreadContext():
+                print "B"
+                done.append(1)
+                print "C"
+            print "D"
+            done.append(1)
+            return
+            yield
+        g = Gio(self.reactor, code())
+        self.reactor.step()
+

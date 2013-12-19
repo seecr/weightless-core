@@ -50,25 +50,18 @@ class Gio(object):
         while True:
             if not response:
                 try:
-                    response = self._generator.send(message)
+                    try:
+                        response = self._generator.send(message)
+                    except YieldException:
+                        print "You want a thread sir?"
                 except StopIteration:
                     yield #'return' without StopIteration
             try:
                 assert self._contextstack, 'Gio: No context available.'
                 context = self._contextstack[-1]
-                if response:
-                    yield context.write(response)
-                    message = None
-                else:
-                    message = yield context.read()
-                    if message == '': # peer closed connection
-                        try:
-                            response = self._generator.throw(CloseException())
-                        except CloseException:
-                            yield
-                        finally:
-                            context.close()
-                response = None
+
+                message, response = yield context.handle(response, self._generator)
+
             except TimeoutException, e:
                 response = self._generator.throw(e)
 
@@ -123,6 +116,33 @@ class Context(object):
 
     def close(self):
         self.gio.close()
+
+    def handle(self, response, generator):
+                if response:
+                    yield self.write(response)
+                    message = None
+                else:
+                    message = yield self.read()
+                    if message == '': # peer closed connection
+                        try:
+                            response = generator.throw(CloseException())
+                        except CloseException:
+                            yield
+                        finally:
+                            self.close()
+                response = None
+                raise StopIteration((message, response))
+
+class YieldException(BaseException):
+    pass
+
+class ThreadContext(Context):
+
+    def __enter__(self):
+        super(ThreadContext, self).__enter__()
+        #thread = Thread(target=self)A
+        print "enter thread"
+        raise YieldException
 
 class FdContext(Context):
 
