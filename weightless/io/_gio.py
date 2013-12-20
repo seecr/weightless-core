@@ -55,15 +55,11 @@ class Gio(object):
                     except YieldException:
                         print "You want a thread sir?"
                 except StopIteration:
-                    yield #'return' without StopIteration
-            try:
-                assert self._contextstack, 'Gio: No context available.'
-                context = self._contextstack[-1]
+                    yield #'return' to reactor
+            assert self._contextstack, 'Gio: No context available.'
+            context = self._contextstack[-1]
 
-                message, response = yield context.handle(response, self._generator)
-
-            except TimeoutException, e:
-                response = self._generator.throw(e)
+            message, response = yield context.handle(message, response, self._generator)
 
     def throw(self, exception):
         try:
@@ -117,7 +113,8 @@ class Context(object):
     def close(self):
         self.gio.close()
 
-    def handle(self, response, generator):
+    def handle(self, message, response, generator):
+            try:
                 if response:
                     yield self.write(response)
                     message = None
@@ -131,7 +128,10 @@ class Context(object):
                         finally:
                             self.close()
                 response = None
-                raise StopIteration((message, response))
+            except TimeoutException, e:
+                print "Time out!"
+                response = generator.throw(e)
+            raise StopIteration((message, response))
 
 class YieldException(BaseException):
     pass
