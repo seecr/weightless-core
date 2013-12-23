@@ -78,11 +78,7 @@ class Gio(object):
     def popContext(self):
         self._contextstack.pop()
 
-    def addTimer(self, time, timeout):
-        return self._reactor.addTimer(time, timeout)
 
-    def removeTimer(self, timer):
-        self._reactor.removeTimer(timer)
 
 class Context(object):
 
@@ -231,11 +227,12 @@ class Timer(object):
         self._timer = None
 
     def __enter__(self):
-        self._timer = self.gio.addTimer(self._timeout, self._timedOut)
+        self.reactor = self.gio._reactor
+        self._timer = self.reactor.addTimer(self._timeout, self._timedOut)
 
     def __exit__(self, *args, **kwargs):
         if self._timer:
-            self.gio.removeTimer(self._timer)
+            self.reactor.removeTimer(self._timer)
             self._timer = None
 
     def _timedOut(self):
