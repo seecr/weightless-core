@@ -270,24 +270,16 @@ class GioTest(WeightlessTestCase):
         self.assertEquals([], self.mockreactor._timers)
         #self.assertEquals([], g._contextstack)
 
-    def XXXtestWithThread(self):
+    def testWithThread(self):
         from threading import current_thread
         done = []
         def code():
             done.append(current_thread().name)
-            with ThreadContext():
+            with ThreadContext('MyThread'):
                 yield
                 done.append(current_thread().name)
             yield
             done.append(current_thread().name)
-            print "After with. Should be second thread", current_thread()
-            return
         g = Gio(None, code())
-        print "******** step ******"
-        g.step()
-        print "********************"
-        g.step()
-        print "********************"
-        g.step()
-        print "********************"
-        self.assertEquals([], done)
+        g()
+        self.assertEquals(['MainThread', 'MyThread', 'MainThread'], done)

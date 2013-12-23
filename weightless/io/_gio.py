@@ -27,6 +27,13 @@ from functools import partial as curry
 import os
 from socket import SOL_SOCKET, SO_RCVBUF, SHUT_RDWR
 from weightless.core import compose, local
+from sys import stdout
+
+from threading import Thread, current_thread
+
+def log(*msgs):
+    print " ".join(str(s) for s in msgs)
+    stdout.flush()
 
 class InitialContext(object):
     def handle(self, response, generator):
@@ -104,25 +111,35 @@ class Context(object):
 
 class ThreadContext(Context):
 
+    def __init__(self, name):
+        self.name = name
+
     def __enter__(self):
-        from threading import Thread
         super(ThreadContext, self).__enter__()
-        self._thread = Thread(target=self.wrap)
-        print "__enter__ created thread", self._thread
+        self._thread = Thread(target=self.wrap, name=self.name)
+        log("__enter__ created thread", self._thread)
+        self._p = None
         return self
 
     def wrap(self):
         self._p()
-        print "warp: Thread done: ", self._thread
+        log("warp: Thread done: ", self._thread)
+        self._p = None
         # after this, the last Context must continue... how?
-        # the last context ran the the previous thread
+        # The last context ran the the previous thread,
+        # or at least cause it to wait until I am finished.
 
     def __exit__(self, ex_type, ex_value, ex_tb):
         super(ThreadContext, self).__exit__(ex_type, ex_value, ex_tb)
-        print "__exit__ thread", self._thread
+        log("__exit__ thread", self._thread)
 
     def handle(self, response, generator):
-        print "handle start thread", self._thread
+        log(current_thread(), self._thread)
+        if self._p and self._thread != current_thread():
+            log("===========================>>>>>>>> JOIN")
+            self._thread.join()
+            
+        log("handle start thread", self._thread)
         self._p = generator.next
         self._thread.start()
         yield
