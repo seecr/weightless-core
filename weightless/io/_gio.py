@@ -53,6 +53,9 @@ class Gio(object):
         #self._generator.throw(Exception('premature close'))
         pass
 
+    def __call__(self):
+        self._callback2generator.next()
+
     def callback2generator(self):
         __gio__ = self
         __reactor__ = self._reactor
@@ -74,12 +77,6 @@ class Gio(object):
 
     def popContext(self):
         self._contextstack.pop()
-
-    def addWriter(self, context):
-        self._reactor.addWriter(context, self._callback2generator.next)
-
-    def addReader(self, context):
-        self._reactor.addReader(context, self._callback2generator.next)
 
     def addTimer(self, time, timeout):
         return self._reactor.addTimer(time, timeout)
@@ -155,7 +152,7 @@ class FdContext(Context):
         os.close(self._fd)
 
     def write(self,response):
-        self.gio.addWriter(self)
+        self.reactor.addWriter(self, self.gio)
         self.onExit(curry(self.reactor.removeWriter, self))
         buff = response
         try:
@@ -167,7 +164,7 @@ class FdContext(Context):
             self.reactor.removeWriter(self)
 
     def read(self):
-        self.gio.addReader(self)
+        self.reactor.addReader(self, self.gio)
         self.onExit(curry(self.reactor.removeReader, self))
         try:
             yield

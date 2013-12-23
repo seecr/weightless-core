@@ -93,9 +93,7 @@ class GioTest(WeightlessTestCase):
                 self.assertTrue(isinstance(datastream, Context), type(datastream))
                 self.dataIn = yield
                 yield 'write this!'
-        g = Gio(self.reactor, myProcessor())
-        #g.step()
-        #g.step()
+        Gio(self.reactor, myProcessor())
         self.reactor.step()
         self.assertEquals('read this!', self.dataIn[:19])
         self.reactor.step()
