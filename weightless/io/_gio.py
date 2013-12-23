@@ -28,11 +28,21 @@ import os
 from socket import SOL_SOCKET, SO_RCVBUF, SHUT_RDWR
 from weightless.core import compose, local
 
+class InitialContext(object):
+    def handle(self, response, generator):
+        try:
+            response = generator.next()
+            #print "================", response
+        except StopIteration:
+            yield
+        #print "Main thread about to be finished?????"
+        raise StopIteration(response)
+
 class Gio(object):
     def __init__(self, reactor, generator):
         self._reactor = reactor
         self._generator = compose(generator)
-        self._contextstack = []
+        self._contextstack = [InitialContext()]
         self._callback2generator = compose(self.callback2generator())
         self._callback2generator.next()
 
@@ -45,21 +55,13 @@ class Gio(object):
 
     def callback2generator(self):
         __gio__ = self
-        message = None
+        __reactor__ = self._reactor
         response = None
         while True:
-            if not response:
-                try:
-                    try:
-                        response = self._generator.send(message)
-                    except YieldException:
-                        print "You want a thread sir?"
-                except StopIteration:
-                    yield #'return' to reactor
             assert self._contextstack, 'Gio: No context available.'
             context = self._contextstack[-1]
-
-            message, response = yield context.handle(message, response, self._generator)
+            response = yield context.handle(response, self._generator)
+            #print "context", response
 
     def throw(self, exception):
         try:
@@ -76,14 +78,8 @@ class Gio(object):
     def addWriter(self, context):
         self._reactor.addWriter(context, self._callback2generator.next)
 
-    def removeWriter(self, context):
-        self._reactor.removeWriter(context)
-
     def addReader(self, context):
         self._reactor.addReader(context, self._callback2generator.next)
-
-    def removeReader(self, context):
-        self._reactor.removeReader(context)
 
     def addTimer(self, time, timeout):
         return self._reactor.addTimer(time, timeout)
@@ -113,36 +109,29 @@ class Context(object):
     def close(self):
         self.gio.close()
 
-    def handle(self, message, response, generator):
-            try:
-                if response:
-                    yield self.write(response)
-                    message = None
-                else:
-                    message = yield self.read()
-                    if message == '': # peer closed connection
-                        try:
-                            response = generator.throw(CloseException())
-                        except CloseException:
-                            yield
-                        finally:
-                            self.close()
-                response = None
-            except TimeoutException, e:
-                print "Time out!"
-                response = generator.throw(e)
-            raise StopIteration((message, response))
-
-class YieldException(BaseException):
-    pass
-
 class ThreadContext(Context):
 
     def __enter__(self):
+        from threading import Thread
         super(ThreadContext, self).__enter__()
-        #thread = Thread(target=self)A
-        print "enter thread"
-        raise YieldException
+        self._thread = Thread(target=self.wrap)
+        print "__enter__ created thread", self._thread
+
+    def wrap(self):
+        self._p()
+        print "warp: Thread done: ", self._thread
+        # after this, the last Context must continue... how?
+        # the last context ran the the previous thread
+
+    def __exit__(self, ex_type, ex_value, ex_tb):
+        super(ThreadContext, self).__exit__(ex_type, ex_value, ex_tb)
+        print "__exit__ thread", self._thread
+
+    def handle(self, response, generator):
+        print "handle start thread", self._thread
+        self._p = generator.next
+        self._thread.start()
+        yield
 
 class FdContext(Context):
 
@@ -150,6 +139,11 @@ class FdContext(Context):
         Context.__init__(self)
         assert type(fd) == int
         self._fd = fd
+        self._msg = None
+
+    def __enter__(self):
+        super(FdContext, self).__enter__()
+        self.reactor = local("__reactor__")
 
     def fileno(self):
         return self._fd
@@ -160,7 +154,7 @@ class FdContext(Context):
 
     def write(self,response):
         self.gio.addWriter(self)
-        self.onExit(curry(self.gio.removeWriter, self))
+        self.onExit(curry(self.reactor.removeWriter, self))
         buff = response
         try:
             while len(buff) > 0:
@@ -168,17 +162,41 @@ class FdContext(Context):
                 written = os.write(self._fd, buff)
                 buff = buffer(buff, written)
         finally:
-            self.gio.removeWriter(self)
+            self.reactor.removeWriter(self)
 
     def read(self):
         self.gio.addReader(self)
-        self.onExit(curry(self.gio.removeReader, self))
+        self.onExit(curry(self.reactor.removeReader, self))
         try:
             yield
             message = os.read(self._fd, self.readBufSize)
         finally:
-            self.gio.removeReader(self)
+            self.reactor.removeReader(self)
         raise StopIteration(message)
+
+    def handle(self, response, generator):
+        try:
+            if response:
+                yield self.write(response)
+                self._message = None
+            else:
+                self._message = yield self.read()
+                if self._message == '': # peer closed connection
+                    try:
+                        response = generator.throw(CloseException())
+                    except CloseException:
+                        yield
+                    finally:
+                        self.close()
+            response = None
+        except TimeoutException, e:
+            response = generator.throw(e)
+        if not response:
+            try:
+                response = generator.send(self._message)
+            except StopIteration:
+                yield #'return' to reactor
+            raise StopIteration(response)
 
 class SocketContext(FdContext):
 
