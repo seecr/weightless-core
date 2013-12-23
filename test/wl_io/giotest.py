@@ -90,10 +90,12 @@ class GioTest(WeightlessTestCase):
         open(self.tempfile, 'w').write('read this!')
         def myProcessor():
             with giopen(self.tempfile, 'rw') as datastream:
-                self.assertTrue(isinstance(datastream, Context))
+                self.assertTrue(isinstance(datastream, Context), type(datastream))
                 self.dataIn = yield
                 yield 'write this!'
-        Gio(self.reactor, myProcessor())
+        g = Gio(self.reactor, myProcessor())
+        #g.step()
+        #g.step()
         self.reactor.step()
         self.assertEquals('read this!', self.dataIn[:19])
         self.reactor.step()
@@ -274,19 +276,20 @@ class GioTest(WeightlessTestCase):
         from threading import current_thread
         done = []
         def code():
-            print "Before with. Should be Main thread:", current_thread()
-            done.append(0)
+            done.append(current_thread().name)
             with ThreadContext():
-                print "In with. Should still be Main thread", current_thread()
                 yield
-                done.append(1)
-                print "In with. Should be second thread:", current_thread()
-            print "After with. Should be second thread", current_thread()
-            done.append(1)
+                done.append(current_thread().name)
             yield
-            print "After yield. Should be Main thread", current_thread()
+            done.append(current_thread().name)
+            print "After with. Should be second thread", current_thread()
             return
-        g = Gio(self.reactor, code())
+        g = Gio(None, code())
         print "******** step ******"
-        self.reactor.step()
+        g.step()
         print "********************"
+        g.step()
+        print "********************"
+        g.step()
+        print "********************"
+        self.assertEquals([], done)

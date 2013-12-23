@@ -116,6 +116,7 @@ class ThreadContext(Context):
         super(ThreadContext, self).__enter__()
         self._thread = Thread(target=self.wrap)
         print "__enter__ created thread", self._thread
+        return self
 
     def wrap(self):
         self._p()
@@ -144,6 +145,7 @@ class FdContext(Context):
     def __enter__(self):
         super(FdContext, self).__enter__()
         self.reactor = local("__reactor__")
+        return self
 
     def fileno(self):
         return self._fd
