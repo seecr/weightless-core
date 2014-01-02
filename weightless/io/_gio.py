@@ -1,26 +1,26 @@
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2006-2009 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 from functools import partial as curry
@@ -34,7 +34,7 @@ class Gio(object):
         self._generator = compose(generator)
         self._contextstack = []
         self._callback2generator = compose(self.callback2generator())
-        self._callback2generator.next()
+        next(self._callback2generator)
 
     def __repr__(self):
         return repr(self._generator)
@@ -69,7 +69,7 @@ class Gio(object):
                         finally:
                             context.close()
                 response = None
-            except TimeoutException, e:
+            except TimeoutException as e:
                 response = self._generator.throw(e)
 
     def throw(self, exception):
@@ -85,13 +85,13 @@ class Gio(object):
         self._contextstack.pop()
 
     def addWriter(self, context):
-        self._reactor.addWriter(context, self._callback2generator.next)
+        self._reactor.addWriter(context, self._callback2generator.__next__)
 
     def removeWriter(self, context):
         self._reactor.removeWriter(context)
 
     def addReader(self, context):
-        self._reactor.addReader(context, self._callback2generator.next)
+        self._reactor.addReader(context, self._callback2generator.__next__)
 
     def removeReader(self, context):
         self._reactor.removeReader(context)
@@ -145,8 +145,8 @@ class FdContext(Context):
         try:
             while len(buff) > 0:
                 yield
-                written = os.write(self._fd, buff)
-                buff = buffer(buff, written)
+                written = os.write(self._fd, bytes(buff, 'UTF-8'))
+                buff = buff[written:]
         finally:
             self.gio.removeWriter(self)
 
@@ -163,7 +163,7 @@ class FdContext(Context):
 class SocketContext(FdContext):
 
     def __init__(self, sok):
-        self.readBufSize = sok.getsockopt(SOL_SOCKET, SO_RCVBUF) / 2
+        self.readBufSize = int(sok.getsockopt(SOL_SOCKET, SO_RCVBUF) / 2)
         sok.setblocking(0)
         FdContext.__init__(self, sok.fileno())
         self._save_sok_from_gc = sok

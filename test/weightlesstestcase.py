@@ -31,7 +31,7 @@ from socket import socket
 from time import time
 
 from os.path import join, dirname, abspath
-from StringIO import StringIO
+from io import StringIO
 import sys, string, os
 from tempfile import mkdtemp, mkstemp
 from shutil import rmtree
@@ -40,8 +40,8 @@ from unittest import TestCase
 from threading import Thread, Event
 from weightless.io import Reactor
 
-from BaseHTTPServer import BaseHTTPRequestHandler
-from SocketServer import TCPServer, ThreadingMixIn, BaseServer
+from http.server import BaseHTTPRequestHandler
+from socketserver import TCPServer, ThreadingMixIn, BaseServer
 from ssl import wrap_socket
 
 mydir = dirname(abspath(__file__))
@@ -67,9 +67,9 @@ class WeightlessTestCase(TestCase):
         self.assertEquals({}, self.reactor._processes)
         for t in self.reactor._timers:
             cb = t.callback
-            code = cb.func_code
-            print 'WARNING: dangling timer in reactor. Remaining timout: %s with callback to %s() in %s at line %s.' \
-                % (t.time-t0, cb.func_name, code.co_filename, code.co_firstlineno)
+            code = cb.__code__
+            print('WARNING: dangling timer in reactor. Remaining timout: %s with callback to %s() in %s at line %s.' \
+                % (t.time-t0, cb.__name__, code.co_filename, code.co_firstlineno))
         self.assertEquals([], self.reactor._timers)
         self.reactor.shutdown()
         self.mockreactor.shutdown()
@@ -178,7 +178,7 @@ class WeightlessTestCase(TestCase):
                 self.end_headers()
 
                 if not streamingData:
-                    self.wfile.write('GET RESPONSE')
+                    self.wfile.write(b'GET RESPONSE')
                     self.wfile.flush()
                     return
 
@@ -241,7 +241,7 @@ class StreamingData(object):
 
         self._event.clear()
 
-    def next(self):
+    def __next__(self):
         self._event.wait(timeout=self._timeout)
         if not self._event.is_set():
             raise AssertionError('Timeout reached')

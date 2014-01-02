@@ -60,10 +60,11 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=No
     sok.setsockopt(SOL_SOCKET, SO_KEEPALIVE, 1)
     sok.setsockopt(SOL_TCP, TCP_KEEPIDLE, 60*10)
     sok.setsockopt(SOL_TCP, TCP_KEEPINTVL, 75)
-    sok.setsockopt(SOL_TCP, TCP_KEEPCNT, 9)    
+    sok.setsockopt(SOL_TCP, TCP_KEEPCNT, 9)
     try:
         sok.connect((host, port))
-    except SocketError, (errno, msg):
+    except SocketError as xxx_todo_changeme:
+        (errno, msg) = xxx_todo_changeme.args
         if errno != EINPROGRESS:
             raise
 
@@ -71,7 +72,7 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=No
         if ssl:
             sok = yield _sslHandshake(sok, this, suspend, prio)
 
-        suspend._reactor.addWriter(sok, this.next, prio=prio)
+        suspend._reactor.addWriter(sok, this.__next__, prio=prio)
         try:
             yield
             err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
@@ -81,7 +82,7 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=No
             # error checking
             if body:
                 data = body
-                if type(data) is unicode:
+                if type(data) is str:
                     data = data.encode(getdefaultencoding())
                 headers.update({'Content-Length': len(data)})
             yield _sendHttpHeaders(sok, method, request, headers)
@@ -89,7 +90,7 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=No
                 yield _asyncSend(sok, data)
         finally:
             suspend._reactor.removeWriter(sok)
-        suspend._reactor.addReader(sok, this.next, prio=prio)
+        suspend._reactor.addReader(sok, this.__next__, prio=prio)
         responses = []
         try:
             while True:
@@ -121,7 +122,7 @@ def _requestLine(method, request):
     return "%s %s HTTP/1.0\r\n" % (method, request)
 
 def _sslHandshake(sok, this, suspend, prio):
-    suspend._reactor.addWriter(sok, this.next, prio=prio)
+    suspend._reactor.addWriter(sok, this.__next__, prio=prio)
     yield
     suspend._reactor.removeWriter(sok)
 
@@ -132,25 +133,25 @@ def _sslHandshake(sok, this, suspend, prio):
             break
         except SSLError as err:
             if err.args[0] == SSL_ERROR_WANT_READ:
-                suspend._reactor.addReader(sok, this.next, prio=prio)
+                suspend._reactor.addReader(sok, this.__next__, prio=prio)
                 yield
                 suspend._reactor.removeReader(sok)
             elif err.args[0] == SSL_ERROR_WANT_WRITE:
-                suspend._reactor.addWriter(sok, this.next, prio=prio)
+                suspend._reactor.addWriter(sok, this.__next__, prio=prio)
                 yield
                 suspend._reactor.removeWriter(sok)
     raise StopIteration(sok)
 
 def _asyncSend(sok, data):
     while data != "":
-        size = sok.send(data)
+        size = sok.send(bytes(data, 'UTF-8'))
         data = data[size:]
         yield
 
 def _sendHttpHeaders(sok, method, request, headers):
     data = _requestLine(method, request)
     if headers:
-        data += ''.join('%s: %s\r\n' % i for i in headers.items())
+        data += ''.join('%s: %s\r\n' % i for i in list(headers.items()))
     data += '\r\n'
     yield _asyncSend(sok, data)
 

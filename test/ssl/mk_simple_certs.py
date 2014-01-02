@@ -39,8 +39,8 @@ def generateIn(directory):
     #open(join(directory, 'CA.cert'), 'w').write(crypto.dump_certificate(crypto.FILETYPE_PEM, cacert))
 
 
-    CN = raw_input("CN: ").strip()
-    O = raw_input("O: ").strip()
+    CN = input("CN: ").strip()
+    O = input("O: ").strip()
     pkey = createKeyPair(TYPE_RSA, 1024)
     req = createCertRequest(pkey, CN=CN, O=O)
     cert = createCertificate(req, (cacert, cakey), 1, (0, 60*60*24*365*5)) # five years
@@ -51,6 +51,6 @@ def generateIn(directory):
 if __name__ == '__main__':
     args = argv[1:]
     if args == []:
-        print "Specify output directory"
+        print("Specify output directory")
     else:
         generateIn(args[0])

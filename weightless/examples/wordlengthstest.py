@@ -102,10 +102,10 @@ class PythonTest(TestCase):
         try:
             firstTry.send('hello')
             self.fail()
-        except TypeError, e:
+        except TypeError as e:
             self.assertEquals("can't send non-None value to a just-started generator", str(e))
         secondTry = withoutAutoStart()
-        secondTry.next() # 'start'
+        next(secondTry) # 'start'
         message = secondTry.send('hello')
         self.assertEquals('hello', message)
         thirdTry = withAutoStart()
@@ -117,17 +117,17 @@ class PythonTest(TestCase):
         f2 = raiseStopIteration()
         f3 = endOfFunction()
         try:
-            f1.next()
+            next(f1)
             self.fail()
         except StopIteration:
             pass
         try:
-            f2.next()
+            next(f2)
             self.fail()
         except StopIteration:
             pass
         try:
-            f3.next()
+            next(f3)
             self.fail()
         except StopIteration:
             pass

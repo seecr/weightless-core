@@ -30,6 +30,7 @@ from traceback import format_exception
 from functools import partial
 
 from weightless.core import is_generator, DeclineMessage, cextension
+import collections
 
 if cextension:
     from weightless.core.ext import AllGenerator
@@ -74,7 +75,7 @@ class Defer(defaultdict):
         try:
             return method(*args, **kwargs)
         except:
-            c, v, t = exc_info(); raise c, v, t.tb_next
+            c, v, t = exc_info(); raise v.with_traceback(t.tb_next)
 
 
 def handleNonGeneratorGeneratorExceptions(method, clazz, value, traceback):
@@ -117,7 +118,7 @@ class MessageBase(object):
                 except DeclineMessage:
                     continue
                 except:
-                    c, v, t = exc_info(); raise c, v, t.tb_next
+                    c, v, t = exc_info(); raise v.with_traceback(t.tb_next)
                 assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
 
     def any(self, *args, **kwargs):
@@ -129,7 +130,7 @@ class MessageBase(object):
                 except DeclineMessage:
                     continue
         except:
-            c, v, t = exc_info(); raise c, v, t.tb_next
+            c, v, t = exc_info(); raise v.with_traceback(t.tb_next)
         raise NoneOfTheObserversRespond(
                 unansweredMessage=self._message,
                 nrOfObservers=len(list(self._observers)))
@@ -150,9 +151,9 @@ class CallMessage(MessageBase):
 
     def call(self, *args, **kwargs):
         try:
-            return self.any(*args, **kwargs).next()
+            return next(self.any(*args, **kwargs))
         except:
-            c, v, t = exc_info(); raise c, v, t.tb_next
+            c, v, t = exc_info(); raise v.with_traceback(t.tb_next)
     __call__ = call
 
     def verifyMethodResult(self, method, result):
@@ -166,7 +167,7 @@ class DoMessage(MessageBase):
             for _ in self.all(*args, **kwargs):
                 pass
         except:
-            c, v, t = exc_info(); raise c, v, t.tb_next
+            c, v, t = exc_info(); raise v.with_traceback(t.tb_next)
     __call__ = do
 
     def verifyMethodResult(self, method, result):
@@ -195,13 +196,13 @@ class OnceMessage(MessageBase):
                     if is_generator(methodResult):
                         _ = yield methodResult
                 except:
-                    c, v, t = exc_info(); raise c, v, t.tb_next
+                    c, v, t = exc_info(); raise v.with_traceback(t.tb_next)
                 assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
             if isinstance(observer, Observable):
                 try:
                     _ = yield self._callonce(observer._observers, args, kwargs, done)
                 except:
-                    c, v, t = exc_info(); raise c, v, t.tb_next
+                    c, v, t = exc_info(); raise v.with_traceback(t.tb_next)
                 assert _ is None, "OnceMessage of %s returned '%s', but must always be None" % (self._observable, _)
 
 
@@ -239,8 +240,8 @@ class Observable(object):
 
     def printTree(self, depth=0):
         def printInColor(ident, color, text):
-            print ' '*ident, chr(27)+"[0;" + str(color) + "m", text, chr(27)+"[0m"
-        print ' ' * depth, self.__repr__()
+            print(' '*ident, chr(27)+"[0;" + str(color) + "m", text, chr(27)+"[0m")
+        print(' ' * depth, self.__repr__())
         for observer in self._observers:
             if hasattr(observer, 'printTree'):
                 observer.printTree(depth=depth+1)
@@ -273,7 +274,7 @@ def be(strand):
     return _beRecursive(strand, helicesDone)
 
 def _beRecursive(helix, helicesDone):
-    if callable(helix):
+    if isinstance(helix, collections.Callable):
         helix = helix(helicesDone)
     component = helix[0]
     strand = helix[1:]

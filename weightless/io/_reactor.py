@@ -31,6 +31,7 @@ from time import time
 from errno import EBADF, EINTR
 from weightless.core import local
 from os import pipe, close, write, read
+from functools import cmp_to_key
 
 def reactor():
     return local('__reactor__')
@@ -91,13 +92,14 @@ class Reactor(object):
         if process in self._processes:
             raise ValueError('Process is already in processes')
         self._processes[process] = Context(process, prio)
-        write(self._processWritePipe, 'x')
+        write(self._processWritePipe, b'x')
 
     def addTimer(self, seconds, callback):
         """Add a timer that calls callback() after the specified number of seconds. Afterwards, the timer is deleted.  It returns a token for removeTimer()."""
         timer = Timer(seconds, callback)
         self._timers.append(timer)
-        self._timers.sort(cmp=lambda lhs, rhs: 1 if not rhs else cmp(lhs.time, rhs.time))
+        # self._timers.sort(key=cmp_to_key(lambda lhs, rhs: 1 if not rhs else cmp(lhs.time, rhs.time)))
+        self._timers.sort(key=lambda timer: timer.time)
         return timer
 
     def removeReader(self, sok):
@@ -143,13 +145,13 @@ class Reactor(object):
             self._processes,
             self._suspended
         ]:
-            for handle in contextDict.keys():
+            for handle in list(contextDict.keys()):
                 contextDict.pop(handle)
                 if hasattr(handle, 'close'):
-                    print 'Reactor shutdown: closing', handle
+                    print('Reactor shutdown: closing', handle)
                     handle.close()
                 else:
-                    print 'Reactor shutdown: terminating %s' % handle
+                    print('Reactor shutdown: terminating %s' % handle)
         self._closeProcessPipe()
 
     def loop(self):
@@ -169,13 +171,18 @@ class Reactor(object):
             timeout = None
 
         try:
-            readers = self._readers.keys() + [self._processReadPipe]
-            rReady, wReady, ignored = self._select(readers, self._writers.keys(), [], timeout)
+            readers = list(self._readers.keys()) + [self._processReadPipe]
+            rReady, wReady, ignored = self._select(readers, list(self._writers.keys()), [], timeout)
         except TypeError:
             print_exc()
             self._findAndRemoveBadFd()
             return self
-        except (select_error, socket_error), (errno, description):
+        except ValueError:
+            print_exc()
+            self._findAndRemoveBadFd()
+            return self
+        except (select_error, socket_error) as xxx_todo_changeme:
+            (errno, description) = xxx_todo_changeme.args
             print_exc()
             if errno == EBADF:
                 self._findAndRemoveBadFd()
@@ -230,7 +237,7 @@ class Reactor(object):
                 print_exc()
 
     def _processCallbacks(self, processes):
-        for self.currenthandle, context in processes.items():
+        for self.currenthandle, context in list(processes.items()):
             if context.prio <= self._prio:
                 self.currentcontext = context
                 try:

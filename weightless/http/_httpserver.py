@@ -1,35 +1,35 @@
 # -*- coding: utf-8 -*-
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
-from _acceptor import Acceptor
+from ._acceptor import Acceptor
 from weightless.core import identify, Yield
-from weightless.http import REGEXP, FORMAT, parseHeaders, parseHeader
+from weightless.http import REGEXP, parseHeaders, parseHeader
 
 import re
-from StringIO import StringIO
+from io import StringIO
 from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
 from tempfile import TemporaryFile
 from email import message_from_file as parse_mime_message
@@ -41,9 +41,10 @@ from gzip import GzipFile
 from OpenSSL import SSL
 from random import randint
 from time import time
-from socket import socket, ssl,  SOL_SOCKET, SO_REUSEADDR, SO_LINGER
+from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER
 from struct import pack
-from sys import stdout, getdefaultencoding
+from sys import getdefaultencoding
+import collections
 
 
 RECVSIZE = 4096
@@ -116,7 +117,7 @@ class HttpsServer(object):
         if self._sok == None:
             def verify_cb(conn, cert, errnum, depth, ok):
                 # This obviously has to be updated
-                print 'Got certificate: %s' % cert.get_subject()
+                print('Got certificate: %s' % cert.get_subject())
                 return ok
 
             # Initialize context
@@ -159,7 +160,6 @@ class HttpsServer(object):
         self._acceptor.shutdown()
 
 
-from sys import stdout
 from resource import getrlimit, RLIMIT_NOFILE
 
 def maxFileDescriptors():
@@ -216,12 +216,12 @@ def updateResponseHeaders(headers, match, addHeaders=None, removeHeaders=None, r
     for header in removeHeaders:
         headerRe = _removeHeaderReCache.get(header, None)
         if headerRe is None:
-            
+
             headerRe = re.compile(r'\r\n%s:.*?\r\n' % re.escape(header), flags=re.I)
             _removeHeaderReCache[header] = headerRe
         _headers = headerRe.sub(CRLF, _headers, count=1)
 
-    for header, value in addHeaders.items():
+    for header, value in list(addHeaders.items()):
         _headers += '%s: %s\r\n' % (header, value)
 
     return _statusLine + _headers + CRLF, _body
@@ -299,7 +299,7 @@ class HttpHandler(object):
             # SOCKET CLOSED by PEER
             self._badRequest()
             return
-        self._dataBuffer += part
+        self._dataBuffer += part.decode('UTF-8')
         self._resetTimer()
         self._dealWithCall()
 
@@ -453,7 +453,7 @@ class HttpHandler(object):
         if self._timer:
             self._reactor.removeTimer(self._timer)
         self._reactor.removeReader(self._sok)
-        self._reactor.addWriter(self._sok, self._writeResponse(encoding=encoding).next, prio=self._prio)
+        self._reactor.addWriter(self._sok, self._writeResponse(encoding=encoding).__next__, prio=self._prio)
 
     def finalize(self):
         self._finalize(self._generatorFactory)
@@ -476,15 +476,15 @@ class HttpHandler(object):
                 if self._rest:
                     data = self._rest
                 else:
-                    data = self._handler.next()
+                    data = next(self._handler)
                     if data is Yield:
                         continue
-                    if callable(data):
-                        data(self._reactor, this.next)
+                    if isinstance(data, collections.Callable):
+                        data(self._reactor, this.__next__)
                         yield
                         data.resumeWriter()
                         continue
-                    if type(data) is unicode:
+                    if type(data) is str:
                         data = data.encode(self._defaultEncoding)
                 if encodeResponseBody is not None:
                     if endHeader is False:
@@ -536,7 +536,7 @@ class HttpHandler(object):
 
         try:
             self._sok.shutdown(SHUT_RDWR)
-        except SocketError, e:
+        except SocketError as e:
             code, message = e.args
             if code == 107:
                 pass # KVS: not well understood, not tested. It seems some quick (local) servers close the connection before this point is reached. It may happen more generally. In any case, it is based on a truely existing phenomenon
@@ -554,7 +554,7 @@ class HttpsHandler(HttpHandler):
                 return
         except (SSL.WantReadError, SSL.WantWriteError, SSL.WantX509LookupError):
             pass
-        except Exception, e:
+        except Exception as e:
             self._closeConnection()
         else:
             self._dataBuffer += part
@@ -566,7 +566,7 @@ class HttpsHandler(HttpHandler):
 
         try:
             self._sok.shutdown()  # No self._sok.shutdown(SHUT_RDWR) for some reason
-        except SocketError, e:
+        except SocketError as e:
             code, message = e.args
             if code == 107:
                 pass # KVS: not well understood, not tested. It seems some quick (local) servers close the connection before this point is reached. It may happen more generally. In any case, it is based on a truely existing phenomenon

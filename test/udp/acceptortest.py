@@ -30,6 +30,7 @@ from random import randint
 from subprocess import Popen, PIPE
 
 from weightless.udp import Acceptor
+import collections
 
 
 class UdpAcceptorTest(TestCase):
@@ -43,7 +44,7 @@ class UdpAcceptorTest(TestCase):
         self.assertTrue(str(port) in out, out)
         sok.close()
         callback = reactor.calledMethods[0].args[1]
-        self.assertTrue(callable(callback))
+        self.assertTrue(isinstance(callback, collections.Callable))
 
     def testHandle(self):
         data = []

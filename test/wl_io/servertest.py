@@ -1,31 +1,31 @@
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2006-2009 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
-from __future__ import with_statement
-from urllib2 import urlopen
-from StringIO import StringIO
+
+from urllib.request import urlopen
+from io import StringIO
 import socket
 import sys
 from select import select
@@ -38,7 +38,7 @@ class ServerTest(WeightlessTestCase):
 
     def testListen(self):
         server = Server(self.reactor, self.port)
-        self.send('localhost', self.port, 'are you listening?')
+        self.send('localhost', self.port, b'are you listening?')
         server.stop()
 
     def testConnect(self):
@@ -48,19 +48,19 @@ class ServerTest(WeightlessTestCase):
                 messages.append((yield))
         server = Server(self.reactor, self.port)
         server.addObserver(Interceptor())
-        sok = self.send('localhost', self.port, 'a message')
+        sok = self.send('localhost', self.port, b'a message')
         self.reactor.step().step()
-        self.assertEquals(['a message'], messages)
+        self.assertEquals([b'a message'], messages)
         sok.close()
         server.stop()
 
     def testConnectionNotProcessedRaisesError(self):
         server = Server(self.reactor, self.port)
-        sok = self.send('localhost', self.port, 'a message')
+        sok = self.send('localhost', self.port, b'a message')
         sys.stderr = StringIO()
         try:
             self.reactor.step()
-            self.assertTrue('None of the 0 observers respond to processConnection(...)' in sys.stderr.getvalue())
+            self.assertTrue('None of the 0 observers respond to processConnection(...)' in sys.stderr.getvalue(), sys.stderr.getvalue())
         finally:
             sys.stderr = sys.__stderr__
         sok.close()
@@ -72,14 +72,14 @@ class ServerTest(WeightlessTestCase):
                 yield 'over en uit'
         server = Server(self.reactor, self.port)
         server.addObserver(Interceptor())
-        connection = self.send('localhost', self.port, 'a message')
+        connection = self.send('localhost', self.port, b'a message')
         while connection not in select([connection],[],[],0)[0]:
             self.reactor.step()
-        self.assertEquals('over en uit', connection.recv(99))
+        self.assertEquals(b'over en uit', connection.recv(99))
         try:
-            connection.send('aap')
+            connection.send(b'aap')
             self.fail('connection is closed, this must raise an io error')
-        except socket.error, e:
+        except socket.error as e:
             pass
         connection.close()
         server.stop()
@@ -91,16 +91,16 @@ class ServerTest(WeightlessTestCase):
                 yield 'over en uit'
         server = Server(self.reactor, self.port)
         server.addObserver(Interceptor())
-        connection = self.send('localhost', self.port, 'a message')
+        connection = self.send('localhost', self.port, b'a message')
         sys.stderr = StringIO()
         try:
             self.reactor.step()
         finally:
             sys.stderr = sys.__stderr__
         try:
-            connection.send('aap')
+            connection.send(b'aap')
             self.fail('connection is closed, this must raise an io error')
-        except socket.error, e:
+        except socket.error as e:
             pass
         connection.close()
         server.stop()

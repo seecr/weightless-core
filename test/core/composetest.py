@@ -59,7 +59,7 @@ class _ComposeTest(TestCase):
         try:
             compose()
             self.fail()
-        except TypeError, e:
+        except TypeError as e:
             self.assertTrue(
                     "compose() takes at least 1 argument (0 given)" in str(e)
                     or # (python 2.5/2.6 C-API differences)
@@ -80,7 +80,7 @@ class _ComposeTest(TestCase):
         def multplyBy2(number): yield number * 2
         g = multplyBy2(2)
         wlt = compose(g)
-        response = wlt.next()
+        response = next(wlt)
         self.assertEquals(4, response)
 
     def testRunCompletely(self):
@@ -92,7 +92,7 @@ class _ComposeTest(TestCase):
         def multplyBy2(number): yield number * 2
         def delegate(number): yield multplyBy2(number * 2)
         wlt = compose(delegate(2))
-        response = wlt.next()
+        response = next(wlt)
         self.assertEquals(8, response)
 
     def testCreateTripleNextedcompose(self):
@@ -100,7 +100,7 @@ class _ComposeTest(TestCase):
         def delegate(number): yield multplyBy2(number * 2)
         def master(number): yield delegate(number * 2)
         wlt = compose(master(2))
-        response = wlt.next()
+        response = next(wlt)
         self.assertEquals(16, response)
 
     def testNoneProtocolNotFalsyProtocol_Responses(self):
@@ -109,18 +109,18 @@ class _ComposeTest(TestCase):
             yield data
 
         composed = compose(gen(firstResponse=False))
-        self.assertEquals(False, composed.next())
+        self.assertEquals(False, next(composed))
         try:
             composed.send(5)
             self.fail('AssertionError not raised')
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertEquals('Cannot accept data. First send None.', str(e))
 
         composed = compose(gen(firstResponse=None))
-        self.assertEquals(None, composed.next())
+        self.assertEquals(None, next(composed))
         try:
             composed.send(5)
-        except AssertionError, e:
+        except AssertionError as e:
             self.fail('NoneProtocol not triggered!, got AssertionError: %s' % str(e))
 
     def testNoneProtocolNotFalsyProtocol_Messages(self):
@@ -129,18 +129,18 @@ class _ComposeTest(TestCase):
             data = yield  # naughty programmer!, first yield None
 
         composed = compose(gen())
-        self.assertEquals('response', composed.next())
+        self.assertEquals('response', next(composed))
         try:
             composed.send(False)
             self.fail('AssertionError not raised')
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertEquals('Cannot accept data. First send None.', str(e))
 
         composed = compose(gen())
-        composed.next()
+        next(composed)
         try:
             composed.send(None)
-        except AssertionError, e:
+        except AssertionError as e:
             self.fail('NoneProtocol not triggered!, got AssertionError: %s' % str(e))
 
 
@@ -149,9 +149,9 @@ class _ComposeTest(TestCase):
             yield 'A'
             yield 'B'
         wlt = compose(thread())
-        response = wlt.next()
+        response = next(wlt)
         self.assertEquals('A', response)
-        response = wlt.next()
+        response = next(wlt)
         self.assertEquals('B', response)
 
     def testResumeNestedcompose(self):
@@ -175,8 +175,8 @@ class _ComposeTest(TestCase):
             r = yield
             raise StopIteration(r * 2)     # <= B
         t = compose(threadA())
-        self.assertEquals(7, t.next())              # 7 yielded at A
-        t.next() # adhere to 'send on None' protocol
+        self.assertEquals(7, next(t))              # 7 yielded at A
+        next(t) # adhere to 'send on None' protocol
         self.assertEquals(18, t.send(3))        # 3 send to A, 6 yielded at B, as return value to C, then yielded at D
 
     def testReturnOne(self):
@@ -266,7 +266,7 @@ class _ComposeTest(TestCase):
             rest = yield
             r.append('parent:'+rest)
         g = compose(parent())
-        g.next()
+        next(g)
         try:
             g.send('dataIn')
             self.fail()
@@ -281,13 +281,13 @@ class _ComposeTest(TestCase):
             yield
         def main():
             s = sub()
-            s.next() # start it already
+            next(s) # start it already
             yield s
         c = compose(main())
         try:
-            c.next()
+            next(c)
             self.fail('must raise')
-        except Exception, e:
+        except Exception as e:
             self.assertEquals('Generator already used.', str(e))
 
     def testForExhaustedGenerator(self):
@@ -296,17 +296,17 @@ class _ComposeTest(TestCase):
             yield
         def main():
             s = sub()
-            s.next()
+            next(s)
             try:
-                s.next()
+                next(s)
                 self.fail('must raise StopIteration')
             except StopIteration: pass
             yield s
         c = compose(main())
         try:
-            c.next()
+            next(c)
             self.fail('must not come here')
-        except Exception, e:
+        except Exception as e:
             self.assertEquals('Generator is exhausted.', str(e))
 
     def testPassThrowCorrectly(self):
@@ -314,11 +314,11 @@ class _ComposeTest(TestCase):
         def child():
             try:
                 yield 1
-            except Exception, e:
+            except Exception as e:
                 self.e = e
             yield 2
         g = compose(child())
-        g.next()
+        next(g)
         g.throw(MyException('aap'))
         self.assertEquals('aap', str(self.e))
 
@@ -327,14 +327,14 @@ class _ComposeTest(TestCase):
         def child(x):
             try:
                 yield 1
-            except Exception, e:
+            except Exception as e:
                 yield f2()
         def f2():
             self.e = local("x")
             yield 2
         a = compose(child("test"))
         g = compose(child("aap"))
-        g.next()
+        next(g)
         g.throw(MyException())
         self.assertEquals('aap', str(self.e))
 
@@ -350,7 +350,7 @@ class _ComposeTest(TestCase):
             while True:
                 data.append((yield None))
         program = compose(g())
-        program.next() # init
+        next(program) # init
         program.send('mies')
         #program.next() # this is what we don't want and what we're testing here
         #program.next()
@@ -367,11 +367,11 @@ class _ComposeTest(TestCase):
         def f():
             try:
                 yield None
-            except BaseException, e:
+            except BaseException as e:
                 r.append(e)
                 raise
         g = compose(f())
-        g.next()
+        next(g)
         g.close()
         self.assertEquals(GeneratorExit, type(r[0]))
 
@@ -382,11 +382,11 @@ class _ComposeTest(TestCase):
         def f2():
             try:
                 yield 1
-            except BaseException, e:
+            except BaseException as e:
                 self.e = local("x")
                 raise
         g = compose(child("aap"))
-        g.next()
+        next(g)
         g.close()
         self.assertEquals('aap', str(self.e))
 
@@ -395,11 +395,11 @@ class _ComposeTest(TestCase):
         def f():
             try:
                 yield None
-            except Exception, e:
+            except Exception as e:
                 r.append(e)
                 raise
         g = compose(f())
-        g.next()
+        next(g)
         try:
             g.throw(StopIteration)
         except:
@@ -415,13 +415,13 @@ class _ComposeTest(TestCase):
         def parent():
             try:
                 yield child()
-            except MyException, e:
+            except MyException as e:
                 raise WrappedException(e)
         g = compose(parent())
         try:
-            g.next()
+            next(g)
             self.fail()
-        except WrappedException, e:
+        except WrappedException as e:
             self.assertEquals('abc', str(e))
 
     def testDealloc(self):
@@ -432,8 +432,8 @@ class _ComposeTest(TestCase):
             yield 'C'
             yield 'D'
         g = compose(f())
-        g.next()
-        g.next()
+        next(g)
+        next(g)
         del g
 
     def testPassException2(self):
@@ -445,14 +445,14 @@ class _ComposeTest(TestCase):
         def parent():
             try:
                 yield child()
-            except MyException, e:
+            except MyException as e:
                 raise WrappedException(e)
         g = compose(parent())
-        g.next()
+        next(g)
         try:
-            g.next()
+            next(g)
             self.fail()
-        except WrappedException, e:
+        except WrappedException as e:
             self.assertEquals('abc', str(e))
 
     def xtestPerformance(self):
@@ -488,13 +488,13 @@ class _ComposeTest(TestCase):
             stdout.write('*')
             stdout.flush()
             t0 = time()
-            [list(compose(f3('begin'))) for i in xrange(100)]
+            [list(compose(f3('begin'))) for i in range(100)]
             t1 = time()
             tg = tg + t1 - t0
-            [baseline() for i in xrange(100)]
+            [baseline() for i in range(100)]
             t2 = time()
             tb = tb + t2 - t1
-        print 'Overhead compose compared to list(): %2.2f %%' % ((tg/tb - 1) * 100.0)
+        print('Overhead compose compared to list(): %2.2f %%' % ((tg/tb - 1) * 100.0))
 
     def testMemLeaks(self):
         def f1(arg):
@@ -506,7 +506,7 @@ class _ComposeTest(TestCase):
                 r2 = yield f1(r1)
             except GeneratorExit:
                 raise
-            except Exception, e:
+            except Exception as e:
                 raise StopIteration(e, 'more')
         def f3(arg):
             e = yield f2('aa')
@@ -516,9 +516,9 @@ class _ComposeTest(TestCase):
             except Exception:
                 raise
         # runs this a zillion times and watch 'top'
-        for i in xrange(1):
+        for i in range(1):
             g = compose(f3('noot'))
-            g.next()
+            next(g)
             g.send('A')
             g.send(None)
             try:
@@ -532,15 +532,15 @@ class _ComposeTest(TestCase):
         def g():
             try:
                 yield f()
-            except Exception, e:
+            except Exception as e:
                 raise Exception(e)
         c = compose(g())
-        r = c.next()
+        r = next(c)
         self.assertEquals('A', r)
         try:
             c.throw(Exception('wrong'))
             self.fail('must raise wrapped exception')
-        except Exception, e:
+        except Exception as e:
             self.assertEquals("Exception(Exception('wrong',),)", repr(e))
 
     def testNestedClose(self):
@@ -549,15 +549,15 @@ class _ComposeTest(TestCase):
         def g():
             try:
                 yield f()
-            except BaseException, e:
+            except BaseException as e:
                 raise Exception(e)
         c = compose(g())
-        r = c.next()
+        r = next(c)
         self.assertEquals('A', r)
         try:
             c.close()
             self.fail('must raise wrapped CLOSE exception')
-        except Exception, e:
+        except Exception as e:
             self.assertEquals("Exception(GeneratorExit(),)", repr(e))
 
     def testMaskException(self):
@@ -567,12 +567,12 @@ class _ComposeTest(TestCase):
             except:
                 pass
         c = compose(f())
-        c.next()
+        next(c)
         try:
             c.throw(Exception('aap'))
         except StopIteration:
             pass
-        except Exception, e:
+        except Exception as e:
             self.fail(str(e))
 
     def testThrowWithExceptionCaughtDoesNotDitchResponse(self):
@@ -583,7 +583,7 @@ class _ComposeTest(TestCase):
                 pass
             yield 'is this ditched?'
         c = compose(f())
-        response = c.next()
+        response = next(c)
         self.assertEquals('response', response)
         response = c.throw(StopIteration())
         self.assertEquals('is this ditched?', response)
@@ -599,7 +599,7 @@ class _ComposeTest(TestCase):
             self.assertEquals('return', ret)
             yield 'is this ditched?'
         c = compose(f())
-        response = c.next()
+        response = next(c)
         self.assertEquals('response', response)
         response = c.throw(StopIteration())
         self.assertEquals('is this ditched?', response)
@@ -660,11 +660,11 @@ class _ComposeTest(TestCase):
             yield 'response'
             yield 'response'
         c = compose(sub())
-        self.assertEquals('response', c.next())
+        self.assertEquals('response', next(c))
         try:
             c.send('message')
             self.fail('must raise exception')
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertEquals('Cannot accept data. First send None.', str(e))
 
     def testExceptionsHaveGeneratorCallStackAsBackTrace(self):
@@ -673,9 +673,9 @@ class _ComposeTest(TestCase):
         def g():
             yield f()
         c = compose(g())
-        c.next()
+        next(c)
         try:
-            c.throw(Exception, Exception('ABC'))
+            c.throw(Exception(Exception('ABC')))
             self.fail()
         except Exception:
             exType, exValue, exTraceback = exc_info()
@@ -691,7 +691,7 @@ class _ComposeTest(TestCase):
         soll = """  File "%s", line %s, in f
     %s""" % (fileDict['__file__'], line if cpython else '?', "def f():" if cpython else "<no source line available>")
         self.assertEquals(soll, tostring(g))
-        g.next()
+        next(g)
         soll = """  File "%s", line %s, in f
     yield""" % (fileDict['__file__'], line + 1)
         self.assertEquals(soll, tostring(g))
@@ -709,7 +709,7 @@ class _ComposeTest(TestCase):
     yield f1()
   File "%s", line %s, in f1
     yield""" % (fileDict['__file__'], l2, fileDict['__file__'], l1)
-        c.next()
+        next(c)
         self.assertEquals(result, tostring(c), "\n%s\n!=\n%s\n" % (result, tostring(c)))
 
     def testToStringForUnstartedGenerator(self):
@@ -729,7 +729,7 @@ class _ComposeTest(TestCase):
         try:
             tostring('x')
             self.fail('must raise TypeError')
-        except TypeError, e:
+        except TypeError as e:
             self.assertEquals("tostring() expects generator", str(e))
 
     def testFindLocalNotThere(self):
@@ -738,10 +738,10 @@ class _ComposeTest(TestCase):
         def f2():
             try:
                 l = local('doesnotexist')
-            except AttributeError, e:
+            except AttributeError as e:
                 yield e
         f = compose(f1())
-        result = f.next()
+        result = next(f)
         self.assertEquals('doesnotexist', str(result))
 
     def testFindLocal(self):
@@ -755,9 +755,9 @@ class _ComposeTest(TestCase):
             l = local('someLocal')
             yield l
         f = compose(f1())
-        result = f.next()
+        result = next(f)
         self.assertEquals('f1', str(result))
-        self.assertEquals('f2', str(compose(f2()).next()))
+        self.assertEquals('f2', str(next(compose(f2()))))
 
     def testFindLocalWithComposeUnassignedToVariable(self):
         def f1():
@@ -766,7 +766,7 @@ class _ComposeTest(TestCase):
         def f2():
             l = local('f1local')
             yield l
-        self.assertEquals('f1', compose(f1()).next())
+        self.assertEquals('f1', next(compose(f1())))
 
     def testFindClosestLocal(self):
         def f1():
@@ -779,7 +779,7 @@ class _ComposeTest(TestCase):
             l = local('myLocal')
             yield l
         f = compose(f1())
-        result = f.next()
+        result = next(f)
         self.assertEquals('f2', str(result))
 
     def testOneFromPEP380(self):
@@ -795,7 +795,7 @@ class _ComposeTest(TestCase):
         def f():
             try:
                 yield g()
-            except SystemExit, e:
+            except SystemExit as e:
                 msg.append('see me')
             yield
         def g():
@@ -814,7 +814,7 @@ class _ComposeTest(TestCase):
                 raise SystemExit('see me')
             yield
         c = compose(f())
-        c.next()
+        next(c)
         c.throw(KeyboardInterrupt())
         self.assertEquals(['KeyboardInterrupt'], msg)
         c.throw(SystemExit())
@@ -844,7 +844,7 @@ class _ComposeTest(TestCase):
         try:
             g1.close()
             self.fail('must raise ValueError')
-        except ValueError, e:
+        except ValueError as e:
             self.assertEquals('1', str(e))
 
         @autostart
@@ -873,7 +873,7 @@ class _ComposeTest(TestCase):
         try:
             g3.close()
             self.fail('must not raise an exception')
-        except RuntimeError, e:
+        except RuntimeError as e:
             self.assertEquals('generator ignored GeneratorExit', str(e))
 
 
@@ -885,7 +885,7 @@ class _ComposeTest(TestCase):
         g4 = f4()
         try:
             g4.close()
-        except BaseException, e:
+        except BaseException as e:
             self.fail('must not raise an exception')
 
         # This is test one
@@ -900,7 +900,7 @@ class _ComposeTest(TestCase):
                 msg.append('GeneratorExit turned into StopIteration')
                 raise StopIteration  # <= this is the clue, see next test
         g5 = compose(f5())
-        g5.next()
+        next(g5)
         try:
             g5.throw(GeneratorExit())
             self.fail('must reraise GeneratorExit if no exception by g1()')
@@ -918,7 +918,7 @@ class _ComposeTest(TestCase):
                 msg.append('GeneratorExit ignored')
             yield # <= this is the clue, see previous test
         g7 = compose(f7())
-        g7.next()
+        next(g7)
         try:
             g7.throw(GeneratorExit)
             self.fail('must reraise RuntimeError(generator ignored GeneratorExit)')
@@ -934,7 +934,7 @@ class _ComposeTest(TestCase):
             try:
                 yield f9()
             #except RuntimeError, e:
-            except ValueError, e:
+            except ValueError as e:
                 msg.append(str(e))
                 raise StopIteration()
         def f9():
@@ -947,7 +947,7 @@ class _ComposeTest(TestCase):
             yield
 
         g8 = compose(f8())
-        g8.next()
+        next(g8)
         try:
             g8.throw(GeneratorExit())
             self.fail('must raise StopIteration')
@@ -974,13 +974,13 @@ class _ComposeTest(TestCase):
         def f():
             gc.collect()
             yield
-        compose(f()).next()
+        next(compose(f()))
 
     def testYieldComposeCloseAndThrow(self):
         def f():
             try:
                 yield 42
-            except Exception, e:
+            except Exception as e:
                 yield 84
 
         c = compose(f())
@@ -991,7 +991,7 @@ class _ComposeTest(TestCase):
     def testMessagesAndResponseAreFreed(self):
         def f():
             v = yield ATrackedObj() # some that is tracked
-        self.assertTrue('ATrackedObj' in str(compose(f()).next()))
+        self.assertTrue('ATrackedObj' in str(next(compose(f()))))
 
     def testDecorator(self):
         from weightless.core import compose
@@ -1017,7 +1017,7 @@ class _ComposeTest(TestCase):
         si = StopIteration()
         try:
             si.args = 9 # not a tuple. Actually checked by StopIteration itself!
-        except TypeError, e:
+        except TypeError as e:
             self.assertEquals("'int' object is not iterable", str(e))
 
     def testArgsIsNoTuple(self):
@@ -1044,14 +1044,14 @@ class _ComposeTest(TestCase):
         def f3():
             raise StopIteration(4,5,6)
             yield
-        try: f0().next()
-        except StopIteration, e: self.assertEquals((), e.args)
-        try: f1().next()
-        except StopIteration, e: self.assertEquals((1,), e.args)
-        try: f2().next()
-        except StopIteration, e: self.assertEquals((2,3), e.args)
-        try: f3().next()
-        except StopIteration, e: self.assertEquals((4,5,6), e.args)
+        try: next(f0())
+        except StopIteration as e: self.assertEquals((), e.args)
+        try: next(f1())
+        except StopIteration as e: self.assertEquals((1,), e.args)
+        try: next(f2())
+        except StopIteration as e: self.assertEquals((2,3), e.args)
+        try: next(f3())
+        except StopIteration as e: self.assertEquals((4,5,6), e.args)
 
     def testRaisStopIterationWithTupleValue(self):
         def f0():
@@ -1074,7 +1074,7 @@ class _ComposeTest(TestCase):
             second_msg = yield
             yield second_msg
         p = compose(g())
-        p.next()
+        next(p)
         p.send("first msg")
         p.send(None)
         x = p.send("second msg")
@@ -1089,8 +1089,8 @@ class _ComposeTest(TestCase):
             two = yield
         c = compose(g())
         try:
-            c.next()
-        except StopIteration, e:
+            next(c)
+        except StopIteration as e:
             self.assertEquals((3,), e.args)
 
     def testComposeInCompose(self):
@@ -1116,15 +1116,15 @@ class _ComposeTest(TestCase):
         genYieldLine = __NEXTLINE__(offset=3)
         def gen():
             genF = f()
-            self.assertEquals("alreadyStarted", genF.next())
+            self.assertEquals("alreadyStarted", next(genF))
             yield genF
 
         composed = compose(gen())
         
         try:
             cLine = __NEXTLINE__()
-            composed.next()
-        except AssertionError, e:
+            next(composed)
+        except AssertionError as e:
             self.assertEquals('Generator already used.', str(e))
         
             stackText = """\
@@ -1147,13 +1147,13 @@ AssertionError: Generator already used.\n""" % {
         def f():
             yield
         startedGen = f()
-        startedGen.next()
+        next(startedGen)
         ok = []
         def gen():
             try:
                 yield startedGen
                 self.fail('Should not happen')
-            except AssertionError, e:
+            except AssertionError as e:
                 self.assertEquals("Generator already used.", str(e))
         def anotherGen():
             try:
@@ -1164,7 +1164,7 @@ AssertionError: Generator already used.\n""" % {
 
 
         try:
-            composed.next()
+            next(composed)
         except StopIteration:
             pass
         else:
@@ -1213,26 +1213,26 @@ class ComposeCTest(_ComposeTest):
     def testQueueSize(self):
         testrange = 9 #QUEUE SIZE = 10
         def f():
-            raise StopIteration(*xrange(testrange))
+            raise StopIteration(*range(testrange))
             yield 'f done'
         def g():
             results = []
             x = yield f()
             results.append(x)
-            for i in xrange(testrange-1):
+            for i in range(testrange-1):
                 results.append((yield))
             yield results
         c = compose(g())
-        self.assertEquals([range(testrange)], list(c))
+        self.assertEquals([list(range(testrange))], list(c))
 
     def testQueueSizeExceeded(self):
         testrange = 10 #QUEUE SIZE = 10
         def f():
-            raise StopIteration(*xrange(testrange))
+            raise StopIteration(*range(testrange))
             yield
         def g():
             x = yield f()
-        self.assertRaises(RuntimeError, compose(g()).next)
+        self.assertRaises(RuntimeError, compose(g()).__next__)
 
     def testStackOverflow(self):
         max_recursion_depth = getrecursionlimit()
@@ -1242,7 +1242,7 @@ class ComposeCTest(_ComposeTest):
         c = compose(f())
         try:
             list(c)
-        except RuntimeError, e:
+        except RuntimeError as e:
             self.fail('must not raise %s' % e)
 
         max_recursion_depth += 1 # <== 
@@ -1250,7 +1250,7 @@ class ComposeCTest(_ComposeTest):
         try:
             list(c)
             self.fail('must raise runtimeerror')
-        except RuntimeError, e:
+        except RuntimeError as e:
             self.assertEquals('maximum recursion depth exceeded (compose)', str(e))
 
     def testDECREF_in_compose_clear(self):
@@ -1261,10 +1261,10 @@ class ComposeCTest(_ComposeTest):
             raise StopIteration(*msg.split())
 
         r = compose(f())
-        r.next()
+        next(r)
         try:
             r.send("ab an")
-        except StopIteration, e:
+        except StopIteration as e:
             self.assertEquals(('ab', 'an'), e.args)
 
     def testAlreadyStartedCompose(self):
@@ -1273,13 +1273,13 @@ class ComposeCTest(_ComposeTest):
             yield
         def g():
             h = compose(f())
-            h.next()
+            next(h)
             yield h
         c = compose(g())
         try:
-            c.next()
+            next(c)
             self.fail("must raise check already started generator failure")
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertEquals("Generator already used.", str(e))
 
     def testSelftest(self):
@@ -1291,6 +1291,6 @@ def gettypeerrormsg():
     def compose(initial, arg1 = None): pass
     try:
         compose()
-    except TypeError, e:
+    except TypeError as e:
         return str(e)
  

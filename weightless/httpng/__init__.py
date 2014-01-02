@@ -22,5 +22,5 @@
 # 
 ## end license ##
 
-import _httpprotocol as http
-from _httpprotocol import HttpProtocol
+from . import _httpprotocol as http
+from ._httpprotocol import HttpProtocol

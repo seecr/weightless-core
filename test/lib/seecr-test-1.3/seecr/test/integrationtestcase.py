@@ -23,7 +23,7 @@
 #
 ## end license ##
 
-from __future__ import with_statement
+
 
 from errno import ECHILD
 from os.path import isdir, join, abspath, dirname, basename, isfile, realpath
@@ -31,17 +31,18 @@ from os import system, listdir, makedirs, waitpid, kill, WNOHANG, getenv
 from sys import stdout, path as systemPath
 from random import randint, choice
 from time import sleep
-from StringIO import StringIO
+from io import StringIO
 from subprocess import Popen
 from signal import SIGTERM
-from urllib import urlopen, urlencode
+from urllib.request import urlopen
+from urllib.parse import urlencode
 from lxml.etree import XMLSyntaxError, parse
 from string import ascii_letters
 from time import time
 
-from seecrtestcase import SeecrTestCase
+from .seecrtestcase import SeecrTestCase
 
-randomString = lambda n=4: ''.join(choice(ascii_letters) for i in xrange(n))
+randomString = lambda n=4: ''.join(choice(ascii_letters) for i in range(n))
 
 class IntegrationTestCase(SeecrTestCase):
     def __getattr__(self, name):
@@ -90,7 +91,7 @@ class IntegrationState(object):
         flagOptions = flagOptions if flagOptions else []
         for flag in flagOptions:
             args.append("--%s" % flag)
-        for k,v in kwargs.items():
+        for k,v in list(kwargs.items()):
             args.append("--%s=%s" % (k, str(v)))
         serverProcess = Popen(
             executable=executable,
@@ -119,13 +120,13 @@ class IntegrationState(object):
     def _stopServer(self, serviceName, waitInSeconds=20.0):
         kill(self.pids[serviceName], SIGTERM)
 
-        for i in xrange(int(waitInSeconds * 200)):
+        for i in range(int(waitInSeconds * 200)):
             try:
                 result = waitpid(self.pids[serviceName], WNOHANG)
                 if result != (0, 0):
                     break
                 sleep(0.005)
-            except OSError, e:
+            except OSError as e:
                 if e.errno == ECHILD:  # ECHILD / 10 --> No child processes, means we're done.
                     break
                 raise
@@ -144,7 +145,7 @@ class IntegrationState(object):
         flagOptions = flagOptions if flagOptions else []
         for flag in flagOptions:
             args.append("--%s" % flag)
-        for k,v in kwargs.items():
+        for k,v in list(kwargs.items()):
             args.append("--%s=%s" % (k, str(v)))
         process = Popen(
             executable=executable,
@@ -178,7 +179,7 @@ class IntegrationState(object):
 
 
     def tearDown(self):
-        for serviceName in self.pids.keys():
+        for serviceName in list(self.pids.keys()):
             self._stdoutWrite("Stopping service '%s' for state '%s'\n" % (serviceName, self.stateName))
             self._stopServer(serviceName)
 

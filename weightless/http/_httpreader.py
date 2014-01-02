@@ -24,9 +24,9 @@
 ## end license ##
 
 from socket import socket, SHUT_RDWR, SHUT_WR
-from urlparse import urlsplit
+from urllib.parse import urlsplit
 from weightless.http import REGEXP, FORMAT, HTTP, parseHeaders
-from _bufferedhandler import BufferedHandler
+from ._bufferedhandler import BufferedHandler
 
 import sys
 
@@ -44,11 +44,11 @@ def Connector(reactor, host, port):
 
 class HandlerFacade(object):
     def __init__(self, responseHandler, errorHandler, bodyHandler):
-        self._bodyHandler = bodyHandler and bodyHandler() or xrange(0)
+        self._bodyHandler = bodyHandler and bodyHandler() or range(0)
         self.throw = errorHandler
         self.send = responseHandler
-    def next(self):
-        return self._bodyHandler.next()
+    def __next__(self):
+        return next(self._bodyHandler)
     def __iter__(self):
         return self
 
@@ -94,13 +94,13 @@ class HttpReader(object):
         self._sok.sendall(
             FORMAT.RequestLine % {'Method': 'POST', 'Request_URI': path, 'HTTPVersion':'1.1'}
             + FORMAT.HostHeader % {'Host': host}
-            + ''.join(FORMAT.Header % header for header in headers.items())
+            + ''.join(FORMAT.Header % header for header in list(headers.items()))
             + FORMAT.UserAgentHeader
             + HTTP.CRLF)
-        item = self._handler.next()
+        item = next(self._handler)
         while item:
             self._sendChunk(item)
-            item = self._handler.next()
+            item = next(self._handler)
 
         self._sendChunk('')
         self._reactor.removeWriter(self._sok)

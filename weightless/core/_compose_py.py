@@ -1,26 +1,26 @@
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 from types import GeneratorType
@@ -102,8 +102,8 @@ def _compose(initial, stepping):
             if is_generator(response):
                 generators.append(response)
                 frame = response.gi_frame
-                if cpython: assert frame, 'Generator is exhausted.' 
-                if cpython: assert frame.f_lineno == frame.f_code.co_firstlineno, 'Generator already used.' 
+                if cpython: assert frame, 'Generator is exhausted.'
+                if cpython: assert frame.f_lineno == frame.f_code.co_firstlineno, 'Generator already used.'
                 try:
                     if stepping:
                         _ = yield Yield
@@ -121,7 +121,7 @@ def _compose(initial, stepping):
                 except BaseException:
                     exType, exValue, exTraceback = exc_info()
                     exception = (exType, exValue, exTraceback.tb_next)
-        except StopIteration, returnValue:
+        except StopIteration as returnValue:
             exception = None
             generators.pop()
             retvals = returnValue.args
@@ -136,7 +136,7 @@ def _compose(initial, stepping):
             exType, exValue, exTraceback = exc_info()
             exception = (exType, exValue, exTraceback.tb_next)
     if exception:
-        raise exception[0], exception[1], exception[2]
+        raise exception[1].with_traceback(exception[2])
     if messages:
         raise StopIteration(*messages)
 

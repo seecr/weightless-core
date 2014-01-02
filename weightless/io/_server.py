@@ -23,7 +23,7 @@
 # 
 ## end license ##
 
-from __future__ import with_statement
+
 from socket import socket, SHUT_RDWR, SOL_SOCKET, SOL_TCP, SO_REUSEADDR, SO_LINGER, TCP_CORK, SO_ERROR
 from struct import pack
 from weightless.core import Observable

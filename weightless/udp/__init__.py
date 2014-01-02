@@ -23,4 +23,4 @@
 # 
 ## end license ##
 
-from _acceptor import Acceptor
+from ._acceptor import Acceptor

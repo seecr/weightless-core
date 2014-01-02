@@ -23,9 +23,9 @@
 # 
 ## end license ##
 
-from __future__ import with_statement
+
 from cgi import parse_qs, parse_header
-from urlparse import urlsplit, urlparse
+from urllib.parse import urlsplit, urlparse
 
 from weightless.core import compose, Observable
 from weightless.core.utils import readRe, readAll, copyBytes
@@ -68,7 +68,7 @@ class HttpProtocol(Observable):
                 yield requestEntityTooLarge()
                 yield HTTP.CRLF
                 return
-            except TimeoutException, e:
+            except TimeoutException as e:
                 yield requestTimeout()
                 yield HTTP.CRLF
                 return
@@ -81,9 +81,9 @@ class HttpProtocol(Observable):
             netloc = tuple(netloc.split(':'))
             query = parse_qs(query)
             if 'content-length' in headers:
-                length = int(headers['content-length'].keys()[0])
+                length = int(list(headers['content-length'].keys())[0])
                 reqArgs['ContentLength'] = length
-            chunked = 'transfer-encoding' in headers and headers['transfer-encoding'].keys()[0] == 'chunked'
+            chunked = 'transfer-encoding' in headers and list(headers['transfer-encoding'].keys())[0] == 'chunked'
             try:
                 handler = self.any.processRequest(
                     scheme=scheme, netloc=netloc, path=path, query=query, fragment=fragment, **reqArgs)
@@ -103,7 +103,7 @@ class HttpProtocol(Observable):
 
 
 def feedChunks(handler):
-    handler.next()
+    next(handler)
     while True:
         chunkSizeLine = yield readRe(REGEXP.CHUNK_SIZE_LINE, MAXREQUESTSIZE)
         size = int(chunkSizeLine['ChunkSize'], 16)

@@ -23,4 +23,4 @@
 # 
 ## end license ##
 
-from _utils import identify, autostart, retval, consume, asList, asString, copyBytes, readRe, readAll, isgeneratorfunction
+from ._utils import identify, autostart, retval, consume, asList, asString, copyBytes, readRe, readAll, isgeneratorfunction
