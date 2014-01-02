@@ -24,7 +24,7 @@
 
 from weightless.core import compose
 
-print """ 1. calling generators """
+print(""" 1. calling generators """)
 def f():
     yield 'No'
     yield g()
@@ -36,18 +36,18 @@ def g():
 
 p = f()
 
-print p.next()
-print p.next() #?
-print p.next()
+print(next(p))
+print(next(p)) #?
+print(next(p))
 
 p = compose(f())
 
-print p.next()
-print p.next()
-print p.next()
+print(next(p))
+print(next(p))
+print(next(p))
 
 
-print """ 2. Catching exceptions """
+print(""" 2. Catching exceptions """)
 
 def f():
     try:
@@ -60,14 +60,14 @@ def g():
 
 p = f()
 
-print p.next()
+print(next(p))
 
 p = compose(f())
 
-print p.next()
+print(next(p))
 
 
-print """ 3. fixing Stack Traces """
+print(""" 3. fixing Stack Traces """)
 
 def f():
     yield g()
@@ -81,7 +81,7 @@ def h():
 # Without tbtools: remove the tbtools symlink
 p = compose(f())
 
-print p.next()
+print(next(p))
 def f():
     yield g()
 
@@ -94,4 +94,4 @@ def h():
 
 p = compose(f())
 
-p.next()
+next(p)

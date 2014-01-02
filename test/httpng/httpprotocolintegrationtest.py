@@ -23,10 +23,9 @@
 # 
 ## end license ##
 
-from __future__ import with_statement
-from urllib2 import urlopen, Request, urlopen
-from StringIO import StringIO
-from socket import socket, SHUT_RDWR, SO_REUSEADDR, SOL_SOCKET
+from urllib.request import urlopen, Request, urlopen
+from io import StringIO
+from socket import socket, SHUT_RD, SHUT_WR, SHUT_RDWR, SO_REUSEADDR, SOL_SOCKET
 from select import select
 import sys
 from subprocess import Popen, PIPE
@@ -91,7 +90,7 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
         body = []
         class MyServer(object):
             def processRequest(this, Method, RequestURI, HTTPVersion, Headers, **kwargs):
-                length = int(Headers['content-length'].keys()[0])
+                length = int(list(Headers['content-length'].keys())[0])
                 @autostart
                 def destination(result):
                     while True:
@@ -333,7 +332,7 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
             self.fail('re-bind must raise Address Already in Use Exception')
         except AssertionError:
             raise
-        except Exception, e:
+        except Exception as e:
             pass
 
 

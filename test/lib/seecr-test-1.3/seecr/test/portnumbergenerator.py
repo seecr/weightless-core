@@ -33,7 +33,7 @@ class PortNumberGenerator(object):
 
     @classmethod
     def next(cls):
-        for i in xrange(cls._maxTries):
+        for i in range(cls._maxTries):
             sok = socket()
             sok.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
             sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)

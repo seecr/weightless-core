@@ -23,7 +23,6 @@
 # 
 ## end license ##
 
-from types import InstanceType, ClassType
 from re import compile
 
 def emptyGenerator():
@@ -50,14 +49,14 @@ class CallTrace:
             return object.__getattr__(self, attrname)
         if attrname in self.ignoredAttributes:
             raise AttributeError("'CallTrace' is instructed to not have an attribute called '%s'" % attrname)
-        if self.onlySpecifiedMethods and not attrname in (self.returnValues.keys() + self.methods.keys() + self.emptyGeneratorMethods):
+        if self.onlySpecifiedMethods and not attrname in (list(self.returnValues.keys()) + list(self.methods.keys()) + self.emptyGeneratorMethods):
             raise AttributeError("'CallTrace' does not support '%s' as it is instructed to only allow specified methods." % attrname) 
         return CallTraceMethod(attrname, self)
 
     def __calltrace__(self):
-        return map(str, self.calledMethods)
+        return list(map(str, self.calledMethods))
 
-    def __nonzero__(self):
+    def __bool__(self):
         return 1
 
     def __repr__(self):
@@ -95,11 +94,11 @@ class TracedCall:
         self.arguments = list(args) # For backwards compatibility only
         self.kwargs = kwargs
         if self._callTrace._verbose:
-            print '%s.%s -> %s' % (
+            print('%s.%s -> %s' % (
                 self._callTrace._name,
                 self.__repr__(),
-                self.represent(self._callTrace.returnValues.get(self.name, None)))
-        if self._callTrace.exceptions.has_key(self.name):
+                self.represent(self._callTrace.returnValues.get(self.name, None))))
+        if self.name in self._callTrace.exceptions:
             raise self._callTrace.exceptions[self.name]
 
         returnValue = None
@@ -129,7 +128,7 @@ class TracedCall:
         if something == None:
             return 'None'
 
-        if isinstance(something, basestring):
+        if isinstance(something, str):
             return "'%s'" % something
         if type(something) == int or type(something) == float:
             return str(something)
@@ -146,7 +145,7 @@ class TracedCall:
         return typeName
 
     def __repr__(self):
-        return '%s(%s)' % (self.name, ", ".join(map(self.represent, self.args)+['%s=%s' % (key, self.represent(value)) for key, value in self.kwargs.items()]))
+        return '%s(%s)' % (self.name, ", ".join(list(map(self.represent, self.args))+['%s=%s' % (key, self.represent(value)) for key, value in list(self.kwargs.items())]))
 
 
 class CalledMethods(list):

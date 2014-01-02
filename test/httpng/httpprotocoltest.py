@@ -51,7 +51,7 @@ class HttpProtocolTest(TestCase):
 
     def processConnection(self):
         stack = compose(self.p.processConnection())
-        self.assertEquals(None, stack.next()) # i.e. it starts with accepting data
+        self.assertEquals(None, next(stack)) # i.e. it starts with accepting data
         return stack
 
     def testRequestHandledByDifferentObservers(self):
@@ -68,11 +68,11 @@ class HttpProtocolTest(TestCase):
         stack = self.processConnection()
         response = stack.send('GET / HTTP/1.1\r\n\r\n')
         self.assertEquals('HTTP/1.1 200 Ok\r\n', response)
-        self.assertEquals('hello GET', stack.next())
-        stack.next()
+        self.assertEquals('hello GET', next(stack))
+        next(stack)
         response = stack.send('HEAD / HTTP/1.1\r\n\r\n')
         self.assertEquals('HTTP/1.1 200 Ok\r\n', response)
-        self.assertEquals('hello POST', stack.next())
+        self.assertEquals('hello POST', next(stack))
 
     def testForwardParsedGETRequest(self):
         args = []
@@ -149,7 +149,7 @@ class HttpProtocolTest(TestCase):
         self.assertEquals(None, response)
         response = stack.send('\nContent-Length: 5\r\n\r\n12345')
         self.assertEquals('HTTP/1.1 2', response)
-        response = stack.next()
+        response = next(stack)
         self.assertEquals('00 Ok\r\n', response)
         self.assertEquals('12345', buff.value())
 
@@ -212,7 +212,7 @@ class HttpProtocolTest(TestCase):
         self.assertEquals(None, response)
         response = stack.send('\r\n')
         self.assertEquals('HTTP/1.1 200 Ok\r\n', response)
-        response = stack.next()
+        response = next(stack)
         self.assertEquals('12345', response)
         self.assertEquals('12345', ''.join(parts))
 

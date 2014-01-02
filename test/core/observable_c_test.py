@@ -23,27 +23,27 @@ class Observable_C_Test(TestCase):
 
     def testCreateAllGeneratorWithWrongArgs(self):
         try: AllGenerator(); self.fail()
-        except TypeError, e:
+        except TypeError as e:
             self.assertEquals("Required argument 'methods' (pos 1) not found", str(e))
 
         try: AllGenerator({}); self.fail()
-        except TypeError, e:
+        except TypeError as e:
             self.assertEquals("__new__() argument 1 must be tuple, not dict", str(e))
 
         try: AllGenerator(()); self.fail()
-        except TypeError, e:
+        except TypeError as e:
             self.assertEquals("Required argument 'args' (pos 2) not found", str(e))
 
         try: AllGenerator((), {}); self.fail()
-        except TypeError, e:
+        except TypeError as e:
             self.assertEquals("__new__() argument 2 must be tuple, not dict", str(e))
 
         try: AllGenerator((), ()); self.fail()
-        except TypeError, e:
+        except TypeError as e:
             self.assertEquals("Required argument 'kwargs' (pos 3) not found", str(e))
 
         try: AllGenerator((), (), ()); self.fail()
-        except TypeError, e:
+        except TypeError as e:
             self.assertEquals("__new__() argument 3 must be dict, not tuple", str(e))
 
     def testCreateAllGenerator(self):
@@ -70,16 +70,16 @@ class Observable_C_Test(TestCase):
         try:
             g.send("Value")
             self.fail()
-        except TypeError, e:
+        except TypeError as e:
             self.assertEquals("can't send non-None value to a just-started generator", str(e))
 
     def testSendValueNotAllowed(self):
         g = AllGenerator((m1,m2), (), {})
-        g.next()
+        next(g)
         try:
             g.send("s1")
             self.fail()
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertEquals("%s returned 's1'" % m1, str(e))
         x = g.send(None)
         self.assertEquals("m2", x)
@@ -87,18 +87,18 @@ class Observable_C_Test(TestCase):
     def testThrow(self):
         g = AllGenerator((m1, m2), (), {})
         try: g.throw(NameError("A")); self.fail()
-        except NameError, e:
+        except NameError as e:
             self.assertEquals("A", str(e))
 
-        g.next()
+        next(g)
 
         try: g.throw(NameError("B")); self.fail()
-        except NameError, e:
+        except NameError as e:
             self.assertEquals("B", str(e))
 
     def testDeclineMessage(self):
         g = AllGenerator((m1, m2), (), {})
-        g.next()
+        next(g)
         r = g.throw(DeclineMessage) # effectively skips one result
         self.assertEquals("m2", r)
 

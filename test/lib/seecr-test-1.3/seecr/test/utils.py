@@ -24,10 +24,10 @@
 ## end license ##
 
 from re import DOTALL, compile, sub
-from StringIO import StringIO
+from io import StringIO
 from lxml.etree import parse as parse_xml, XMLSyntaxError
 from socket import socket
-from urllib import urlencode
+from urllib.parse import urlencode
 import sys
 from sys import getdefaultencoding
 from time import sleep
@@ -45,14 +45,14 @@ _entities = {
 def parseHtmlAsXml(body):
     def forceXml(body):
         newBody = body
-        for entity, replacement in _entities.items():
+        for entity, replacement in list(_entities.items()):
             newBody = newBody.replace(entity, replacement)
         newBody = _scriptTagRegex.sub('', newBody)
         return newBody
     try:
         return parse_xml(StringIO(forceXml(body)))
     except XMLSyntaxError:
-        print body
+        print(body)
         raise
 
 def getPage(port, path, arguments=None, expectedStatus="200", sessionId=None):
@@ -87,8 +87,8 @@ def assertHttpOK(header, body, expectedStatus="200"):
     try:
         assertSubstring("HTTP/1.0 %s" % expectedStatus, header)
         assertNotSubstring("Traceback", header + "\r\n\r\n" + body)
-    except AssertionError, e:
-        print header, body
+    except AssertionError as e:
+        print(header, body)
         raise
 
 def assertSubstring(value, s):
@@ -114,7 +114,7 @@ def createReturnValue(header, body, parse):
 
 def postRequest(port, path, data, contentType='text/xml; charset="utf-8"', parse=True, timeOutInSeconds=None, additionalHeaders=None):
     additionalHeaders = additionalHeaders or {}
-    if type(data) is unicode:
+    if type(data) is str:
         data = data.encode(getdefaultencoding())
     sok = _socket(port, timeOutInSeconds)
     try:
@@ -124,7 +124,7 @@ def postRequest(port, path, data, contentType='text/xml; charset="utf-8"', parse
             'Content-Type: %(contentType)s',
             'Content-Length: %(contentLength)s'
         ]
-        lines += ["%s: %s" % (k, v) for k, v in additionalHeaders.items()]
+        lines += ["%s: %s" % (k, v) for k, v in list(additionalHeaders.items())]
         lines += ['', '']
         sendBuffer = ('\r\n'.join(lines) % locals()) + data
         totalBytesSent = 0
@@ -159,7 +159,7 @@ def createPostMultipartForm(boundary, formValues):
             headers['Content-Type'] = valueDict['mimetype']
 
         strm.write('--' + boundary + '\r\n')
-        for item in headers.items():
+        for item in list(headers.items()):
             strm.write('%s: %s\r\n' % item)
         strm.write('\r\n')
         strm.write(valueDict['value'])
@@ -178,7 +178,7 @@ def getRequest(port, path, arguments=None, parse=True, timeOutInSeconds=None, ho
         if host != None:
             request = 'GET %(requestString)s HTTP/1.1\r\nHost: %(host)s\r\n' % locals()
         if additionalHeaders != None:
-            for header in additionalHeaders.items():
+            for header in list(additionalHeaders.items()):
                 request += '%s: %s\r\n' % header
         request += '\r\n'
         sok.send(request)
@@ -201,7 +201,7 @@ def receiveFromSocket(sok):
 def splitHttpHeaderBody(response):
     try:
         header, body = response.split('\r\n\r\n', 1)
-    except ValueError, e:
+    except ValueError as e:
         raise ValueError("%s can not be split into a header and body" % repr(response))
     else:
         return header, body

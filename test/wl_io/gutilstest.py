@@ -34,7 +34,7 @@ def collector(basket, responses):
     responses = iter(responses)
     try:
         while True:
-            basket.append((yield responses.next()))
+            basket.append((yield next(responses)))
     except StopIteration:
         pass
     yield
@@ -51,7 +51,7 @@ class GutilsTest(TestCase):
         basket = []
         restbasket = []
         def helper():
-            c1 = collector(basket, responses); c1.next()
+            c1 = collector(basket, responses); next(c1)
             yield copyBytes(bytes, c1)
             while True:
                 restbasket.append((yield))
@@ -80,12 +80,12 @@ class GutilsTest(TestCase):
             basket = []
             restbasket = []
             def helper():
-                c1 = collector(basket,[None for x in range(99999)]); c1.next()
+                c1 = collector(basket,[None for x in range(99999)]); next(c1)
                 yield copyBytes(sliceLen, c1)
                 while True:
                     restbasket.append((yield))
             g = compose(helper())
-            g.next()
+            next(g)
             totalLen = 0
             while totalLen < sliceLen:
                 s = ''.join(choice(ascii_letters) for i in range(randint(0,100)))
@@ -103,14 +103,14 @@ class GutilsTest(TestCase):
             except StopIteration:
                 data.append('done')
         def helper():
-            t = target(); t.next()
+            t = target(); next(t)
             yield copyBytes(2, t)
             try:
                 yield t.throw(StopIteration)
             except:
                 pass
             while True: yield
-        g = compose(helper()); g.next()
+        g = compose(helper()); next(g)
         feed(['a','b','c'], g)
         self.assertEquals(['a','b', 'done'], data)
 
@@ -123,14 +123,14 @@ class GutilsTest(TestCase):
             except StopIteration:
                 data.append('done')
         def helper():
-            t = target(); t.next()
+            t = target(); next(t)
             yield copyBytes(2, t)
             try:
                 yield t.throw(StopIteration)
             except StopIteration:
                 pass
             while True: yield
-        g = compose(helper()); g.next()
+        g = compose(helper()); next(g)
         feed(['a','bc','d'], g)
         self.assertEquals(['a','b', 'done'], data)
 
@@ -139,7 +139,7 @@ class GutilsTest(TestCase):
             data = yield readAll()
             self.assertEquals('a', data)
             yield 'A'
-        appl = compose(application()); appl.next()
+        appl = compose(application()); next(appl)
         def protocol():
             yield copyBytes(1, appl)
             yield appl.throw(StopIteration)
@@ -147,7 +147,7 @@ class GutilsTest(TestCase):
             b = yield
             yield b
         g = compose(protocol()); 
-        self.assertEquals(None, g.next())
+        self.assertEquals(None, next(g))
         self.assertEquals('A', g.send('a'))
         self.assertEquals('B', g.send(None))
         self.assertEquals(None, g.send(None))
@@ -158,7 +158,7 @@ class GutilsTest(TestCase):
             data = yield readAll()
             self.assertEquals('a', data)
             yield 'A'
-        appl = compose(application()); appl.next()
+        appl = compose(application()); next(appl)
         def protocol():
             yield copyBytes(1, appl)
             try:
@@ -169,7 +169,7 @@ class GutilsTest(TestCase):
             yield 'C'
             b = yield
             yield b
-        g = compose(protocol()); g.next()
+        g = compose(protocol()); next(g)
         self.assertEquals('A', g.send('ab'))
         self.assertEquals('B', g.send(None))
         self.assertEquals('C', g.send(None))
@@ -177,29 +177,29 @@ class GutilsTest(TestCase):
 
     def testReadRe(self):
         x = readRe(compile('(?P<ape>xyz)'))
-        x.next()
+        next(x)
         try:
             x.send('xyz') # fail
             self.fail('must not come here')
-        except StopIteration, s:
+        except StopIteration as s:
             self.assertEquals(({'ape': 'xyz'},), s.args)
 
     def testReadReWithMaximumBytes(self):
         x = readRe(compile('xyz'), 5)
-        x.next()
+        next(x)
         x.send('abc')
         try:
             x.send('abc') # fail
             self.fail('must not come here')
-        except OverflowError, e:
+        except OverflowError as e:
             self.assertEquals('no match after 6 bytes', str(e))
 
     def testReadReEndOfStream(self):
         x = readRe(compile('.*'), 10)
-        x.next()
+        next(x)
         try:
             x.send(None)
             self.fail('must raise Exception')
-        except Exception, e:
+        except Exception as e:
             self.assertEquals("no match at eof: ''", str(e))
 

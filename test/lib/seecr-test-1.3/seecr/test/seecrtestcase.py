@@ -25,16 +25,16 @@
 ## end license ##
 
 from unittest import TestCase
-from StringIO import StringIO
+from io import StringIO
 from functools import partial
-from itertools import chain, ifilter
+from itertools import chain
 from os import getenv, close as osClose, remove, getpid
 from os.path import join, isfile, realpath, abspath
 from shutil import rmtree
 from string import whitespace
 from sys import path as systemPath, exc_info
 from tempfile import mkdtemp, mkstemp
-from timing import T
+from .timing import T
 
 import pprint
 import difflib
@@ -175,7 +175,7 @@ class CompareXml(object):
         except AssertionError:
             c, v, t = exc_info()
             v = c(str(v) + self._contextStr(expectedNode, resultNode))
-            raise c, v, t.tb_next
+            raise c(v).with_traceback(t.tb_next)
 
     def _contextStr(self, expectedNode, resultNode):
         if not hasattr(self, '_context'):
@@ -276,7 +276,7 @@ class CompareXml(object):
                         self.xpathToHere(expectedNode, includeCurrent=True)
                 ))
 
-        for attrName, expectedAttrValue in expectedAttrs.items():
+        for attrName, expectedAttrValue in list(expectedAttrs.items()):
             resultAttrValue = resultAttrs[attrName]
             if expectedAttrValue != resultAttrValue:
                 raise AssertionError("Attribute '%s' has a different value ('%s' != '%s') at location: '%s'" % (attrName, expectedAttrValue, resultAttrValue, self.xpathToHere(expectedNode, includeCurrent=True)))
@@ -292,7 +292,7 @@ class CompareXml(object):
         if len(expectedChildren) != len(resultChildren):
             tagsLandR = [
                 (elementAsRepresentation(x), elementAsRepresentation(r))
-                for x, r in izip_longest(expectedChildren, resultChildren)
+                for x, r in zip_longest(expectedChildren, resultChildren)
             ]
             tagsLandR = '\n'.join([
                 '    %s -- %s' % (x, r)
@@ -300,7 +300,7 @@ class CompareXml(object):
             ])
             path = self.xpathToHere(parent, includeCurrent=True) if parent is not None else ''
             raise AssertionError("Number of children not equal (expected -- result):\n%s\n\nAt location: '%s'" % (tagsLandR, path))
-        self._remainingContainer[:0] = zip(expectedChildren, resultChildren)
+        self._remainingContainer[:0] = list(zip(expectedChildren, resultChildren))
 
     def xpathToHere(self, node, includeCurrent=False):
         path = []
@@ -341,11 +341,11 @@ class CompareXml(object):
             else:
                 nodeIndex, othersWithsameTagCount = self._nodeIndex(
                     node=node,
-                    iterator=ifilter(
+                    iterator=filter(
                         lambda n: n.target == node.target,
                         node.getparent().iterchildren(tag=PI)))
         else:
-            if not isinstance(nodeTag, basestring):
+            if not isinstance(nodeTag, str):
                 raise TypeError("Unexpected Node-Type '%s'" % nodeTag)
 
             nodeIndex, othersWithsameTagCount = self._nodeIndex(
@@ -450,14 +450,14 @@ XPATH_IS_ONE_BASED = 1
 
 
 try:
-    from itertools import izip_longest
+    from itertools import zip_longest
 except ImportError:
     # Added for Python 2.5 compatibility
     from itertools import repeat, chain
     _SENTINEL = object()
     def next(iterable, default=_SENTINEL):
         try:
-            retval = iterable.next()
+            retval = iterable.__next__()
         except StopIteration:
             if default is _SENTINEL:
                 raise

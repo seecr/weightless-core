@@ -26,13 +26,13 @@ from types import GeneratorType, FunctionType
 
 def decorator(generatorOrFunction):
     if type(generatorOrFunction) == GeneratorType:
-        print "composing"
+        print("composing")
         return generatorOrFunction
     elif type(generatorOrFunction) == FunctionType:
-        print "decorating"
+        print("decorating")
         return generatorOrFunction
     else:
-        print "error"
+        print("error")
 
 class A(object):
     @decorator

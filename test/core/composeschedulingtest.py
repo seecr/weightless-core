@@ -60,10 +60,10 @@ class _ComposeSchedulingTest(TestCase):
 
         composed = compose(gen(), stepping=True)
 
-        self.assertEquals("one", composed.next())
-        self.assertEquals("two", composed.next())
+        self.assertEquals("one", next(composed))
+        self.assertEquals("two", next(composed))
         try:
-            composed.next()
+            next(composed)
         except StopIteration:
             pass
         else:
@@ -78,9 +78,9 @@ class _ComposeSchedulingTest(TestCase):
 
         composed = compose(gen(), stepping=True)
 
-        self.assertEquals(Yield, composed.next())
-        self.assertEquals("one", composed.next())
-        self.assertEquals("two", composed.next())
+        self.assertEquals(Yield, next(composed))
+        self.assertEquals("one", next(composed))
+        self.assertEquals("two", next(composed))
 
     def testMoreGenerators(self):
         def a():
@@ -115,17 +115,17 @@ class _ComposeSchedulingTest(TestCase):
             yield nextNr(number)
          
         composed = compose(gen(), stepping=True)
-        result = composed.next()
+        result = next(composed)
         self.assertEquals(None, result)
          
         result = composed.send(41)
         self.assertEquals(Yield, result)
          
-        result = composed.next()
+        result = next(composed)
         self.assertEquals(42, result)
          
         try:
-            composed.next()
+            next(composed)
         except StopIteration:
             pass
         else:
@@ -143,10 +143,10 @@ class _ComposeSchedulingTest(TestCase):
         c = compose(sub(), stepping=True)
         self.assertEquals(None, c.send(None))      # 1 init with None, oh, it accepts data
         self.assertEquals(Yield, c.send('jack'))   # 2 send data, oh it gives Yield, do .next()
-        self.assertEquals('hello jack', c.next())  # 3 oh it has data
+        self.assertEquals('hello jack', next(c))  # 3 oh it has data
         self.assertEquals(None, c.send(None))      # 4 it had data, so send None to see what it wants next, oh, it accepts data
         self.assertEquals(Yield, c.send('peter'))  # 5 send data, oh it gives Yield, do .next()
-        self.assertEquals('hello peter', c.next()) # 6 oh, it has data
+        self.assertEquals('hello peter', next(c)) # 6 oh, it has data
 
     def testYieldTransparentlyYieldedWhenStepping(self):
         def gen():
@@ -156,9 +156,9 @@ class _ComposeSchedulingTest(TestCase):
             yield data1, data2
         composed = compose(gen(), stepping=True)
 
-        self.assertEquals(None, composed.next())
+        self.assertEquals(None, next(composed))
         self.assertEquals(Yield, composed.send('data_a'))
-        self.assertEquals(None, composed.next())
+        self.assertEquals(None, next(composed))
         self.assertEquals(('data_a', 'data_b'), composed.send('data_b'))
 
     def testToStringOnTransparentYield(self):
@@ -168,7 +168,7 @@ class _ComposeSchedulingTest(TestCase):
             yield 'pause'
         composed = compose(gen(), stepping=True)
 
-        self.assertEquals(Yield, composed.next())
+        self.assertEquals(Yield, next(composed))
         self.assertEquals("""\
   File "%%(__file__)s", line %(line)s, in gen
     yield Yield""" % {'line': line} % fileDict, tostring(composed))
@@ -181,11 +181,11 @@ class _ComposeSchedulingTest(TestCase):
             yield f()
         composed = compose(gen(), stepping=True)
 
-        self.assertEquals(Yield, composed.next())
+        self.assertEquals(Yield, next(composed))
         try:
             composed.send('data')
             self.fail('Should have failed')
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertEquals('Cannot accept data when stepping. First send None.', str(e))
 
     def testExceptionOnSendData_TransparentStepping(self):
@@ -197,8 +197,8 @@ class _ComposeSchedulingTest(TestCase):
         def g():
             yield f()  # first Yield
         c = compose(g(), stepping=True)
-        self.assertEquals(Yield, c.next())
-        self.assertEquals(Yield, c.next())
+        self.assertEquals(Yield, next(c))
+        self.assertEquals(Yield, next(c))
         try:
             cLine = __NEXTLINE__()
             c.send('data')
@@ -230,8 +230,8 @@ AssertionError: Cannot accept data. First send None.\n""" % {
         def g():
             yield f()  # first Yield
         c = compose(g(), stepping=True)
-        self.assertEquals(Yield, c.next())
-        self.assertEquals(Yield, c.next())
+        self.assertEquals(Yield, next(c))
+        self.assertEquals(Yield, next(c))
         try:
             cLine = __NEXTLINE__()
             c.throw(Exception("tripping compose"))
@@ -263,7 +263,7 @@ Exception: tripping compose\n""" % {
             yield f()
 
         composed = compose(gen(), stepping=True)
-        self.assertEquals(Yield, composed.next())
+        self.assertEquals(Yield, next(composed))
 
         stackText = """\
   File "%(__file__)s", line %(gYieldLine)s, in gen
@@ -283,15 +283,15 @@ Exception: tripping compose\n""" % {
         genYieldLine = __NEXTLINE__(offset=3)
         def gen():
             genF = f()
-            self.assertEquals("alreadyStarted", genF.next())
+            self.assertEquals("alreadyStarted", next(genF))
             yield genF
 
         composed = compose(gen(), stepping=True)
         
         try:
             cLine = __NEXTLINE__()
-            composed.next()
-        except AssertionError, e:
+            next(composed)
+        except AssertionError as e:
             self.assertEquals('Generator already used.', str(e))
         
             stackText = """\
@@ -318,7 +318,7 @@ AssertionError: Generator already used.\n""" % {
         def g():
             yield f()
         c = compose(g(), stepping=True)
-        c.next()
+        next(c)
         try:
             cLine = __NEXTLINE__()
             c.throw(Exception("tripping compose"))
@@ -358,7 +358,7 @@ class ComposeSchedulingCTest(_ComposeSchedulingTest):
         self.assertEquals(type, type(Yield))
         try:
             Yield()
-        except TypeError, e:
+        except TypeError as e:
             self.assertEquals("cannot create 'Yield' instances", str(e))
         else:
             self.fail('Should not happen')
@@ -378,7 +378,7 @@ class ComposeSchedulingPyTest(_ComposeSchedulingTest):
         self.assertEquals(type, type(Yield))
         try:
             Yield()
-        except TypeError, e:
+        except TypeError as e:
             self.assertEquals("cannot create 'Yield' instances", str(e))
         else:
             self.fail('Should not happen')

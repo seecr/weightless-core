@@ -33,7 +33,7 @@ try:
 except ImportError:
     def isgeneratorfunction(func):
         try:
-            return bool(func.func_code.co_flags & 0x20)
+            return bool(func.__code__.co_flags & 0x20)
         except AttributeError:
             return False
 
@@ -41,8 +41,8 @@ def retval(generator):
     g = compose(generator)
     try:
         while True:
-            g.next()
-    except StopIteration, e:
+            next(g)
+    except StopIteration as e:
         return e.args[0] if e.args else None
 
 def consume(generator):
@@ -58,7 +58,7 @@ def asString(g):
 def identify(generator):
     def helper(*args, **kwargs):
         g = generator(*args, **kwargs)
-        g.next()
+        next(g)
         g.send(g)
         return g
     return helper
@@ -66,12 +66,12 @@ def identify(generator):
 def autostart(generator):
     def helper(*args, **kwargs):
         g = generator(*args, **kwargs)
-        g.next()
+        next(g)
         return g
     return helper
 
 def readRe(regexp, maximum=None):
-    if isinstance(regexp, basestring):
+    if isinstance(regexp, str):
         regexp = compile(regexp)
     match = None
     message = ''

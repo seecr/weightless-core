@@ -1,4 +1,4 @@
-from __future__ import with_statement
+
 ## begin license ##
 # 
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
@@ -51,7 +51,7 @@ class GioTest(WeightlessTestCase):
         try:
             g = Gio(self.mockreactor, handler())
             self.fail('must not come here')
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertEquals('Gio: No context available.', str(e))
 
     def testNeverExittedContextIsForcedToExitByGeneratorExitWhileWriting(self):
@@ -240,7 +240,7 @@ class GioTest(WeightlessTestCase):
             try:
                 with giopen(self.tempfile, 'rw'):
                     with Timer(0.1):
-                        for i in xrange(999999):
+                        for i in range(999999):
                             yield 'a'
             except TimeoutException:
                 done.append(False)
@@ -258,7 +258,7 @@ class GioTest(WeightlessTestCase):
             with giopen(self.tempfile, 'rw'):
                 with Timer(0.1):
                     try:
-                        for i in xrange(999999):
+                        for i in range(999999):
                             yield 'a'
                     except TimeoutException:
                         done.append(False)

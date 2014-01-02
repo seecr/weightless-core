@@ -24,12 +24,12 @@
 #
 ## end license ##
 
-from _acceptor import Acceptor
+from ._acceptor import Acceptor
 from weightless.core import identify, Yield
-from weightless.http import REGEXP, FORMAT, parseHeaders, parseHeader
+from weightless.http import REGEXP, parseHeaders, parseHeader
 
 import re
-from StringIO import StringIO
+from io import StringIO
 from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
 from tempfile import TemporaryFile
 from email import message_from_file as parse_mime_message
@@ -40,15 +40,14 @@ from zlib import Z_DEFAULT_COMPRESSION, DEFLATED, MAX_WBITS, DEF_MEM_LEVEL, Z_DE
 from OpenSSL import SSL
 from random import randint
 from time import time
-from socket import socket, ssl,  SOL_SOCKET, SO_REUSEADDR, SO_LINGER
+from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER
 from struct import pack
 from sys import getdefaultencoding
-
+import collections
 
 RECVSIZE = 4096
 CRLF = '\r\n'
 CRLF_LEN = 2
-
 
 class HttpServer(object):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
@@ -115,7 +114,7 @@ class HttpsServer(object):
         if self._sok == None:
             def verify_cb(conn, cert, errnum, depth, ok):
                 # This obviously has to be updated
-                print 'Got certificate: %s' % cert.get_subject()
+                print('Got certificate: %s' % cert.get_subject())
                 return ok
 
             # Initialize context
@@ -219,7 +218,7 @@ def updateResponseHeaders(headers, match, addHeaders=None, removeHeaders=None, r
             _removeHeaderReCache[header] = headerRe
         _headers = headerRe.sub(CRLF, _headers, count=1)
 
-    for header, value in addHeaders.items():
+    for header, value in list(addHeaders.items()):
         _headers += '%s: %s\r\n' % (header, value)
 
     return _statusLine + _headers + CRLF, _body
@@ -301,7 +300,7 @@ class HttpHandler(object):
             # SOCKET CLOSED by PEER
             self._badRequest()
             return
-        self._dataBuffer += part
+        self._dataBuffer += part.decode('UTF-8')
         self._resetTimer()
         self._dealWithCall()
 
@@ -455,7 +454,7 @@ class HttpHandler(object):
         if self._timer:
             self._reactor.removeTimer(self._timer)
         self._reactor.removeReader(self._sok)
-        self._reactor.addWriter(self._sok, self._writeResponse(encoding=encoding).next, prio=self._prio)
+        self._reactor.addWriter(self._sok, self._writeResponse(encoding=encoding).__next__, prio=self._prio)
 
     def finalize(self):
         self._finalize(self._generatorFactory)
@@ -478,15 +477,15 @@ class HttpHandler(object):
                 if self._rest:
                     data = self._rest
                 else:
-                    data = self._handler.next()
+                    data = next(self._handler)
                     if data is Yield:
                         continue
-                    if callable(data):
-                        data(self._reactor, this.next)
+                    if isinstance(data, collections.Callable):
+                        data(self._reactor, this.__next__)
                         yield
                         data.resumeWriter()
                         continue
-                    if type(data) is unicode:
+                    if type(data) is str:
                         data = data.encode(self._defaultEncoding)
                 if encodeResponseBody is not None:
                     if endHeader is False:
@@ -539,7 +538,7 @@ class HttpHandler(object):
 
         try:
             self._sok.shutdown(SHUT_RDWR)
-        except SocketError, e:
+        except SocketError as e:
             code, message = e.args
             if code == 107:
                 pass # KVS: not well understood, not tested. It seems some quick (local) servers close the connection before this point is reached. It may happen more generally. In any case, it is based on a truely existing phenomenon
@@ -557,7 +556,7 @@ class HttpsHandler(HttpHandler):
                 return
         except (SSL.WantReadError, SSL.WantWriteError, SSL.WantX509LookupError):
             pass
-        except Exception, e:
+        except Exception as e:
             self._closeConnection()
         else:
             self._dataBuffer += part
@@ -569,7 +568,7 @@ class HttpsHandler(HttpHandler):
 
         try:
             self._sok.shutdown()  # No self._sok.shutdown(SHUT_RDWR) for some reason
-        except SocketError, e:
+        except SocketError as e:
             code, message = e.args
             if code == 107:
                 pass # KVS: not well understood, not tested. It seems some quick (local) servers close the connection before this point is reached. It may happen more generally. In any case, it is based on a truely existing phenomenon
