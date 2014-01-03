@@ -71,7 +71,7 @@ class ReactorTest(WeightlessTestCase):
             reactor.addReader(Sok(), None)
             self.fail()
         except Exception as e:
-            self.assertEquals('aap', str(e))
+            self.assertEqual('aap', str(e))
 
     def testReadFile(self):
         reactor = Reactor()
@@ -122,8 +122,8 @@ class ReactorTest(WeightlessTestCase):
 
         reactor.step()
         reactor.step()
-        self.assertEquals(0, len(reactor._timers))
-        self.assertEquals(['zero', 'newTimer', 'one'], executed)
+        self.assertEqual(0, len(reactor._timers))
+        self.assertEqual(['zero', 'newTimer', 'one'], executed)
 
     def testInvalidTime(self):
         reactor = Reactor()
@@ -131,7 +131,7 @@ class ReactorTest(WeightlessTestCase):
             reactor.addTimer(-1, None)
             self.fail('should raise exeption')
         except Exception as e:
-            self.assertEquals('Timeout must be >= 0. It was -1.', str(e))
+            self.assertEqual('Timeout must be >= 0. It was -1.', str(e))
 
     def testDuplicateTimerDoesNotCauseZeroTimeout(self):
         itstime = []
@@ -145,7 +145,7 @@ class ReactorTest(WeightlessTestCase):
         reactor.addTimer(0.05, itsTime)
         while itstime != [True, True, True, True, True]:
             reactor.step()
-        self.assertEquals([True, True, True, True, True], itstime)
+        self.assertEqual([True, True, True, True, True], itstime)
 
     def testRemoveTimer(self):
         def itsTime(): pass
@@ -153,7 +153,7 @@ class ReactorTest(WeightlessTestCase):
         token1 = reactor.addTimer(0.05, itsTime)
         token2 = reactor.addTimer(0.051, itsTime)
         reactor.removeTimer(token1)
-        self.assertEquals(1, len(reactor._timers))
+        self.assertEqual(1, len(reactor._timers))
 
     def testRemoveTimerById(self):
         def itsTime(): pass
@@ -162,10 +162,10 @@ class ReactorTest(WeightlessTestCase):
         token2 = reactor.addTimer(0.051, itsTime)
         token3 = reactor.addTimer(0.051, itsTime)
         token3.time = token2.time = token1.time  # whiteboxing, can happen in real code, not easy to reproduce in a test situation.
-        self.assertEquals(token1.callback, token2.callback)
-        self.assertEquals(token2.callback, token3.callback)
+        self.assertEqual(token1.callback, token2.callback)
+        self.assertEqual(token2.callback, token3.callback)
         reactor.removeTimer(token2)
-        self.assertEquals([token1, token3], reactor._timers)
+        self.assertEqual([token1, token3], reactor._timers)
 
     def testRemoveTimerWithSameTimestamp(self):
         reactor = Reactor()
@@ -174,9 +174,9 @@ class ReactorTest(WeightlessTestCase):
         token2.time = token1.time
 
         reactor.removeTimer(token2)
-        self.assertEquals([id(token1)], [id(t) for t in reactor._timers])
+        self.assertEqual([id(token1)], [id(t) for t in reactor._timers])
         reactor.removeTimer(token1)
-        self.assertEquals([], reactor._timers)
+        self.assertEqual([], reactor._timers)
 
     def testExceptionInTimeoutCallback(self):
         sys.stderr = StringIO()
@@ -195,25 +195,25 @@ class ReactorTest(WeightlessTestCase):
         done = []
         reactor = Reactor()
         def callback1():
-            self.assertEquals([], done)
+            self.assertEqual([], done)
             done.append(1)
-            self.assertEquals([timer2, timer3], reactor._timers)
+            self.assertEqual([timer2, timer3], reactor._timers)
         def callback2():
-            self.assertEquals([1], done)
+            self.assertEqual([1], done)
             done.append(2)
-            self.assertEquals([timer3], reactor._timers)
+            self.assertEqual([timer3], reactor._timers)
         def callback3():
-            self.assertEquals([1,2], done)
+            self.assertEqual([1,2], done)
             done.append(3)
-            self.assertEquals([], reactor._timers)
+            self.assertEqual([], reactor._timers)
         timer1 = reactor.addTimer(0.0001, callback1)
         timer2 = reactor.addTimer(0.0002, callback2)
         timer3 = reactor.addTimer(0.0003, callback3)
-        self.assertEquals([timer1, timer2, timer3], reactor._timers)
+        self.assertEqual([timer1, timer2, timer3], reactor._timers)
         sleep(0.04)
         reactor.step()
-        self.assertEquals([1,2,3], done)
-        self.assertEquals([], reactor._timers)
+        self.assertEqual([1,2,3], done)
+        self.assertEqual([], reactor._timers)
 
     def testAssertionErrorInReadCallback(self):
         sys.stderr = StringIO()
@@ -225,7 +225,7 @@ class ReactorTest(WeightlessTestCase):
                 reactor.step()
                 self.fail('must raise exception')
             except AssertionError as e:
-                self.assertEquals('here is the assertion', str(e))
+                self.assertEqual('here is the assertion', str(e))
         finally:
             sys.stderr = sys.__stderr__
 
@@ -239,7 +239,7 @@ class ReactorTest(WeightlessTestCase):
                 reactor.step()
                 self.fail('must raise exception')
             except AssertionError as e:
-                self.assertEquals('here is the assertion', str(e))
+                self.assertEqual('here is the assertion', str(e))
         finally:
             sys.stderr = sys.__stderr__
 
@@ -253,7 +253,7 @@ class ReactorTest(WeightlessTestCase):
         reactor.addWriter('sok1', write)
         reactor.addReader('sok1', read)
         reactor.step()
-        self.assertEquals(['t1', 't2'], t)
+        self.assertEqual(['t1', 't2'], t)
 
     def testReadDeletesWrite(self):
         reactor = Reactor(lambda r,w,o,t: (r,w,o))
@@ -279,7 +279,7 @@ class ReactorTest(WeightlessTestCase):
         reactor.addTimer(0, timer)
         reactor.addReader('sok1', read)
         reactor.step()
-        self.assertEquals(['t1', 't2'], t)
+        self.assertEqual(['t1', 't2'], t)
 
     def testTimerDeletesRead(self):
         reactor = Reactor(lambda r,w,o,t: (r,w,o))
@@ -335,9 +335,9 @@ class ReactorTest(WeightlessTestCase):
                 reactor.step()
             self.assertTrue("Bad file descriptor" in s.getvalue(), s.getvalue())
         self.assertTrue(self.timeout)
-        self.assertEquals({}, reactor._readers)
-        self.assertEquals({}, reactor._writers)
-        self.assertEquals([], reactor._timers)
+        self.assertEqual({}, reactor._readers)
+        self.assertEqual({}, reactor._writers)
+        self.assertEqual([], reactor._timers)
 
     def testGetRidOfClosedSocket(self):
         reactor = Reactor()
@@ -352,8 +352,8 @@ class ReactorTest(WeightlessTestCase):
             reactor.step()
             reactor.step()
             self.assertTrue("file descriptor cannot be a negative integer" in s.getvalue(), s.getvalue())
-        self.assertEquals({}, reactor._readers)
-        self.assertEquals([True, True], callbacks)
+        self.assertEqual({}, reactor._readers)
+        self.assertEqual([True, True], callbacks)
 
     def testDoNotDieButLogOnProgrammingErrors(self):
         reactor = Reactor()
@@ -374,7 +374,7 @@ class ReactorTest(WeightlessTestCase):
             reactor.step()
             self.fail('must raise oops')
         except Exception as e:
-            self.assertEquals('oops', str(e))
+            self.assertEqual('oops', str(e))
 
     def testTimerDoesNotMaskAssertionErrors(self):
         reactor = Reactor()
@@ -383,7 +383,7 @@ class ReactorTest(WeightlessTestCase):
             reactor.step()
             raise Exception('step() must raise AssertionError')
         except AssertionError:
-            self.assertEquals([], reactor._timers)
+            self.assertEqual([], reactor._timers)
 
     def testTimerDoesNotMaskKeyboardInterrupt(self):
         reactor = Reactor()
@@ -394,7 +394,7 @@ class ReactorTest(WeightlessTestCase):
             reactor.step()
             self.fail('step() must raise KeyboardInterrupt')
         except KeyboardInterrupt:
-            self.assertEquals([], reactor._timers)
+            self.assertEqual([], reactor._timers)
 
     def testTimerDoesNotMaskSystemExit(self):
         reactor = Reactor()
@@ -405,7 +405,7 @@ class ReactorTest(WeightlessTestCase):
             reactor.step()
             self.fail('step() must raise SystemExit')
         except SystemExit:
-            self.assertEquals([], reactor._timers)
+            self.assertEqual([], reactor._timers)
 
     def testReaderOrWriterDoesNotMaskKeyboardInterrupt(self):
         fd, path = mkstemp()
@@ -413,12 +413,12 @@ class ReactorTest(WeightlessTestCase):
         def raiser():
             raise KeyboardInterrupt('Ctrl-C')
         reactor.addReader(sok=fd, sink=raiser)
-        self.assertEquals([raiser], [c.callback for c in list(reactor._readers.values())])
+        self.assertEqual([raiser], [c.callback for c in list(reactor._readers.values())])
         try:
             reactor.step()
             self.fail('step() must raise KeyboardInterrupt')
         except KeyboardInterrupt:
-            self.assertEquals([], [c.callback for c in list(reactor._readers.values())])
+            self.assertEqual([], [c.callback for c in list(reactor._readers.values())])
 
         fd, path = mkstemp()
         reactor = Reactor()
@@ -427,7 +427,7 @@ class ReactorTest(WeightlessTestCase):
             reactor.step()
             self.fail('step() must raise KeyboardInterrupt')
         except KeyboardInterrupt:
-            self.assertEquals([], [c.callback for c in list(reactor._readers.values())])
+            self.assertEqual([], [c.callback for c in list(reactor._readers.values())])
 
     def testReaderOrWriterDoesNotMaskSystemExit(self):
         fd, path = mkstemp()
@@ -435,12 +435,12 @@ class ReactorTest(WeightlessTestCase):
         def raiser():
             raise SystemExit('shutdown...')
         reactor.addReader(sok=fd, sink=raiser)
-        self.assertEquals([raiser], [c.callback for c in list(reactor._readers.values())])
+        self.assertEqual([raiser], [c.callback for c in list(reactor._readers.values())])
         try:
             reactor.step()
             self.fail('step() must raise SystemExit')
         except SystemExit:
-            self.assertEquals([], [c.callback for c in list(reactor._readers.values())])
+            self.assertEqual([], [c.callback for c in list(reactor._readers.values())])
 
         fd, path = mkstemp()
         reactor = Reactor()
@@ -449,13 +449,13 @@ class ReactorTest(WeightlessTestCase):
             reactor.step()
             self.fail('step() must raise SystemExit')
         except SystemExit:
-            self.assertEquals([], [c.callback for c in list(reactor._readers.values())])
+            self.assertEqual([], [c.callback for c in list(reactor._readers.values())])
 
     def testGlobalReactor(self):
         from weightless.io import reactor
         thereactor = Reactor()
         def handler():
-            self.assertEquals(thereactor, reactor())
+            self.assertEqual(thereactor, reactor())
         thereactor.addTimer(0, handler)
         thereactor.step()
 
@@ -474,12 +474,14 @@ class ReactorTest(WeightlessTestCase):
         local0.send(b'ape')
         local1.send(b'nut')
         reactor.step() #0
-        self.assertEquals([b'ape'], data0)
-        self.assertEquals([], data1)
+        self.assertEqual([b'ape'], data0)
+        self.assertEqual([], data1)
         reactor.step() #1
-        self.assertEquals([], data1)
+        self.assertEqual([], data1)
         reactor.step() #2
-        self.assertEquals([b'nut'], data1)
+        self.assertEqual([b'nut'], data1)
+        local0.close(); local1.close()
+        remote0.close(); remote1.close()
 
     def testMinandMaxPrio(self):
         reactor = Reactor()
@@ -487,29 +489,29 @@ class ReactorTest(WeightlessTestCase):
             reactor.addReader('', '', -1)
             self.fail()
         except ValueError as e:
-            self.assertEquals('Invalid priority: -1', str(e))
+            self.assertEqual('Invalid priority: -1', str(e))
         try:
             reactor.addReader('', '', Reactor.MAXPRIO)
             self.fail()
         except ValueError as e:
-            self.assertEquals('Invalid priority: 10', str(e))
+            self.assertEqual('Invalid priority: 10', str(e))
         try:
             reactor.addWriter('', '', -1)
             self.fail()
         except ValueError as e:
-            self.assertEquals('Invalid priority: -1', str(e))
+            self.assertEqual('Invalid priority: -1', str(e))
         try:
             reactor.addWriter('', '', Reactor.MAXPRIO)
             self.fail()
         except ValueError as e:
-            self.assertEquals('Invalid priority: 10', str(e))
+            self.assertEqual('Invalid priority: 10', str(e))
 
     def testDefaultPrio(self):
         reactor = Reactor()
         reactor.addReader('', '')
-        self.assertEquals(Reactor.DEFAULTPRIO, reactor._readers[''].prio)
+        self.assertEqual(Reactor.DEFAULTPRIO, reactor._readers[''].prio)
         reactor.addWriter('', '')
-        self.assertEquals(Reactor.DEFAULTPRIO, reactor._writers[''].prio)
+        self.assertEqual(Reactor.DEFAULTPRIO, reactor._writers[''].prio)
 
     def testWritePrio(self):
         reactor = Reactor()
@@ -523,7 +525,7 @@ class ReactorTest(WeightlessTestCase):
         reactor.addWriter(remote0, remoteHandler0, 0)
         reactor.addWriter(remote1, remoteHandler1, 2)
         reactor.step() #0
-        self.assertEquals(b'ape', local0.recv(999))
+        self.assertEqual(b'ape', local0.recv(999))
         try:
             local1.recv(999)
             self.fail('must be no data on the socket yet')
@@ -536,20 +538,22 @@ class ReactorTest(WeightlessTestCase):
         except error:
             pass
         reactor.step() #2
-        self.assertEquals(b'nut', local1.recv(999))
+        self.assertEqual(b'nut', local1.recv(999))
+        local0.close(); local1.close()
+        remote0.close(); remote1.close()
 
     def testGetOpenConnections(self):
         reactor = Reactor()
-        self.assertEquals(0, reactor.getOpenConnections())
+        self.assertEqual(0, reactor.getOpenConnections())
         reactor.addReader('', '')
-        self.assertEquals(1, reactor.getOpenConnections())
+        self.assertEqual(1, reactor.getOpenConnections())
         reactor.addWriter('', '')
-        self.assertEquals(2, reactor.getOpenConnections())
+        self.assertEqual(2, reactor.getOpenConnections())
 
         reactor.removeReader('')
-        self.assertEquals(1, reactor.getOpenConnections())
+        self.assertEqual(1, reactor.getOpenConnections())
         reactor.removeWriter('')
-        self.assertEquals(0, reactor.getOpenConnections())
+        self.assertEqual(0, reactor.getOpenConnections())
 
     def testAddProcessGenerator(self):
         reactor = Reactor()
@@ -568,13 +572,13 @@ class ReactorTest(WeightlessTestCase):
 
         reactor.addProcess(p().__next__)
         reactor.step()
-        self.assertEquals([1], trace)
+        self.assertEqual([1], trace)
         reactor.step()
-        self.assertEquals([1, 2], trace)
+        self.assertEqual([1, 2], trace)
 
         reactor.addProcess(lambda: None)
         reactor.step()
-        self.assertEquals([1, 2], trace)
+        self.assertEqual([1, 2], trace)
 
     def testAddProcessFunction(self):
         reactor = Reactor()
@@ -590,15 +594,15 @@ class ReactorTest(WeightlessTestCase):
 
         reactor.addProcess(p)
         reactor.step()
-        self.assertEquals([2], trace)
+        self.assertEqual([2], trace)
         reactor.step()
-        self.assertEquals([2, 4], trace)
+        self.assertEqual([2, 4], trace)
         reactor.step()
-        self.assertEquals([2, 4, 'removedProcess'], trace)
+        self.assertEqual([2, 4, 'removedProcess'], trace)
 
         reactor.addProcess(lambda: None)
         reactor.step()
-        self.assertEquals([2, 4, 'removedProcess'], trace)
+        self.assertEqual([2, 4, 'removedProcess'], trace)
 
     def testAddProcessSanityCheck(self):
         reactor = Reactor()
@@ -606,13 +610,13 @@ class ReactorTest(WeightlessTestCase):
             reactor.addProcess(lambda: None, prio=10)
             self.fail('Should not come here.')
         except ValueError as e:
-            self.assertEquals('Invalid priority: 10', str(e))
+            self.assertEqual('Invalid priority: 10', str(e))
 
         try:
             reactor.addProcess(lambda: None, prio=-1)
             self.fail('Should not come here.')
         except ValueError as e:
-            self.assertEquals('Invalid priority: -1', str(e))
+            self.assertEqual('Invalid priority: -1', str(e))
 
         lambdaFunc = lambda: reactor.suspend()
         reactor.addProcess(lambdaFunc)
@@ -621,7 +625,7 @@ class ReactorTest(WeightlessTestCase):
             reactor.addProcess(lambdaFunc)
             self.fail('Should not come here.')
         except ValueError as e:
-            self.assertEquals('Process is suspended', str(e))
+            self.assertEqual('Process is suspended', str(e))
 
     def testProcessAddsNotWhenAlreadyInThere(self):
         reactor = Reactor()
@@ -631,7 +635,7 @@ class ReactorTest(WeightlessTestCase):
             reactor.addProcess(aProcess)
             self.fail('Should not come here.')
         except ValueError as e:
-            self.assertEquals('Process is already in processes', str(e))
+            self.assertEqual('Process is already in processes', str(e))
 
     def testProcessPriority(self):
         reactor = Reactor()
@@ -654,25 +658,25 @@ class ReactorTest(WeightlessTestCase):
         reactor.addProcess(lowPrio, prio=3)
 
         reactor.step()
-        self.assertEquals([
+        self.assertEqual([
                 'default_0',
             ], trace)
 
         reactor.step()
-        self.assertEquals(set([
+        self.assertEqual(set([
                 'default_0',
                 'high_0', 'default_1',
             ]), set(trace))
 
         reactor.step()
-        self.assertEquals(set([
+        self.assertEqual(set([
                 'default_0',
                 'high_0', 'default_1',
                 'high_1', 'default_2',
             ]), set(trace))
 
         reactor.step()
-        self.assertEquals(set([
+        self.assertEqual(set([
                 'default_0',
                 'high_0', 'default_1',
                 'high_1', 'default_2',
@@ -693,34 +697,34 @@ class ReactorTest(WeightlessTestCase):
         reactor.addProcess(callback)
         reactor.addProcess(lambda: None)
         reactor.step()
-        self.assertEquals([callback], list(reactor._suspended.keys()))
-        self.assertEquals([callback, 'suspending'], trace)
+        self.assertEqual([callback], list(reactor._suspended.keys()))
+        self.assertEqual([callback, 'suspending'], trace)
 
         reactor.step()
-        self.assertEquals([callback], list(reactor._suspended.keys()))
-        self.assertEquals([callback, 'suspending'], trace)
+        self.assertEqual([callback], list(reactor._suspended.keys()))
+        self.assertEqual([callback, 'suspending'], trace)
 
         reactor.resumeProcess(handle=callback)
         reactor.step()
-        self.assertEquals([], list(reactor._suspended.keys()))
-        self.assertEquals([callback, 'suspending', 'resuming'], trace)
+        self.assertEqual([], list(reactor._suspended.keys()))
+        self.assertEqual([callback, 'suspending', 'resuming'], trace)
 
     def testShutdownWithRemainingProcesses(self):
         reactor = Reactor()
         lambdaFunc = lambda: None
         reactor.addProcess(lambdaFunc)
-        self.assertEquals([lambdaFunc], list(reactor._processes.keys()))
-        self.assertEquals('Reactor shutdown: terminating %s\n' % lambdaFunc, self.withSTDOUTRedirected(reactor.shutdown))
-        self.assertEquals([], list(reactor._processes.keys()))
+        self.assertEqual([lambdaFunc], list(reactor._processes.keys()))
+        self.assertEqual('Reactor shutdown: terminating %s\n' % lambdaFunc, self.withSTDOUTRedirected(reactor.shutdown))
+        self.assertEqual([], list(reactor._processes.keys()))
 
         reactor = Reactor()
         lambdaFunc = lambda: reactor.suspend()
         reactor.addProcess(lambdaFunc)
         reactor.step()
 
-        self.assertEquals([lambdaFunc], list(reactor._suspended.keys()))
-        self.assertEquals('Reactor shutdown: terminating %s\n' % lambdaFunc, self.withSTDOUTRedirected(reactor.shutdown))
-        self.assertEquals([], list(reactor._suspended.keys()))
+        self.assertEqual([lambdaFunc], list(reactor._suspended.keys()))
+        self.assertEqual('Reactor shutdown: terminating %s\n' % lambdaFunc, self.withSTDOUTRedirected(reactor.shutdown))
+        self.assertEqual([], list(reactor._suspended.keys()))
 
     def testExceptionsInProcessNotSuppressed(self):
         reactor = Reactor()
@@ -729,13 +733,13 @@ class ReactorTest(WeightlessTestCase):
             raise RuntimeError('The Error')
 
         reactor.addProcess(p)
-        self.assertEquals([p], list(reactor._processes.keys()))
+        self.assertEqual([p], list(reactor._processes.keys()))
         try:
             reactor.step()
             self.fail('Should not come here.')
         except RuntimeError as e:
-            self.assertEquals('The Error', str(e))
-            self.assertEquals([], list(reactor._processes.keys()))
+            self.assertEqual('The Error', str(e))
+            self.assertEqual([], list(reactor._processes.keys()))
 
     def testAddProcessFromThread(self):
         processCallback = []
@@ -747,13 +751,13 @@ class ReactorTest(WeightlessTestCase):
         proc = lambda: processCallback.append(True)
         reactor.addProcess(proc)
         t.join()
-        self.assertEquals([True], processCallback)
+        self.assertEqual([True], processCallback)
 
         reactor.removeProcess(proc)
         reactor.addTimer(0.1, lambda: timerCallback.append(True))
         reactor.step()
-        self.assertEquals([True], processCallback)
-        self.assertEquals([True], timerCallback)
+        self.assertEqual([True], processCallback)
+        self.assertEqual([True], timerCallback)
 
     def withSTDOUTRedirected(self, function, expectedOutput=None):
         stream = StringIO()
@@ -764,6 +768,6 @@ class ReactorTest(WeightlessTestCase):
             sys.stdout = sys.__stdout__
             value = stream.getvalue()
             if not expectedOutput is None:
-                self.assertEquals(expectedOutput, value)
+                self.assertEqual(expectedOutput, value)
         return value
 

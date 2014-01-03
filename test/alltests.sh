@@ -50,7 +50,7 @@ fi
 echo Performing tests: $tests
 
 pyversions="python3"
-tests="PYTHON"
+tests="C"
 for t in $tests; do
     for pycmd in $pyversions; do
         echo "================ $t with $pycmd _alltests.py $@ ================"

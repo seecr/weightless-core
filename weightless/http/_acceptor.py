@@ -24,7 +24,7 @@
 #
 ## end license ##
 
-from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_CORK, TCP_NODELAY
+from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_CORK
 from struct import pack
 
 def createSocket(port, bindAddress=None):
@@ -57,6 +57,8 @@ class Acceptor(object):
         handler = self._sinkFactory(newConnection)
         if handler:
             self._reactor.addReader(newConnection, handler, prio=self._prio)
+        else:
+            newConnection.close()
 
     def close(self):
         self._sok.close()
