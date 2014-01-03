@@ -145,7 +145,7 @@ class FdContext(Context):
         try:
             while len(buff) > 0:
                 yield
-                written = os.write(self._fd, bytes(buff, 'UTF-8'))
+                written = os.write(self._fd, buff.encode())
                 buff = buff[written:]
         finally:
             self.gio.removeWriter(self)

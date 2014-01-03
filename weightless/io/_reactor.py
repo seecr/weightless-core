@@ -181,8 +181,8 @@ class Reactor(object):
             print_exc()
             self._findAndRemoveBadFd()
             return self
-        except (select_error, socket_error) as xxx_todo_changeme:
-            (errno, description) = xxx_todo_changeme.args
+        except (select_error, socket_error) as error:
+            (errno, description) = error.args
             print_exc()
             if errno == EBADF:
                 self._findAndRemoveBadFd()

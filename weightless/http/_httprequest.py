@@ -63,8 +63,8 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=No
     sok.setsockopt(SOL_TCP, TCP_KEEPCNT, 9)
     try:
         sok.connect((host, port))
-    except SocketError as xxx_todo_changeme:
-        (errno, msg) = xxx_todo_changeme.args
+    except SocketError as error:
+        (errno, msg) = error.args
         if errno != EINPROGRESS:
             raise
 
@@ -144,7 +144,7 @@ def _sslHandshake(sok, this, suspend, prio):
 
 def _asyncSend(sok, data):
     while data != "":
-        size = sok.send(bytes(data, 'UTF-8'))
+        size = sok.send(data.encode())
         data = data[size:]
         yield
 
