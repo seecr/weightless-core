@@ -64,16 +64,16 @@ class WeightlessTestCase(TestCase):
         t0 = time()
         if hasattr(self, 'httpd') and hasattr(self.httpd, 'shutdown'):
             self.httpd.shutdown()
-        self.assertEquals({}, self.reactor._readers)
-        self.assertEquals({}, self.reactor._writers)
-        self.assertEquals({}, self.reactor._suspended)
-        self.assertEquals({}, self.reactor._processes)
+        self.assertEqual({}, self.reactor._readers)
+        self.assertEqual({}, self.reactor._writers)
+        self.assertEqual({}, self.reactor._suspended)
+        self.assertEqual({}, self.reactor._processes)
         for t in self.reactor._timers:
             cb = t.callback
             code = cb.__code__
             print('WARNING: dangling timer in reactor. Remaining timout: %s with callback to %s() in %s at line %s.' \
                 % (t.time-t0, cb.__name__, code.co_filename, code.co_firstlineno))
-        self.assertEquals([], self.reactor._timers)
+        self.assertEqual([], self.reactor._timers)
         self.reactor.shutdown()
         self.mockreactor.shutdown()
         rmtree(self.tempdir)

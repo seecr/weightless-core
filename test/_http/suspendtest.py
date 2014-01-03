@@ -303,7 +303,7 @@ ZeroDivisionError: integer division or modulo by zero
   File "%(__file__)s", line 201, in handler
     suspend.getResult()
   File "%(suspend.py)s", line 62, in getResult
-    raise self._exception[0], self._exception[1], self._exception[2]
+    raise self._exception[1].with_traceback(self._exception[2])
 ValueError: BAD VALUE
         """ % fileDict)
         self.assertEquals(3, len(listener.data))
@@ -371,6 +371,5 @@ class MyMockSocket(object):
         return len(chunk)
 
 def ignoreLineNumbers(s):
-    print ('>>',type(s))
     return sub("line \d+,", "line [#],", s)
 
