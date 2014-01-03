@@ -53,7 +53,7 @@ def server(port, response, expectedrequest, delay=0, loop=50):
         for i in range(loop):
             if expectedrequest:
                 try:
-                    msg += newSok.recv(4096)
+                    msg += newSok.recv(4096).decode()
                     if msg == expectedrequest:
                         break
                     if len(msg) >= len(expectedrequest):
@@ -64,11 +64,11 @@ def server(port, response, expectedrequest, delay=0, loop=50):
                     print("expected:", repr(expectedrequest))
                     return
         if response:
-            if hasattr(response, 'next'):
+            if hasattr(response, '__next__'):
                 for r in response:
                     newSok.send(r)
             else:
-                newSok.send(response)
+                newSok.send(response.encode())
             sleep(delay)
             newSok.close()
         else:
@@ -101,23 +101,23 @@ class HttpReaderTest(TestCase):
         while 'Hello World!' != "".join((x for x in dataReceived[1:] if x)):
             reactor.step()
         serverThread.join()
-        self.assertEquals({'HTTPVersion': '1.1', 'StatusCode': '200', 'ReasonPhrase': 'OK', 'Headers': {'Content-Type': 'text/html'}, 'Client': ('127.0.0.1', MATCHALL)}, dataReceived[0])
+        self.assertEqual({'HTTPVersion': '1.1', 'StatusCode': '200', 'ReasonPhrase': 'OK', 'Headers': {'Content-Type': 'text/html'}, 'Client': ('127.0.0.1', MATCHALL)}, dataReceived[0])
 
     def testHttpUrlParse(self):
         host, port, path = _httpParseUrl('http://www.cq2.org')
-        self.assertEquals('www.cq2.org', host)
-        self.assertEquals(80, port)
-        self.assertEquals('/', path)
+        self.assertEqual('www.cq2.org', host)
+        self.assertEqual(80, port)
+        self.assertEqual('/', path)
 
         host, port, path = _httpParseUrl('http://www.cq2.org:5000/page#anchor')
-        self.assertEquals('www.cq2.org', host)
-        self.assertEquals(5000, port)
-        self.assertEquals('/page#anchor', path)
+        self.assertEqual('www.cq2.org', host)
+        self.assertEqual(5000, port)
+        self.assertEqual('/page#anchor', path)
 
         host, port, path = _httpParseUrl('http://www.cq2.org:5000/page?x=1')
-        self.assertEquals('www.cq2.org', host)
-        self.assertEquals(5000, port)
-        self.assertEquals('/page?x=1', path)
+        self.assertEqual('www.cq2.org', host)
+        self.assertEqual(5000, port)
+        self.assertEqual('/page?x=1', path)
 
 
     def testEmptyPath(self):
@@ -143,7 +143,7 @@ class HttpReaderTest(TestCase):
         while not errorArgs:
             reactor.step()
         serverThread.join()
-        self.assertEquals('timeout while receiving data', str(errorArgs[0]))
+        self.assertEqual('timeout while receiving data', str(errorArgs[0]))
 
     def testTimeoutOnSilentServer(self):
         port = randint(2**10, 2**16)
@@ -161,7 +161,7 @@ class HttpReaderTest(TestCase):
         while not errorArgs:
             reactor.step()
         serverThread.join()
-        self.assertEquals('timeout while receiving data', str(errorArgs[0]))
+        self.assertEqual('timeout while receiving data', str(errorArgs[0]))
 
     def testTimeoutOnServerGoingSilentAfterHeaders(self):
         port = randint(2**10, 2**16)
@@ -181,7 +181,7 @@ class HttpReaderTest(TestCase):
         while not errorArgs:
             reactor.step()
         serverThread.join()
-        self.assertEquals('timeout while receiving data', str(errorArgs[0]))
+        self.assertEqual('timeout while receiving data', str(errorArgs[0]))
 
     def testClearTimer(self):
         port = randint(2**10, 2**16)
@@ -225,15 +225,15 @@ class HttpReaderTest(TestCase):
         while not done:
             reactor.step()
 
-        self.assertEquals(['response'], sentData[1:])
-        self.assertEquals('200', sentData[0]['StatusCode'])
+        self.assertEqual(['response'], sentData[1:])
+        self.assertEqual('200', sentData[0]['StatusCode'])
         expected = 'POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nSOAPAction: blah\r\nUser-Agent: Weightless/v%s\r\n\r\n' % WlVersion + '1\r\nA\r\n' + '1\r\nB\r\n' + '1\r\nC\r\n' + '0\r\n\r\n'
-        self.assertEquals(expected, "".join(request))
+        self.assertEqual(expected, "".join(request))
 
     def testWriteChunks(self):
         reader  = HttpReader(CallTrace("reactor"), CallTrace("socket"), HandlerFacade(None, None, None), '', '', '')
-        self.assertEquals('1\r\nA\r\n', reader._createChunk('A'))
-        self.assertEquals('A\r\n' + 10*'B' + '\r\n', reader._createChunk(10*'B'))
+        self.assertEqual('1\r\nA\r\n', reader._createChunk('A'))
+        self.assertEqual('A\r\n' + 10*'B' + '\r\n', reader._createChunk(10*'B'))
 
     def testDealWithChunkedResponse(self):
         port = randint(2048, 4096)
@@ -266,7 +266,7 @@ Content-Type: text/html; charset=utf-8
         reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
         while not done:
             reactor.step()
-        self.assertEquals("""<p>The document has moved <a href="/page/softwarestudio.page/show">here</a></p>""", "".join(sentData[1:]))
+        self.assertEqual("""<p>The document has moved <a href="/page/softwarestudio.page/show">here</a></p>""", "".join(sentData[1:]))
 
     def testChunkedAllTheWay(self):
         reactor = CallTrace('Reactor')
@@ -281,16 +281,16 @@ Content-Type: text/html; charset=utf-8
         httpreader._chunked = True
         # chunk == network message
         httpreader._sendFragment('4\r\n1234\r\n')
-        self.assertEquals(['1234'], data)
+        self.assertEqual(['1234'], data)
         httpreader._sendFragment('10\r\n0123456789abcdef\r\n')
-        self.assertEquals(['1234', '0123456789abcdef'], data)
+        self.assertEqual(['1234', '0123456789abcdef'], data)
         del data[0]
         del data[0]
         # chunk = 2 network messages
         httpreader._sendFragment('10\r\nfedcba')
-        #self.assertEquals(['fedcba'], data)
+        #self.assertEqual(['fedcba'], data)
         httpreader._sendFragment('9876543210\r\n')
-        self.assertEquals(['fedcba9876543210'], data)
+        self.assertEqual(['fedcba9876543210'], data)
 
     def testLastRecvContainsCompleteChunk(self):
         reactor = CallTrace('Reactor')
@@ -307,14 +307,14 @@ Content-Type: text/html; charset=utf-8
         chunkOne = '9\r\n123456789\r\n'
         chunkTwo = '8\r\n87654321\r\n'
         httpreader._sendFragment(chunkOne)
-        self.assertEquals(['123456789'], data)
+        self.assertEqual(['123456789'], data)
         httpreader._sendFragment(chunkTwo)
-        self.assertEquals(['123456789', '87654321'], data)
+        self.assertEqual(['123456789', '87654321'], data)
         while data: del data[0] # now both in one network message
         httpreader._sendFragment(chunkOne + chunkTwo +'0\r\n\r\n')
         # Send fragment will only read one fragment.
         # Now feed it until all chunks are finished
         httpreader._sendFragment('')
         httpreader._sendFragment('')
-        self.assertEquals(['123456789', '87654321'], data)
-        self.assertEquals([True], done)
+        self.assertEqual(['123456789', '87654321'], data)
+        self.assertEqual([True], done)

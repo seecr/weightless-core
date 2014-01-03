@@ -1,26 +1,26 @@
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 from socket import socket, SHUT_RDWR, SHUT_WR
@@ -91,12 +91,12 @@ class HttpReader(object):
 
     def _sendPostRequest(self, path, host, headers):
         headers['Transfer-Encoding'] = 'chunked'
-        self._sok.sendall(
+        self._sok.sendall((
             FORMAT.RequestLine % {'Method': 'POST', 'Request_URI': path, 'HTTPVersion':'1.1'}
             + FORMAT.HostHeader % {'Host': host}
             + ''.join(FORMAT.Header % header for header in list(headers.items()))
             + FORMAT.UserAgentHeader
-            + HTTP.CRLF)
+            + HTTP.CRLF).encode())
         item = next(self._handler)
         while item:
             self._sendChunk(item)
@@ -110,19 +110,19 @@ class HttpReader(object):
         return hex(len(data))[len('0x'):].upper() + HTTP.CRLF + data + HTTP.CRLF
 
     def _sendChunk(self, data):
-        self._sok.sendall(self._createChunk(data))
+        self._sok.sendall(self._createChunk(data).encode())
 
     def _sendGetRequest(self, path, host):
-        self._sok.sendall(
+        self._sok.sendall((
             FORMAT.RequestLine % {'Method': 'GET', 'Request_URI': path, 'HTTPVersion':'1.1'}
             + FORMAT.HostHeader % {'Host': host}
             + FORMAT.UserAgentHeader
-            + HTTP.CRLF)
+            + HTTP.CRLF).encode())
         self._reactor.removeWriter(self._sok)
         self._reactor.addReader(self._sok, self._headerFragment)
 
     def _headerFragment(self):
-        self._responseBuffer += self._sok.recv(self._recvSize)
+        self._responseBuffer += self._sok.recv(self._recvSize).decode()
         match = REGEXP.RESPONSE.match(self._responseBuffer)
         if not match:
             if not self._timer:
@@ -147,7 +147,7 @@ class HttpReader(object):
 
     def _bodyFragment(self):
         self._stopTimer()
-        fragment = self._sok.recv(self._recvSize)
+        fragment = self._sok.recv(self._recvSize).decode()
 
         if not fragment:
             self._stop()

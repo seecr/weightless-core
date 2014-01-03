@@ -69,12 +69,13 @@ class AsyncReaderTest(WeightlessTestCase):
             yield response
         self.handler = passthruhandler
         expectedrequest = "GET /depot?arg=1&arg=2 HTTP/1.0\r\n\r\n"
-        responses = (i for i in ['hel', 'lo!'])
+        responses = (i for i in [b'hel', b'lo!'])
         backofficeserver = testserver(backofficeport, responses, expectedrequest)
         client = clientget('localhost', self.port, '/depot?arg=1&arg=2')
         self._loopReactorUntilDone()
         response = client.recv(99)
-        self.assertEquals('hello!', response)
+        self.assertEquals(b'hello!', response)
+        client.close()
 
     @stderr_replaced
     def testConnectFails(self):
@@ -83,7 +84,7 @@ class AsyncReaderTest(WeightlessTestCase):
 
         self.handler = failingserver
 
-        clientget('localhost', self.port, '/')
+        clientget('localhost', self.port, '/').close()
         target = ('localhost', 'port', '/') # non-numeric port
         self._loopReactorUntilDone()
 
@@ -94,11 +95,12 @@ class AsyncReaderTest(WeightlessTestCase):
     response = yield httpget(*target)
   File "%(httprequest.py)s", line 78, in _httpRequest
     result = s.getResult()
+  File "%(suspend.py)s", line [#], in getResult
+    raise self._exception[1].with_traceback(self._exception[2])
   File "%(suspend.py)s", line 34, in __call__
     self._doNext(self)
   File "%(httprequest.py)s", line 35, in _do
     sok.connect((host, port))
-  File "<string>", line 1, in connect
 TypeError: an integer is required
        """ % fileDict)
         if PYVERSION == "2.7":
@@ -121,17 +123,17 @@ TypeError: an integer is required
         self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(''.join(format_exception(*self.error))))
 
         target = ('localhost', 87, '/') # invalid port
-        clientget('localhost', self.port, '/')
+        clientget('localhost', self.port, '/').close()
         self._loopReactorUntilDone()
         self.assertEquals(IOError, self.error[0])
 
         target = ('UEYR^$*FD(#>NDJ.khfd9.(*njnd', 9876, '/') # invalid host
-        clientget('localhost', self.port, '/')
+        clientget('localhost', self.port, '/').close()
         self._loopReactorUntilDone()
         self.assertEquals(SocketGaiError, self.error[0])
 
         target = ('127.0.0.255', 9876, '/')
-        clientget('localhost', self.port, '/')
+        clientget('localhost', self.port, '/').close()
         self._loopReactorUntilDone()
         self.assertEquals(IOError, self.error[0])
         self.assertEquals('111', str(self.error[1]))
@@ -155,7 +157,7 @@ TypeError: an integer is required
             originalRequestLine = httpRequestModule._requestLine
             httpRequestModule._requestLine = requestLine
 
-            clientget('localhost', self.port, '/')
+            clientget('localhost', self.port, '/').close()
             with stderr_replaced():
                 self._loopReactorUntilDone()
 
@@ -166,6 +168,8 @@ TypeError: an integer is required
     response = yield httpget(*target)
   File "%(httprequest.py)s", line 129, in _httpRequest
     result = s.getResult()
+  File "%(suspend.py)s", line [#], in getResult
+    raise self._exception[1].with_traceback(self._exception[2])
   File "%(httprequest.py)s", line 83, in _do
     yield _sendHttpHeaders(sok, method, request, headers)
   File "%(httprequest.py)s", line 121, in _sendHttpHeaders
@@ -190,17 +194,17 @@ RuntimeError: Boom!""" % fileDict)
                     headers={'Content-Type': 'text/plain'}
             )
             yield response
-            responses.append(response)
+            responses.append(response.decode())
         self.handler = posthandler
-        clientget('localhost', self.port, '/')
+        clientget('localhost', self.port, '/').close()
         self._loopReactorUntilDone()
 
         self.assertTrue("POST RESPONSE" in responses[0], responses[0])
         self.assertEquals('POST', post_request[0]['command'])
         self.assertEquals('/path', post_request[0]['path'])
-        headers = post_request[0]['headers'].headers
-        self.assertEquals(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n'], headers)
-        self.assertEquals(body, post_request[0]['body'])
+        headers = post_request[0]['headers']
+        self.assertEquals('Content-Length: 100000\nContent-Type: text/plain\n\n', headers.as_string())
+        self.assertEquals(body, post_request[0]['body'].decode())
 
     def testHttpPostWithoutHeaders(self):
         post_request = []
@@ -211,17 +215,17 @@ RuntimeError: Boom!""" % fileDict)
         def posthandler(*args, **kwargs):
             response = yield httppost('localhost', port, '/path', body)
             yield response
-            responses.append(response)
+            responses.append(response.decode())
         self.handler = posthandler
-        clientget('localhost', self.port, '/')
+        clientget('localhost', self.port, '/').close()
         self._loopReactorUntilDone()
 
         self.assertTrue("POST RESPONSE" in responses[0], responses[0])
         self.assertEquals('POST', post_request[0]['command'])
         self.assertEquals('/path', post_request[0]['path'])
-        headers = post_request[0]['headers'].headers
-        self.assertEquals(['Content-Length: 100000\r\n'], headers)
-        self.assertEquals(body, post_request[0]['body'])
+        headers = post_request[0]['headers']
+        self.assertEquals('Content-Length: 100000\n\n', headers.as_string())
+        self.assertEquals(body, post_request[0]['body'].decode())
 
     def testHttpsPost(self):
         post_request = []
@@ -234,17 +238,17 @@ RuntimeError: Boom!""" % fileDict)
                     headers={'Content-Type': 'text/plain'}
             )
             yield response
-            responses.append(response)
+            responses.append(response.decode())
         self.handler = posthandler
-        clientget('localhost', self.port, '/')
+        clientget('localhost', self.port, '/').close()
         self._loopReactorUntilDone()
 
         self.assertTrue("POST RESPONSE" in responses[0], responses[0])
         self.assertEquals('POST', post_request[0]['command'])
         self.assertEquals('/path', post_request[0]['path'])
-        headers = post_request[0]['headers'].headers
-        self.assertEquals(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n'], headers)
-        self.assertEquals(body, post_request[0]['body'])
+        headers = post_request[0]['headers']
+        self.assertEquals('Content-Length: 100000\nContent-Type: text/plain\n\n', headers.as_string())
+        self.assertEquals(body, post_request[0]['body'].decode())
 
     def testHttpGet(self):
         get_request = []
@@ -260,16 +264,16 @@ RuntimeError: Boom!""" % fileDict)
                         prio=4
                 )
             finally:
-                responses.append(response)
+                responses.append(response.decode())
         self.handler = gethandler
-        clientget('localhost', self.port, '/')
+        clientget('localhost', self.port, '/').close()
         self._loopReactorUntilDone()
 
         self.assertTrue("GET RESPONSE" in responses[0], responses[0])
         self.assertEquals('GET', get_request[0]['command'])
         self.assertEquals('/path', get_request[0]['path'])
-        headers = get_request[0]['headers'].headers
-        self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
+        headers = get_request[0]['headers']
+        self.assertEquals('Content-Length: 0\nContent-Type: text/plain\n\n', headers.as_string())
 
     def testHttpGetWithReallyLargeHeaders(self):
         get_request = []
@@ -289,13 +293,13 @@ RuntimeError: Boom!""" % fileDict)
                     headers=headersOrig,
                 )
             finally:
-                responses.append(response)
+                responses.append(response.decode())
         self.handler = gethandler
-        clientget('localhost', self.port, '/')
+        clientget('localhost', self.port, '/').close()
         self._loopReactorUntilDone()
 
-        headers = get_request[0]['headers'].headers
-        headersAsDict = dict([tuple(h.strip().split(': ', 1)) for h in headers])
+        headers = get_request[0]['headers']._headers
+        headersAsDict = dict(headers)
         self.assertEquals(len(headersOrig), len(headersAsDict))
         self.assertEquals(headersOrig, headersAsDict)
 
@@ -312,7 +316,7 @@ RuntimeError: Boom!""" % fileDict)
 
             dataHandled = []
             def handleDataFragment(data):
-                dataHandled.append(data)
+                dataHandled.append(data.decode())
                 if '\r\n\r\n' in ''.join(dataHandled):
                     streamingData.doNext()
 
@@ -328,7 +332,7 @@ RuntimeError: Boom!""" % fileDict)
                 finally:
                     responses.append(response)
             self.handler = gethandler
-            clientget('localhost', self.port, '/')
+            clientget('localhost', self.port, '/').close()
             self._loopReactorUntilDone()
 
             self.assertEquals([None], responses)
@@ -336,8 +340,8 @@ RuntimeError: Boom!""" % fileDict)
             self.assertTrue(len(dataHandled) > len("STREAMING GET RESPONSE"), dataHandled)
             self.assertEquals('GET', get_request[0]['command'])
             self.assertEquals('/path', get_request[0]['path'])
-            headers = get_request[0]['headers'].headers
-            self.assertEquals(['Accept: text/plain\r\n'], headers)
+            headers = get_request[0]['headers']
+            self.assertEquals('Accept: text/plain\n\n', headers.as_string())
 
     def testHttpsGet(self):
         get_request = []
@@ -350,17 +354,17 @@ RuntimeError: Boom!""" % fileDict)
                     headers={'Content-Type': 'text/plain', 'Content-Length': 0}
             )
             yield response
-            responses.append(response)
+            responses.append(response.decode())
         self.handler = gethandler
-        clientget('localhost', self.port, '/')
+        clientget('localhost', self.port, '/').close()
 
         self._loopReactorUntilDone()
 
         self.assertTrue("GET RESPONSE" in responses[0], responses[0])
         self.assertEquals('GET', get_request[0]['command'])
         self.assertEquals('/path', get_request[0]['path'])
-        headers = get_request[0]['headers'].headers
-        self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
+        headers = get_request[0]['headers']
+        self.assertEquals('Content-Length: 0\nContent-Type: text/plain\n\n', headers.as_string())
 
     def _dispatch(self, *args, **kwargs):
         def handle():
