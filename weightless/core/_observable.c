@@ -1,26 +1,26 @@
 /* begin license *
- * 
- * "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
- * 
+ *
+ * "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+ *
  * Copyright (C) 2009-2011 Seek You Too (CQ2) http://www.cq2.nl
- * Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
- * 
+ * Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+ *
  * This file is part of "Weightless"
- * 
+ *
  * "Weightless" is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * "Weightless" is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with "Weightless"; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- * 
+ *
  * end license */
 
 /* This code is formatted with:
@@ -128,7 +128,7 @@ static PyObject* allgenerator_send(PyAllGeneratorObject* self, PyObject* arg) {
         PyObject* pa = PyObject_Str(PyTuple_GET_ITEM(self->_methods, self->_i));
         PyObject* pb = PyObject_Str(arg);
         PyObject* r = PyErr_Format(PyExc_AssertionError, "%s returned '%s'",
-                PyString_AsString(pa), PyString_AsString(pb));
+                PyUnicode_AsUnicode(pa), PyUnicode_AsUnicode(pb));
         Py_DECREF(pa);
         Py_DECREF(pb);
         return r;
@@ -208,8 +208,7 @@ static PyMethodDef allgenerator_methods[] = {
 };
 
 PyTypeObject PyAllGenerator_Type = {
-    PyObject_HEAD_INIT(&PyType_Type)
-    0,                                  /*ob_size*/
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "AllGenerator",                    /*tp_name*/
     sizeof(PyAllGeneratorObject),       /*tp_basicsize*/
     0,                                  /*tp_itemsize*/
@@ -228,7 +227,7 @@ PyTypeObject PyAllGenerator_Type = {
     0,                                  /*tp_getattro*/
     0,                                  /*tp_setattro*/
     0,                                  /*tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_HAVE_ITER,
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
     "Internal all-iterator object.",    /*tp_doc */
     allgenerator_traverse,/*tp_traverse */
     (inquiry)allgenerator_clear,        /*tp_clear */
@@ -260,7 +259,7 @@ int module_add_object(PyObject* module, const char* name, PyObject* obj) {
     }
     return 0;
 }
-    
+
 int init_observable(PyObject* module) {
 
     Exc_DeclineMessage = PyErr_NewException("weightless.core.DeclineMessage", NULL, NULL);
