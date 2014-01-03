@@ -109,15 +109,15 @@ class WeightlessTestCase(TestCase):
         return sok
 
     def httpGet(self, host, port, path):
-        return self.send(host, port, 'GET %(path)s HTTP/1.0\r\n\r\n' % locals())
+        return self.send(host, port, b'GET %(path)s HTTP/1.0\r\n\r\n' % locals())
 
     def httpPost(self, host='localhost', port=None, path='/', data='', contentType='text/plain'):
         return self.send(host, port or self.port,
-            'POST %s HTTP/1.0\r\n' % path +
+            ('POST %s HTTP/1.0\r\n' % path +
             'Content-Type: %s; charset=\"utf-8\"\r\n' % contentType +
             'Content-Length: %s\r\n' % len(data) +
             '\r\n' +
-            data)
+            data).encode())
 
     @contextmanager
     def loopingReactor(self, timeOutInSec = 3):
@@ -186,7 +186,7 @@ class WeightlessTestCase(TestCase):
                     return
 
                 for dataFragment in streamingData:
-                    self.wfile.write(dataFragment)
+                    self.wfile.write(dataFragment.encode())
                     self.wfile.flush()
 
             def do_POST(self, *args, **kwargs):
@@ -197,7 +197,7 @@ class WeightlessTestCase(TestCase):
                     'body': self.rfile.read(int(self.headers["Content-Length"]))})
                 self.send_response(200, "OK")
                 self.end_headers()
-                self.wfile.write('POST RESPONSE')
+                self.wfile.write(b'POST RESPONSE')
                 self.wfile.flush()
 
         if ssl:

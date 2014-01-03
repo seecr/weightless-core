@@ -127,7 +127,7 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
             if body:
                 data = body
                 if type(data) is str:
-                    data = data.encode(getdefaultencoding())
+                    data = data.encode()
                 headers.update({'Content-Length': len(data)})
             yield _sendHttpHeaders(sok, method, request, headers)
             if body:
@@ -145,7 +145,7 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
                     if e.errno != SSL_ERROR_WANT_READ:
                         raise
                     continue
-                if response == '':
+                if response == b'':
                     break
 
                 if handlePartialResponse:
@@ -154,9 +154,9 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
                     responses.append(response)
         finally:
             suspend._reactor.removeReader(sok)
-        sok.shutdown(SHUT_RDWR)
+        # sok.shutdown(SHUT_RDWR)
         sok.close()
-        suspend.resume(None if handlePartialResponse else ''.join(responses))
+        suspend.resume(None if handlePartialResponse else b''.join(responses))
     except Exception:
         suspend.throw(*exc_info())
     # Uber finally: sok.close() from line 108
@@ -193,8 +193,8 @@ def _sslHandshake(sok, this, suspend, prio):
     raise StopIteration(sok)
 
 def _asyncSend(sok, data):
-    while data != "":
-        size = sok.send(data.encode())
+    while data != b"":
+        size = sok.send(data)
         data = data[size:]
         yield
 
@@ -203,5 +203,5 @@ def _sendHttpHeaders(sok, method, request, headers):
     if headers:
         data += ''.join('%s: %s\r\n' % i for i in list(headers.items()))
     data += '\r\n'
-    yield _asyncSend(sok, data)
+    yield _asyncSend(sok, data.encode())
 

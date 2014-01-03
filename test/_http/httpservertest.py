@@ -1,40 +1,39 @@
 # -*- coding: utf-8 -*-
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 
 
 from weightlesstestcase import WeightlessTestCase, MATCHALL
-from random import randint
-from socket import socket, error as SocketError
+from socket import socket
 from select import select
 from weightless.io import Reactor
 from time import sleep
 from seecr.test import CallTrace
 from os.path import join, abspath, dirname
-from io import StringIO
+from io import StringIO, BytesIO
 from sys import getdefaultencoding
 from zlib import compress
 from gzip import GzipFile
@@ -63,14 +62,14 @@ class HttpServerTest(WeightlessTestCase):
         sok.send(request)
 
         mockStdout = None
-        with self.stdout_replaced() as mockStdout:
-            while not self.responseCalled:
-                self.reactor.step()
-            if compressResponse and extraStepAfterCompress: #not everythingSent???: 
-                self.reactor.step()
-        stdoutValue = mockStdout.getvalue()
-        if stdoutValue:
-            print(stdoutValue)
+        # with self.stdout_replaced() as mockStdout:
+        while not self.responseCalled:
+            self.reactor.step()
+        if compressResponse and extraStepAfterCompress: #not everythingSent???:
+            self.reactor.step()
+        # stdoutValue = mockStdout.getvalue()
+        # if stdoutValue:
+        #     print(stdoutValue)
 
         server.shutdown()
         r = sok.recv(4096)
@@ -87,7 +86,7 @@ class HttpServerTest(WeightlessTestCase):
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
-        sok.send('GET / HTTP/1.0\r\n\r\n')
+        sok.send(b'GET / HTTP/1.0\r\n\r\n')
         reactor.step() # connect/accept
         reactor.step() # read GET request
         reactor.step() # call onRequest for response data
@@ -110,26 +109,26 @@ class HttpServerTest(WeightlessTestCase):
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
-        sok.send('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
+        sok.send(b'GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
         while not self.kwargs:
             reactor.step()
         self.assertEquals({'Body': '', 'RequestURI': '/path/here', 'HTTPVersion': '1.0', 'Method': 'GET', 'Headers': {'Connection': 'close', 'Ape-Nut': 'Mies'}, 'Client': ('127.0.0.1', MATCHALL)}, self.kwargs)
 
     def testGetResponse(self):
-        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
-        self.assertEquals('The Response', response)
+        response = self.sendRequestAndReceiveResponse(b'GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
+        self.assertEquals(b'The Response', response)
 
     def testGetCompressedResponse_deflate(self):
-        rawHeaders = 'HTTP/1.1 200 OK\r\n'
-        rawBody = '''This is the response.
+        rawHeaders = b'HTTP/1.1 200 OK\r\n'
+        rawBody = b'''This is the response.
         Nicely uncompressed, and readable.'''
-        rawResponse = rawHeaders + '\r\n' + rawBody
+        rawResponse = rawHeaders + b'\r\n' + rawBody
         def rawResponser():
             for c in rawResponse:
                 yield Yield
                 yield c
-        compressedResponse = rawHeaders + 'Content-Encoding: deflate\r\n\r\n' + compress(rawBody)
-        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
+        compressedResponse = rawHeaders + b'Content-Encoding: deflate\r\n\r\n' + compress(rawBody)
+        response = self.sendRequestAndReceiveResponse(b'GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
         self.assertEquals(compressedResponse, response)
 
     def testGetCompressedResponse_deflate_ContentLengthStripped(self):
@@ -140,53 +139,53 @@ class HttpServerTest(WeightlessTestCase):
         def rawResponser():
             for c in rawResponse:
                 yield Yield
-                yield c
+                yield c.encode()
         compressedResponse = rawHeaders.replace('Content-Length: 12345\r\n', '') + 'Content-Encoding: deflate\r\n\r\n' + compress(rawBody)
-        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
+        response = self.sendRequestAndReceiveResponse(b'GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
         self.assertEquals(compressedResponse, response)
 
     def testGetCompressedResponse_gzip_ContentLengthStripped(self):
-        rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nAnother: Header\r\n'
-        rawBody = '''This is the response.
+        rawHeaders = b'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nAnother: Header\r\n'
+        rawBody = b'''This is the response.
         Nicely uncompressed, and readable.'''
-        rawResponse = rawHeaders + '\r\n' + rawBody
+        rawResponse = rawHeaders + b'\r\n' + rawBody
         def rawResponser():
             for c in rawResponse:
                 yield Yield
                 yield c
-        _sio = StringIO()
-        _gzFileObj = GzipFile(filename=None, mode='wb', compresslevel=6, fileobj=_sio)
+        _bio = BytesIO()
+        _gzFileObj = GzipFile(filename=None, mode='wb', compresslevel=6, fileobj=_bio)
         _gzFileObj.write(rawBody); _gzFileObj.close()
-        compressedBody = _sio.getvalue()
+        compressedBody = _bio.getvalue()
 
-        compressedResponse = rawHeaders.replace('Content-Length: 12345\r\n', '') + 'Content-Encoding: gzip\r\n\r\n' + compressedBody
-        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: gzip;q=0.999, deflate;q=0.998, dontknowthisone;q=1\r\n\r\n', response=rawResponser(), compressResponse=True)
+        compressedResponse = rawHeaders.replace(b'Content-Length: 12345\r\n', b'') + b'Content-Encoding: gzip\r\n\r\n' + compressedBody
+        response = self.sendRequestAndReceiveResponse(b'GET /path/here HTTP/1.0\r\nAccept-Encoding: gzip;q=0.999, deflate;q=0.998, dontknowthisone;q=1\r\n\r\n', response=rawResponser(), compressResponse=True)
         self.assertEquals(compressedResponse, response)
 
     def testOnlyCompressBodyWhenCompressResponseIsOn(self):
-        rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nAnother: Header\r\n'
-        rawBody = '''This is the response.
+        rawHeaders = b'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nAnother: Header\r\n'
+        rawBody = b'''This is the response.
         Nicely uncompressed, and readable.'''
-        rawResponse = rawHeaders + '\r\n' + rawBody
+        rawResponse = rawHeaders + b'\r\n' + rawBody
         def rawResponser():
             for c in rawResponse:
                 yield c
 
-        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=False)
+        response = self.sendRequestAndReceiveResponse(b'GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=False)
         self.assertEquals(rawResponse, response)
 
-        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
+        response = self.sendRequestAndReceiveResponse(b'GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
         self.assertNotEqual(rawResponse, response)
 
     def testGetCompressedResponse_uncompressedWhenContentEncodingPresent(self):
-        rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nContent-Encoding: enlightened\r\n'
-        rawBody = '''This is the response.
+        rawHeaders = b'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nContent-Encoding: enlightened\r\n'
+        rawBody = b'''This is the response.
         *NOT* compressed.'''
-        rawResponse = rawHeaders + '\r\n' + rawBody
+        rawResponse = rawHeaders + b'\r\n' + rawBody
         def rawResponser():
             for c in rawResponse:
                 yield c
-        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True, extraStepAfterCompress=False)
+        response = self.sendRequestAndReceiveResponse(b'GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True, extraStepAfterCompress=False)
         self.assertEquals(rawResponse, response)
 
     def testParseContentEncoding(self):
@@ -274,14 +273,14 @@ class HttpServerTest(WeightlessTestCase):
             self.assertEquals('Response headers contained disallowed items: C, B', str(e))
 
     def testCloseConnection(self):
-        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
+        response = self.sendRequestAndReceiveResponse(b'GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
         self.assertEquals('The Response', response)
         self.assertEquals({}, self.reactor._readers)
         self.assertEquals({}, self.reactor._writers)
 
     def testSmallFragments(self):
-        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n', recvSize=3)
-        self.assertEquals('The Response', response)
+        response = self.sendRequestAndReceiveResponse(b'GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n', recvSize=3)
+        self.assertEquals(b'The Response', response)
 
     def testSmallFragmentsWhileSendingResponse(self):
         def response(**kwargs):
@@ -292,7 +291,7 @@ class HttpServerTest(WeightlessTestCase):
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
-        sok.send('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
+        sok.send(b'GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
         while not reactor._writers:
             reactor.step()
         serverSok, handler = list(reactor._writers.items())[0]
@@ -307,7 +306,7 @@ class HttpServerTest(WeightlessTestCase):
         self.assertEquals('some text that is longer than the lenght of fragments sent', fragment)
 
     def testHttpServerEncodesUnicode(self):
-        unicodeString = 'some t\xe9xt' 
+        unicodeString = 'some t\xe9xt'
         oneStringLength = len(unicodeString.encode(getdefaultencoding()))
         self.assertTrue(len(unicodeString) != oneStringLength)
         def response(**kwargs):
@@ -317,7 +316,7 @@ class HttpServerTest(WeightlessTestCase):
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
-        sok.send('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
+        sok.send(b'GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
         while not reactor._writers:
             reactor.step()
         reactor.step()
@@ -340,11 +339,11 @@ class HttpServerTest(WeightlessTestCase):
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
-        sok.send('GET HTTP/1.0\r\n\r\n') # no path
+        sok.send(b'GET HTTP/1.0\r\n\r\n') # no path
         while select([sok],[], [], 0) != ([sok], [], []):
             reactor.step()
         response = sok.recv(4096)
-        self.assertEquals('HTTP/1.0 400 Bad Request\r\n\r\n', response)
+        self.assertEquals(b'HTTP/1.0 400 Bad Request\r\n\r\n', response)
         self.assertEquals(1, len(timers))
 
     def testInvalidPOSTRequestStartsOnlyOneTimer(self):
@@ -361,12 +360,12 @@ class HttpServerTest(WeightlessTestCase):
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
-        sok.send('POST / HTTP/1.0\r\nContent-Length: 10\r\n\r\n')
+        sok.send(b'POST / HTTP/1.0\r\nContent-Length: 10\r\n\r\n')
         reactor.step()
-        sok.send(".")
+        sok.send(b".")
         sleep(0.1)
         reactor.step()
-        sok.send(".")
+        sok.send(b".")
         reactor.step()
         sleep(0.1)
         while select([sok],[], [], 0) != ([sok], [], []):
@@ -381,10 +380,10 @@ class HttpServerTest(WeightlessTestCase):
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
-        sok.send('POST / HTTP/1.0\r\n') 
-        sok.send('Expect: something\r\n')
-        sok.send('Content-Length: 5\r\n')
-        sok.send('\r\n1234')
+        sok.send(b'POST / HTTP/1.0\r\n')
+        sok.send(b'Expect: something\r\n')
+        sok.send(b'Content-Length: 5\r\n')
+        sok.send(b'\r\n1234')
         sok.close()
         with self.stderr_replaced() as s:
             for i in range(4):
@@ -397,12 +396,12 @@ class HttpServerTest(WeightlessTestCase):
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
-        sok.send('GET / HTTP/1.0\r\n\r\n')
+        sok.send(b'GET / HTTP/1.0\r\n\r\n')
         sleep(0.02)
         for i in range(11):
             reactor.step()
         response = sok.recv(4096)
-        self.assertEquals('aaa', response)
+        self.assertEquals(b'aaa', response)
 
     def testPostMethodReadsBody(self):
         self.requestData = None
@@ -414,7 +413,7 @@ class HttpServerTest(WeightlessTestCase):
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
-        sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\nbodydata')
+        sok.send(b'POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\nbodydata')
 
         while not self.requestData:
             reactor.step()
@@ -426,7 +425,7 @@ class HttpServerTest(WeightlessTestCase):
         self.assertEquals(8, int(headers['Content-Length']))
 
         self.assertTrue('Body' in self.requestData)
-        self.assertEquals('bodydata', self.requestData['Body'])
+        self.assertEquals(b'bodydata', self.requestData['Body'])
 
     def testPostMethodDeCompressesDeflatedBody_deflate(self):
         self.requestData = None
@@ -540,7 +539,7 @@ class HttpServerTest(WeightlessTestCase):
 
         done = []
         def onDone():
-            fromServer = sok.recv(1024)
+            fromServer = sok.recv(1024).decode()
             self.assertTrue('HTTP/1.0 400 Bad Request' in fromServer)
             done.append(True)
 
@@ -550,7 +549,7 @@ class HttpServerTest(WeightlessTestCase):
         reactor.addTimer(0.02, onDone)
         sok = socket()
         sok.connect(('localhost', self.port))
-        sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\n')
+        sok.send(b'POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\n')
 
         while not done:
             reactor.step()
@@ -565,14 +564,14 @@ class HttpServerTest(WeightlessTestCase):
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
-        sok.send('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nabcde\r\n5\r\nfghij\r\n0\r\n')
+        sok.send(b'POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nabcde\r\n5\r\nfghij\r\n0\r\n')
 
         reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
         while self.requestData.get('Body', None) != 'abcdefghij':
             reactor.step()
 
     def testReadChunkedAndCompressedPost(self):
-        postData = 'AhjBeehCeehAhjBeehCeehAhjBeehCeehAhjBeehCeeh'
+        postData = b'AhjBeehCeehAhjBeehCeehAhjBeehCeehAhjBeehCeeh'
         postDataCompressed = compress(postData)
         self.assertEquals(20, len(postDataCompressed))
         self.assertEquals(15, len(postDataCompressed[:15]))
@@ -588,7 +587,7 @@ class HttpServerTest(WeightlessTestCase):
         sok = socket()
         sok.connect(('localhost', self.port))
         postString = 'POST / HTTP/1.1\r\nContent-Type: application/x-www-form-urlencoded\r\nTransfer-Encoding: chunked\r\nContent-Encoding: deflate\r\n\r\nf\r\n%s\r\n5\r\n%s\r\n0\r\n' % (postDataCompressed[:15], postDataCompressed[15:])
-        sok.send(postString)
+        sok.send(postString.encode())
 
         reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
         while self.requestData.get('Body', None) != postData:
@@ -670,7 +669,7 @@ class HttpServerTest(WeightlessTestCase):
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
-        sok.send(httpRequest)
+        sok.send(httpRequest.encode())
 
         reactor.addTimer(2, lambda: self.fail("Test Stuck"))
         while self.requestData.get('Form', None) == None:
@@ -720,11 +719,11 @@ class HttpServerTest(WeightlessTestCase):
         sock = socket()
         sock.connect(('localhost', self.port))
         self.reactor.step()
-        sock.send("GET / HTTP/1.0\r\n\r\n")
+        sock.send(b"GET / HTTP/1.0\r\n\r\n")
         self.reactor.step().step().step()
         server.shutdown()
 
-        self.assertEquals('FAIL', sock.recv(1024))
+        self.assertEquals(b'FAIL', sock.recv(1024))
         self.assertEquals([503], codes)
 
     def testOnlyHandleAMaximumNrOfRequestsBelowBoundary(self):
@@ -742,11 +741,11 @@ class HttpServerTest(WeightlessTestCase):
         sock = socket()
         sock.connect(('localhost', self.port))
         self.reactor.step()
-        sock.send("GET / HTTP/1.0\r\n\r\n")
+        sock.send(b"GET / HTTP/1.0\r\n\r\n")
         self.reactor.step().step().step()
         server.shutdown()
 
-        self.assertEquals('OK', sock.recv(1024))
+        self.assertEquals(b'OK', sock.recv(1024))
 
     def testDefaultErrorHandler(self):
         def handler(**kwargs):
@@ -760,10 +759,10 @@ class HttpServerTest(WeightlessTestCase):
         sock = socket()
         sock.connect(('localhost', self.port))
         self.reactor.step()
-        sock.send("GET / HTTP/1.0\r\n\r\n")
+        sock.send(b"GET / HTTP/1.0\r\n\r\n")
         self.reactor.step().step().step()
 
-        self.assertEquals('HTTP/1.0 503 Service Unavailable\r\n\r\n<html><head></head><body><h1>Service Unavailable</h1></body></html>', sock.recv(1024))
+        self.assertEquals(b'HTTP/1.0 503 Service Unavailable\r\n\r\n<html><head></head><body><h1>Service Unavailable</h1></body></html>', sock.recv(1024))
         server.shutdown()
 
     def testYieldInHttpServer(self):
@@ -779,13 +778,13 @@ class HttpServerTest(WeightlessTestCase):
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
-        sok.send('GET /path/here HTTP/1.0\r\n\r\n')
+        sok.send(b'GET /path/here HTTP/1.0\r\n\r\n')
         for i in range(500):
             reactor.step()
-        self.assertEquals('A', sok.recv(100))
+        self.assertEquals(b'A', sok.recv(100))
         bucket.append('continue')
         reactor.step()
-        self.assertEquals('B', sok.recv(100))
+        self.assertEquals(b'B', sok.recv(100))
 
     def testYieldPossibleUseCase(self):
         bucket = []
@@ -819,10 +818,10 @@ class HttpServerTest(WeightlessTestCase):
             useYield[:] = [use]
             sok0 = socket()
             sok0.connect(('localhost', self.port))
-            sok0.send('GET /aLotOfWork HTTP/1.0\r\n\r\n')
+            sok0.send(b'GET /aLotOfWork HTTP/1.0\r\n\r\n')
             sok1 = socket()
             sok1.connect(('localhost', self.port))
-            sok1.send('GET /path/here HTTP/1.0\r\n\r\n')
+            sok1.send(b'GET /path/here HTTP/1.0\r\n\r\n')
             sleep(0.02)
             while ready != ['yes']:
                 reactor.step()

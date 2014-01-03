@@ -29,7 +29,7 @@ from weightless.core import identify, Yield
 from weightless.http import REGEXP, parseHeaders, parseHeader
 
 import re
-from io import StringIO
+from io import StringIO, BytesIO
 from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
 from tempfile import TemporaryFile
 from email import message_from_file as parse_mime_message
@@ -42,7 +42,7 @@ from random import randint
 from time import time
 from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER
 from struct import pack
-from sys import getdefaultencoding
+from sys import getdefaultencoding, stderr
 import collections
 
 RECVSIZE = 4096
@@ -202,9 +202,9 @@ def updateResponseHeaders(headers, match, addHeaders=None, removeHeaders=None, r
 
     matchStartHeaders = match.start('_headers')
     matchEnd = match.end()
-    _statusLine = headers[:matchStartHeaders - CRLF_LEN]
-    _headers = headers[matchStartHeaders - CRLF_LEN:matchEnd - CRLF_LEN]
-    _body = headers[matchEnd:]
+    _statusLine = headers[:matchStartHeaders - CRLF_LEN].decode()
+    _headers = headers[matchStartHeaders - CRLF_LEN:matchEnd - CRLF_LEN].decode()
+    _body = headers[matchEnd:].decode()
 
     notAbsents = requireAbsent.intersection(set(headersDict.keys()))
     if notAbsents:
@@ -220,7 +220,6 @@ def updateResponseHeaders(headers, match, addHeaders=None, removeHeaders=None, r
 
     for header, value in list(addHeaders.items()):
         _headers += '%s: %s\r\n' % (header, value)
-
     return _statusLine + _headers + CRLF, _body
 
 
@@ -277,7 +276,7 @@ class HttpHandler(object):
         self._reactor = reactor
         self._sok = sok
         self._generatorFactory = generatorFactory
-        self._dataBuffer = ''
+        self._dataBuffer = b''
         self._rest = None
         self._timeout = timeout
         self._timer = None
@@ -300,7 +299,7 @@ class HttpHandler(object):
             # SOCKET CLOSED by PEER
             self._badRequest()
             return
-        self._dataBuffer += part.decode()
+        self._dataBuffer += part
         self._resetTimer()
         self._dealWithCall()
 
@@ -309,7 +308,7 @@ class HttpHandler(object):
         self._dealWithCall()
 
     def _readHeaders(self):
-        match = REGEXP.REQUEST.match(self._dataBuffer)
+        match = REGEXP.REQUEST.match(self._dataBuffer.decode())
         if not match:
             return # for more data
         self.request = match.groupdict()
@@ -326,7 +325,7 @@ class HttpHandler(object):
                 self.setCallDealer(lambda: self._readMultiForm(pDict['boundary']))
                 return
         if 'Expect' in self.request['Headers']:
-            self._sok.send('HTTP/1.1 100 Continue\r\n\r\n')
+            self._sok.send(b'HTTP/1.1 100 Continue\r\n\r\n')
 
         if self._reactor.getOpenConnections() > self._maxConnections:
             self.request['ResponseCode'] = 503
@@ -365,7 +364,7 @@ class HttpHandler(object):
             self.finalize()
             return
 
-        self._dataBuffer= ''
+        self._dataBuffer= b''
 
     def _processFilename(self, filename):
         parts = filename.split('\\')
@@ -411,7 +410,7 @@ class HttpHandler(object):
         self.finalize()
 
     def _readChunk(self):
-        match = REGEXP.CHUNK_SIZE_LINE.match(self._dataBuffer)
+        match = REGEXP.CHUNK_SIZE_LINE.match(self._dataBuffer.decode())
         if not match:
             return # for more data
         self._chunkSize = int(match.groupdict()['ChunkSize'], 16)
@@ -460,7 +459,7 @@ class HttpHandler(object):
         self._finalize(self._generatorFactory)
 
     def _badRequest(self):
-        self._sok.send('HTTP/1.0 400 Bad Request\r\n\r\n')
+        self._sok.send(b'HTTP/1.0 400 Bad Request\r\n\r\n')
         self._reactor.removeReader(self._sok)
         self._sok.shutdown(SHUT_RDWR)
         self._sok.close()
@@ -469,7 +468,7 @@ class HttpHandler(object):
     def _writeResponse(self, encoding=None):
         this = yield
         endHeader = False
-        headers = ''
+        headers = b''
         encodeResponseBody = SUPPORTED_CONTENT_ENCODINGS[encoding]['encode']() if encoding is not None else None
         while True:
             yield
@@ -487,10 +486,12 @@ class HttpHandler(object):
                         continue
                     if type(data) is str:
                         data = data.encode(self._defaultEncoding)
+                    elif type(data) is int:
+                        data = bytes(chr(data), self._defaultEncoding)
                 if encodeResponseBody is not None:
                     if endHeader is False:
                         headers += data
-                        match = REGEXP.RESPONSE.match(headers)
+                        match = REGEXP.RESPONSE.match(headers.decode())
                         if match:
                             endHeader = True
                             try:
@@ -504,12 +505,11 @@ class HttpHandler(object):
                                 encodeResponseBody = None
                                 data = headers
                             else:
-                                data = _statusLineAndHeaders + encodeResponseBody.compress(_bodyStart)
+                                data = _statusLineAndHeaders.encode() + encodeResponseBody.compress(_bodyStart.encode())
                         else:
                             continue
                     elif not self._rest:
                         data = encodeResponseBody.compress(data)
-
                 if data:
                     sent = self._sok.send(data, MSG_DONTWAIT)
                     if sent < len(data):
