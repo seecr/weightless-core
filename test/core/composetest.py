@@ -1129,7 +1129,7 @@ class _ComposeTest(TestCase):
             stackText = """\
 Traceback (most recent call last):
   File "%(__file__)s", line %(cLine)s, in testUnsuitableGeneratorTraceback
-    composed.next()
+    next(composed)
   File "%(__file__)s", line %(genYieldLine)s, in gen
     yield genF
 AssertionError: Generator already used.\n""" % {
