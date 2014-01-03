@@ -119,7 +119,7 @@ class HttpsServer(object):
 
             # Initialize context
             ctx = SSL.Context(SSL.SSLv23_METHOD)
-            ctx.set_session_id('weightless:%s:%s' % (time(), randint(1024,4096)))
+            ctx.set_session_id('weightless:%s:%s' % (str(time())[:-1], randint(1024,4096)))
             ctx.set_options(SSL.OP_NO_SSLv2)
             ctx.set_verify(SSL.VERIFY_PEER, verify_cb) # Demand a certificate
             ctx.use_privatekey_file(self._keyfile)
@@ -300,7 +300,7 @@ class HttpHandler(object):
             # SOCKET CLOSED by PEER
             self._badRequest()
             return
-        self._dataBuffer += part.decode('UTF-8')
+        self._dataBuffer += part.decode()
         self._resetTimer()
         self._dealWithCall()
 

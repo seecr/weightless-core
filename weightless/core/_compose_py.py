@@ -93,8 +93,8 @@ def _compose(initial, stepping):
             if exception:
                 if exception[0] == GeneratorExit:
                     generator.close()
-                    raise exception
-                response = generator.throw(*exception)
+                    raise exception[1]
+                response = generator.throw(exception[1])
                 exception = None
             else:
                 message = messages.pop(0)

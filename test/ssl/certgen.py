@@ -51,23 +51,20 @@ def createCertRequest(pkey, digest="md5", **name):
     req.sign(pkey, digest)
     return req
 
-def createCertificate(req, xxx_todo_changeme, serial, xxx_todo_changeme1, digest="md5"):
+def createCertificate(req, issuerCertAndKey, serial, notBeforeAfter, digest="md5"):
     """
     Generate a certificate given a certificate request.
 
-    Arguments: req        - Certificate reqeust to use
-               issuerCert - The certificate of the issuer
-               issuerKey  - The private key of the issuer
-               serial     - Serial number for the certificate
-               notBefore  - Timestamp (relative to now) when the certificate
-                            starts being valid
-               notAfter   - Timestamp (relative to now) when the certificate
-                            stops being valid
-               digest     - Digest method to use for signing, default is md5
+    Arguments: req              - Certificate reqeust to use
+               issuerCertAndKey - The certificate and private key of the issuer
+               serial           - Serial number for the certificate
+               notBeforeAfter   - Timestamps (relative to now) when the certificate
+                                  starts and stopsbeing valid
+               digest           - Digest method to use for signing, default is md5
     Returns:   The signed certificate in an X509 object
     """
-    (issuerCert, issuerKey) = xxx_todo_changeme
-    (notBefore, notAfter) = xxx_todo_changeme1
+    (issuerCert, issuerKey) = issuerCertAndKey
+    (notBefore, notAfter) = notBeforeAfter
     cert = crypto.X509()
     cert.set_serial_number(serial)
     cert.gmtime_adj_notBefore(notBefore)
