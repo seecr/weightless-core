@@ -3,7 +3,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2014 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -28,7 +28,7 @@ from __future__ import with_statement
 
 from time import time, sleep
 from signal import signal, SIGALRM, alarm
-from select import error as ioerror
+from select import error as ioerror, select
 import os, sys
 from tempfile import mkstemp
 from StringIO import StringIO
@@ -691,16 +691,18 @@ class ReactorTest(WeightlessTestCase):
             yield
         callback = p().next
         reactor.addProcess(callback)
-        reactor.addProcess(lambda: None)
+        reactor.addProcess(lambda: reactor.removeProcess())
         reactor.step()
         self.assertEquals([callback], reactor._suspended.keys())
         self.assertEquals([callback, 'suspending'], trace)
 
-        reactor.step()
-        self.assertEquals([callback], reactor._suspended.keys())
-        self.assertEquals([callback, 'suspending'], trace)
+        readers, _, _ = select([reactor._processReadPipe], [], [], 0.01)
+        self.assertEquals([], readers)
 
         reactor.resumeProcess(handle=callback)
+        readers, _, _ = select([reactor._processReadPipe], [], [], 0.01)
+        self.assertEquals([reactor._processReadPipe], readers)
+
         reactor.step()
         self.assertEquals([], reactor._suspended.keys())
         self.assertEquals([callback, 'suspending', 'resuming'], trace)
