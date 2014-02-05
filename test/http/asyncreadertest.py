@@ -4,7 +4,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2010-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2014 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -245,6 +245,23 @@ RuntimeError: Boom!""" % fileDict)
         headers = post_request[0]['headers'].headers
         self.assertEquals(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n'], headers)
         self.assertEquals(body, post_request[0]['body'])
+
+    @stderr_replaced
+    def testHttpsPostOnIncorrectPort(self):
+        responses = []
+        def posthandler(*args, **kwargs):
+            response = yield httpspost('localhost', self.port + 1, '/path', "body",
+                    headers={'Content-Type': 'text/plain'}
+            )
+            yield response
+            responses.append(response)
+        self.handler = posthandler
+        clientget('localhost', self.port, '/')
+        self._loopReactorUntilDone()
+
+        self.assertTrue(self.error[0] is IOError)
+        self.assertEquals("111", str(self.error[1]))
+
 
     def testHttpGet(self):
         get_request = []
