@@ -3,7 +3,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2010-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2014 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -60,7 +60,7 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=No
     sok.setsockopt(SOL_SOCKET, SO_KEEPALIVE, 1)
     sok.setsockopt(SOL_TCP, TCP_KEEPIDLE, 60*10)
     sok.setsockopt(SOL_TCP, TCP_KEEPINTVL, 75)
-    sok.setsockopt(SOL_TCP, TCP_KEEPCNT, 9)    
+    sok.setsockopt(SOL_TCP, TCP_KEEPCNT, 9)
     try:
         sok.connect((host, port))
     except SocketError, (errno, msg):
@@ -68,16 +68,21 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=No
             raise
 
     try:
-        if ssl:
-            sok = yield _sslHandshake(sok, this, suspend, prio)
-
         suspend._reactor.addWriter(sok, this.next, prio=prio)
         try:
             yield
             err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
             if err != 0:    # connection created succesfully?
                 raise IOError(err)
-            yield
+        finally:
+            suspend._reactor.removeWriter(sok)
+
+        if ssl:
+            sok = yield _sslHandshake(sok, this, suspend, prio)
+
+        suspend._reactor.addWriter(sok, this.next, prio=prio)
+        yield
+        try:
             # error checking
             if body:
                 data = body
@@ -121,10 +126,6 @@ def _requestLine(method, request):
     return "%s %s HTTP/1.0\r\n" % (method, request)
 
 def _sslHandshake(sok, this, suspend, prio):
-    suspend._reactor.addWriter(sok, this.next, prio=prio)
-    yield
-    suspend._reactor.removeWriter(sok)
-
     sok = wrap_socket(sok, do_handshake_on_connect=False)
     while True:
         try:
