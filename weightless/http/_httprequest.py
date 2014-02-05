@@ -140,6 +140,8 @@ def _sslHandshake(sok, this, suspend, prio):
                 suspend._reactor.addWriter(sok, this.next, prio=prio)
                 yield
                 suspend._reactor.removeWriter(sok)
+            else:
+                raise
     raise StopIteration(sok)
 
 def _asyncSend(sok, data):
