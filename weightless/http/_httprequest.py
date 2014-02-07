@@ -127,7 +127,9 @@ def _requestLine(method, request):
 
 def _sslHandshake(sok, this, suspend, prio):
     sok = wrap_socket(sok, do_handshake_on_connect=False)
-    while True:
+    count = 0
+    while count < 254:
+        count += 1
         try:
             sok.do_handshake()
             break
@@ -142,6 +144,8 @@ def _sslHandshake(sok, this, suspend, prio):
                 suspend._reactor.removeWriter(sok)
             else:
                 raise
+    if count == 254:
+        raise ValueError("SSL handshake failed.")
     raise StopIteration(sok)
 
 def _asyncSend(sok, data):
