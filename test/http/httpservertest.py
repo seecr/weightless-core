@@ -63,15 +63,16 @@ class HttpServerTest(WeightlessTestCase):
         sok.send(request)
 
         mockStdout = None
+        self.steps = 0
         with self.stdout_replaced() as mockStdout:
             while not self.responseCalled:
+                self.steps += 1
                 self.reactor.step()
             if compressResponse and extraStepAfterCompress: #not everythingSent???: 
                 self.reactor.step()
         stdoutValue = mockStdout.getvalue()
         if stdoutValue:
             print stdoutValue
-
         server.shutdown()
         r = sok.recv(4096)
         sok.close()
@@ -154,14 +155,12 @@ class HttpServerTest(WeightlessTestCase):
             for c in rawResponse:
                 yield Yield
                 yield c
-        _sio = StringIO()
-        _gzFileObj = GzipFile(filename=None, mode='wb', compresslevel=6, fileobj=_sio)
-        _gzFileObj.write(rawBody); _gzFileObj.close()
-        compressedBody = _sio.getvalue()
 
-        compressedResponse = rawHeaders.replace('Content-Length: 12345\r\n', '') + 'Content-Encoding: gzip\r\n\r\n' + compressedBody
         response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: gzip;q=0.999, deflate;q=0.998, dontknowthisone;q=1\r\n\r\n', response=rawResponser(), compressResponse=True)
-        self.assertEquals(compressedResponse, response)
+        compressed_response = response.split('\r\n\r\n', 1)[1]
+        decompressed_response = GzipFile(None, fileobj=StringIO(compressed_response)).read()
+
+        self.assertEquals(decompressed_response, rawBody)
 
     def testOnlyCompressBodyWhenCompressResponseIsOn(self):
         rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nAnother: Header\r\n'
@@ -177,6 +176,19 @@ class HttpServerTest(WeightlessTestCase):
 
         response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
         self.assertNotEqual(rawResponse, response)
+
+    def testCompressLargerBuggerToTriggerCompressionBuffersToFlush(self):
+        from random import random
+        rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 99999\r\nAnother: Header\r\n\r\n'
+        def rawResponser():
+            yield rawHeaders
+            for _ in xrange(4500):
+                yield str(random())
+
+        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
+
+        #TODO find assert: the response is streamed and not sent in one piece
+        #TODO find assert: no '' strings are sent by the server
 
     def testGetCompressedResponse_uncompressedWhenContentEncodingPresent(self):
         rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nContent-Encoding: enlightened\r\n'

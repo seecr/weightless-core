@@ -234,7 +234,9 @@ class GzipCompress(object):
 
     def compress(self, data):
         self._gzipFileObj.write(data)
-        return ''
+        data = self._buffer.getvalue()
+        self._buffer.truncate(0)
+        return data
 
     def flush(self):
         self._gzipFileObj.close()
@@ -509,11 +511,12 @@ class HttpHandler(object):
                     else:
                         data = encodeResponseBody.compress(data)
 
-                sent = self._sok.send(data, MSG_DONTWAIT)
-                if sent < len(data):
-                    self._rest = data[sent:]
-                else:
-                    self._rest = None
+                if data:  # TODO find a unittest for it; if you can
+                    sent = self._sok.send(data, MSG_DONTWAIT)
+                    if sent < len(data):
+                        self._rest = data[sent:]
+                    else:
+                        self._rest = None
             except StopIteration:
                 if encodeResponseBody:
                     self._rest = encodeResponseBody.flush()
