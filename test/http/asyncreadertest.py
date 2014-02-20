@@ -379,6 +379,32 @@ RuntimeError: Boom!""" % fileDict)
         headers = get_request[0]['headers'].headers
         self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
 
+    def testHttpGetViaProxy(self):
+        get_request = []
+        port = self.port + 1
+        proxyPort = port + 1
+        self.proxyServer(proxyPort, get_request)
+        self.referenceHttpServer(port, get_request)
+
+        responses = []
+        def gethandler(*args, **kwargs):
+            response = yield httpget('localhost', port, '/path',
+                    headers={'Content-Type': 'text/plain', 'Content-Length': 0},
+                    proxyServer="http://localhost:%s" % proxyPort
+            )
+            yield response
+            responses.append(response)
+        self.handler = gethandler
+        clientget('localhost', self.port, '/')
+
+        self._loopReactorUntilDone()
+
+        self.assertTrue("GET RESPONSE" in responses[0], responses[0])
+        self.assertEquals('CONNECT', get_request[0]['command'])
+        self.assertEquals('localhost:%s' % port, get_request[0]['path'])
+        self.assertEquals('GET', get_request[1]['command'])
+        self.assertEquals('/path', get_request[1]['path'])
+
     def _dispatch(self, *args, **kwargs):
         def handle():
             try:

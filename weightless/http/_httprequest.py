@@ -31,36 +31,49 @@ from functools import partial
 
 from weightless.io import Suspend
 from weightless.core import compose, identify
+from urlparse import urlsplit
 
 
-def httpget(host, port, request, headers=None, body=None, ssl=False, prio=None, handlePartialResponse=None):
-    return _httpRequest(method='GET', host=host, port=port, request=request, body=body, headers=headers, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse)
+def httpget(host, port, request, headers=None, body=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None):
+    return _httpRequest(method='GET', host=host, port=port, request=request, body=body, headers=headers, proxyServer=proxyServer, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse)
 
-def httppost(host, port, request, body, headers=None, ssl=False, prio=None, handlePartialResponse=None):
-    return _httpRequest(method='POST', host=host, port=port, request=request, body=body, headers=headers, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse)
+def httppost(host, port, request, body, headers=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None):
+    return _httpRequest(method='POST', host=host, port=port, request=request, body=body, headers=headers, proxyServer=proxyServer, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse)
 
 httpsget = partial(httpget, ssl=True)
 httpspost = partial(httppost, ssl=True)
 
 
-def _httpRequest(host, port, request, body=None, headers=None, ssl=False, prio=None, handlePartialResponse=None, method='GET'):
-    s = Suspend(_do(method, host=host, port=port, request=request, headers=headers, body=body, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse).send)
+def _httpRequest(host, port, request, body=None, headers=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None, method='GET'):
+    s = Suspend(_do(method, host=host, port=port, request=request, headers=headers, proxyServer=proxyServer, body=body, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse).send)
     yield s
     result = s.getResult()
     raise StopIteration(result)
 
-@identify
-@compose
-def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=None, handlePartialResponse=None):
-    headers = headers or {}
-    this = yield # this generator, from @identify
-    suspend = yield # suspend object, from Suspend.__call__
+def _createSocket():
     sok = socket()
     sok.setblocking(0)
     sok.setsockopt(SOL_SOCKET, SO_KEEPALIVE, 1)
     sok.setsockopt(SOL_TCP, TCP_KEEPIDLE, 60*10)
     sok.setsockopt(SOL_TCP, TCP_KEEPINTVL, 75)
     sok.setsockopt(SOL_TCP, TCP_KEEPCNT, 9)
+    return sok
+
+@identify
+@compose
+def _do(method, host, port, request, body=None, headers=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None):
+    headers = headers or {}
+    this = yield # this generator, from @identify
+    suspend = yield # suspend object, from Suspend.__call__
+
+    sok = _createSocket()
+    if proxyServer:
+        proxy = urlsplit(proxyServer)
+        origHost = host
+        origPort = port
+        host = proxy.hostname
+        port = proxy.port or 80
+
     try:
         sok.connect((host, port))
     except SocketError, (errno, msg):
@@ -76,6 +89,20 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=No
                 raise IOError(err)
         finally:
             suspend._reactor.removeWriter(sok)
+
+        if proxyServer:
+            sok.send(
+                ("CONNECT %s:%d HTTP/1.0\r\n" +
+                "Host: %s:%d\r\n\r\n") % (origHost, origPort, origHost, origPort))
+            suspend._reactor.addReader(sok, this.next, prio=prio)
+            response = ''
+            while True:
+                yield
+                response += sok.recv(4096)
+                if '\r\n\r\n' in response:
+                    if not response.split()[1] == '200':
+                        raise ValueError("Failed to connect through proxy")
+                    break
 
         if ssl:
             sok = yield _sslHandshake(sok, this, suspend, prio)

@@ -4,7 +4,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2006-2009 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2014 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -27,7 +27,7 @@
 from contextlib import contextmanager
 from operator import xor
 from random import randint
-from socket import socket
+from socket import socket, AF_INET, SOCK_STREAM
 from time import time
 
 from os.path import join, dirname, abspath
@@ -42,7 +42,11 @@ from weightless.io import Reactor
 
 from BaseHTTPServer import BaseHTTPRequestHandler
 from SocketServer import TCPServer, ThreadingMixIn, BaseServer
+from SimpleHTTPServer import SimpleHTTPRequestHandler
 from ssl import wrap_socket
+from urllib2 import urlopen
+from select import select
+from urlparse import urlunparse, urlparse
 
 mydir = dirname(abspath(__file__))
 sslDir = join(mydir, 'ssl')
@@ -198,13 +202,34 @@ class WeightlessTestCase(TestCase):
                 self.wfile.flush()
 
         if ssl:
-            self.httpd = MySSLTCPServer(("", port), Handler)
+            httpd = MySSLTCPServer(("", port), Handler)
         else:
-            self.httpd = TCPServer(("", port), Handler)
-        thread=Thread(None, lambda: server(self.httpd))
+            httpd = TCPServer(("", port), Handler)
+        thread=Thread(None, lambda: server(httpd))
         thread.daemon = True
         thread.start()
 
+    def proxyServer(self, port, request):
+        def server(httpd):
+            httpd.serve_forever()
+        class Proxy(BaseHTTPRequestHandler):
+            def log_message(*args, **kwargs):
+                pass
+
+            def do_CONNECT(self):
+                request.append({'command': self.command, 'path': self.path, 'headers': self.headers})
+                self.send_response(200, "Connection established")
+                self.end_headers()
+                origRequest = self.connection.recv(4096)
+                path = "http://" + self.path + origRequest.split()[1]
+                self.wfile.write(urlopen(path).read())
+                self.wfile.flush()
+                self.connection.close()
+
+        httpd = TCPServer(("", port), Proxy)
+        thread=Thread(None, lambda: server(httpd))
+        thread.daemon = True
+        thread.start()
 
 class MatchAll(object):
     def __eq__(self, other):
