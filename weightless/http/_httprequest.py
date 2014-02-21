@@ -103,6 +103,7 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
                     if not response.split()[1] == '200':
                         raise ValueError("Failed to connect through proxy")
                     break
+            suspend._reactor.removeReader(sok)
 
         if ssl:
             sok = yield _sslHandshake(sok, this, suspend, prio)
