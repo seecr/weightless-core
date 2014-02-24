@@ -95,15 +95,17 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
                 ("CONNECT %s:%d HTTP/1.0\r\n" +
                 "Host: %s:%d\r\n\r\n") % (origHost, origPort, origHost, origPort))
             suspend._reactor.addReader(sok, this.next, prio=prio)
-            response = ''
-            while True:
-                yield
-                response += sok.recv(4096)
-                if '\r\n\r\n' in response:
-                    if not response.split()[1] == '200':
-                        raise ValueError("Failed to connect through proxy")
-                    break
-            suspend._reactor.removeReader(sok)
+            try:
+                response = ''
+                while True:
+                    yield
+                    response += sok.recv(4096)
+                    if '\r\n\r\n' in response:
+                        if not response.split()[1] == '200':
+                            raise ValueError("Failed to connect through proxy")
+                        break
+            finally:
+                suspend._reactor.removeReader(sok)
 
         if ssl:
             sok = yield _sslHandshake(sok, this, suspend, prio)
