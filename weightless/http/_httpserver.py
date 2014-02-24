@@ -35,8 +35,7 @@ from tempfile import TemporaryFile
 from email import message_from_file as parse_mime_message
 from zlib import compressobj as deflateCompress
 from zlib import decompressobj as deflateDeCompress
-from gzip import GzipFile
-
+from zlib import Z_DEFAULT_COMPRESSION, DEFLATED, MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY
 
 from OpenSSL import SSL
 from random import randint
@@ -229,26 +228,28 @@ def updateResponseHeaders(headers, match, addHeaders=None, removeHeaders=None, r
 
 class GzipCompress(object):
     def __init__(self):
-        self._buffer = StringIO()
-        self._gzipFileObj = GzipFile(filename=None, mode='wb', compresslevel=6, fileobj=self._buffer)
+        # See for more info:
+        #   - zlib's zlib.h deflateInit2 comment
+        #   - Python sources: Modules/zlibmodule.c PyZlib_compressobj
+        # compressobj([level[, method[, wbits[, memlevel[, strategy]]]]])
+        self._compressObj = deflateCompress(Z_DEFAULT_COMPRESSION, DEFLATED, MAX_WBITS+16, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY)  # wbits=15+16; "The default value is 15 ..." "windowBits can also be greater than 15 for optional gzip encoding.  Add 16 to windowBits to write a simple gzip header and trailer around the compressed data instead of a zlib wrapper."
 
     def compress(self, data):
-        self._gzipFileObj.write(data)
-        data = self._buffer.getvalue()
-        self._buffer.truncate(0)
-        return data
+        return self._compressObj.compress(data)
 
     def flush(self):
-        self._gzipFileObj.close()
-        return self._buffer.getvalue()
+        return self._compressObj.flush()
 
 
 class GzipDeCompress(object):
     def __init__(self):
-        self._decompressObj = deflateDeCompress()
+        # See for more info:
+        #   - zlib's zlib.h inflateInit2 comment
+        #   - Python sources: Modules/zlibmodule.c PyZlib_decompressobj
+        self._decompressObj = deflateDeCompress(MAX_WBITS+16)  # wbits=15+16; "The default value is 15 ..." "... windowBits can also be greater than 15 for optional gzip decoding. ..." "... or add 16 to decode only the gzip format"
 
     def decompress(self, data):
-        return self._decompressObj.decompress(data, 48)  # wbits=16+32; decompress gzip-stream only
+        return self._decompressObj.decompress(data)
 
     def flush(self):
         return self._decompressObj.flush()

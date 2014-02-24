@@ -481,8 +481,7 @@ class HttpServerTest(WeightlessTestCase):
         _sio = StringIO()
         _gzFileObj = GzipFile(filename=None, mode='wb', compresslevel=6, fileobj=_sio)
         _gzFileObj.write(bodyData); _gzFileObj.close()
-        compressedBodyData = _sio.getvalue()
-        bodyDataCompressed = compress(bodyData)
+        bodyDataCompressed = _sio.getvalue()
         contentLengthCompressed = len(bodyDataCompressed)
         sok.send(('POST / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nContent-Encoding: gzip\r\n\r\n' % contentLengthCompressed) + bodyDataCompressed)
 
