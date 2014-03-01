@@ -91,19 +91,25 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
             suspend._reactor.removeWriter(sok)
 
         if proxyServer:
-            sok.send(
+            sok.sendall(  # hotfix EG d.d. 1/3/14
                 ("CONNECT %s:%d HTTP/1.0\r\n" +
                 "Host: %s:%d\r\n\r\n") % (origHost, origPort, origHost, origPort))
             suspend._reactor.addReader(sok, this.next, prio=prio)
             try:
+                # hotfix EG d.d. 1/3/14
                 response = ''
                 while True:
                     yield
-                    response += sok.recv(4096)
-                    if '\r\n\r\n' in response:
-                        if not response.split()[1] == '200':
-                            raise ValueError("Failed to connect through proxy")
+                    fragment = sok.recv(4096)
+                    if fragment == '':
                         break
+                    response += fragment
+                    if "\r\n\r\n" in response:
+                        break
+                status = response.split()[:2]
+                if not "200" in status:
+                    raise ValueError("Failed to connect through proxy")
+                # end hotfix
             finally:
                 suspend._reactor.removeReader(sok)
 
