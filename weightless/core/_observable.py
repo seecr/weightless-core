@@ -111,8 +111,7 @@ class MessageBase(object):
                     except (StopIteration, GeneratorExit):
                         c, v, t = exc_info()
                         handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
-                    if __debug__:
-                        self.verifyMethodResult(method, result)
+                    self.verifyMethodResult(method, result)
                     _ = yield result
                 except DeclineMessage:
                     continue
