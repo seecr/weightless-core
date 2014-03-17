@@ -27,20 +27,24 @@
 from __future__ import with_statement
 
 from weightlesstestcase import WeightlessTestCase, MATCHALL
-from random import randint, random
-from socket import socket, error as SocketError
-from select import select
-from weightless.io import Reactor
-from time import sleep
-from seecr.test import CallTrace
-from os.path import join, abspath, dirname
-from StringIO import StringIO
-from sys import getdefaultencoding
-from zlib import compress
-from gzip import GzipFile
 
-from weightless.http import HttpServer, _httpserver, REGEXP
+from StringIO import StringIO
+from errno import EAGAIN
+from gzip import GzipFile
+from os.path import join, abspath, dirname
+from random import randint, random
+from seecr.test import CallTrace
+from select import select
+from socket import socket, error as SocketError
+from sys import getdefaultencoding
+from time import sleep
+from weightless.io import Reactor
+from zlib import compress
+
+import sys
+
 from weightless.core import Yield, compose
+from weightless.http import HttpServer, _httpserver, REGEXP
 
 from weightless.http._httpserver import updateResponseHeaders, parseContentEncoding, parseAcceptEncoding
 
@@ -61,23 +65,38 @@ class HttpServerTest(WeightlessTestCase):
         sok = socket()
         sok.connect(('localhost', self.port))
         sok.send(request)
+        sok.setblocking(0)
 
-        stdoutValue = None
-        with self.stdout_replaced() as mockStdout:
-            while not self.responseCalled:
+        clientResponse = ''
+
+        def clientRecv():
+            clientResponse = ''
+            while True:
+                try:
+                    r = sok.recv(4096)
+                except SocketError, (errno, msg):
+                    if errno == EAGAIN:
+                        break
+                    raise
+                if not r:
+                    break
+                clientResponse += r
+            return clientResponse
+
+        while not self.responseCalled:
+            self.reactor.step()
+            if stepWatcher:
+                stepWatcher(self.reactor)
+            clientResponse += clientRecv()
+        if compressResponse and extraStepsAfterCompress:
+            for _ in range(extraStepsAfterCompress):
                 self.reactor.step()
-                if stepWatcher:
-                    stepWatcher(self.reactor)
-            if compressResponse and extraStepsAfterCompress:
-                for _ in range(extraStepsAfterCompress):
-                    self.reactor.step()
-            stdoutValue = mockStdout.getvalue()
-        if stdoutValue:
-            print stdoutValue
+                clientResponse += clientRecv()
+
         server.shutdown()
-        r = sok.recv(4096)
+        clientResponse += clientRecv()
         sok.close()
-        return r
+        return clientResponse
 
     def testConnect(self):
         self.req = False
@@ -178,57 +197,37 @@ class HttpServerTest(WeightlessTestCase):
         response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
         self.assertNotEqual(rawResponse, response)
 
+    def testDontCompressRestMoreThanOnce(self):
+        rawHeaders = 'HTTP/1.1 200 OK\r\n'
+        rawBody = ''
+        for _ in xrange((1024 ** 2 / 5)):  # * len(str(random())) (+/- 14)
+            rawBody += str(random())
+        rawResponse = rawHeaders + '\r\n' + rawBody
+        def rawResponser():
+            yield rawResponse
+
+        # Value *must* be larger than size used for a TCP Segment.
+        self.assertTrue(1000000 < len(compress(rawBody)))
+        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: gzip\r\n\r\n', response=rawResponser(), compressResponse=True, extraStepsAfterCompress=1)
+        compressed_response = response.split('\r\n\r\n', 1)[1]
+        decompressed_response = GzipFile(None, fileobj=StringIO(compressed_response)).read()
+
+        self.assertEquals(decompressed_response, rawBody)
+
+        # White box, more than one sock.send(...) -> uses self._rest -> must not be compressed again.
+        stepWatcher = StepWatcher()
+        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: gzip\r\n\r\n', response=rawResponser(), compressResponse=True, stepWatcher=stepWatcher.onStep, extraStepsAfterCompress=1)
+        compressed_response = response.split('\r\n\r\n', 1)[1]
+        decompressed_response = GzipFile(None, fileobj=StringIO(compressed_response)).read()
+        self.assertEquals(decompressed_response, rawBody)
+        self.assertTrue(6 <= len(stepWatcher.sokSends) <= 20, len(stepWatcher.sokSends))
+
     def testCompressLargerBuggerToTriggerCompressionBuffersToFlush(self):
         rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nAnother: Header\r\n\r\n'
         def rawResponser():
             yield rawHeaders
             for _ in xrange(4500):
                 yield str(random()) * 3 + str(random()) * 2 + str(random())
-
-        class SendLoggingMockSock(object):
-            def __init__(self, bucket, origSock):
-                self._bucket = bucket
-                self._orig = origSock
-
-            def send(self, data, *args, **kwargs):
-                self._bucket.append(data)
-                return self._orig.send(data, *args, **kwargs)
-
-            def __getattr__(self, attr):
-                return getattr(self._orig, attr)
-
-        class StepWatcher(object):
-            def __init__(self):
-                self._alreadyWrappedSocket = False
-                self.sokSends = []
-
-            def onStep(self, reactor):
-                if self._alreadyWrappedSocket:
-                    return
-
-                httpHandlerObj = self._extractWriteResponsesHttpHandlerObj(reactor)
-                if not httpHandlerObj:
-                    return
-
-                # Wrap it!
-                self._alreadyWrappedSocket = True
-                origSock = httpHandlerObj._sok
-                origCloseConnection = httpHandlerObj._closeConnection
-
-                def cleanupAndDelegate(*args, **kwargs):
-                    httpHandlerObj._sok = origSock
-                    httpHandlerObj._closeConnection = origCloseConnection
-                    return httpHandlerObj._closeConnection(*args, **kwargs)
-
-                httpHandlerObj._sok = SendLoggingMockSock(bucket=self.sokSends, origSock=origSock)
-                httpHandlerObj._closeConnection = cleanupAndDelegate
-
-            @staticmethod
-            def _extractWriteResponsesHttpHandlerObj(reactor):
-                result = [ctx.callback.__self__.gi_frame.f_locals['self'] for ctx in reactor._writers.values() if ctx.callback.__self__.gi_frame.f_code.co_name == '_writeResponse']
-                if result:
-                    return result[0]
-                return None
 
         stepWatcher = StepWatcher()
 
@@ -431,8 +430,6 @@ class HttpServerTest(WeightlessTestCase):
         while select([sok],[], [], 0) != ([sok], [], []):
             reactor.step()
         self.assertEquals(2, len(timers))
-
-
 
     def testInvalidRequestWithHalfHeader(self):
         reactor = Reactor()
@@ -906,4 +903,50 @@ class HttpServerTest(WeightlessTestCase):
                 set(['lazy_END']),
                 set(['work_part_2', 'work_END']),
            ], loopWithYield(True))
+
+
+class SendLoggingMockSock(object):
+    def __init__(self, bucket, origSock):
+        self._bucket = bucket
+        self._orig = origSock
+
+    def send(self, data, *args, **kwargs):
+        self._bucket.append(data)
+        return self._orig.send(data, *args, **kwargs)
+
+    def __getattr__(self, attr):
+        return getattr(self._orig, attr)
+
+class StepWatcher(object):
+    def __init__(self):
+        self._alreadyWrappedSocket = False
+        self.sokSends = []
+
+    def onStep(self, reactor):
+        if self._alreadyWrappedSocket:
+            return
+
+        httpHandlerObj = self._extractWriteResponsesHttpHandlerObj(reactor)
+        if not httpHandlerObj:
+            return
+
+        # Wrap it!
+        self._alreadyWrappedSocket = True
+        origSock = httpHandlerObj._sok
+        origCloseConnection = httpHandlerObj._closeConnection
+
+        def cleanupAndDelegate(*args, **kwargs):
+            httpHandlerObj._sok = origSock
+            httpHandlerObj._closeConnection = origCloseConnection
+            return httpHandlerObj._closeConnection(*args, **kwargs)
+
+        httpHandlerObj._sok = SendLoggingMockSock(bucket=self.sokSends, origSock=origSock)
+        httpHandlerObj._closeConnection = cleanupAndDelegate
+
+    @staticmethod
+    def _extractWriteResponsesHttpHandlerObj(reactor):
+        result = [ctx.callback.__self__.gi_frame.f_locals['self'] for ctx in reactor._writers.values() if ctx.callback.__self__.gi_frame.f_code.co_name == '_writeResponse']
+        if result:
+            return result[0]
+        return None
 
