@@ -42,7 +42,7 @@ from random import randint
 from time import time
 from socket import socket, ssl,  SOL_SOCKET, SO_REUSEADDR, SO_LINGER
 from struct import pack
-from sys import stdout, getdefaultencoding
+from sys import getdefaultencoding
 
 
 RECVSIZE = 4096
@@ -158,7 +158,6 @@ class HttpsServer(object):
         self._acceptor.shutdown()
 
 
-from sys import stdout
 from resource import getrlimit, RLIMIT_NOFILE
 
 def maxFileDescriptors():
@@ -512,7 +511,7 @@ class HttpHandler(object):
                     elif not self._rest:
                         data = encodeResponseBody.compress(data)
 
-                if data:  # TODO find a unittest for it; if you can
+                if data:
                     sent = self._sok.send(data, MSG_DONTWAIT)
                     if sent < len(data):
                         self._rest = data[sent:]
