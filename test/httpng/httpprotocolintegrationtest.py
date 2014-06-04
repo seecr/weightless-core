@@ -26,7 +26,7 @@
 from __future__ import with_statement
 from urllib2 import urlopen, Request, urlopen
 from StringIO import StringIO
-from socket import socket, SHUT_RD, SHUT_WR, SHUT_RDWR, SO_REUSEADDR, SOL_SOCKET
+from socket import socket, SHUT_RDWR, SO_REUSEADDR, SOL_SOCKET
 from select import select
 import sys
 from subprocess import Popen, PIPE

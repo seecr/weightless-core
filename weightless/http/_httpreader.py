@@ -23,7 +23,7 @@
 # 
 ## end license ##
 
-from socket import socket, SHUT_RDWR, SHUT_WR
+from socket import socket, SHUT_RDWR
 from urlparse import urlsplit
 from weightless.http import REGEXP, FORMAT, HTTP, parseHeaders
 from _bufferedhandler import BufferedHandler
