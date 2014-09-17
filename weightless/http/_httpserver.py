@@ -332,7 +332,7 @@ class HttpHandler(object):
         if self._reactor.getOpenConnections() > self._maxConnections:
             self.request['ResponseCode'] = 503
             return self._finalize(self._errorHandler)
-        if self.request['Method'] == 'POST':
+        if self.request['Method'] in ['POST', 'PUT']:
             self.setCallDealer(self._readBody)
         else:
             self.finalize()

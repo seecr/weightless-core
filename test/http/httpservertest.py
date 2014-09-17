@@ -1,27 +1,27 @@
 # -*- coding: utf-8 -*-
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
 # Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 from __future__ import with_statement
@@ -365,7 +365,7 @@ class HttpServerTest(WeightlessTestCase):
         self.assertEquals('some text that is longer than the lenght of fragments sent', fragment)
 
     def testHttpServerEncodesUnicode(self):
-        unicodeString = u'some t\xe9xt' 
+        unicodeString = u'some t\xe9xt'
         oneStringLength = len(unicodeString.encode(getdefaultencoding()))
         self.assertTrue(len(unicodeString) != oneStringLength)
         def response(**kwargs):
@@ -437,7 +437,7 @@ class HttpServerTest(WeightlessTestCase):
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
-        sok.send('POST / HTTP/1.0\r\n') 
+        sok.send('POST / HTTP/1.0\r\n')
         sok.send('Expect: something\r\n')
         sok.send('Content-Length: 5\r\n')
         sok.send('\r\n1234')
@@ -478,6 +478,30 @@ class HttpServerTest(WeightlessTestCase):
         self.assertTrue('Headers' in self.requestData)
         headers = self.requestData['Headers']
         self.assertEquals('POST', self.requestData['Method'])
+        self.assertEquals('application/x-www-form-urlencoded', headers['Content-Type'])
+        self.assertEquals(8, int(headers['Content-Length']))
+
+        self.assertTrue('Body' in self.requestData)
+        self.assertEquals('bodydata', self.requestData['Body'])
+
+    def testPutMethodReadsBody(self):
+        self.requestData = None
+        def handler(**kwargs):
+            self.requestData = kwargs
+
+        reactor = Reactor()
+        server = HttpServer(reactor, self.port, handler, timeout=0.01)
+        server.listen()
+        sok = socket()
+        sok.connect(('localhost', self.port))
+        sok.send('PUT / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\nbodydata')
+
+        while not self.requestData:
+            reactor.step()
+        self.assertEquals(dict, type(self.requestData))
+        self.assertTrue('Headers' in self.requestData)
+        headers = self.requestData['Headers']
+        self.assertEquals('PUT', self.requestData['Method'])
         self.assertEquals('application/x-www-form-urlencoded', headers['Content-Type'])
         self.assertEquals(8, int(headers['Content-Length']))
 
