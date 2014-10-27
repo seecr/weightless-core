@@ -204,7 +204,11 @@ class HttpServerTest(WeightlessTestCase):
             rawBody += str(random())
         rawResponse = rawHeaders + '\r\n' + rawBody
         def rawResponser():
-            yield rawResponse
+            responseCopy = rawResponse
+            while len(responseCopy) > 0:
+                randomSize = int(random()*384*1024)
+                yield responseCopy[:randomSize]
+                responseCopy = responseCopy[randomSize:]
 
         # Value *must* be larger than size used for a TCP Segment.
         self.assertTrue(1000000 < len(compress(rawBody)))
