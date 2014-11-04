@@ -34,21 +34,21 @@ from weightless.core import compose, identify
 from urlparse import urlsplit
 
 
-def httpget(host, port, request, headers=None, body=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None):
-    return _httpRequest(method='GET', host=host, port=port, request=request, body=body, headers=headers, proxyServer=proxyServer, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse)
-
-def httppost(host, port, request, body, headers=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None):
-    return _httpRequest(method='POST', host=host, port=port, request=request, body=body, headers=headers, proxyServer=proxyServer, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse)
-
-httpsget = partial(httpget, ssl=True)
-httpspost = partial(httppost, ssl=True)
-
-
 def _httpRequest(host, port, request, body=None, headers=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None, method='GET'):
     s = Suspend(_do(method, host=host, port=port, request=request, headers=headers, proxyServer=proxyServer, body=body, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse).send)
     yield s
     result = s.getResult()
     raise StopIteration(result)
+
+httpget = _httpRequest
+httppost = partial(_httpRequest, method='POST')
+httpdelete = partial(_httpRequest, method='DELETE')
+httpput = partial(_httpRequest, method='PUT')
+
+httpsget = partial(httpget, ssl=True)
+httpspost = partial(httppost, ssl=True)
+httpsdelete = partial(httpdelete, ssl=True)
+httpsput = partial(httpput, ssl=True)
 
 def _createSocket():
     sok = socket()
