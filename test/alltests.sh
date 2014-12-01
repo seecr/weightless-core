@@ -28,19 +28,8 @@ export LANG=en_US.UTF-8
 export PYTHONPATH=.:"$PYTHONPATH"
 
 option=$1
-pyversions=""
-for pythonVersion in python2.6 python2.7
-do
-    if command -v ${pythonVersion} > /dev/null; then
-        pyversions="${pyversions} ${pythonVersion}"
-    fi
-done
-if [ -z pyversions ]; then
-    echo "No suitable python version found"
-    exit 1
-fi
-
-if [ "${option:0:10}" == "--python2." ]; then
+pyversions="python3"
+if [ "${option:0:9}" == "--python3." ]; then
     shift
     pyversions="${option:2}"
 fi

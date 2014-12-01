@@ -89,7 +89,7 @@ class CallbackTest(TestCase):
         handler.send('xt/plain\r\n')
         handler.send('\r\n')
         handler.send('Hello Pythons!')
-        self.assertEquals(['POST', 'text/plain', 'Hello Pythons!'], result)
+        self.assertEqual(['POST', 'text/plain', 'Hello Pythons!'], result)
 
     def testGenerator(self):
         result = []
@@ -100,7 +100,7 @@ class CallbackTest(TestCase):
         handler.send('Content-Type: text/plain\r\n')
         handler.send('\r\n')
         handler.send('Hello Pythons!')
-        self.assertEquals(['POST', 'text/plain', 'Hello Pythons!'], result)
+        self.assertEqual(['POST', 'text/plain', 'Hello Pythons!'], result)
 
     def testCallbacksWithBrokenUpHeader(self):
         result = []
@@ -112,7 +112,7 @@ class CallbackTest(TestCase):
         handler.send('xt/plain\r\n')
         handler.send('\r\n')
         handler.send('Hello Pythons!')
-        self.assertEquals(['POST', 'text/plain', 'Hello Pythons!'], result)
+        self.assertEqual(['POST', 'text/plain', 'Hello Pythons!'], result)
 
     def testCallbacks(self):
         result = []
@@ -123,6 +123,6 @@ class CallbackTest(TestCase):
         handler.send('Content-Type: text/plain\r\n')
         handler.send('\r\n')
         handler.send('Hello Pythons!')
-        self.assertEquals(['POST', 'text/plain', 'Hello Pythons!'], result)
+        self.assertEqual(['POST', 'text/plain', 'Hello Pythons!'], result)
 
 main()

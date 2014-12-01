@@ -67,8 +67,8 @@ class HttpsServerTest(TestCase):
                reactor.step()
 
             reactor.step()
-            self.assertEquals(1, len(popenStdout))
-            self.assertEquals(serverResponse, popenStdout[0])
+            self.assertEqual(1, len(popenStdout))
+            self.assertEqual(serverResponse.encode(), popenStdout[0])
         finally:
             server.shutdown()
 
@@ -77,5 +77,5 @@ class HttpsServerTest(TestCase):
         port = randint(15000, 16000)
         server = HttpsServer(reactor, port, lambda **kwargs: None, bindAddress='127.0.0.1', keyfile='ssl/server.pkey', certfile='ssl/server.cert')
         server.listen()
-        self.assertEquals(('127.0.0.1', port), server._sok.getsockname())
+        self.assertEqual(('127.0.0.1', port), server._sok.getsockname())
 

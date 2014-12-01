@@ -128,17 +128,17 @@ class SuspendTest(WeightlessTestCase):
         sok = MockSocket()
         reactor.addWriter(sok, callback)
         reactor.step()
-        self.assertEquals(sok, handle[0])
+        self.assertEqual(sok, handle[0])
         try:
             reactor.addWriter(sok, callback)
             self.fail("Exception not raised")
         except ValueError as e:
-            self.assertEquals('Socket is suspended', str(e))
+            self.assertEqual('Socket is suspended', str(e))
         try:
             reactor.addReader(sok, callback)
             self.fail("Exception not raised")
         except ValueError as e:
-            self.assertEquals('Socket is suspended', str(e))
+            self.assertEqual('Socket is suspended', str(e))
 
     def testShutdownReactor(self):
         reactor = Reactor(select_func=mockselect)
@@ -178,15 +178,15 @@ class SuspendTest(WeightlessTestCase):
         httpserver._acceptor._accept()
         reactor.step()
         reactor.step()
-        self.assertEquals(1, len(reactor._writers))
+        self.assertEqual(1, len(reactor._writers))
         reactor.step()
-        self.assertEquals(reactor, suspend._reactor)
-        self.assertEquals(0, len(reactor._writers))
+        self.assertEqual(reactor, suspend._reactor)
+        self.assertEqual(0, len(reactor._writers))
         suspend.resume('RESPONSE')
         reactor.step()
         reactor.step()
         reactor.step()
-        self.assertEquals([b'before suspend', b'result = RESPONSE', b'after suspend'], listener.data)
+        self.assertEqual([b'before suspend', b'result = RESPONSE', b'after suspend'], listener.data)
 
     def testSuspendProtocolWithThrow(self):
         reactor = Reactor(select_func=mockselect)
@@ -209,10 +209,10 @@ class SuspendTest(WeightlessTestCase):
         httpserver._acceptor._accept()
         reactor.step()
         reactor.step()
-        self.assertEquals(1, len(reactor._writers))
+        self.assertEqual(1, len(reactor._writers))
         reactor.step()
-        self.assertEquals(reactor, suspend._reactor)
-        self.assertEquals(0, len(reactor._writers))
+        self.assertEqual(reactor, suspend._reactor)
+        self.assertEqual(0, len(reactor._writers))
         def raiser():
             raise ValueError("BAD VALUE")
         try:
@@ -232,10 +232,10 @@ class SuspendTest(WeightlessTestCase):
     raise ValueError("BAD VALUE")
 ValueError: BAD VALUE
         """ % fileDict)
-        self.assertEquals(3, len(listener.data))
-        self.assertEquals(b'before suspend', listener.data[0])
+        self.assertEqual(3, len(listener.data))
+        self.assertEqual(b'before suspend', listener.data[0])
         self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1].decode('UTF-8')))
-        self.assertEquals(b'after suspend', listener.data[2])
+        self.assertEqual(b'after suspend', listener.data[2])
 
     def testDoNextErrorReRaisedOnGetResult(self):
         def razor(ignored):
@@ -261,7 +261,7 @@ ValueError: BAD VALUE
     1/0  # Division by zero exception
 ZeroDivisionError: integer division or modulo by zero
         """ % fileDict)
-        self.assertEquals(ZeroDivisionError, exc_type)
+        self.assertEqual(ZeroDivisionError, exc_type)
         self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(format_exc()))
 
     def testSuspendThrowBackwardsCompatibleWithInstanceOnlyThrow_YouWillMissTracebackHistory(self):
@@ -285,10 +285,10 @@ ZeroDivisionError: integer division or modulo by zero
         httpserver._acceptor._accept()
         reactor.step()
         reactor.step()
-        self.assertEquals(1, len(reactor._writers))
+        self.assertEqual(1, len(reactor._writers))
         reactor.step()
-        self.assertEquals(reactor, suspend._reactor)
-        self.assertEquals(0, len(reactor._writers))
+        self.assertEqual(reactor, suspend._reactor)
+        self.assertEqual(0, len(reactor._writers))
         def raiser():
             raise ValueError("BAD VALUE")
         try:
@@ -306,24 +306,24 @@ ZeroDivisionError: integer division or modulo by zero
     raise self._exception[1].with_traceback(self._exception[2])
 ValueError: BAD VALUE
         """ % fileDict)
-        self.assertEquals(3, len(listener.data))
-        self.assertEquals(b'before suspend', listener.data[0])
+        self.assertEqual(3, len(listener.data))
+        self.assertEqual(b'before suspend', listener.data[0])
         self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1].decode('UTF-8')))
-        self.assertEquals(b'after suspend', listener.data[2])
+        self.assertEqual(b'after suspend', listener.data[2])
 
     def testGetResult(self):
         reactor = CallTrace('reactor')
         s = Suspend()
         s(reactor, whenDone=lambda:None)
         s.resume('state')
-        self.assertEquals('state', s.getResult())
+        self.assertEqual('state', s.getResult())
 
     def testGetNoneResult(self):
         reactor = CallTrace('reactor')
         s = Suspend()
         s(reactor, whenDone=lambda:None)
         s.resume()
-        self.assertEquals(None, s.getResult())
+        self.assertEqual(None, s.getResult())
 
     def testGetResultRaisesException(self):
         reactor = CallTrace('reactor')

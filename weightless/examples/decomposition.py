@@ -36,15 +36,15 @@ def g():
 
 p = f()
 
-print(next(p))
-print(next(p)) #?
-print(next(p))
+print((next(p)))
+print((next(p))) #?
+print((next(p)))
 
 p = compose(f())
 
-print(next(p))
-print(next(p))
-print(next(p))
+print((next(p)))
+print((next(p)))
+print((next(p)))
 
 
 print(""" 2. Catching exceptions """)
@@ -60,11 +60,11 @@ def g():
 
 p = f()
 
-print(next(p))
+print((next(p)))
 
 p = compose(f())
 
-print(next(p))
+print((next(p)))
 
 
 print(""" 3. fixing Stack Traces """)
@@ -81,7 +81,7 @@ def h():
 # Without tbtools: remove the tbtools symlink
 p = compose(f())
 
-print(next(p))
+print((next(p)))
 def f():
     yield g()
 

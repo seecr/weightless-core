@@ -34,26 +34,7 @@ from weightless.core import compose, local
 ok = lambda *args, **kwargs: True
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 #1
-
-
-
-
-
-
 
 def Beyond_Python_Enhanced_Generators():
     conference  = "EuroPython"
@@ -67,11 +48,6 @@ def Beyond_Python_Enhanced_Generators():
     while True:
         listen()
         speak()
-
-
-
-
-
 
 #2
 

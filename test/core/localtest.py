@@ -40,7 +40,7 @@ class LocalTest(TestCase):
     def testNotFound(self):
         try:
             v = local('no_such_thing')
-            print("V", v)
+            print(("V", v))
             self.fail()
         except AttributeError:
             pass

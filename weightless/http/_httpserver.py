@@ -52,7 +52,7 @@ CRLF_LEN = 2
 class HttpServer(object):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
 
-    def __init__(self, reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, compressResponse=False, bindAddress=None):
+    def __init__(self, reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, compressResponse=False, bindAddress=None, socketWrap=None):
         self._reactor = reactor
         self._port = port
         self._bindAddress = bindAddress
@@ -64,6 +64,7 @@ class HttpServer(object):
         self._maxConnections = maxConnections
         self._errorHandler = errorHandler
         self._compressResponse = compressResponse
+        self._socketWrap = socketWrap
 
     def listen(self):
         self._acceptor = Acceptor(
@@ -82,7 +83,8 @@ class HttpServer(object):
             ),
             prio=self._prio,
             sok=self._sok,
-            bindAddress=self._bindAddress)
+            bindAddress=self._bindAddress,
+            socketWrap=self._socketWrap)
 
     def setMaxConnections(self, m):
         self._maxConnections = m
@@ -202,9 +204,9 @@ def updateResponseHeaders(headers, match, addHeaders=None, removeHeaders=None, r
 
     matchStartHeaders = match.start('_headers')
     matchEnd = match.end()
-    _statusLine = headers[:matchStartHeaders - CRLF_LEN].decode()
-    _headers = headers[matchStartHeaders - CRLF_LEN:matchEnd - CRLF_LEN].decode()
-    _body = headers[matchEnd:].decode()
+    _statusLine = headers[:matchStartHeaders - CRLF_LEN]
+    _headers = headers[matchStartHeaders - CRLF_LEN:matchEnd - CRLF_LEN]
+    _body = headers[matchEnd:]
 
     notAbsents = requireAbsent.intersection(set(headersDict.keys()))
     if notAbsents:
@@ -484,14 +486,14 @@ class HttpHandler(object):
                         yield
                         data.resumeWriter()
                         continue
+                    if type(data) is int:
+                        data = chr(data)
                     if type(data) is str:
-                        data = data.encode(self._defaultEncoding)
-                    elif type(data) is int:
-                        data = bytes(chr(data), self._defaultEncoding)
+                        data = data.encode()
                 if encodeResponseBody is not None:
                     if endHeader is False:
                         headers += data
-                        match = REGEXP.RESPONSE.match(headers.decode())
+                        match = REGEXP.RESPONSE.match(headers)
                         if match:
                             endHeader = True
                             try:
@@ -505,11 +507,14 @@ class HttpHandler(object):
                                 encodeResponseBody = None
                                 data = headers
                             else:
-                                data = _statusLineAndHeaders.encode() + encodeResponseBody.compress(_bodyStart.encode())
+                                encodedStuff = encodeResponseBody.compress(_bodyStart.encode(self._defaultEncoding))
+                                if type(encodedStuff) is not bytes:
+                                    encodedStuff = encodedStuff.encode(self._defaultEncoding)
+                                data = _statusLineAndHeaders.encode(self._defaultEncoding) + encodedStuff
                         else:
                             continue
                     elif not self._rest:
-                        data = encodeResponseBody.compress(data)
+                        data = encodeResponseBody.compress(data.encode(self._defaultEncoding))
                 if data:
                     sent = self._sok.send(data, MSG_DONTWAIT)
                     if sent < len(data):

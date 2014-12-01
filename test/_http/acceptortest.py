@@ -35,10 +35,15 @@ import collections
 
 class AcceptorTest(TestCase):
 
+    def tearDown(self):
+        TestCase.tearDown(self)
+        if hasattr(self, 'acceptor'):
+            self.acceptor.close()
+
     def testStartListening(self):
         reactor = CallTrace()
         port = randint(2**10, 2**16)
-        acceptor = Acceptor(reactor, port, None)
+        self.acceptor = Acceptor(reactor, port, None)
         self.assertEqual('addReader', reactor.calledMethods[0].name)
         sok = reactor.calledMethods[0].args[0]
         out = Popen(['netstat', '--numeric', '--listening', '--tcp'], stdout=PIPE, stderr=PIPE).communicate()[0]
@@ -51,7 +56,7 @@ class AcceptorTest(TestCase):
     def testConnect(self):
         reactor = CallTrace()
         port = randint(2**10, 2**16)
-        acceptor = Acceptor(reactor, port, lambda sok: None)
+        self.acceptor = Acceptor(reactor, port, lambda sok: None)
         self.assertEqual('addReader', reactor.calledMethods[0].name)
         acceptCallback = reactor.calledMethods[0].args[1]
         sok = socket()
@@ -66,7 +71,7 @@ class AcceptorTest(TestCase):
         port = randint(2**10, 2**16)
         class sinkFactory(object):
             def __init__(inner, *args, **kwargs): self.args, self.kwargs = args, kwargs
-        acceptor = Acceptor(reactor, port, sinkFactory)
+        self.acceptor = Acceptor(reactor, port, sinkFactory)
         acceptCallback = reactor.calledMethods[0].args[1]
         sok = socket()
         sok.connect(('localhost', port))
@@ -85,7 +90,7 @@ class AcceptorTest(TestCase):
                 self.args, self.kwargs = args, kwargs
             def __next__(inner):
                 self.next = True
-        acceptor = Acceptor(reactor, port, sinkFactory)
+        self.acceptor = Acceptor(reactor, port, sinkFactory)
         acceptCallback = reactor.calledMethods[0].args[1]
         sok = socket()
         sok.connect(('localhost', port))
@@ -100,33 +105,33 @@ class AcceptorTest(TestCase):
     def testReuseAddress(self):
         reactor = CallTrace()
         port = randint(2**10, 2**16)
-        acceptor = Acceptor(reactor, port, lambda sok: None)
+        self.acceptor = Acceptor(reactor, port, lambda sok: None)
         client = socket()
         client.connect(('127.0.0.1', port))
-        acceptor._accept()
-        acceptor.close()
-        acceptor = Acceptor(reactor, port, lambda sok: None)
+        self.acceptor._accept()
+        self.acceptor.close()
+        self.acceptor = Acceptor(reactor, port, lambda sok: None)
         client.close()
 
     def testAcceptorWithPrio(self):
         reactor = CallTrace()
         port = randint(2**10, 2**16)
-        acceptor = Acceptor(reactor, port, lambda sok: None, prio=5)
+        self.acceptor = Acceptor(reactor, port, lambda sok: None, prio=5)
         client = socket()
         client.connect(('127.0.0.1', port))
-        acceptor._accept()
+        self.acceptor._accept()
         self.assertEqual(5, reactor.calledMethods[0].kwargs['prio'])
         client.close()
 
     def testBindAddress_DefaultsTo_0_0_0_0(self):
         reactor = CallTrace()
         port = randint(2**10, 2**16)
-        acceptor = Acceptor(reactor, port, lambda sok: None, prio=5)
-        self.assertEqual(('0.0.0.0', port), acceptor._sok.getsockname())
+        self.acceptor = Acceptor(reactor, port, lambda sok: None, prio=5)
+        self.assertEqual(('0.0.0.0', port), self.acceptor._sok.getsockname())
 
     def testBindAddressCustom(self):
         reactor = CallTrace()
         port = randint(2**10, 2**16)
-        acceptor = Acceptor(reactor, port, lambda sok: None, bindAddress='127.0.0.1', prio=5)
-        self.assertEqual(('127.0.0.1', port), acceptor._sok.getsockname())
+        self.acceptor = Acceptor(reactor, port, lambda sok: None, bindAddress='127.0.0.1', prio=5)
+        self.assertEqual(('127.0.0.1', port), self.acceptor._sok.getsockname())
 

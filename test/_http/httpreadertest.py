@@ -60,8 +60,8 @@ def server(port, response, expectedrequest, delay=0, loop=50):
                         print("hihi")
                         raise timeout
                 except timeout:
-                    print("Received:", repr(msg))
-                    print("expected:", repr(expectedrequest))
+                    print(("Received:", repr(msg)))
+                    print(("expected:", repr(expectedrequest)))
                     return
         if response:
             if hasattr(response, '__next__'):

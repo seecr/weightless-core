@@ -76,7 +76,7 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
 
     try:
         sok.connect((host, port))
-    except SocketError as error:
+    except (TypeError, SocketError) as error:
         (errno, msg) = error.args
         if errno != EINPROGRESS:
             raise
