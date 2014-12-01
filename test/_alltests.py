@@ -72,5 +72,8 @@ from wl_io.servertest import ServerTest
 #from httpng.httpprotocolintegrationtest import HttpProtocolIntegrationTest
 #from httpng.httpprotocoltest import HttpProtocolTest
 
+#import gc
+#gc.set_debug(gc.DEBUG_UNCOLLECTABLE)
+
 if __name__ == '__main__':
     main()

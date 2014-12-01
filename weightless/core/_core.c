@@ -78,14 +78,14 @@ PyMODINIT_FUNC PyInit_ext(void) {
 
     if(!module) {
         PyErr_Print();
-        return;
+        return NULL;
     }
 
     if(init_compose(module))
-        return;
+        return NULL;
 
     if(init_observable(module))
-        return;
+        return NULL;
 
     return module;
 }

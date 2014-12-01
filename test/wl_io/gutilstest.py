@@ -56,9 +56,9 @@ class GutilsTest(TestCase):
             while True:
                 restbasket.append((yield))
         responsesResult = feed([None]+messages, compose(helper()))
-        self.assertEquals(responses, responsesResult) # I still don't know if this is relevant and how it must work
-        self.assertEquals(slice, basket)
-        self.assertEquals(remainder, restbasket)
+        self.assertEqual(responses, responsesResult) # I still don't know if this is relevant and how it must work
+        self.assertEqual(slice, basket)
+        self.assertEqual(remainder, restbasket)
 
     def testMessagesOfSizeOne(self):
         self.assertCopy(bytes=10, messages=['a','b','c'], responses=[None,None,None,None], slice=['a','b','c'], remainder=[])
@@ -91,8 +91,8 @@ class GutilsTest(TestCase):
                 s = ''.join(choice(ascii_letters) for i in range(randint(0,100)))
                 g.send(s)
                 totalLen += len(s)
-            self.assertEquals(sliceLen, len(''.join(basket)))
-            self.assertEquals(totalLen-sliceLen, len(''.join(restbasket)))
+            self.assertEqual(sliceLen, len(''.join(basket)))
+            self.assertEqual(totalLen-sliceLen, len(''.join(restbasket)))
 
     def testStopIterationBoundariesCollide(self):
         data = []
@@ -112,7 +112,7 @@ class GutilsTest(TestCase):
             while True: yield
         g = compose(helper()); next(g)
         feed(['a','b','c'], g)
-        self.assertEquals(['a','b', 'done'], data)
+        self.assertEqual(['a','b', 'done'], data)
 
     def testStopIteration(self):
         data = []
@@ -132,12 +132,12 @@ class GutilsTest(TestCase):
             while True: yield
         g = compose(helper()); next(g)
         feed(['a','bc','d'], g)
-        self.assertEquals(['a','b', 'done'], data)
+        self.assertEqual(['a','b', 'done'], data)
 
     def testDoNotDitchResponse(self):
         def application():
             data = yield readAll()
-            self.assertEquals('a', data)
+            self.assertEqual('a', data)
             yield 'A'
         appl = compose(application()); next(appl)
         def protocol():
@@ -147,16 +147,16 @@ class GutilsTest(TestCase):
             b = yield
             yield b
         g = compose(protocol()); 
-        self.assertEquals(None, next(g))
-        self.assertEquals('A', g.send('a'))
-        self.assertEquals('B', g.send(None))
-        self.assertEquals(None, g.send(None))
-        self.assertEquals('b', g.send('b'))
+        self.assertEqual(None, next(g))
+        self.assertEqual('A', g.send('a'))
+        self.assertEqual('B', g.send(None))
+        self.assertEqual(None, g.send(None))
+        self.assertEqual('b', g.send('b'))
 
     def testDoNotDitchResponseInCaseOfSplitMessages(self):
         def application():
             data = yield readAll()
-            self.assertEquals('a', data)
+            self.assertEqual('a', data)
             yield 'A'
         appl = compose(application()); next(appl)
         def protocol():
@@ -170,10 +170,10 @@ class GutilsTest(TestCase):
             b = yield
             yield b
         g = compose(protocol()); next(g)
-        self.assertEquals('A', g.send('ab'))
-        self.assertEquals('B', g.send(None))
-        self.assertEquals('C', g.send(None))
-        self.assertEquals('b', g.send(None))
+        self.assertEqual('A', g.send('ab'))
+        self.assertEqual('B', g.send(None))
+        self.assertEqual('C', g.send(None))
+        self.assertEqual('b', g.send(None))
 
     def testReadRe(self):
         x = readRe(compile('(?P<ape>xyz)'))
@@ -182,7 +182,7 @@ class GutilsTest(TestCase):
             x.send('xyz') # fail
             self.fail('must not come here')
         except StopIteration as s:
-            self.assertEquals(({'ape': 'xyz'},), s.args)
+            self.assertEqual(({'ape': 'xyz'},), s.args)
 
     def testReadReWithMaximumBytes(self):
         x = readRe(compile('xyz'), 5)
@@ -192,7 +192,7 @@ class GutilsTest(TestCase):
             x.send('abc') # fail
             self.fail('must not come here')
         except OverflowError as e:
-            self.assertEquals('no match after 6 bytes', str(e))
+            self.assertEqual('no match after 6 bytes', str(e))
 
     def testReadReEndOfStream(self):
         x = readRe(compile('.*'), 10)
@@ -201,5 +201,5 @@ class GutilsTest(TestCase):
             x.send(None)
             self.fail('must raise Exception')
         except Exception as e:
-            self.assertEquals("no match at eof: ''", str(e))
+            self.assertEqual("no match at eof: ''", str(e))
 

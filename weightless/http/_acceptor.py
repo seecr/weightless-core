@@ -38,7 +38,7 @@ def createSocket(port, bindAddress=None):
 class Acceptor(object):
     """Listens on a port for incoming internet (TCP/IP) connections and calls a factory to create a handler for the new connection.  It does not use threads but a asynchronous reactor instead."""
 
-    def __init__(self, reactor, port, sinkFactory, prio=None, sok=None, bindAddress=None):
+    def __init__(self, reactor, port, sinkFactory, prio=None, sok=None, bindAddress=None, socketWrap=None):
         """The reactor is a user specified reactor for dispatching I/O events asynchronously. The sinkFactory is called with the newly created socket as its single argument. It is supposed to return a callable callback function that is called by the reactor when data is available."""
 
         if sok == None:
@@ -46,12 +46,14 @@ class Acceptor(object):
 
         reactor.addReader(sok, self._accept, prio=prio)
         self._sinkFactory = sinkFactory
+        self._socketWrap = socketWrap
         self._sok = sok
         self._reactor = reactor
         self._prio = prio
 
     def _accept(self):
         newConnection, address = self._sok.accept()
+        newConnection = self._socketWrap(newConnection) if self._socketWrap is not None else newConnection
         newConnection.setsockopt(SOL_TCP, TCP_CORK, 1)
         #newConnection.setsockopt(SOL_TCP, TCP_NODELAY, 1)
         handler = self._sinkFactory(newConnection)

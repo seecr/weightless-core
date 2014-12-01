@@ -63,7 +63,7 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=No
     sok.setsockopt(SOL_TCP, TCP_KEEPCNT, 9)
     try:
         sok.connect((host, port))
-    except SocketError as error:
+    except (TypeError, SocketError) as error:
         (errno, msg) = error.args
         if errno != EINPROGRESS:
             raise

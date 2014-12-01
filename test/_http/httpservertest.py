@@ -59,7 +59,7 @@ class HttpServerTest(WeightlessTestCase):
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
-        sok.send(request)
+        sok.send(request.encode())
 
         mockStdout = None
         # with self.stdout_replaced() as mockStdout:
@@ -90,13 +90,13 @@ class HttpServerTest(WeightlessTestCase):
         reactor.step() # connect/accept
         reactor.step() # read GET request
         reactor.step() # call onRequest for response data
-        self.assertEquals(True, self.req)
+        self.assertEqual(True, self.req)
 
     def testConnectBindAddress(self):
         reactor = CallTrace()
         server = HttpServer(reactor, self.port, lambda **kwargs: None, bindAddress='127.0.0.1')
         server.listen()
-        self.assertEquals(('127.0.0.1', self.port), server._acceptor._sok.getsockname())
+        self.assertEqual(('127.0.0.1', self.port), server._acceptor._sok.getsockname())
 
 
     def testSendHeader(self):
@@ -112,11 +112,11 @@ class HttpServerTest(WeightlessTestCase):
         sok.send(b'GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
         while not self.kwargs:
             reactor.step()
-        self.assertEquals({'Body': '', 'RequestURI': '/path/here', 'HTTPVersion': '1.0', 'Method': 'GET', 'Headers': {'Connection': 'close', 'Ape-Nut': 'Mies'}, 'Client': ('127.0.0.1', MATCHALL)}, self.kwargs)
+        self.assertEqual({'Body': '', 'RequestURI': '/path/here', 'HTTPVersion': '1.0', 'Method': 'GET', 'Headers': {'Connection': 'close', 'Ape-Nut': 'Mies'}, 'Client': ('127.0.0.1', MATCHALL)}, self.kwargs)
 
     def testGetResponse(self):
         response = self.sendRequestAndReceiveResponse(b'GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
-        self.assertEquals(b'The Response', response)
+        self.assertEqual(b'The Response', response)
 
     def testGetCompressedResponse_deflate(self):
         rawHeaders = b'HTTP/1.1 200 OK\r\n'
@@ -129,7 +129,7 @@ class HttpServerTest(WeightlessTestCase):
                 yield c
         compressedResponse = rawHeaders + b'Content-Encoding: deflate\r\n\r\n' + compress(rawBody)
         response = self.sendRequestAndReceiveResponse(b'GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
-        self.assertEquals(compressedResponse, response)
+        self.assertEqual(compressedResponse, response)
 
     def testGetCompressedResponse_deflate_ContentLengthStripped(self):
         rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nAnother: Header\r\n'
@@ -142,7 +142,7 @@ class HttpServerTest(WeightlessTestCase):
                 yield c.encode()
         compressedResponse = rawHeaders.replace('Content-Length: 12345\r\n', '') + 'Content-Encoding: deflate\r\n\r\n' + compress(rawBody)
         response = self.sendRequestAndReceiveResponse(b'GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
-        self.assertEquals(compressedResponse, response)
+        self.assertEqual(compressedResponse, response)
 
     def testGetCompressedResponse_gzip_ContentLengthStripped(self):
         rawHeaders = b'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nAnother: Header\r\n'
@@ -160,7 +160,7 @@ class HttpServerTest(WeightlessTestCase):
 
         compressedResponse = rawHeaders.replace(b'Content-Length: 12345\r\n', b'') + b'Content-Encoding: gzip\r\n\r\n' + compressedBody
         response = self.sendRequestAndReceiveResponse(b'GET /path/here HTTP/1.0\r\nAccept-Encoding: gzip;q=0.999, deflate;q=0.998, dontknowthisone;q=1\r\n\r\n', response=rawResponser(), compressResponse=True)
-        self.assertEquals(compressedResponse, response)
+        self.assertEqual(compressedResponse, response)
 
     def testOnlyCompressBodyWhenCompressResponseIsOn(self):
         rawHeaders = b'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nAnother: Header\r\n'
@@ -172,7 +172,7 @@ class HttpServerTest(WeightlessTestCase):
                 yield c
 
         response = self.sendRequestAndReceiveResponse(b'GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=False)
-        self.assertEquals(rawResponse, response)
+        self.assertEqual(rawResponse, response)
 
         response = self.sendRequestAndReceiveResponse(b'GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
         self.assertNotEqual(rawResponse, response)
@@ -186,72 +186,72 @@ class HttpServerTest(WeightlessTestCase):
             for c in rawResponse:
                 yield c
         response = self.sendRequestAndReceiveResponse(b'GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True, extraStepAfterCompress=False)
-        self.assertEquals(rawResponse, response)
+        self.assertEqual(rawResponse, response)
 
     def testParseContentEncoding(self):
-        self.assertEquals(['gzip'], parseContentEncoding('gzip'))
-        self.assertEquals(['gzip'], parseContentEncoding('    gzip       '))
-        self.assertEquals(['gzip', 'deflate'], parseContentEncoding('gzip, deflate'))
-        self.assertEquals(['deflate', 'gzip'], parseContentEncoding('  deflate  ,    gzip '))
+        self.assertEqual(['gzip'], parseContentEncoding('gzip'))
+        self.assertEqual(['gzip'], parseContentEncoding('    gzip       '))
+        self.assertEqual(['gzip', 'deflate'], parseContentEncoding('gzip, deflate'))
+        self.assertEqual(['deflate', 'gzip'], parseContentEncoding('  deflate  ,    gzip '))
 
     def testParseAcceptEncoding(self):
-        self.assertEquals(['gzip'], parseAcceptEncoding('gzip'))
-        self.assertEquals(['gzip', 'deflate'], parseAcceptEncoding('gzip, deflate'))
-        self.assertEquals(['gzip', 'deflate'], parseAcceptEncoding(' gzip  , deflate '))
-        self.assertEquals(['deflate'], parseAcceptEncoding('gzip;q=0, deflate;q=1.0'))
-        self.assertEquals(['deflate'], parseAcceptEncoding('gzip;q=0.00, deflate;q=1.001'))
-        self.assertEquals(['deflate;media=range'], parseAcceptEncoding('gzip;q=0.00, deflate;media=range;q=1.001;I=amIgnored'))
-        self.assertEquals(['text/xhtml+xml', 'x-gzip', 'text/html;level=2'], parseAcceptEncoding('text/html;level=2;q=0.005, text/xhtml+xml;q=0.7, x-gzip;q=0.6'))
+        self.assertEqual(['gzip'], parseAcceptEncoding('gzip'))
+        self.assertEqual(['gzip', 'deflate'], parseAcceptEncoding('gzip, deflate'))
+        self.assertEqual(['gzip', 'deflate'], parseAcceptEncoding(' gzip  , deflate '))
+        self.assertEqual(['deflate'], parseAcceptEncoding('gzip;q=0, deflate;q=1.0'))
+        self.assertEqual(['deflate'], parseAcceptEncoding('gzip;q=0.00, deflate;q=1.001'))
+        self.assertEqual(['deflate;media=range'], parseAcceptEncoding('gzip;q=0.00, deflate;media=range;q=1.001;I=amIgnored'))
+        self.assertEqual(['text/xhtml+xml', 'x-gzip', 'text/html;level=2'], parseAcceptEncoding('text/html;level=2;q=0.005, text/xhtml+xml;q=0.7, x-gzip;q=0.6'))
 
     def testUpdateResponseHeaders(self):
         headers = 'HTTP/1.0 200 OK\r\nSome: Header\r\n\r\nThe Body'
         match = REGEXP.RESPONSE.match(headers)
         newHeaders, newBody = updateResponseHeaders(headers, match)
 
-        self.assertEquals('HTTP/1.0 200 OK\r\nSome: Header\r\n\r\n', newHeaders)
-        self.assertEquals('The Body', newBody)
+        self.assertEqual('HTTP/1.0 200 OK\r\nSome: Header\r\n\r\n', newHeaders)
+        self.assertEqual('The Body', newBody)
 
         headers = 'HTTP/1.0 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nAnother: 1\r\n\r\nThe Body'
         match = REGEXP.RESPONSE.match(headers)
         newHeaders, newBody = updateResponseHeaders(headers, match, removeHeaders=['Content-Length'])
 
-        self.assertEquals('HTTP/1.0 200 OK\r\nSome: Header\r\nAnother: 1\r\n\r\n', newHeaders)
-        self.assertEquals('The Body', newBody)
+        self.assertEqual('HTTP/1.0 200 OK\r\nSome: Header\r\nAnother: 1\r\n\r\n', newHeaders)
+        self.assertEqual('The Body', newBody)
 
         headers = 'HTTP/1.0 200 OK\r\nA: H\r\ncOnTeNt-LENGTh:\r\nB: I\r\n\r\nThe Body'
         match = REGEXP.RESPONSE.match(headers)
         newHeaders, newBody = updateResponseHeaders(headers, match, removeHeaders=['Content-Length'])
 
-        self.assertEquals('HTTP/1.0 200 OK\r\nA: H\r\nB: I\r\n\r\n', newHeaders)
-        self.assertEquals('The Body', newBody)
+        self.assertEqual('HTTP/1.0 200 OK\r\nA: H\r\nB: I\r\n\r\n', newHeaders)
+        self.assertEqual('The Body', newBody)
 
     def testUpdateResponseHeaders_addHeaders(self):
         headers = 'HTTP/1.0 200 OK\r\nA: H\r\n\r\nbody'
         match = REGEXP.RESPONSE.match(headers)
         newHeaders, newBody = updateResponseHeaders(headers, match, addHeaders={'Content-Encoding': 'deflate'})
-        self.assertEquals(('HTTP/1.0 200 OK\r\nA: H\r\nContent-Encoding: deflate\r\n\r\n', 'body'), (newHeaders, newBody))
+        self.assertEqual(('HTTP/1.0 200 OK\r\nA: H\r\nContent-Encoding: deflate\r\n\r\n', 'body'), (newHeaders, newBody))
 
     def testUpdateResponseHeaders_removeHeaders(self):
         statusLineAndHeaders = 'HTTP/1.0 200 OK\r\nB: have\r\n\r\nbody'
         match = REGEXP.RESPONSE.match(statusLineAndHeaders)
         newSLandHeaders, newBody = updateResponseHeaders(statusLineAndHeaders, match, removeHeaders=['B'])
-        self.assertEquals(('HTTP/1.0 200 OK\r\n\r\n', 'body'), (newSLandHeaders, newBody))
+        self.assertEqual(('HTTP/1.0 200 OK\r\n\r\n', 'body'), (newSLandHeaders, newBody))
 
         statusLineAndHeaders = 'HTTP/1.0 200 OK\r\nB: have\r\n\r\nbody'
         match = REGEXP.RESPONSE.match(statusLineAndHeaders)
         newSLandHeaders, newBody = updateResponseHeaders(statusLineAndHeaders, match, removeHeaders=['Not-Found-Header'])
-        self.assertEquals(('HTTP/1.0 200 OK\r\nB: have\r\n\r\n', 'body'), (newSLandHeaders, newBody))
+        self.assertEqual(('HTTP/1.0 200 OK\r\nB: have\r\n\r\n', 'body'), (newSLandHeaders, newBody))
 
         statusLineAndHeaders = 'HTTP/1.0 200 OK\r\nAnother: header\r\nB: have\r\nBe: haved\r\n\r\nbody'
         match = REGEXP.RESPONSE.match(statusLineAndHeaders)
         newSLandHeaders, newBody = updateResponseHeaders(statusLineAndHeaders, match, removeHeaders=['B'])
-        self.assertEquals(('HTTP/1.0 200 OK\r\nAnother: header\r\nBe: haved\r\n\r\n', 'body'), (newSLandHeaders, newBody))
+        self.assertEqual(('HTTP/1.0 200 OK\r\nAnother: header\r\nBe: haved\r\n\r\n', 'body'), (newSLandHeaders, newBody))
 
     def testUpdateResponseHeaders_requireAbsent(self):
         headers = 'HTTP/1.0 200 OK\r\nA: H\r\n\r\nbody'
         match = REGEXP.RESPONSE.match(headers)
         newHeaders, newBody = updateResponseHeaders(headers, match, requireAbsent=['Content-Encoding'])
-        self.assertEquals(('HTTP/1.0 200 OK\r\nA: H\r\n\r\n', 'body'), (newHeaders, newBody))
+        self.assertEqual(('HTTP/1.0 200 OK\r\nA: H\r\n\r\n', 'body'), (newHeaders, newBody))
 
         headers = 'HTTP/1.0 200 OK\r\nA: H\r\nContent-Encoding: Yes, Please\r\n\r\nbody'
         match = REGEXP.RESPONSE.match(headers)
@@ -270,40 +270,50 @@ class HttpServerTest(WeightlessTestCase):
         try:
             updateResponseHeaders(headers, match, requireAbsent=['B', 'C'])
         except ValueError as e:
-            self.assertEquals('Response headers contained disallowed items: C, B', str(e))
+            self.assertEqual('Response headers contained disallowed items: B, C', str(e))
 
     def testCloseConnection(self):
-        response = self.sendRequestAndReceiveResponse(b'GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
-        self.assertEquals('The Response', response)
-        self.assertEquals({}, self.reactor._readers)
-        self.assertEquals({}, self.reactor._writers)
+        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
+        self.assertEqual(b'The Response', response)
+        self.assertEqual({}, self.reactor._readers)
+        self.assertEqual({}, self.reactor._writers)
 
     def testSmallFragments(self):
         response = self.sendRequestAndReceiveResponse(b'GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n', recvSize=3)
-        self.assertEquals(b'The Response', response)
+        self.assertEqual(b'The Response', response)
 
     def testSmallFragmentsWhileSendingResponse(self):
+
+        class WrappedSocket(object):
+            def __init__(self, target):
+                self.__dict__['_target'] = target
+
+            def send(self, data, *options):
+                self._target.send(data[:3], *options)
+                return 3
+
+            def __getattr__(self, attr):
+                return getattr(self._target, attr)
+
+            def __setattr__(self, attr, value):
+                setattr(self._target, attr, value)
+
         def response(**kwargs):
             yield 'some text that is longer than '
-            yield 'the lenght of fragments sent'
+            yield 'the length of fragments sent'
         reactor = Reactor()
-        server = HttpServer(reactor, self.port, response, recvSize=3)
+        server = HttpServer(reactor, self.port, response, recvSize=3, socketWrap=WrappedSocket)
         server.listen()
         sok = socket()
         sok.connect(('localhost', self.port))
         sok.send(b'GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
         while not reactor._writers:
             reactor.step()
-        serverSok, handler = list(reactor._writers.items())[0]
-        originalSend = serverSok.send
-        def sendOnlyManagesToActuallySendThreeBytesPerSendCall(data, *options):
-            originalSend(data[:3], *options)
-            return 3
-        serverSok.send = sendOnlyManagesToActuallySendThreeBytesPerSendCall
-        for i in range(21):
+
+        for i in range(20):
             reactor.step()
         fragment = sok.recv(4096)
-        self.assertEquals('some text that is longer than the lenght of fragments sent', fragment)
+        self.assertEqual(b'some text that is longer than the length of fragments sent', fragment)
 
     def testHttpServerEncodesUnicode(self):
         unicodeString = 'some t\xe9xt'
@@ -323,7 +333,7 @@ class HttpServerTest(WeightlessTestCase):
         fragment = sok.recv(100000) # will read about 49152 chars
         reactor.step()
         fragment += sok.recv(100000)
-        self.assertEquals(oneStringLength * 6000, len(fragment))
+        self.assertEqual(oneStringLength * 6000, len(fragment))
         self.assertTrue("some t\xc3\xa9xt" in fragment, fragment)
 
     def testInvalidGETRequestStartsOnlyOneTimer(self):
@@ -343,8 +353,8 @@ class HttpServerTest(WeightlessTestCase):
         while select([sok],[], [], 0) != ([sok], [], []):
             reactor.step()
         response = sok.recv(4096)
-        self.assertEquals(b'HTTP/1.0 400 Bad Request\r\n\r\n', response)
-        self.assertEquals(1, len(timers))
+        self.assertEqual(b'HTTP/1.0 400 Bad Request\r\n\r\n', response)
+        self.assertEqual(1, len(timers))
 
     def testInvalidPOSTRequestStartsOnlyOneTimer(self):
         # problem in found in OAS, timers not removed properly when whole body hasnt been read yet
@@ -370,7 +380,7 @@ class HttpServerTest(WeightlessTestCase):
         sleep(0.1)
         while select([sok],[], [], 0) != ([sok], [], []):
             reactor.step()
-        self.assertEquals(2, len(timers))
+        self.assertEqual(2, len(timers))
 
 
 
@@ -388,7 +398,7 @@ class HttpServerTest(WeightlessTestCase):
         with self.stderr_replaced() as s:
             for i in range(4):
                 reactor.step()
-            self.assertEquals(1, len(reactor._readers))
+            self.assertEqual(1, len(reactor._readers))
 
     def testValidRequestResetsTimer(self):
         reactor = Reactor()
@@ -401,7 +411,7 @@ class HttpServerTest(WeightlessTestCase):
         for i in range(11):
             reactor.step()
         response = sok.recv(4096)
-        self.assertEquals(b'aaa', response)
+        self.assertEqual(b'aaa', response)
 
     def testPostMethodReadsBody(self):
         self.requestData = None
@@ -417,15 +427,15 @@ class HttpServerTest(WeightlessTestCase):
 
         while not self.requestData:
             reactor.step()
-        self.assertEquals(dict, type(self.requestData))
+        self.assertEqual(dict, type(self.requestData))
         self.assertTrue('Headers' in self.requestData)
         headers = self.requestData['Headers']
-        self.assertEquals('POST', self.requestData['Method'])
-        self.assertEquals('application/x-www-form-urlencoded', headers['Content-Type'])
-        self.assertEquals(8, int(headers['Content-Length']))
+        self.assertEqual('POST', self.requestData['Method'])
+        self.assertEqual('application/x-www-form-urlencoded', headers['Content-Type'])
+        self.assertEqual(8, int(headers['Content-Length']))
 
         self.assertTrue('Body' in self.requestData)
-        self.assertEquals(b'bodydata', self.requestData['Body'])
+        self.assertEqual(b'bodydata', self.requestData['Body'])
 
     def testPostMethodDeCompressesDeflatedBody_deflate(self):
         self.requestData = None
@@ -444,15 +454,15 @@ class HttpServerTest(WeightlessTestCase):
 
         while not self.requestData:
             reactor.step()
-        self.assertEquals(dict, type(self.requestData))
+        self.assertEqual(dict, type(self.requestData))
         self.assertTrue('Headers' in self.requestData)
         headers = self.requestData['Headers']
-        self.assertEquals('POST', self.requestData['Method'])
-        self.assertEquals('application/x-www-form-urlencoded', headers['Content-Type'])
-        self.assertEquals(contentLengthCompressed, int(headers['Content-Length']))  # TS: is this correct?, maybe decompressed length?
+        self.assertEqual('POST', self.requestData['Method'])
+        self.assertEqual('application/x-www-form-urlencoded', headers['Content-Type'])
+        self.assertEqual(contentLengthCompressed, int(headers['Content-Length']))  # TS: is this correct?, maybe decompressed length?
 
         self.assertTrue('Body' in self.requestData)
-        self.assertEquals('bodydatabodydata', self.requestData['Body'])
+        self.assertEqual('bodydatabodydata', self.requestData['Body'])
 
     def testPostMethodDeCompressesDeflatedBody_gzip(self):
         self.requestData = None
@@ -475,15 +485,15 @@ class HttpServerTest(WeightlessTestCase):
 
         while not self.requestData:
             reactor.step()
-        self.assertEquals(dict, type(self.requestData))
+        self.assertEqual(dict, type(self.requestData))
         self.assertTrue('Headers' in self.requestData)
         headers = self.requestData['Headers']
-        self.assertEquals('POST', self.requestData['Method'])
-        self.assertEquals('application/x-www-form-urlencoded', headers['Content-Type'])
-        self.assertEquals(contentLengthCompressed, int(headers['Content-Length']))
+        self.assertEqual('POST', self.requestData['Method'])
+        self.assertEqual('application/x-www-form-urlencoded', headers['Content-Type'])
+        self.assertEqual(contentLengthCompressed, int(headers['Content-Length']))
 
         self.assertTrue('Body' in self.requestData)
-        self.assertEquals('bodydatabodydata', self.requestData['Body'])
+        self.assertEqual('bodydatabodydata', self.requestData['Body'])
 
     def testPostMethodDeCompressesDeflatedBody_x_deflate(self):
         self.requestData = None
@@ -507,7 +517,7 @@ class HttpServerTest(WeightlessTestCase):
         self.assertFalse(sok.recv(4096).startswith('HTTP/1.0 400 Bad Request'))
 
         # TS: minimalistic assert that it works too for x-deflate
-        self.assertEquals('bodydatabodydata', self.requestData['Body'])
+        self.assertEqual('bodydatabodydata', self.requestData['Body'])
 
     def testPostMethodDeCompressesDeflatedBody_unrecognizedEncoding(self):
         self.requestData = None
@@ -530,7 +540,7 @@ class HttpServerTest(WeightlessTestCase):
             reactor.step()
         self.assertTrue(sok.recv(4096).startswith('HTTP/1.0 400 Bad Request'))
 
-        self.assertEquals(None, self.requestData)
+        self.assertEqual(None, self.requestData)
 
     def testPostMethodTimesOutOnBadBody(self):
         self.requestData = None
@@ -573,9 +583,9 @@ class HttpServerTest(WeightlessTestCase):
     def testReadChunkedAndCompressedPost(self):
         postData = b'AhjBeehCeehAhjBeehCeehAhjBeehCeehAhjBeehCeeh'
         postDataCompressed = compress(postData)
-        self.assertEquals(20, len(postDataCompressed))
-        self.assertEquals(15, len(postDataCompressed[:15]))
-        self.assertEquals(5, len(postDataCompressed[15:]))
+        self.assertEqual(20, len(postDataCompressed))
+        self.assertEqual(15, len(postDataCompressed[:15]))
+        self.assertEqual(5, len(postDataCompressed[15:]))
 
         self.requestData = {}
         def handler(**kwargs):
@@ -610,8 +620,8 @@ class HttpServerTest(WeightlessTestCase):
         while self.requestData.get('Form', None) == None:
             reactor.step()
         form = self.requestData['Form']
-        self.assertEquals(4, len(form))
-        self.assertEquals(['SOME ID'], form['id'])
+        self.assertEqual(4, len(form))
+        self.assertEqual(['SOME ID'], form['id'])
 
     def XXX_testPostMultipartFormCompressed(self):
         """Not yet"""
@@ -631,8 +641,8 @@ class HttpServerTest(WeightlessTestCase):
         while self.requestData.get('Form', None) == None:
             reactor.step()
         form = self.requestData['Form']
-        self.assertEquals(4, len(form))
-        self.assertEquals(['SOME ID'], form['id'])
+        self.assertEqual(4, len(form))
+        self.assertEqual(['SOME ID'], form['id'])
 
     def testWindowsPostMultipartForm(self):
         httpRequest = open(inmydir('data/multipart-data-02')).read()
@@ -651,12 +661,12 @@ class HttpServerTest(WeightlessTestCase):
         while self.requestData.get('Form', None) == None:
             reactor.step()
         form = self.requestData['Form']
-        self.assertEquals(4, len(form))
-        self.assertEquals(['SOME ID'], form['id'])
-        self.assertEquals(1, len(form['somename']))
+        self.assertEqual(4, len(form))
+        self.assertEqual(['SOME ID'], form['id'])
+        self.assertEqual(1, len(form['somename']))
         filename, mimetype, data = form['somename'][0]
-        self.assertEquals('Bank Gothic Medium BT.ttf', filename)
-        self.assertEquals('application/octet-stream', mimetype)
+        self.assertEqual('Bank Gothic Medium BT.ttf', filename)
+        self.assertEqual('application/octet-stream', mimetype)
 
     def testTextFileSeenAsFile(self):
         httpRequest = open(inmydir('data/multipart-data-03')).read()
@@ -675,15 +685,15 @@ class HttpServerTest(WeightlessTestCase):
         while self.requestData.get('Form', None) == None:
             reactor.step()
         form = self.requestData['Form']
-        self.assertEquals(4, len(form))
-        self.assertEquals(['SOME ID'], form['id'])
-        self.assertEquals(1, len(form['somename']))
+        self.assertEqual(4, len(form))
+        self.assertEqual(['SOME ID'], form['id'])
+        self.assertEqual(1, len(form['somename']))
         filename, mimetype, data = form['somename'][0]
-        self.assertEquals('hello.bas', filename)
-        self.assertEquals('text/plain', mimetype)
+        self.assertEqual('hello.bas', filename)
+        self.assertEqual('text/plain', mimetype)
 
     def testReadMultipartFormEndBoundary(self):
-        httpRequest = open(inmydir('data/multipart-data-04')).read()
+        httpRequest = open(inmydir('data/multipart-data-04')).read().encode()
         self.requestData = {}
         def handler(**kwargs):
             self.requestData = kwargs
@@ -699,8 +709,8 @@ class HttpServerTest(WeightlessTestCase):
         while self.requestData.get('Form', None) == None:
             reactor.step()
         form = self.requestData['Form']
-        self.assertEquals(1, len(form))
-        self.assertEquals(3521*'X', form['id'][0])
+        self.assertEqual(1, len(form))
+        self.assertEqual(3521*'X', form['id'][0])
 
     def testOnlyHandleAMaximumNrOfRequests(self):
         codes = []
@@ -723,8 +733,8 @@ class HttpServerTest(WeightlessTestCase):
         self.reactor.step().step().step()
         server.shutdown()
 
-        self.assertEquals(b'FAIL', sock.recv(1024))
-        self.assertEquals([503], codes)
+        self.assertEqual(b'FAIL', sock.recv(1024))
+        self.assertEqual([503], codes)
 
     def testOnlyHandleAMaximumNrOfRequestsBelowBoundary(self):
         def handler(**kwargs):
@@ -745,7 +755,7 @@ class HttpServerTest(WeightlessTestCase):
         self.reactor.step().step().step()
         server.shutdown()
 
-        self.assertEquals(b'OK', sock.recv(1024))
+        self.assertEqual(b'OK', sock.recv(1024))
 
     def testDefaultErrorHandler(self):
         def handler(**kwargs):
@@ -762,7 +772,7 @@ class HttpServerTest(WeightlessTestCase):
         sock.send(b"GET / HTTP/1.0\r\n\r\n")
         self.reactor.step().step().step()
 
-        self.assertEquals(b'HTTP/1.0 503 Service Unavailable\r\n\r\n<html><head></head><body><h1>Service Unavailable</h1></body></html>', sock.recv(1024))
+        self.assertEqual(b'HTTP/1.0 503 Service Unavailable\r\n\r\n<html><head></head><body><h1>Service Unavailable</h1></body></html>', sock.recv(1024))
         server.shutdown()
 
     def testYieldInHttpServer(self):
@@ -781,10 +791,10 @@ class HttpServerTest(WeightlessTestCase):
         sok.send(b'GET /path/here HTTP/1.0\r\n\r\n')
         for i in range(500):
             reactor.step()
-        self.assertEquals(b'A', sok.recv(100))
+        self.assertEqual(b'A', sok.recv(100))
         bucket.append('continue')
         reactor.step()
-        self.assertEquals(b'B', sok.recv(100))
+        self.assertEqual(b'B', sok.recv(100))
 
     def testYieldPossibleUseCase(self):
         bucket = []
@@ -836,12 +846,12 @@ class HttpServerTest(WeightlessTestCase):
                     del bucket[:]
             return result
 
-        self.assertEquals([
+        self.assertEqual([
                 set(['work_START']),
                 set(['lazy_START', 'work_part_1', 'work_part_2', 'work_END']),
                 set(['lazy_END'])
            ], loopWithYield(False))
-        self.assertEquals([
+        self.assertEqual([
                 set(['work_START']),
                 set(['lazy_START', 'work_part_1']),
                 set(['lazy_END']),

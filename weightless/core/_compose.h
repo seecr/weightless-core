@@ -27,6 +27,8 @@
 #ifndef __compose_h__
 #define __compose_h__
 
+#include "_observable.h" 
+
 int init_compose(PyObject* module);
 
 PyObject* compose_selftest(PyObject* self, PyObject* null);

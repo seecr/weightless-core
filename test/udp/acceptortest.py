@@ -37,14 +37,17 @@ class UdpAcceptorTest(TestCase):
     def testStartListening(self):
         reactor = CallTrace()
         port = randint(2**10, 2**16)
-        Acceptor(reactor, port, lambda sok: lambda: None)
-        self.assertEquals('addReader', reactor.calledMethods[0].name)
-        sok = reactor.calledMethods[0].args[0]
-        out = Popen(['netstat', '--numeric', '--listening', '--udp'], stdout=PIPE, stderr=PIPE).communicate()[0]
-        self.assertTrue(str(port) in out, out)
-        sok.close()
-        callback = reactor.calledMethods[0].args[1]
-        self.assertTrue(isinstance(callback, collections.Callable))
+        acceptor = Acceptor(reactor, port, lambda sok: lambda: None)
+        try:
+            self.assertEqual('addReader', reactor.calledMethods[0].name)
+            sok = reactor.calledMethods[0].args[0]
+            out, _ = Popen(['netstat', '--numeric', '--listening', '--udp'], stdout=PIPE, stderr=PIPE).communicate()
+            self.assertTrue(str(port).encode() in out, out)
+            sok.close()
+            callback = reactor.calledMethods[0].args[1]
+            self.assertTrue(isinstance(callback, collections.Callable))
+        finally:
+            acceptor.close()
 
     def testHandle(self):
         data = []
@@ -55,22 +58,25 @@ class UdpAcceptorTest(TestCase):
         reactor = CallTrace()
         port = randint(2**10, 2**16)
         Acceptor(reactor, port, sinkFactory)
-        self.assertEquals('addReader', reactor.calledMethods[0].name)
+        self.assertEqual('addReader', reactor.calledMethods[0].name)
         handleCallback = reactor.calledMethods[0].args[1]
         sok = socket(AF_INET, SOCK_DGRAM)
-        sok.sendto("TEST", ('localhost', port))
+        sok.sendto(b"TEST", ('localhost', port))
         handleCallback()
         contents, remoteAddr = data[0]
-        self.assertEquals("TEST", contents)
-        sok.sendto("ANOTHER TEST", ('localhost', port))
+        self.assertEqual(b"TEST", contents)
+        sok.sendto(b"ANOTHER TEST", ('localhost', port))
         handleCallback()
-        self.assertEquals(2, len(data))
+        self.assertEqual(2, len(data))
         reactor.calledMethods[0].args[0].close()
         sok.close()
 
     def testAcceptorWithPrio(self):
         reactor = CallTrace()
         port = randint(2**10, 2**16)
-        Acceptor(reactor, port, lambda sok: None, prio=5)
-        self.assertEquals('addReader', reactor.calledMethods[0].name)
-        self.assertEquals(5, reactor.calledMethods[0].kwargs['prio'])
+        acceptor = Acceptor(reactor, port, lambda sok: None, prio=5)
+        try:
+            self.assertEqual('addReader', reactor.calledMethods[0].name)
+            self.assertEqual(5, reactor.calledMethods[0].kwargs['prio'])
+        finally:
+            acceptor.close()

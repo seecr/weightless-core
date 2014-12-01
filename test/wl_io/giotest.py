@@ -52,7 +52,7 @@ class GioTest(WeightlessTestCase):
             g = Gio(self.mockreactor, handler())
             self.fail('must not come here')
         except AssertionError as e:
-            self.assertEquals('Gio: No context available.', str(e))
+            self.assertEqual('Gio: No context available.', str(e))
 
     def testNeverExittedContextIsForcedToExitByGeneratorExitWhileWriting(self):
         context =  giopen(self.tempfile, 'rw')
@@ -68,7 +68,7 @@ class GioTest(WeightlessTestCase):
             self.fail('Must not come here')
         except StopIteration:
             pass
-        self.assertEquals([], g._contextstack)
+        self.assertEqual([], g._contextstack)
 
     def XXXXXXXXXXXXXtestNeverExittedContextIsForcedToExitByGeneratorExitWhileReading(self):
         context =  giopen(self.tempfile, 'rw')
@@ -84,7 +84,7 @@ class GioTest(WeightlessTestCase):
             self.fail('Must not come here')
         except GeneratorExit:
             pass
-        self.assertEquals([], g._contextstack)
+        self.assertEqual([], g._contextstack)
 
     def testGioAsContext(self):
         open(self.tempfile, 'w').write('read this!')
@@ -95,11 +95,11 @@ class GioTest(WeightlessTestCase):
                 yield 'write this!'
         Gio(self.reactor, myProcessor())
         self.reactor.step()
-        self.assertEquals('read this!', self.dataIn[:19])
+        self.assertEqual('read this!', self.dataIn[:19])
         self.reactor.step()
-        self.assertEquals('read this!write this!', open(self.tempfile).read()[:21])
-        self.assertEquals({}, self.reactor._readers)
-        self.assertEquals({}, self.reactor._writers)
+        self.assertEqual('read this!write this!', open(self.tempfile).read()[:21])
+        self.assertEqual({}, self.reactor._readers)
+        self.assertEqual({}, self.reactor._writers)
 
     def testAlternate(self):
         done = []
@@ -120,8 +120,8 @@ class GioTest(WeightlessTestCase):
         with self.loopingReactor():
             while not done:
                 pass
-        self.assertEquals('1234abcd', open(self.tempdir+'/1').read())
-        self.assertEquals('abcd1234', open(self.tempdir+'/2').read())
+        self.assertEqual('1234abcd', open(self.tempdir+'/1').read())
+        self.assertEqual('abcd1234', open(self.tempdir+'/2').read())
 
     def testNesting(self):
         done = []
@@ -140,8 +140,8 @@ class GioTest(WeightlessTestCase):
         Gio(self.reactor, swapContents())
         while not done:
             self.reactor.step()
-        self.assertEquals('1234abcd', open(self.tempdir+'/1').read())
-        self.assertEquals('abcd1234', open(self.tempdir+'/2').read())
+        self.assertEqual('1234abcd', open(self.tempdir+'/1').read())
+        self.assertEqual('abcd1234', open(self.tempdir+'/2').read())
 
     def testSocketHandshake(self):
         reactor = Reactor()
@@ -153,12 +153,12 @@ class GioTest(WeightlessTestCase):
         def jack(channel):
             with channel:
                 x = yield 'My name is Jack'
-                self.assertEquals(None, x)
+                self.assertEqual(None, x)
                 self.response = yield
         Gio(reactor, jack(SocketContext(lhs)))
         Gio(reactor, peter(SocketContext(rhs)))
         reactor.step().step().step().step()
-        self.assertEquals('Hello Jack', self.response)
+        self.assertEqual('Hello Jack', self.response)
 
     def testLargeBuffers(self):
         reactor = Reactor()
@@ -177,7 +177,7 @@ class GioTest(WeightlessTestCase):
         while sum(len(message) for message in messages) < messageSize:
             reactor.step()
         self.assertTrue(len(messages) > 1) # test is only sensible when multiple parts are sent
-        self.assertEquals(messageSize, len(''.join(messages)))
+        self.assertEqual(messageSize, len(''.join(messages)))
 
     def testHowToCreateAHttpServer(self):
         port = randint(1024, 64000)
@@ -217,7 +217,7 @@ class GioTest(WeightlessTestCase):
         Gio(self.reactor, httpClient())
         while not responses:
             self.reactor.step()
-        self.assertEquals(['HTTP/1.1 200 Ok\r\n\r\nGoodbye'], responses)
+        self.assertEqual(['HTTP/1.1 200 Ok\r\n\r\nGoodbye'], responses)
         server.stop()
 
     def testTimerDoesNotFire(self):
@@ -230,9 +230,9 @@ class GioTest(WeightlessTestCase):
             done.append(True)
         g = Gio(self.mockreactor, handler())
         self.mockreactor.step().step()
-        self.assertEquals([True], done)
-        self.assertEquals([], self.mockreactor._timers)
-        self.assertEquals([], g._contextstack)
+        self.assertEqual([True], done)
+        self.assertEqual([], self.mockreactor._timers)
+        self.assertEqual([], g._contextstack)
 
     def testTimerTimesOutOutsideBlock(self):
         done = []
@@ -248,9 +248,9 @@ class GioTest(WeightlessTestCase):
         g = Gio(self.mockreactor, handler())
         while not done:
             self.mockreactor.step()
-        self.assertEquals([False], done)
-        self.assertEquals([], self.mockreactor._timers)
-        self.assertEquals([], g._contextstack)
+        self.assertEqual([False], done)
+        self.assertEqual([], self.mockreactor._timers)
+        self.assertEqual([], g._contextstack)
 
     def testTimerTimesOutWithinBlock(self):
         done = []
@@ -266,6 +266,6 @@ class GioTest(WeightlessTestCase):
         g = Gio(self.reactor, handler())
         while done != [False]:
             self.reactor.step()
-        self.assertEquals([False], done)
-        self.assertEquals([], self.mockreactor._timers)
-        self.assertEquals([], g._contextstack)
+        self.assertEqual([False], done)
+        self.assertEqual([], self.mockreactor._timers)
+        self.assertEqual([], g._contextstack)

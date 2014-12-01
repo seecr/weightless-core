@@ -32,6 +32,7 @@
 #include <structmember.h>
 
 #include "_core.h"
+#include "_observable.h"
 
 ////////// Python Object and Type structures //////////
 
@@ -772,7 +773,7 @@ int init_compose(PyObject* module) {
 
     if(!linecache) {
         PyErr_Print();
-        return;
+        return -1;
     }
 
     PyObject* dict = PyModule_GetDict(linecache); // borrowed ref
@@ -780,7 +781,7 @@ int init_compose(PyObject* module) {
     if(!dict) {
         Py_CLEAR(linecache);
         PyErr_Print();
-        return;
+        return -1;
     }
 
     py_getline = PyMapping_GetItemString(dict, "getline"); // new ref
@@ -788,7 +789,7 @@ int init_compose(PyObject* module) {
     if(!py_getline) {
         Py_CLEAR(linecache);
         PyErr_Print();
-        return;
+        return -1;
     }
 
     py_code = create_empty_code();
@@ -797,7 +798,7 @@ int init_compose(PyObject* module) {
         Py_CLEAR(linecache);
         Py_CLEAR(py_getline);
         PyErr_Print();
-        return;
+        return -1;
     }
 
     if(PyType_Ready(&PyCompose_Type) < 0) {
@@ -805,7 +806,7 @@ int init_compose(PyObject* module) {
         Py_CLEAR(py_getline);
         Py_CLEAR(py_code);
         PyErr_Print();
-        return;
+        return -1;
     }
 
 
@@ -814,6 +815,7 @@ int init_compose(PyObject* module) {
 
     Py_INCREF(&PyYield_Type);
     PyModule_AddObject(module, "Yield", (PyObject*) &PyYield_Type);
+    return 0;
 }
 
 

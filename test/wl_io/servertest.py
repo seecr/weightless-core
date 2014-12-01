@@ -50,7 +50,7 @@ class ServerTest(WeightlessTestCase):
         server.addObserver(Interceptor())
         sok = self.send('localhost', self.port, b'a message')
         self.reactor.step().step()
-        self.assertEquals([b'a message'], messages)
+        self.assertEqual([b'a message'], messages)
         sok.close()
         server.stop()
 
@@ -75,7 +75,7 @@ class ServerTest(WeightlessTestCase):
         connection = self.send('localhost', self.port, b'a message')
         while connection not in select([connection],[],[],0)[0]:
             self.reactor.step()
-        self.assertEquals(b'over en uit', connection.recv(99))
+        self.assertEqual(b'over en uit', connection.recv(99))
         try:
             connection.send(b'aap')
             self.fail('connection is closed, this must raise an io error')
@@ -119,9 +119,9 @@ class ServerTest(WeightlessTestCase):
         while conn1 not in readable or conn2 not in readable or conn3 not in readable:
             self.reactor.step()
             readable = select([conn1, conn2, conn3],[],[],0)[0]
-        self.assertEquals('Goodbye Thijs', conn1.recv(99))
-        self.assertEquals('Goodbye Johan', conn2.recv(99))
-        self.assertEquals('Goodbye Klaas', conn3.recv(99))
+        self.assertEqual('Goodbye Thijs', conn1.recv(99))
+        self.assertEqual('Goodbye Johan', conn2.recv(99))
+        self.assertEqual('Goodbye Klaas', conn3.recv(99))
         conn1.close()
         conn2.close()
         conn3.close()
