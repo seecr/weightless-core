@@ -32,11 +32,10 @@ import re
 from io import StringIO, BytesIO
 from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
 from tempfile import TemporaryFile
-from email import message_from_file as parse_mime_message
+from email.parser import BytesParser
 from zlib import compressobj as deflateCompress
 from zlib import decompressobj as deflateDeCompress
 from gzip import GzipFile
-
 
 from OpenSSL import SSL
 from random import randint
@@ -48,8 +47,9 @@ import collections
 
 
 RECVSIZE = 4096
-CRLF = '\r\n'
+CRLF = b'\r\n'
 CRLF_LEN = 2
+CRLF_STR = "\r\n"
 
 
 class HttpServer(object):
@@ -68,6 +68,7 @@ class HttpServer(object):
         self._errorHandler = errorHandler
         self._compressResponse = compressResponse
         self._socketWrap = socketWrap
+        self._acceptor = None
 
     def listen(self):
         self._acceptor = Acceptor(
@@ -95,6 +96,12 @@ class HttpServer(object):
     def shutdown(self):
         self._acceptor.shutdown()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self ,type, value, traceback):
+        if self._acceptor is not None:
+            self.shutdown()
 
 class HttpsServer(object):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
@@ -161,6 +168,12 @@ class HttpsServer(object):
     def shutdown(self):
         self._acceptor.shutdown()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self ,type, value, traceback):
+        if hasattr(self, "acceptor"):
+            self.shutdown()
 
 from resource import getrlimit, RLIMIT_NOFILE
 
@@ -199,17 +212,19 @@ def parseAcceptEncoding(headerValue):
 
 _removeHeaderReCache = {}
 CONTENT_LENGTH_RE = re.compile(r'\r\nContent-Length:.*?\r\n', flags=re.I)
-def updateResponseHeaders(headers, match, addHeaders=None, removeHeaders=None, requireAbsent=None):
+def updateResponseHeaders(headers, headersEndMarker, addHeaders=None, removeHeaders=None, requireAbsent=None):
     requireAbsent = set(requireAbsent or [])
     addHeaders = addHeaders or {}
     removeHeaders = removeHeaders or []
+    statusAndHeaders = headers[:headersEndMarker].decode()
+    _body = headers[headersEndMarker:]
+    match = REGEXP.RESPONSE.match(statusAndHeaders)
     headersDict = parseHeaders(match.groupdict()['_headers'])
 
     matchStartHeaders = match.start('_headers')
     matchEnd = match.end()
     _statusLine = headers[:matchStartHeaders - CRLF_LEN]
     _headers = headers[matchStartHeaders - CRLF_LEN:matchEnd - CRLF_LEN]
-    _body = headers[matchEnd:]
 
     notAbsents = requireAbsent.intersection(set(headersDict.keys()))
     if notAbsents:
@@ -221,12 +236,11 @@ def updateResponseHeaders(headers, match, addHeaders=None, removeHeaders=None, r
 
             headerRe = re.compile(r'\r\n%s:.*?\r\n' % re.escape(header), flags=re.I)
             _removeHeaderReCache[header] = headerRe
-        _headers = headerRe.sub(CRLF, _headers, count=1)
+        _headers = headerRe.sub(CRLF_STR, _headers.decode(), count=1).encode()
 
     for header, value in list(addHeaders.items()):
-        _headers += '%s: %s\r\n' % (header, value)
+        _headers += ('%s: %s\r\n' % (header, value)).encode()
     return _statusLine + _headers + CRLF, _body
-
 
 class GzipCompress(object):
     def __init__(self):
@@ -285,7 +299,7 @@ class HttpHandler(object):
         self.request = None
         self._dealWithCall = self._readHeaders
         self._prio = prio
-        self._window = ''
+        self._window = b''
         self._maxConnections = maxConnections if maxConnections else maxFileDescriptors()
         self._errorHandler = errorHandler if errorHandler else defaultErrorHandler
         self._defaultEncoding = getdefaultencoding()
@@ -309,20 +323,26 @@ class HttpHandler(object):
         self._dealWithCall()
 
     def _readHeaders(self):
-        match = REGEXP.REQUEST.match(self._dataBuffer.decode())
-        if not match:
+        endHeaderMarkerLocation = self._dataBuffer.find(2*CRLF)
+        if endHeaderMarkerLocation == -1:
             return # for more data
+        endHeaderMarkerLocation += 2*CRLF_LEN
+        headers = self._dataBuffer[:endHeaderMarkerLocation].decode()
+
+        match = REGEXP.REQUEST.match(headers)
+        if not match:
+            return
+        
+        self._dataBuffer = self._dataBuffer[endHeaderMarkerLocation:]
         self.request = match.groupdict()
-        self.request['Body'] = ''
+        self.request['Body'] = b''
         self.request['Headers'] = parseHeaders(self.request['_headers'])
-        matchEnd = match.end()
-        self._dataBuffer = self._dataBuffer[matchEnd:]
         if 'Content-Type' in self.request['Headers']:
             cType, pDict = parseHeader(self.request['Headers']['Content-Type'])
             if cType.startswith('multipart/form-data'):
                 self._tempfile = TemporaryFile('w+b')
                 #self._tempfile = open('/tmp/mimetest', 'w+b')
-                self._tempfile.write('Content-Type: %s\r\n\r\n' % self.request['Headers']['Content-Type'])
+                self._tempfile.write(('Content-Type: %s\r\n\r\n' % self.request['Headers']['Content-Type']).encode())
                 self.setCallDealer(lambda: self._readMultiForm(pDict['boundary']))
                 return
         if 'Expect' in self.request['Headers']:
@@ -343,11 +363,12 @@ class HttpHandler(object):
         self._window += self._dataBuffer
         self._window = self._window[-2*self._recvSize:]
 
-        if self._window.endswith("\r\n--%s--\r\n" % boundary):
+        if self._window.endswith(("\r\n--%s--\r\n" % boundary).encode()):
             self._tempfile.seek(0)
 
             form = {}
-            for msg in parse_mime_message(self._tempfile).get_payload():
+            parser = BytesParser()
+            for msg in parser.parse(self._tempfile).get_payload():
                 cType, pDict = parseHeader(msg['Content-Disposition'])
                 contentType = msg.get_content_type()
                 fieldName = pDict['name'][1:-1]
@@ -426,10 +447,12 @@ class HttpHandler(object):
 
         if len(self._dataBuffer) < self._chunkSize + CRLF_LEN:
             return # for more data
+
+        chunk = self._dataBuffer[:self._chunkSize]
         if self._decodeRequestBody is not None:
-            self.request['Body'] += self._decodeRequestBody.decompress(self._dataBuffer[:self._chunkSize])
+            self.request['Body'] += self._decodeRequestBody.decompress(chunk)
         else:
-            self.request['Body'] += self._dataBuffer[:self._chunkSize]
+            self.request['Body'] += chunk
         self._dataBuffer = self._dataBuffer[self._chunkSize + CRLF_LEN:]
         self.setCallDealer(self._readChunk)
 
@@ -492,12 +515,13 @@ class HttpHandler(object):
                 if encodeResponseBody is not None:
                     if endHeader is False:
                         headers += data
-                        match = REGEXP.RESPONSE.match(headers)
-                        if match:
+                        headersEndMarker = headers.find(2*CRLF)
+                        if headersEndMarker > -1:
                             endHeader = True
+                            headersEndMarker += 2*CRLF_LEN
                             try:
                                 _statusLineAndHeaders, _bodyStart = updateResponseHeaders(
-                                        headers, match,
+                                        headers, headersEndMarker,
                                         addHeaders={'Content-Encoding': encoding},
                                         removeHeaders=['Content-Length'],
                                         requireAbsent=['Content-Encoding'])
@@ -506,14 +530,16 @@ class HttpHandler(object):
                                 encodeResponseBody = None
                                 data = headers
                             else:
-                                encodedStuff = encodeResponseBody.compress(_bodyStart.encode(self._defaultEncoding))
+                                encodedStuff = encodeResponseBody.compress(_bodyStart)
                                 if type(encodedStuff) is not bytes:
                                     encodedStuff = encodedStuff.encode(self._defaultEncoding)
-                                data = _statusLineAndHeaders.encode(self._defaultEncoding) + encodedStuff
+                                data = _statusLineAndHeaders + encodedStuff
                         else:
                             continue
                     else:
-                        data = encodeResponseBody.compress(data.encode(self._defaultEncoding))
+                        data = encodeResponseBody.compress(data)
+                        if type(data) is str:
+                            data = data.encode()
                 sent = self._sok.send(data)
                 if sent < len(data):
                     self._rest = data[sent:]

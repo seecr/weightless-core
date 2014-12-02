@@ -55,6 +55,7 @@ class AsyncReaderTest(WeightlessTestCase):
 
     def tearDown(self):
         self.httpserver.shutdown()
+        self.reactor.shutdown()
         WeightlessTestCase.tearDown(self)
 
     def testHttpRequest(self):

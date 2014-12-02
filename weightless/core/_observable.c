@@ -33,7 +33,7 @@
 #include "_core.h"
 #include "_observable.h"
 
-int debug = 0;
+int debug = 1;
 
 ////////// Python Object and Type declarations //////////
 
@@ -128,7 +128,8 @@ static PyObject* allgenerator_send(PyAllGeneratorObject* self, PyObject* arg) {
         PyObject* pa = PyObject_Str(PyTuple_GET_ITEM(self->_methods, self->_i));
         PyObject* pb = PyObject_Str(arg);
         PyObject* r = PyErr_Format(PyExc_AssertionError, "%s returned '%s'",
-                PyUnicode_AsUnicode(pa), PyUnicode_AsUnicode(pb));
+                PyBytes_AS_STRING(PyUnicode_AsEncodedString(pa, "utf-8", "Error")), 
+                PyBytes_AS_STRING(PyUnicode_AsEncodedString(pb, "utf-8", "Error")));
         Py_DECREF(pa);
         Py_DECREF(pb);
         return r;

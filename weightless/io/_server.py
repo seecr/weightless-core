@@ -64,3 +64,10 @@ class Server(Observable):
             pass
         self._ear.close()
         self._reactor = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self ,type, value, traceback):
+        self.stop()
+

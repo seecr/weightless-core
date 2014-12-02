@@ -23,87 +23,71 @@
 #
 ## end license ##
 
-
-from urllib.request import urlopen
-from io import StringIO
 import socket
-import sys
 from select import select
 
 from weightlesstestcase import WeightlessTestCase
 
 from weightless.io import Server
+from seecr.test.io import stderr_replaced
 
 class ServerTest(WeightlessTestCase):
 
     def testListen(self):
-        server = Server(self.reactor, self.port)
-        self.send('localhost', self.port, b'are you listening?')
-        server.stop()
+        with Server(self.reactor, self.port) as server:
+            with self.send('localhost', self.port, b'are you listening?') as sok:
+                pass
 
     def testConnect(self):
         messages = []
         class Interceptor(object):
             def processConnection(self):
                 messages.append((yield))
-        server = Server(self.reactor, self.port)
-        server.addObserver(Interceptor())
-        sok = self.send('localhost', self.port, b'a message')
-        self.reactor.step().step()
-        self.assertEqual([b'a message'], messages)
-        sok.close()
-        server.stop()
+        with Server(self.reactor, self.port) as server:
+            server.addObserver(Interceptor())
+            with self.send('localhost', self.port, b'a message') as sok:
+                self.reactor.step().step()
+                self.assertEqual([b'a message'], messages)
 
     def testConnectionNotProcessedRaisesError(self):
-        server = Server(self.reactor, self.port)
-        sok = self.send('localhost', self.port, b'a message')
-        sys.stderr = StringIO()
-        try:
-            self.reactor.step()
-            self.assertTrue('None of the 0 observers respond to processConnection(...)' in sys.stderr.getvalue(), sys.stderr.getvalue())
-        finally:
-            sys.stderr = sys.__stderr__
-        sok.close()
-        server.stop()
+        with Server(self.reactor, self.port) as server:
+            with self.send('localhost', self.port, b'a message') as sok:
+                with stderr_replaced() as stderr:
+                    self.reactor.step()
+                    self.assertTrue('None of the 0 observers respond to processConnection(...)' in stderr.getvalue(), stderr.getvalue())
 
     def testShutdownAndClose(self):
         class Interceptor(object):
             def processConnection(self):
                 yield 'over en uit'
-        server = Server(self.reactor, self.port)
-        server.addObserver(Interceptor())
-        connection = self.send('localhost', self.port, b'a message')
-        while connection not in select([connection],[],[],0)[0]:
-            self.reactor.step()
-        self.assertEqual(b'over en uit', connection.recv(99))
-        try:
-            connection.send(b'aap')
-            self.fail('connection is closed, this must raise an io error')
-        except socket.error as e:
-            pass
-        connection.close()
-        server.stop()
+        with Server(self.reactor, self.port) as server:
+            server.addObserver(Interceptor())
+            with self.send('localhost', self.port, b'a message') as connection:
+                while connection not in select([connection],[],[],0)[0]:
+                    self.reactor.step()
+                self.assertEqual(b'over en uit', connection.recv(99))
+                try:
+                    connection.send(b'aap')
+                    self.fail('connection is closed, this must raise an io error')
+                except socket.error as e:
+                    pass
 
     def testShutdownAndCloseInCaseOfException(self):
         class Interceptor(object):
             def processConnection(self):
                 raise Exception('oops')
                 yield 'over en uit'
-        server = Server(self.reactor, self.port)
-        server.addObserver(Interceptor())
-        connection = self.send('localhost', self.port, b'a message')
-        sys.stderr = StringIO()
-        try:
-            self.reactor.step()
-        finally:
-            sys.stderr = sys.__stderr__
-        try:
-            connection.send(b'aap')
-            self.fail('connection is closed, this must raise an io error')
-        except socket.error as e:
-            pass
-        connection.close()
-        server.stop()
+        with Server(self.reactor, self.port) as server:
+            server.addObserver(Interceptor())
+            with self.send('localhost', self.port, b'a message') as connection:
+                with stderr_replaced() as s:
+                    self.reactor.step()
+                    self.assertTrue('Exception: oops' in s.getvalue(), s.getvalue())
+                try:
+                    connection.send(b'aap')
+                    self.fail('connection is closed, this must raise an io error')
+                except socket.error as e:
+                    pass
 
     def XXXXXXXXXXXXXXXXtestMultipleConnectionsAndSomeShortConversation(self):
         class MyHandler(object):

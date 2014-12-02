@@ -27,12 +27,7 @@
 export LANG=en_US.UTF-8
 export PYTHONPATH=.:"$PYTHONPATH"
 
-option=$1
 pyversions="python3"
-if [ "${option:0:9}" == "--python3." ]; then
-    shift
-    pyversions="${option:2}"
-fi
 echo Found Python versions: $pyversions
 option=$1
 if [ "$option" == "--python" ]; then
@@ -47,7 +42,6 @@ fi
 echo Performing tests: $tests
 
 pyversions="python3"
-tests="C"
 for t in $tests; do
     for pycmd in $pyversions; do
         echo "================ $t with $pycmd _alltests.py $@ ================"

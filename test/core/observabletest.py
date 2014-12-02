@@ -124,22 +124,20 @@ class ObservableTest(TestCase):
                 yield
         root = be((Observable(), (A(),)))
         g = compose(root.all.f())
-        next(g)
-        return
         try:
             next(g)
             self.fail("Should not happen")
         except AssertionError as e:
-            self.assertTrue("<bound method A.f of <core.observabletest.A object at 0x" in str(e), str(e))
+            self.assertTrue("<bound method A.f of <core.observabletest.ObservableTest.testAllAssertsNoneReturnValues.<locals>.A object at 0x" in str(e), str(e))
             self.assertTrue(">> returned '1'" in str(e), str(e))
         g = compose(root.all.x())
         try:
             next(g)
             self.fail("Should not happen")
         except AssertionError as e:
-            self.assertTrue("> returned '2'" in str(e), str(e))
+            self.assertTrue(" returned '2'" in str(e), str(e))
             if not cextension:
-                self.assertTrue("<bound method A.all_unknown of <core.observabletest.A object at 0x" in str(e), str(e))
+                self.assertTrue("<bound method A.all_unknown of <core.observabletest.ObservableTest.testAllAssertsNoneReturnValues.<locals>.A object at 0x" in str(e), str(e))
 
     @skip_if(cextension)
     def testAllAssertsResultOfCallIsGeneratorOrComposed(self):
@@ -154,8 +152,6 @@ class ObservableTest(TestCase):
             next(g)
             self.fail("Should not happen")
         except AssertionError as e:
-            from traceback import print_tb
-            print_tb(exc_info()[2])
             self.assertTrue("<bound method A.f of <core.observabletest.A object at 0x" in str(e), str(e))
             self.assertTrue(">> should have resulted in a generator." in str(e), str(e))
             self.assertFunctionsOnTraceback("testAllAssertsResultOfCallIsGeneratorOrComposed", "_compose", "all_unknown", "verifyMethodResult")
@@ -1216,6 +1212,12 @@ GeneratorExit: Exit!
         #p.runcall(f)
 
     def assertFunctionsOnTraceback(self, *args):
+        #na, na, tb = exc_info()
+        #print("------")
+        #while tb is not None:
+        #    print(tb.tb_frame.f_code.co_name)
+        #    tb = tb.tb_next
+
         na, na, tb = exc_info()
         for functionName in args:
             self.assertEqual(functionName, tb.tb_frame.f_code.co_name)
