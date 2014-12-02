@@ -710,21 +710,25 @@ class ReactorTest(WeightlessTestCase):
         self.assertEqual([callback, 'suspending', 'resuming'], trace)
 
     def testShutdownWithRemainingProcesses(self):
-        reactor = Reactor()
-        lambdaFunc = lambda: None
-        reactor.addProcess(lambdaFunc)
-        self.assertEqual([lambdaFunc], list(reactor._processes.keys()))
-        self.assertEqual('Reactor shutdown: terminating %s\n' % lambdaFunc, self.withSTDOUTRedirected(reactor.shutdown))
-        self.assertEqual([], list(reactor._processes.keys()))
+        log = StringIO()
+        with Reactor(log=log) as reactor:
+            lambdaFunc = lambda: None
+            reactor.addProcess(lambdaFunc)
+            self.assertEqual([lambdaFunc], list(reactor._processes.keys()))
+            reactor.shutdown()
+            self.assertEqual('Reactor shutdown: terminating %s\n' % lambdaFunc, log.getvalue())
+            self.assertEqual([], list(reactor._processes.keys()))
 
-        reactor = Reactor()
-        lambdaFunc = lambda: reactor.suspend()
-        reactor.addProcess(lambdaFunc)
-        reactor.step()
+        log = StringIO()
+        with Reactor(log=log) as reactor:
+            lambdaFunc = lambda: reactor.suspend()
+            reactor.addProcess(lambdaFunc)
+            reactor.step()
 
-        self.assertEqual([lambdaFunc], list(reactor._suspended.keys()))
-        self.assertEqual('Reactor shutdown: terminating %s\n' % lambdaFunc, self.withSTDOUTRedirected(reactor.shutdown))
-        self.assertEqual([], list(reactor._suspended.keys()))
+            self.assertEqual([lambdaFunc], list(reactor._suspended.keys()))
+            reactor.shutdown()
+            self.assertEqual('Reactor shutdown: terminating %s\n' % lambdaFunc, log.getvalue())
+            self.assertEqual([], list(reactor._suspended.keys()))
 
     def testExceptionsInProcessNotSuppressed(self):
         reactor = Reactor()

@@ -37,7 +37,6 @@ from sys import stdout
 def reactor():
     return local('__reactor__')
 
-
 class Context(object):
     def __init__(self, callback, prio):
         if prio is None:
@@ -111,10 +110,10 @@ class Reactor(object):
         return timer
 
     def removeReader(self, sok):
-        del self._readers[sok]
+        self._readers.pop(sok, None)
 
     def removeWriter(self, sok):
-        del self._writers[sok]
+        self._writers.pop(sok, None)
 
     def removeProcess(self, process=None):
         if process is None:
