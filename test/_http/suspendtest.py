@@ -52,116 +52,116 @@ class SuspendTest(WeightlessTestCase):
 
     def testReactorSuspend(self):
         handle = ['initial value']
-        reactor = Reactor(select_func=mockselect)
-        def callback():
-            handle[0] = reactor.suspend()
-        sok = MockSocket()
-        reactor.addReader(sok, callback)
-        self.assertTrue(sok in reactor._readers)
-        reactor.step()
-        self.assertTrue(sok not in reactor._readers)
+        with Reactor(select_func=mockselect) as reactor:
+            def callback():
+                handle[0] = reactor.suspend()
+            sok = MockSocket()
+            reactor.addReader(sok, callback)
+            self.assertTrue(sok in reactor._readers)
+            reactor.step()
+            self.assertTrue(sok not in reactor._readers)
 
-        sok = MockSocket()
-        reactor.addWriter(sok, callback)
-        self.assertTrue(sok in reactor._writers)
-        reactor.step()
-        self.assertTrue(sok not in reactor._writers)
-        self.assertTrue(handle[0] != None)
-        self.assertTrue(handle[0] != 'initial value')
+            sok = MockSocket()
+            reactor.addWriter(sok, callback)
+            self.assertTrue(sok in reactor._writers)
+            reactor.step()
+            self.assertTrue(sok not in reactor._writers)
+            self.assertTrue(handle[0] != None)
+            self.assertTrue(handle[0] != 'initial value')
 
     def testReactorResumeWriter(self):
         handle = ['initial value']
-        reactor = Reactor(select_func=mockselect)
-        def callback():
-            handle[0] = reactor.suspend()
-            yield
-            yield
-        sok = MockSocket()
-        reactor.addWriter(sok, callback().__next__)
-        reactor.step()
-        reactor.resumeWriter(handle[0])
-        reactor.step()
-        self.assertTrue(sok in reactor._writers)
-        self.assertTrue(sok not in reactor._readers)
-        self.assertRaises(KeyError, reactor.resumeWriter, handle[0])
+        with Reactor(select_func=mockselect, log=StringIO()) as reactor:
+            def callback():
+                handle[0] = reactor.suspend()
+                yield
+                yield
+            sok = MockSocket()
+            reactor.addWriter(sok, callback().__next__)
+            reactor.step()
+            reactor.resumeWriter(handle[0])
+            reactor.step()
+            self.assertTrue(sok in reactor._writers)
+            self.assertTrue(sok not in reactor._readers)
+            self.assertRaises(KeyError, reactor.resumeWriter, handle[0])
 
     def testReactorResumeReader(self):
         handle = ['initial value']
-        reactor = Reactor(select_func=mockselect)
-        def callback():
-            handle[0] = reactor.suspend()
-            yield
-            yield
-        sok = MockSocket()
-        reactor.addReader(sok, callback().__next__)
-        reactor.step()
-        reactor.resumeReader(handle[0])
-        reactor.step()
-        self.assertFalse(sok in reactor._writers)
-        self.assertTrue(sok in reactor._readers)
-        self.assertRaises(KeyError, reactor.resumeReader, handle[0])
+        with Reactor(select_func=mockselect, log=StringIO()) as reactor:
+            def callback():
+                handle[0] = reactor.suspend()
+                yield
+                yield
+            sok = MockSocket()
+            reactor.addReader(sok, callback().__next__)
+            reactor.step()
+            reactor.resumeReader(handle[0])
+            reactor.step()
+            self.assertFalse(sok in reactor._writers)
+            self.assertTrue(sok in reactor._readers)
+            self.assertRaises(KeyError, reactor.resumeReader, handle[0])
 
     def testReactorResumeProcess(self):
-        reactor = Reactor(select_func=mockselect)
-        def callback():
-            handle[0] = reactor.suspend()
-            yield
-            yield
-        handle = [callback().__next__]
-        sok = MockSocket()
-        reactor.addProcess(handle[0])
-        reactor.step()
-        reactor.resumeProcess(handle[0])
-        reactor.step()
-        self.assertFalse(handle[0] in reactor._writers)
-        self.assertFalse(handle[0] in reactor._readers)
-        self.assertTrue(handle[0] in reactor._processes)
-        self.assertRaises(KeyError, reactor.resumeProcess, handle[0])
+        log = StringIO()
+        with Reactor(select_func=mockselect, log=log) as reactor:
+            def callback():
+                handle[0] = reactor.suspend()
+                yield
+                yield
+            handle = [callback().__next__]
+            sok = MockSocket()
+            reactor.addProcess(handle[0])
+            reactor.step()
+            reactor.resumeProcess(handle[0])
+            reactor.step()
+            self.assertFalse(handle[0] in reactor._writers)
+            self.assertFalse(handle[0] in reactor._readers)
+            self.assertTrue(handle[0] in reactor._processes)
+            self.assertRaises(KeyError, reactor.resumeProcess, handle[0])
 
     def testWrongUseAfterSuspending(self):
-        reactor = Reactor(select_func=mockselect)
-        handle = ['initial value']
-        def callback():
-            handle[0] = reactor.suspend()
-        sok = MockSocket()
-        reactor.addWriter(sok, callback)
-        reactor.step()
-        self.assertEqual(sok, handle[0])
-        try:
+        with Reactor(select_func=mockselect) as reactor:
+            handle = ['initial value']
+            def callback():
+                handle[0] = reactor.suspend()
+            sok = MockSocket()
             reactor.addWriter(sok, callback)
-            self.fail("Exception not raised")
-        except ValueError as e:
-            self.assertEqual('Socket is suspended', str(e))
-        try:
-            reactor.addReader(sok, callback)
-            self.fail("Exception not raised")
-        except ValueError as e:
-            self.assertEqual('Socket is suspended', str(e))
+            reactor.step()
+            self.assertEqual(sok, handle[0])
+            try:
+                reactor.addWriter(sok, callback)
+                self.fail("Exception not raised")
+            except ValueError as e:
+                self.assertEqual('Socket is suspended', str(e))
+            try:
+                reactor.addReader(sok, callback)
+                self.fail("Exception not raised")
+            except ValueError as e:
+                self.assertEqual('Socket is suspended', str(e))
 
     def testShutdownReactor(self):
-        reactor = Reactor(select_func=mockselect)
-        sok1 = MockSocket()
-        sok2 = MockSocket()
-        sok3 = MockSocket()
         def callback():
             reactor.suspend()
-        reactor.addReader(sok1, lambda: None)
-        reactor.addWriter(sok2, lambda: None)
-        reactor.addWriter(sok3, callback)
-        reactor.step()
-        self.assertFalse(sok3 in reactor._readers)
-        self.assertFalse(sok3 in reactor._writers)
-        with self.stdout_replaced() as s:
+        log = StringIO()
+        with Reactor(select_func=mockselect, log=log) as reactor:
+            sok1 = MockSocket()
+            sok2 = MockSocket()
+            sok3 = MockSocket()
+            reactor.addReader(sok1, lambda: None)
+            reactor.addWriter(sok2, lambda: None)
+            reactor.addWriter(sok3, callback)
+            reactor.step()
+            self.assertFalse(sok3 in reactor._readers)
+            self.assertFalse(sok3 in reactor._writers)
             reactor.shutdown()
-            self.assertTrue(str(sok1) in s.getvalue(), s.getvalue())
-            self.assertTrue(str(sok2) in s.getvalue(), s.getvalue())
-        self.assertTrue(str(sok3) in s.getvalue())
-        self.assertTrue(sok1.closed)
-        self.assertTrue(sok2.closed)
-        self.assertTrue(sok3.closed)
+            self.assertTrue(str(sok1) in log.getvalue(), log.getvalue())
+            self.assertTrue(str(sok2) in log.getvalue(), log.getvalue())
+            self.assertTrue(str(sok3) in log.getvalue())
+            self.assertTrue(sok1.closed)
+            self.assertTrue(sok2.closed)
+            self.assertTrue(sok3.closed)
 
     def testSuspendProtocol(self):
-        reactor = Reactor(select_func=mockselect)
         suspend = Suspend()
         def handler(**httpvars):
             yield 'before suspend'
@@ -170,25 +170,27 @@ class SuspendTest(WeightlessTestCase):
             yield 'after suspend'
         listener = MyMockSocket()
         port = 9
-        with HttpServer(reactor, port, handler, sok=listener) as httpserver:
-            httpserver.listen()
-            httpserver._acceptor._accept()
-            reactor.step()
-            reactor.step()
-            print( reactor._writers )
-            self.assertEqual(2, len(reactor._writers))
-            reactor.step()
-            self.assertEqual(reactor, suspend._reactor)
-            self.assertEqual(1, len(reactor._writers))
-            suspend.resume('RESPONSE')
-            reactor.step()
-            reactor.step()
-            reactor.step()
-            self.assertEqual([b'before suspend', b'result = RESPONSE', b'after suspend'], listener.data)
+        with Reactor(select_func=mockselect, log=StringIO()) as reactor:
+            with HttpServer(reactor, port, handler, sok=listener) as httpserver:
+                httpserver.listen()
+                reactor.removeReader(listener)
+                httpserver._acceptor._accept()
+                reactor.step()
+                reactor.step()
+                self.assertEqual(1, len(reactor._writers))
+                reactor.step()
+                self.assertEqual(reactor, suspend._reactor)
+                self.assertEqual(0, len(reactor._writers))
+                suspend.resume('RESPONSE')
+                reactor.step()
+                reactor.step()
+                reactor.step()
+        self.assertEqual([b'before suspend', b'result = RESPONSE', b'after suspend'], listener.data)
 
     def testSuspendProtocolWithThrow(self):
-        reactor = Reactor(select_func=mockselect)
         suspend = Suspend()
+        listener = MyMockSocket()
+        port = 9
         def handler(**httpvars):
             yield 'before suspend'
             yield suspend
@@ -199,68 +201,66 @@ class SuspendTest(WeightlessTestCase):
                 tbstring = format_exc()
                 yield "result = %s" % tbstring
             yield 'after suspend'
-        listener = MyMockSocket()
-        port = 9
-        with HttpServer(reactor, port, handler, sok=listener) as httpserver:
-            httpserver.listen()
-            reactor.removeReader(listener) # avoid new connections
-            httpserver._acceptor._accept()
-            reactor.step()
-            reactor.step()
-            self.assertEqual(1, len(reactor._writers))
-            reactor.step()
-            self.assertEqual(reactor, suspend._reactor)
-            self.assertEqual(0, len(reactor._writers))
-            def raiser():
-                raise ValueError("BAD VALUE")
-            try:
-                raiser()
-            except ValueError as e:
-                exc_type, exc_value, exc_traceback = exc_info()
-                suspend.throw(exc_type(exc_value).with_traceback(exc_traceback))
-            reactor.step()
-            reactor.step()
-            reactor.step()
-            expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
-  File "%(__file__)s", line [#], in handler
-    suspend.getResult()
-  File "../weightless/io/_suspend.py", line [#], in getResult
-    raise self._exception[1].with_traceback(self._exception[2])
-ValueError: BAD VALUE""" % fileDict)
-            self.assertEqual(3, len(listener.data))
-            self.assertEqual(b'before suspend', listener.data[0])
-            #self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1].decode('UTF-8')))
-            #self.assertEqual(b'after suspend', listener.data[2])
+        with Reactor(select_func=mockselect) as reactor:
+            with HttpServer(reactor, port, handler, sok=listener) as httpserver:
+                httpserver.listen()
+                reactor.removeReader(listener) # avoid new connections
+                httpserver._acceptor._accept()
+                reactor.step()
+                reactor.step()
+                self.assertEqual(1, len(reactor._writers))
+                reactor.step()
+                self.assertEqual(reactor, suspend._reactor)
+                self.assertEqual(0, len(reactor._writers))
+                def raiser():
+                    raise ValueError("BAD VALUE")
+                try:
+                    raiser()
+                except ValueError as e:
+                    exc_type, exc_value, exc_traceback = exc_info()
+                    suspend.throw(exc_type(exc_value).with_traceback(exc_traceback))
+                reactor.step()
+                reactor.step()
+                reactor.step()
+                expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+      File "%(__file__)s", line [#], in handler
+        suspend.getResult()
+      File "../weightless/io/_suspend.py", line [#], in getResult
+        raise self._exception[1].with_traceback(self._exception[2])
+    ValueError: BAD VALUE""" % fileDict)
+                self.assertEqual(3, len(listener.data))
+                self.assertEqual(b'before suspend', listener.data[0])
+                #self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1].decode('UTF-8')))
+                #self.assertEqual(b'after suspend', listener.data[2])
 
     def testDoNextErrorReRaisedOnGetResult(self):
         def razor(ignored):
             1/0  # Division by zero exception
         suspend = Suspend(doNext=razor)
-        olderr = sys.stderr
-        sys.stderr = StringIO()
-        try:
-            suspend(reactor=CallTrace(), whenDone="not called")
-        finally:
-            sys.stderr = olderr
-        try:
-            suspend.getResult()
-        except:
-            exc_type, exc_value, exc_traceback = exc_info()
 
-        expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
-  File "%(__file__)s", line 200, in testDoNextErrorReRaisedOnGetResult
-    suspend.getResult()
-  File "%(suspend.py)s", line 40, in __call__
-    self._doNext(self)
-  File "%(__file__)s", line 196, in razor
-    1/0  # Division by zero exception
-ZeroDivisionError: integer division or modulo by zero
-        """ % fileDict)
-        self.assertEqual(ZeroDivisionError, exc_type)
-        self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(format_exc()))
+        with self.stderr_replaced() as stderr:
+            with Reactor(log=StringIO()) as reactor:
+                suspend(reactor=reactor, whenDone="not called")
+            try:
+                suspend.getResult()
+            except:
+                exc_type, exc_value, exc_traceback = exc_info()
+
+                expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+File "%(__file__)s", line 200, in testDoNextErrorReRaisedOnGetResult
+  suspend.getResult()
+File "%(suspend.py)s", line 40, in getResult
+  raise self._exception[1].with_traceback(self._exception[2])
+File "%(suspend.py)s", line 40, in __call__
+  self._doNext(self)
+File "%(__file__)s", line 196, in razor
+  1/0  # Division by zero exception
+ZeroDivisionError: division by zero
+""" % fileDict)
+                self.assertEqual(ZeroDivisionError, exc_type)
+                self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(format_exc()))
 
     def testSuspendThrowBackwardsCompatibleWithInstanceOnlyThrow_YouWillMissTracebackHistory(self):
-        reactor = Reactor(select_func=mockselect)
         suspend = Suspend()
         def handler(**httpvars):
             yield 'before suspend'
@@ -274,37 +274,38 @@ ZeroDivisionError: integer division or modulo by zero
             yield 'after suspend'
         listener = MyMockSocket()
         port = 9
-        httpserver = HttpServer(reactor, port, handler, sok=listener)
-        httpserver.listen()
-        reactor.removeReader(listener) # avoid new connections
-        httpserver._acceptor._accept()
-        reactor.step()
-        reactor.step()
-        self.assertEqual(1, len(reactor._writers))
-        reactor.step()
-        self.assertEqual(reactor, suspend._reactor)
-        self.assertEqual(0, len(reactor._writers))
-        def raiser():
-            raise ValueError("BAD VALUE")
-        try:
-            raiser()
-        except:
-            exc_value = exc_info()[1]
-            suspend.throw(exc_value)
-        reactor.step()
-        reactor.step()
-        reactor.step()
-        expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+        with Reactor(select_func=mockselect) as reactor:
+            with HttpServer(reactor, port, handler, sok=listener) as httpserver:
+                httpserver.listen()
+                reactor.removeReader(listener) # avoid new connections
+                httpserver._acceptor._accept()
+                reactor.step()
+                reactor.step()
+                self.assertEqual(1, len(reactor._writers))
+                reactor.step()
+                self.assertEqual(reactor, suspend._reactor)
+                self.assertEqual(0, len(reactor._writers))
+                def raiser():
+                    raise ValueError("BAD VALUE")
+                try:
+                    raiser()
+                except:
+                    exc_value = exc_info()[1]
+                    suspend.throw(exc_value)
+                reactor.step()
+                reactor.step()
+                reactor.step()
+                expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
   File "%(__file__)s", line 201, in handler
     suspend.getResult()
   File "%(suspend.py)s", line 62, in getResult
     raise self._exception[1].with_traceback(self._exception[2])
 ValueError: BAD VALUE
         """ % fileDict)
-        self.assertEqual(3, len(listener.data))
-        self.assertEqual(b'before suspend', listener.data[0])
-        self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1].decode('UTF-8')))
-        self.assertEqual(b'after suspend', listener.data[2])
+                self.assertEqual(3, len(listener.data))
+                self.assertEqual(b'before suspend', listener.data[0])
+                self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1].decode('UTF-8')))
+                self.assertEqual(b'after suspend', listener.data[2])
 
     def testGetResult(self):
         reactor = CallTrace('reactor')
@@ -328,23 +329,23 @@ ValueError: BAD VALUE
         self.assertRaises(ValueError, s.getResult)
 
     def testCleanUp(self):
-        reactor = Reactor(select_func=mockselect)
-        def handler():
-            reactor.suspend()
-            yield
-        reactor.addWriter(1, lambda: None)
-        reactor.addReader(2, lambda: None)
-        reactor.addReader(3, handler().__next__)
-        reactor.step()
-        self.assertTrue(1 in reactor._writers)
-        reactor.cleanup(1)
-        self.assertFalse(1 in reactor._writers)
-        self.assertTrue(2 in reactor._readers)
-        reactor.cleanup(2)
-        self.assertFalse(2 in reactor._readers)
-        self.assertTrue(3 in reactor._suspended)
-        reactor.cleanup(3)
-        self.assertFalse(3 in reactor._suspended)
+        with Reactor(select_func=mockselect) as reactor:
+            def handler():
+                reactor.suspend()
+                yield
+            reactor.addWriter(1, lambda: None)
+            reactor.addReader(2, lambda: None)
+            reactor.addReader(3, handler().__next__)
+            reactor.step()
+            self.assertTrue(1 in reactor._writers)
+            reactor.cleanup(1)
+            self.assertFalse(1 in reactor._writers)
+            self.assertTrue(2 in reactor._readers)
+            reactor.cleanup(2)
+            self.assertFalse(2 in reactor._readers)
+            self.assertTrue(3 in reactor._suspended)
+            reactor.cleanup(3)
+            self.assertFalse(3 in reactor._suspended)
 
 class MyMockSocket(object):
     def __init__(self, data=None):
