@@ -47,32 +47,35 @@ def server(port, response, expectedrequest, delay=0, loop=50):
         serverSok.listen(1)
         isListening.set()
         newSok, addr = serverSok.accept()
-        newSok.settimeout(1)
+        try:
+            newSok.settimeout(1)
 
-        msg = ''
-        for i in range(loop):
-            if expectedrequest:
-                try:
-                    msg += newSok.recv(4096).decode()
-                    if msg == expectedrequest:
-                        break
-                    if len(msg) >= len(expectedrequest):
-                        print("hihi")
-                        raise timeout
-                except timeout:
-                    print(("Received:", repr(msg)))
-                    print(("expected:", repr(expectedrequest)))
-                    return
-        if response:
-            if hasattr(response, '__next__'):
-                for r in response:
-                    newSok.send(r)
+            msg = ''
+            for i in range(loop):
+                if expectedrequest:
+                    try:
+                        msg += newSok.recv(4096).decode()
+                        if msg == expectedrequest:
+                            break
+                        if len(msg) >= len(expectedrequest):
+                            print("hihi")
+                            raise timeout
+                    except timeout:
+                        print(("Received:", repr(msg)))
+                        print(("expected:", repr(expectedrequest)))
+                        return
+            if response:
+                if hasattr(response, '__next__'):
+                    for r in response:
+                        newSok.send(r)
+                else:
+                    newSok.send(response.encode())
+                sleep(delay)
+                newSok.close()
             else:
-                newSok.send(response.encode())
-            sleep(delay)
+                sleep(0.5)
+        finally:
             newSok.close()
-        else:
-            sleep(0.5)
         serverSok.close()
 
     thread=Thread(None, serverProcess)
@@ -156,10 +159,11 @@ class HttpReaderTest(TestCase):
                 errorArgs.append(exception)
         def error(exception):
             errorArgs.append(exception)
-        reader = HttpReader(reactor, Connector(reactor, 'localhost', port), Handler(), "GET", "localhost", "/", timeout=0.01)
-        reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
-        while not errorArgs:
-            reactor.step()
+        with Connector(reactor, "localhost", port) as connector:
+            reader = HttpReader(reactor, connector, Handler(), "GET", "localhost", "/", timeout=0.01)
+            reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
+            while not errorArgs:
+                reactor.step()
         serverThread.join()
         self.assertEqual('timeout while receiving data', str(errorArgs[0]))
 
@@ -204,7 +208,7 @@ class HttpReaderTest(TestCase):
     def testPost(self):
         port = randint(2048, 4096)
         reactor = Reactor()
-        request = "POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nSOAPAction: blah\r\nUser-Agent: Weightless/v%s\r\n\r\n1\r\nA\r\n1\r\nB\r\n1\r\nC\r\n0\r\n\r\n" % WlVersion
+        request = "POST / HTTP/1.1\r\nHost: localhost\r\nSOAPAction: blah\r\nTransfer-Encoding: chunked\r\nUser-Agent: Weightless/v%s\r\n\r\n1\r\nA\r\n1\r\nB\r\n1\r\nC\r\n0\r\n\r\n" % WlVersion
         serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\nresponse", request, loop=9)
         sentData = []
         done = []
@@ -227,7 +231,7 @@ class HttpReaderTest(TestCase):
 
         self.assertEqual(['response'], sentData[1:])
         self.assertEqual('200', sentData[0]['StatusCode'])
-        expected = 'POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nSOAPAction: blah\r\nUser-Agent: Weightless/v%s\r\n\r\n' % WlVersion + '1\r\nA\r\n' + '1\r\nB\r\n' + '1\r\nC\r\n' + '0\r\n\r\n'
+        expected = 'POST / HTTP/1.1\r\nHost: localhost\r\nSOAPAction: blah\r\nTransfer-Encoding: chunked\r\nUser-Agent: Weightless/v%s\r\n\r\n' % WlVersion + '1\r\nA\r\n' + '1\r\nB\r\n' + '1\r\nC\r\n' + '0\r\n\r\n'
         self.assertEqual(expected, "".join(request))
 
     def testWriteChunks(self):

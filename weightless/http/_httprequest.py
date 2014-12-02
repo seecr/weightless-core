@@ -116,49 +116,54 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
                 # end hotfix
             finally:
                 suspend._reactor.removeReader(sok)
-
-        if ssl:
-            sok = yield _sslHandshake(sok, this, suspend, prio)
-
-        suspend._reactor.addWriter(sok, this.next, prio=prio)
-        yield
         try:
-            # error checking
-            if body:
-                data = body
-                if type(data) is str:
-                    data = data.encode()
-                headers.update({'Content-Length': len(data)})
-            yield _sendHttpHeaders(sok, method, request, headers)
-            if body:
-                yield _asyncSend(sok, data)
-        finally:
-            suspend._reactor.removeWriter(sok)
-        suspend._reactor.addReader(sok, this.__next__, prio=prio)
-        responses = []
-        try:
-            while True:
+            if ssl:
+                sok = yield _sslHandshake(sok, this, suspend, prio)
+
+            suspend._reactor.addWriter(sok, this.next, prio=prio)
+            try:
                 yield
-                try:
-                    response = sok.recv(4096) # error checking
-                except SSLError as e:
-                    if e.errno != SSL_ERROR_WANT_READ:
-                        raise
-                    continue
-                if response == b'':
-                    break
+                err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
+                if err != 0:    # connection created succesfully?
+                    raise IOError(err)
+                yield
+                # error checking
+                if body:
+                    data = body
+                    if type(data) is str:
+                        data = data.encode()
+                    headers.update({'Content-Length': len(data)})
+                yield _sendHttpHeaders(sok, method, request, headers)
+                if body:
+                    yield _asyncSend(sok, data)
+            finally:
+                suspend._reactor.removeWriter(sok)
+            suspend._reactor.addReader(sok, this.__next__, prio=prio)
+            responses = []
+        
+            try:
+                while True:
+                    yield
+                    try:
+                        response = sok.recv(4096) # error checking
+                    except SSLError as e:
+                        if e.errno != SSL_ERROR_WANT_READ:
+                            raise
+                        continue
+                    if response == b'':
+                        break
 
-                if handlePartialResponse:
-                    handlePartialResponse(response)
-                else:
-                    responses.append(response)
-        finally:
-            suspend._reactor.removeReader(sok)
-        # sok.shutdown(SHUT_RDWR)
-        sok.close()
-        suspend.resume(None if handlePartialResponse else b''.join(responses))
-    except Exception:
-        suspend.throw(*exc_info())
+                    if handlePartialResponse:
+                        handlePartialResponse(response)
+                    else:
+                        responses.append(response)
+            finally:
+                suspend._reactor.removeReader(sok)
+            # sok.shutdown(SHUT_RDWR)
+            sok.close()
+            suspend.resume(None if handlePartialResponse else b''.join(responses))
+        except Exception:
+            suspend.throw(*exc_info())
     # Uber finally: sok.close() from line 108
     yield
 

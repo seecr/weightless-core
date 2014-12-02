@@ -32,6 +32,7 @@ from errno import EBADF, EINTR
 from weightless.core import local
 from os import pipe, close, write, read
 from functools import cmp_to_key
+from sys import stdout
 
 def reactor():
     return local('__reactor__')
@@ -61,7 +62,7 @@ class Reactor(object):
     MAXPRIO = 10
     DEFAULTPRIO = 0
 
-    def __init__(self, select_func = select):
+    def __init__(self, select_func=select, log=stdout):
         self._readers = {}
         self._writers = {}
         self._suspended = {}
@@ -69,10 +70,17 @@ class Reactor(object):
         self._timers = []
         self._select = select_func
         self._prio = -1
+        self._log = log
         self._processReadPipe, self._processWritePipe = pipe()
 
     def __del__(self):
         self._closeProcessPipe()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self ,type, value, traceback):
+        self.shutdown()
 
     def addReader(self, sok, sink, prio=None):
         """Adds a socket and calls sink() when the socket becomes readable. It remains at the readers list."""
@@ -150,10 +158,10 @@ class Reactor(object):
             for handle in list(contextDict.keys()):
                 contextDict.pop(handle)
                 if hasattr(handle, 'close'):
-                    print('Reactor shutdown: closing', handle)
+                    print('Reactor shutdown: closing',  handle, file=self._log, flush=True)
                     handle.close()
                 else:
-                    print('Reactor shutdown: terminating %s' % handle)
+                    print('Reactor shutdown: terminating', handle, file=self._log, flush=True)
         self._closeProcessPipe()
 
     def loop(self):

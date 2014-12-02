@@ -167,7 +167,10 @@ class WeightlessTestCase(TestCase):
 
     def referenceHttpServer(self, port, request, ssl=False, streamingData=None):
         def server(httpd):
-            httpd.serve_forever()
+            try:
+                httpd.serve_forever()
+            finally:
+                httpd.shutdown()
         class Handler(BaseHTTPRequestHandler):
             def log_message(*args, **kwargs):
                 pass
@@ -207,6 +210,7 @@ class WeightlessTestCase(TestCase):
         thread=Thread(None, lambda: server(httpd))
         thread.daemon = True
         thread.start()
+        return thread
 
     def proxyServer(self, port, request):
         def server(httpd):

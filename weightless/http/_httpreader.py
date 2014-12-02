@@ -94,7 +94,7 @@ class HttpReader(object):
         self._sok.sendall((
             FORMAT.RequestLine % {'Method': 'POST', 'Request_URI': path, 'HTTPVersion':'1.1'}
             + FORMAT.HostHeader % {'Host': host}
-            + ''.join(FORMAT.Header % header for header in list(headers.items()))
+            + ''.join(FORMAT.Header % header for header in sorted(headers.items()))
             + FORMAT.UserAgentHeader
             + HTTP.CRLF).encode())
         item = next(self._handler)

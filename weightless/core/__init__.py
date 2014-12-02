@@ -49,25 +49,25 @@ elif hasattr(platform, 'system'):
 else:
     cpython = False
 
-# try:
-from os import getenv
-if getenv('WEIGHTLESS_COMPOSE_TEST') == 'PYTHON':
-    raise ImportError('Python compose for testing purposes')
-from .ext import compose as _compose, local, tostring, Yield, is_generator, DeclineMessage
-cextension = True
-ComposeType = _compose
-# except ImportError as e:
-#     from warnings import warn
-#     warn("Using Python version of compose(), local() and tostring()", stacklevel=2)
-#     def is_generator(o):
-#         return type(o) is GeneratorType
-#     class DeclineMessage(Exception):
-#         pass
-#     from ._compose_py import compose as _compose, Yield
-#     from ._local_py import local
-#     from ._tostring_py import tostring
-#     cextension = False
-#     ComposeType = GeneratorType
+try:
+    from os import getenv
+    if getenv('WEIGHTLESS_COMPOSE_TEST') == 'PYTHON':
+        raise ImportError('Python compose for testing purposes')
+    from .ext import compose as _compose, local, tostring, Yield, is_generator, DeclineMessage
+    cextension = True
+    ComposeType = _compose
+except ImportError as e:
+    from warnings import warn
+    warn("Using Python version of compose(), local() and tostring()", stacklevel=2)
+    def is_generator(o):
+        return type(o) is GeneratorType
+    class DeclineMessage(Exception):
+        pass
+    from ._compose_py import compose as _compose, Yield
+    from ._local_py import local
+    from ._tostring_py import tostring
+    cextension = False
+    ComposeType = GeneratorType
 
 def compose(X, *args, **kwargs):
     if type(X) == FunctionType: # compose used as decorator
