@@ -28,7 +28,7 @@ from unittest import TestCase
 from sys import stdout, exc_info, getrecursionlimit, version_info
 from types import GeneratorType
 
-from weightless.core import autostart, cpython
+from weightless.core import autostart, cpython, cextension
 from weightless.core._compose_py import __file__ as  _compose_py_module_file
 from weightless.core._compose_py import compose as pyCompose
 from weightless.core._compose_py import Yield as pyYield
@@ -203,7 +203,22 @@ class _ComposeSchedulingTest(TestCase):
             cLine = __NEXTLINE__()
             c.send('data')
         except Exception:
-            stackText = """\
+            if cextension:
+                stackText = """\
+Traceback (most recent call last):
+  File "%%(__file__)s", line %(cLine)s, in testExceptionOnSendData_TransparentStepping
+    c.send('data')
+  File "%%(__file__)s", line %(gLine)s, in g
+    yield f()  # first Yield
+  File "%%(__file__)s", line %(fLine)s, in f
+    yield Yield  # second Yield
+AssertionError: Cannot accept data. First send None.\n""" % {
+                'cLine': cLine,
+                'fLine': fLine,
+                'gLine': gLine,
+            } % fileDict
+            else:
+                stackText = """\
 Traceback (most recent call last):
   File "%%(__file__)s", line %(cLine)s, in testExceptionOnSendData_TransparentStepping
     c.send('data')
@@ -242,7 +257,22 @@ AssertionError: Cannot accept data. First send None.\n""" % {
             cLine = __NEXTLINE__()
             c.throw(Exception("tripping compose"))
         except Exception:
-            stackText = """\
+            if cextension:
+                stackText = """\
+Traceback (most recent call last):
+  File "%%(__file__)s", line %(cLine)s, in testExceptionThrownInCompose_TransparentStepping
+    c.throw(Exception("tripping compose"))
+  File "%%(__file__)s", line %(gLine)s, in g
+    yield f()  # first Yield
+  File "%%(__file__)s", line %(fLine)s, in f
+    yield Yield  # second Yield
+Exception: tripping compose\n""" % {
+                'cLine': cLine,
+                'fLine': fLine,
+                'gLine': gLine,
+            } % fileDict
+            else:
+                stackText = """\
 Traceback (most recent call last):
   File "%%(__file__)s", line %(cLine)s, in testExceptionThrownInCompose_TransparentStepping
     c.throw(Exception("tripping compose"))
@@ -305,8 +335,20 @@ Exception: tripping compose\n""" % {
             next(composed)
         except AssertionError as e:
             self.assertEqual('Generator already used.', str(e))
-        
-            stackText = """\
+            if cextension:
+                stackText = """\
+Traceback (most recent call last):
+  File "%(__file__)s", line %(cLine)s, in testUnsuitableGeneratorTracebackBeforeStepping
+    next(composed)
+  File "%(__file__)s", line %(genYieldLine)s, in gen
+    yield genF
+AssertionError: Generator already used.\n""" % {
+                '__file__': fileDict['__file__'],
+                'cLine': cLine,
+                'genYieldLine': genYieldLine,
+            }
+            else:
+                stackText = """\
 Traceback (most recent call last):
   File "%(__file__)s", line %(cLine)s, in testUnsuitableGeneratorTracebackBeforeStepping
     next(composed)
@@ -340,7 +382,24 @@ AssertionError: Generator already used.\n""" % {
             cLine = __NEXTLINE__()
             c.throw(Exception("tripping compose"))
         except Exception:
-            stackText = """\
+            if cextension:
+                stackText = """\
+Traceback (most recent call last):
+  File "%(__file__)s", line %(cLine)s, in testExceptionThrownInCompose
+    c.throw(Exception("tripping compose"))
+  File "%(__file__)s", line %(gLine)s, in g
+    yield f()
+  File "%(__file__)s", line %(fLine)s, in f
+    def f():
+Exception: tripping compose\n""" % {
+                '__file__': fileDict['__file__'],
+                'cLine': cLine,
+                'gLine': gLine,
+                'fLine': fLine,
+            }
+                pass
+            else:
+                stackText = """\
 Traceback (most recent call last):
   File "%(__file__)s", line %(cLine)s, in testExceptionThrownInCompose
     c.throw(Exception("tripping compose"))
