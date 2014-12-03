@@ -27,7 +27,7 @@ from unittest import TestCase
 from sys import stdout, exc_info, getrecursionlimit
 import gc
 from types import GeneratorType
-from weightless.core import autostart, cpython
+from weightless.core import autostart, cpython, cextension
 from weightless.core._local_py import local as pyLocal
 from weightless.core._compose_py import __file__ as  _compose_py_module_file
 from weightless.core._compose_py import compose as pyCompose
@@ -61,7 +61,10 @@ class _ComposeTest(TestCase):
             compose()
             self.fail()
         except TypeError as e:
-            self.assertTrue("compose() missing 1 required positional argument: 'initial'" in str(e))
+            if cextension:
+                self.assertTrue("Required argument 'initial' (pos 1) not found" in str(e), str(e))
+            else:
+                self.assertTrue("compose() missing 1 required positional argument: 'initial'" in str(e), str(e))
         self.assertRaises(TypeError, compose, 's')
         self.assertRaises(TypeError, compose, 0)
 
@@ -678,8 +681,12 @@ class _ComposeTest(TestCase):
         except Exception:
             exType, exValue, exTraceback = exc_info()
             self.assertEqual('testExceptionsHaveGeneratorCallStackAsBackTrace', exTraceback.tb_frame.f_code.co_name)
-            self.assertEqual('g', exTraceback.tb_next.tb_next.tb_frame.f_code.co_name)
-            self.assertEqual('f', exTraceback.tb_next.tb_next.tb_next.tb_next.tb_frame.f_code.co_name)
+            if cextension:
+                self.assertEqual('g', exTraceback.tb_next.tb_frame.f_code.co_name)
+                self.assertEqual('f', exTraceback.tb_next.tb_next.tb_frame.f_code.co_name)
+            else:
+                self.assertEqual('g', exTraceback.tb_next.tb_next.tb_frame.f_code.co_name)
+                self.assertEqual('f', exTraceback.tb_next.tb_next.tb_next.tb_next.tb_frame.f_code.co_name)
 
     def testToStringForSimpleGenerator(self):
         line = __NEXTLINE__()
@@ -1124,7 +1131,20 @@ class _ComposeTest(TestCase):
             next(composed)
         except AssertionError as e:
             self.assertEqual('Generator already used.', str(e))
-            stackText = """\
+            if cextension:
+                stackText = """\
+Traceback (most recent call last):
+  File "%(__file__)s", line %(cLine)s, in testUnsuitableGeneratorTraceback
+    next(composed)
+  File "%(__file__)s", line %(genYieldLine)s, in gen
+    yield genF
+AssertionError: Generator already used.\n""" % {
+                '__file__': fileDict['__file__'],
+                'cLine': cLine,
+                'genYieldLine': genYieldLine,
+            }
+            else:
+                stackText = """\
 Traceback (most recent call last):
   File "%(__file__)s", line %(cLine)s, in testUnsuitableGeneratorTraceback
     next(composed)
