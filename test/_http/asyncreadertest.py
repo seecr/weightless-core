@@ -34,7 +34,8 @@ from re import sub
 from .httpreadertest import server as testserver
 from weightless.http import HttpServer, httpget, httppost, httpspost, httpsget
 from weightless.io import Reactor, Suspend
-from weightless.core import compose
+from weightless.core import compose, cextension
+from weightless.core._compose_py import __file__ as  _compose_py_module_file
 
 from weightless.http._httprequest import _requestLine
 from weightless.http import _httprequest as httpRequestModule
@@ -105,7 +106,8 @@ class AsyncReaderTest(WeightlessTestCase):
 TypeError: an integer is required
        """ % fileDict)
 
-        expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+        if cextension:
+            expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
   File "%(httprequest.py)s", line [#], in _do
     sok.connect((host, port))
 TypeError: an integer is required (got type str)
@@ -123,6 +125,35 @@ Traceback (most recent call last):
     raise self._exception[1].with_traceback(self._exception[2])
   File "%(suspend.py)s", line [#], in __call__
     self._doNext(self)
+  File "%(httprequest.py)s", line [#], in _do
+    (errno, msg) = error.args
+ValueError: need more than 1 value to unpack
+        """ % fileDict)
+        else:
+            expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+  File "%(httprequest.py)s", line [#], in _do
+    sok.connect((host, port))
+TypeError: an integer is required (got type str)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "%(__file__)s", line [#], in handle
+    yield self.handler(*args, **kwargs)
+  File "%(compose.py)s", line [#], in _compose
+    response = generator.throw(exception[1])
+  File "%(__file__)s", line [#], in failingserver
+    response = yield httpget(*target)
+  File "%(compose.py)s", line [#], in _compose
+    response = generator.send(message)
+  File "%(httprequest.py)s", line [#], in _httpRequest
+    result = s.getResult()
+  File "%(suspend.py)s", line [#], in getResult
+    raise self._exception[1].with_traceback(self._exception[2])
+  File "%(suspend.py)s", line [#], in __call__
+    self._doNext(self)
+  File "%(compose.py)s", line [#], in _compose
+    raise exception[1].with_traceback(exception[2])
   File "%(httprequest.py)s", line [#], in _do
     (errno, msg) = error.args
 ValueError: need more than 1 value to unpack
@@ -147,7 +178,7 @@ ValueError: need more than 1 value to unpack
         self.assertEqual(IOError, self.error[0])
         self.assertEqual('111', str(self.error[1]))
 
-    @stdout_replaced
+    #@stdout_replaced
     def testTracebackPreservedAcrossSuspend(self):
         backofficeport = self.port + 1
         expectedrequest = ''
@@ -169,8 +200,8 @@ ValueError: need more than 1 value to unpack
             clientget('localhost', self.port, '/').close()
             with stderr_replaced():
                 self._loopReactorUntilDone()
-
-            expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+            if cextension:     
+                expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
   File "%(__file__)s", line 0, in handle
       yield self.handler(*args, **kwargs)
   File "%(__file__)s", line 192, in failingserver
@@ -181,6 +212,29 @@ ValueError: need more than 1 value to unpack
     raise self._exception[1].with_traceback(self._exception[2])
   File "%(httprequest.py)s", line 83, in _do
     yield _sendHttpHeaders(sok, method, request, headers)
+  File "%(httprequest.py)s", line 121, in _sendHttpHeaders
+    data = _requestLine(method, request)
+  File "%(__file__)s", line 198, in requestLine
+    raise RuntimeError("Boom!")
+RuntimeError: Boom!""" % fileDict)
+            else:
+                expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+  File "%(__file__)s", line 0, in handle
+      yield self.handler(*args, **kwargs)
+  File "%(compose.py)s", line 97, in _compose
+    response = generator.throw(exception[1])
+  File "%(__file__)s", line 192, in failingserver
+    response = yield httpget(*target)
+  File "%(compose.py)s", line 101, in _compose
+    response = generator.send(message)
+  File "%(httprequest.py)s", line 129, in _httpRequest
+    result = s.getResult()
+  File "%(suspend.py)s", line [#], in getResult
+    raise self._exception[1].with_traceback(self._exception[2])
+  File "%(httprequest.py)s", line 83, in _do
+    yield _sendHttpHeaders(sok, method, request, headers)
+  File "%(compose.py)s", line 101, in _compose
+    response = generator.send(message)
   File "%(httprequest.py)s", line 121, in _sendHttpHeaders
     data = _requestLine(method, request)
   File "%(__file__)s", line 198, in requestLine
@@ -404,6 +458,7 @@ fileDict = {
     '__file__': clientget.__code__.co_filename,
     'suspend.py': Suspend.__call__.__code__.co_filename,
     'httprequest.py': _requestLine.__code__.co_filename,
+    'compose.py': _compose_py_module_file,
 }
 
 def ignoreLineNumbers(s):
