@@ -37,7 +37,6 @@ if cextension:
 
 from collections import defaultdict
 
-
 class NoneOfTheObserversRespond(Exception):
     """Must not be thrown anywhere outside of the Observable
     implementation. It is exposed only so that it can be caught in
