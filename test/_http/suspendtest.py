@@ -52,7 +52,7 @@ class SuspendTest(WeightlessTestCase):
 
     def testReactorSuspend(self):
         handle = ['initial value']
-        with Reactor(select_func=mockselect) as reactor:
+        with Reactor(select_func=mockselect, log=StringIO()) as reactor:
             def callback():
                 handle[0] = reactor.suspend()
             sok = MockSocket()
@@ -120,7 +120,7 @@ class SuspendTest(WeightlessTestCase):
             self.assertRaises(KeyError, reactor.resumeProcess, handle[0])
 
     def testWrongUseAfterSuspending(self):
-        with Reactor(select_func=mockselect) as reactor:
+        with Reactor(select_func=mockselect, log=StringIO()) as reactor:
             handle = ['initial value']
             def callback():
                 handle[0] = reactor.suspend()
