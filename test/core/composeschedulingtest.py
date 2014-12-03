@@ -207,10 +207,16 @@ class _ComposeSchedulingTest(TestCase):
 Traceback (most recent call last):
   File "%%(__file__)s", line %(cLine)s, in testExceptionOnSendData_TransparentStepping
     c.send('data')
+  File "%%(compose_py)s", line 139, in _compose
+    raise exception[1].with_traceback(exception[2])
   File "%%(__file__)s", line %(gLine)s, in g
     yield f()  # first Yield
+  File "%%(compose_py)s", line 97, in _compose
+    response = generator.throw(exception[1])
   File "%%(__file__)s", line %(fLine)s, in f
     yield Yield  # second Yield
+  File "%%(compose_py)s", line 119, in _compose
+    assert message is None or response is None, 'Cannot accept data. First send None.'
 AssertionError: Cannot accept data. First send None.\n""" % {
                 'cLine': cLine,
                 'fLine': fLine,
@@ -240,10 +246,16 @@ AssertionError: Cannot accept data. First send None.\n""" % {
 Traceback (most recent call last):
   File "%%(__file__)s", line %(cLine)s, in testExceptionThrownInCompose_TransparentStepping
     c.throw(Exception("tripping compose"))
+  File "%%(compose_py)s", line 139, in _compose
+    raise exception[1].with_traceback(exception[2])
   File "%%(__file__)s", line %(gLine)s, in g
     yield f()  # first Yield
+  File "%%(compose_py)s", line 97, in _compose
+    response = generator.throw(exception[1])
   File "%%(__file__)s", line %(fLine)s, in f
     yield Yield  # second Yield
+  File "%%(compose_py)s", line 118, in _compose
+    message = yield response
 Exception: tripping compose\n""" % {
                 'cLine': cLine,
                 'fLine': fLine,
@@ -298,10 +310,15 @@ Exception: tripping compose\n""" % {
 Traceback (most recent call last):
   File "%(__file__)s", line %(cLine)s, in testUnsuitableGeneratorTracebackBeforeStepping
     next(composed)
+  File "%(compose_py)s", line 139, in _compose
+    raise exception[1].with_traceback(exception[2])
   File "%(__file__)s", line %(genYieldLine)s, in gen
     yield genF
+  File "%(compose_py)s", line 106, in _compose
+    if cpython: assert frame.f_lineno == frame.f_code.co_firstlineno, 'Generator already used.'
 AssertionError: Generator already used.\n""" % {
                 '__file__': fileDict['__file__'],
+                'compose_py': fileDict['compose_py'],
                 'cLine': cLine,
                 'genYieldLine': genYieldLine,
             }
@@ -327,10 +344,16 @@ AssertionError: Generator already used.\n""" % {
 Traceback (most recent call last):
   File "%(__file__)s", line %(cLine)s, in testExceptionThrownInCompose
     c.throw(Exception("tripping compose"))
+  File "%(compose_py)s", line 139, in _compose
+    raise exception[1].with_traceback(exception[2])
   File "%(__file__)s", line %(gLine)s, in g
     yield f()
+  File "%(compose_py)s", line 97, in _compose
+    response = generator.throw(exception[1])
   File "%(__file__)s", line %(fLine)s, in f
     def f():
+  File "%(compose_py)s", line 109, in _compose
+    _ = yield Yield
 Exception: tripping compose\n""" % {
                 '__file__': fileDict['__file__'],
                 'cLine': cLine,

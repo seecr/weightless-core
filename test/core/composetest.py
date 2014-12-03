@@ -29,6 +29,7 @@ import gc
 from types import GeneratorType
 from weightless.core import autostart, cpython
 from weightless.core._local_py import local as pyLocal
+from weightless.core._compose_py import __file__ as  _compose_py_module_file
 from weightless.core._compose_py import compose as pyCompose
 from weightless.core._tostring_py import tostring as pyTostring
 try:
@@ -42,7 +43,8 @@ from inspect import currentframe
 from traceback import format_exc
 
 fileDict = {
-    '__file__' : __file__.replace(".pyc", ".py").replace("$py.class", ".py")
+    '__file__' : __file__.replace(".pyc", ".py").replace("$py.class", ".py"),
+    '_compose_py': _compose_py_module_file,
 }
 
 def __NEXTLINE__(offset=0):
@@ -59,10 +61,7 @@ class _ComposeTest(TestCase):
             compose()
             self.fail()
         except TypeError as e:
-            self.assertTrue(
-                    "compose() takes at least 1 argument (0 given)" in str(e)
-                    or # (python 2.5/2.6 C-API differences)
-                    "Required argument 'initial' (pos 1) not found" in str(e))
+            self.assertTrue("compose() missing 1 required positional argument: 'initial'" in str(e))
         self.assertRaises(TypeError, compose, 's')
         self.assertRaises(TypeError, compose, 0)
 
@@ -679,8 +678,8 @@ class _ComposeTest(TestCase):
         except Exception:
             exType, exValue, exTraceback = exc_info()
             self.assertEqual('testExceptionsHaveGeneratorCallStackAsBackTrace', exTraceback.tb_frame.f_code.co_name)
-            self.assertEqual('g', exTraceback.tb_next.tb_frame.f_code.co_name)
-            self.assertEqual('f', exTraceback.tb_next.tb_next.tb_frame.f_code.co_name)
+            self.assertEqual('g', exTraceback.tb_next.tb_next.tb_frame.f_code.co_name)
+            self.assertEqual('f', exTraceback.tb_next.tb_next.tb_next.tb_next.tb_frame.f_code.co_name)
 
     def testToStringForSimpleGenerator(self):
         line = __NEXTLINE__()
@@ -1125,15 +1124,19 @@ class _ComposeTest(TestCase):
             next(composed)
         except AssertionError as e:
             self.assertEqual('Generator already used.', str(e))
-
             stackText = """\
 Traceback (most recent call last):
   File "%(__file__)s", line %(cLine)s, in testUnsuitableGeneratorTraceback
     next(composed)
+  File "%(_compose_py)s", line 139, in _compose
+    raise exception[1].with_traceback(exception[2])
   File "%(__file__)s", line %(genYieldLine)s, in gen
     yield genF
+  File "%(_compose_py)s", line 106, in _compose
+    if cpython: assert frame.f_lineno == frame.f_code.co_firstlineno, 'Generator already used.'
 AssertionError: Generator already used.\n""" % {
                 '__file__': fileDict['__file__'],
+                '_compose_py': fileDict['_compose_py'],
                 'cLine': cLine,
                 'genYieldLine': genYieldLine,
             }
