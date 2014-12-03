@@ -152,16 +152,16 @@ class ObservableTest(TestCase):
             next(g)
             self.fail("Should not happen")
         except AssertionError as e:
-            self.assertTrue("<bound method A.f of <core.observabletest.A object at 0x" in str(e), str(e))
+            self.assertTrue("<bound method A.f of <core.observabletest.ObservableTest.testAllAssertsResultOfCallIsGeneratorOrComposed.<locals>.A object at 0x" in str(e), str(e))
             self.assertTrue(">> should have resulted in a generator." in str(e), str(e))
-            self.assertFunctionsOnTraceback("testAllAssertsResultOfCallIsGeneratorOrComposed", "_compose", "all_unknown", "verifyMethodResult")
+            self.assertFunctionsOnTraceback("testAllAssertsResultOfCallIsGeneratorOrComposed", "_compose", "all", "_compose", "all_unknown", "_compose", "all", "verifyMethodResult")
 
         g = compose(root.all.undefinedMethod())
         try:
             next(g)
             self.fail("Should not happen")
         except AssertionError as e:
-            self.assertTrue("<bound method A.all_unknown of <core.observabletest.A object at 0x" in str(e), str(e))
+            self.assertTrue("<bound method A.all_unknown of <core.observabletest.ObservableTest.testAllAssertsResultOfCallIsGeneratorOrComposed.<locals>.A object at 0x" in str(e), str(e))
             self.assertTrue(">> should have resulted in a generator." in str(e), str(e))
 
     def testOnceAssertsNoneReturnValues(self):
@@ -288,14 +288,14 @@ class ObservableTest(TestCase):
             next(compose(root.any.f()))
             self.fail('Should not happen')
         except AssertionError as e:
-            self.assertTrue("<bound method A.f of <core.observabletest.A object at 0x" in str(e), str(e))
+            self.assertTrue("<bound method A.f of <core.observabletest.ObservableTest.testAnyAssertsResultOfCallIsGeneratorOrComposed.<locals>.A object at 0x" in str(e), str(e))
             self.assertTrue(">> should have resulted in a generator." in str(e), str(e))
 
         try:
             next(compose(root.any.undefinedMethod()))
             self.fail('Should not happen')
         except AssertionError as e:
-            self.assertTrue("<bound method A.any_unknown of <core.observabletest.A object at 0x" in str(e), str(e))
+            self.assertTrue("<bound method A.any_unknown of <core.observabletest.ObservableTest.testAnyAssertsResultOfCallIsGeneratorOrComposed.<locals>.A object at 0x" in str(e), str(e))
             self.assertTrue(">> should have resulted in a generator." in str(e), str(e))
 
     def testAnyViaUnknown(self):
@@ -356,14 +356,14 @@ class ObservableTest(TestCase):
             root.do.f()
             self.fail('Should not happen')
         except AssertionError as e:
-            self.assertTrue("<bound method A.f of <core.observabletest.A object at 0x" in str(e), str(e))
+            self.assertTrue("<bound method A.f of <core.observabletest.ObservableTest.testDoAssertsIndividualCallsReturnNone.<locals>.A object at 0x" in str(e), str(e))
             self.assertTrue(">> returned '<generator object" in str(e), str(e))
 
         try:
             root.do.undefinedMethod()
             self.fail('Should not happen')
         except AssertionError as e:
-            self.assertTrue("<bound method A.do_unknown of <core.observabletest.A object at 0x" in str(e), str(e))
+            self.assertTrue("<bound method A.do_unknown of <core.observabletest.ObservableTest.testDoAssertsIndividualCallsReturnNone.<locals>.A object at 0x" in str(e), str(e))
             self.assertTrue(">> returned '42'" in str(e), str(e))
 
     def testUnknownDispatchingNoImplementation(self):
@@ -435,7 +435,12 @@ class ObservableTest(TestCase):
             answer = list(compose(observable.any.gimmeAnswer('please')))
             self.fail('should raise NoneOfTheObserversRespond')
         except NoneOfTheObserversRespond as e:
-            self.assertFunctionsOnTraceback("testProperErrorMessage", "any")
+            stack = \
+                ['testProperErrorMessage', '_compose', 'any']
+            if cextension:
+                stack = \
+                    ["testProperErrorMessage", "any"]
+            self.assertFunctionsOnTraceback(*stack)
             self.assertEqual('None of the 0 observers respond to gimmeAnswer(...)', str(e))
 
     def testProperErrorMessageWhenArgsDoNotMatch(self):
@@ -560,8 +565,13 @@ class ObservableTest(TestCase):
             #    ['testTransparentUnknownImplementationIsVisibleOnTraceback'] + \
             #        ['call_unknown'] + \
             #            ['aCall']
-
             stack = \
+                ['testTransparentUnknownImplementationIsVisibleOnTraceback'] + \
+                    ['call', 'any', 'all'] + \
+                        ['call_unknown', 'unknown'] + \
+                            ['call', 'any', 'all', 'aCall']                            
+            if cextension:
+                stack = \
                 ['testTransparentUnknownImplementationIsVisibleOnTraceback'] + \
                     ['call', 'any'] + \
                         ['call_unknown', 'unknown'] + \
@@ -574,6 +584,12 @@ class ObservableTest(TestCase):
         except RuntimeError:
             stack = \
                 ['testTransparentUnknownImplementationIsVisibleOnTraceback'] + \
+                    ['_compose', 'any', '_compose', 'any_unknown'] + \
+                        ['_compose', 'any', '_compose', 'aAny'] + \
+                            ['_compose', 'lookBusy']
+            if cextension:
+                stack = \
+                ['testTransparentUnknownImplementationIsVisibleOnTraceback'] + \
                     ['any', 'any_unknown'] + \
                         ['any', 'aAny'] + \
                             ['lookBusy']
@@ -583,13 +599,25 @@ class ObservableTest(TestCase):
             next(compose(root.all.aAll()))
             self.fail('Should not happen')
         except RuntimeError:
-            self.assertFunctionsOnTraceback('testTransparentUnknownImplementationIsVisibleOnTraceback', 'all_unknown', 'aAll')
+            stack = \
+                ['testTransparentUnknownImplementationIsVisibleOnTraceback'] + \
+                    ['_compose', 'all'] + \
+                        ['_compose', 'all_unknown', ] + \
+                            ['_compose', 'all', '_compose', 'aAll']
+            if cextension:
+                stack = ['testTransparentUnknownImplementationIsVisibleOnTraceback', 'all_unknown', 'aAll']
+            self.assertFunctionsOnTraceback(*stack)
 
         try:
             root.do.aDo()
             self.fail('Should not happen')
         except RuntimeError:
             stack = \
+                ['testTransparentUnknownImplementationIsVisibleOnTraceback'] + \
+                    ['do', 'all', 'do_unknown'] + \
+                        ['unknown', 'do', 'all', 'aDo']
+            if cextension:
+                stack = \
                 ['testTransparentUnknownImplementationIsVisibleOnTraceback'] + \
                     ['do', 'do_unknown'] + \
                         ['unknown', 'do', 'aDo']
@@ -606,42 +634,60 @@ class ObservableTest(TestCase):
         try:
             list(compose(observable.any.a()))
         except Exception:
-            self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "any", "a")
+            if cextension:
+                self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "any", "a")
+            else:
+                self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "_compose", "any", "all", "a")
         else:
             self.fail('Should not happen.')
 
         try:
             list(compose(observable.all.a()))
         except Exception:
-            self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "a")
+            if cextension:
+                self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "a")
+            else:
+                self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "_compose", "all", "a")
         else:
             self.fail('Should not happen.')
 
         try:
             observable.do.a()
         except Exception:
-            self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "do", "a")
+            if cextension:
+                self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "do", "a")
+            else:
+                self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "do", "all", "a")
         else:
             self.fail('Should not happen.')
 
         try:
             observable.call.a()
         except Exception:
-            self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "call", "any", "a")
+            if cextension:
+                self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "call", "any", "a")
+            else:
+                self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "call", "any", "all", "a")
         else:
             self.fail('Should not happen.')
 
         try:
             list(compose(observable.any.unknown('a')))
         except Exception:
-            self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "any", "a")
+            if cextension:
+                self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "any", "a")
+            else:
+                self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "_compose", "any", "all", "a")
         else:
             self.fail('Should not happen.')
 
         try:
             list(compose(observable.any.somethingNotThereButHandledByUnknown('a')))
         except Exception:
-            self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "any", "any_unknown", "a")
+            if cextension:
+                self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "any", "any_unknown", "a")
+            else:
+                self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "_compose", "any", "_compose", "any_unknown", "a")
         else:
             self.fail('Should not happen.')
 
@@ -664,7 +710,10 @@ class ObservableTest(TestCase):
             a.a()
             self.fail('should raise exception')
         except:
-            self.assertFunctionsOnTraceback("testMoreElaborateExceptionCleaning", "a", "call", "any", "b", "call", "any", "c", "call", "any", "d")
+            if cextension:
+                self.assertFunctionsOnTraceback("testMoreElaborateExceptionCleaning", "a", "call", "any", "b", "call", "any", "c", "call", "any", "d")
+            else:
+                self.assertFunctionsOnTraceback("testMoreElaborateExceptionCleaning", "a", "call", "any", "all", "b", "call", "any", "all", "c", "call", "any", "all", "d")
 
     def testObserverInit(self):
         initcalled = [0]
@@ -861,10 +910,17 @@ class ObservableTest(TestCase):
             list(compose(root.once.raisesOnCallGenerator()))
         except BaseException:
             stack = ['testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce'] + \
-                ['_callonce'] + \
+                ['_compose', '_callonce'] + \
+                    ['_compose', '_callonce'] + \
+                        ['_compose', '_callonce'] + \
+                            ['_compose', '_callonce', '_compose', 'raisesOnCallGenerator']
+            if cextension:
+                stack = \
+                ['testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce'] + \
                     ['_callonce'] + \
                         ['_callonce'] + \
-                            ['_callonce', 'raisesOnCallGenerator']
+                            ['_callonce'] + \
+                                ['_callonce', 'raisesOnCallGenerator']
             self.assertFunctionsOnTraceback(*stack)
         else:
             self.fail('Should not happen')
@@ -873,10 +929,17 @@ class ObservableTest(TestCase):
             list(compose(root.once.raisesOnCall()))
         except BaseException:
             stack = ['testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce'] + \
-                ['_callonce'] + \
-                    ['_callonce'] + \
+                ['_compose', '_callonce'] + \
+                    ['_compose', '_callonce'] + \
+                        ['_compose', '_callonce'] + \
+                            ['_compose', '_callonce', 'raisesOnCall']
+            if cextension:
+                stack = \
+                    ['testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce'] + \
                         ['_callonce'] + \
-                            ['_callonce', 'raisesOnCall']
+                            ['_callonce'] + \
+                                ['_callonce'] + \
+                                    ['_callonce', 'raisesOnCall']
             self.assertFunctionsOnTraceback(*stack)
         else:
             self.fail('Should not happen')
@@ -898,9 +961,10 @@ class ObservableTest(TestCase):
         root = be(dna)
 
         # Verify traceback's and wrapped-exception text is ok
-        try: root.call.stopIter()
+        try: 
+            root.call.stopIter()
         except AssertionError as e:
-            self.assertTrue(str(e).startswith('Non-Generator <bound method OddObject.stopIter of <core.observabletest.OddObject object at 0x'), str(e))
+            self.assertTrue(str(e).startswith('Non-Generator <bound method OddObject.stopIter of <core.observabletest.ObservableTest.testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages.<locals>.OddObject object at 0x'), str(e))
             expected = ignoreLineNumbers('''>> should not have raised Generator-Exception:
 Traceback (most recent call last):
   File "%(__file__)s", line [#], in stopIter
@@ -910,13 +974,20 @@ StopIteration: Stop!
             self.assertTrue(ignoreLineNumbers(str(e)).endswith(expected), str(e))
             self.assertFunctionsOnTraceback(
                 'testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages',
+                'call', # XXX
+                'any',  # XXX
+                'all',  # XXX
                 'call_unknown',  # From Transparent, is supposed to be on the stack to aid retracing the path taken for a messages.
+                'unknown', # XXX
+                'call',    # XXX
+                'any',     # XXX
+                'all',     # XXX
                 'handleNonGeneratorGeneratorExceptions')
         else: self.fail('Should not happen')
 
         try: root.call.genExit()
         except AssertionError as e:
-            self.assertTrue(str(e).startswith('Non-Generator <bound method OddObject.genExit of <core.observabletest.OddObject object at 0x'), str(e))
+            self.assertTrue(str(e).startswith('Non-Generator <bound method OddObject.genExit of <core.observabletest.ObservableTest.testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages.<locals>.OddObject object at 0x'), str(e))
             expected = ignoreLineNumbers('''>> should not have raised Generator-Exception:
 Traceback (most recent call last):
   File "%(__file__)s", line [#], in genExit
@@ -926,20 +997,27 @@ GeneratorExit: Exit!
             self.assertTrue(ignoreLineNumbers(str(e)).endswith(expected), str(e))
             self.assertFunctionsOnTraceback(
                 'testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages',
+                'call', # XXX
+                'any',  # XXX
+                'all',  # XXX
                 'call_unknown',  # From Transparent, is supposed to be on the stack to aid retracing the path taken for a messages.
+                'unknown', # XXX
+                'call',    # XXX
+                'any',     # XXX
+                'all',     # XXX
                 'handleNonGeneratorGeneratorExceptions')
         else: self.fail('Should not happen')
 
         # Verify logic implemented in all messages, with traceback-manipulation
-        for observableCallName, failMethod in [
-                    ('do', 'stopIter'),
-                    ('do', 'genExit'),
-                    ('any', 'stopIter'),
-                    ('any', 'genExit'),
-                    ('all', 'stopIter'),
-                    ('all', 'genExit'),
-                    ('once', 'stopIter'),
-                    ('once', 'genExit'),
+        for observableCallName, failMethod, beforeMethod, afterMethod in [
+                    ('do', 'stopIter', ['do', 'all' ], ['unknown', 'do', 'all']),
+                    ('do', 'genExit', ['do', 'all' ], ['unknown', 'do', 'all']),
+                    ('any', 'stopIter', ['_compose', 'any', '_compose'], ['_compose', 'any', 'all']),
+                    ('any', 'genExit', ['_compose', 'any', '_compose'], ['_compose', 'any', 'all']),
+                    ('all', 'stopIter', ['_compose', 'all', '_compose'], ['_compose', 'all']),
+                    ('all', 'genExit', ['_compose', 'all', '_compose'], ['_compose', 'all']),
+                    ('once', 'stopIter', ['_compose', '_callonce'], ['_compose', '_callonce']),
+                    ('once', 'genExit', ['_compose', '_callonce'], ['_compose', '_callonce']),
                 ]:
             try:
                 _ = getattr(getattr(root, observableCallName), failMethod)()
@@ -947,12 +1025,13 @@ GeneratorExit: Exit!
                     list(compose(_))
             except AssertionError as e:
                 self.assertTrue('should not have raised Generator-Exception:' in str(e), str(e))
-                expected = [
-                    'testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages',
-                    'handleNonGeneratorGeneratorExceptions',
-                ]
-                if observableCallName != 'once':
-                    expected[1:1] = '%s_unknown' % observableCallName,  # From Transparent, is supposed to be on the stack to aid retracing the path taken for a messages.
+                expected = \
+                    ['testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages'] + \
+                    beforeMethod + \
+                    (['%s_unknown' % observableCallName] if observableCallName != 'once' else []) + \
+                    afterMethod + \
+                    ['handleNonGeneratorGeneratorExceptions']
+
                 self.assertFunctionsOnTraceback(*expected)
             else: self.fail('Should not happen')
 
@@ -1211,12 +1290,14 @@ GeneratorExit: Exit!
         #p = Profile("profile.prof", lineevents=1, linetimings=1)
         #p.runcall(f)
 
-    def assertFunctionsOnTraceback(self, *args):
-        #na, na, tb = exc_info()
-        #print("------")
-        #while tb is not None:
-        #    print(tb.tb_frame.f_code.co_name)
-        #    tb = tb.tb_next
+    def assertFunctionsOnTraceback(self, *args, debug=False):
+        if debug:
+            print(args)
+            _, _, tb = exc_info()
+            print("------")
+            while tb is not None:
+                print(tb.tb_frame.f_code.co_name)
+                tb = tb.tb_next
 
         na, na, tb = exc_info()
         for functionName in args:
