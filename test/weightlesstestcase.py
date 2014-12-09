@@ -43,9 +43,9 @@ from weightless.io import Reactor
 from http.server import BaseHTTPRequestHandler
 from socketserver import TCPServer, ThreadingMixIn, BaseServer
 from ssl import wrap_socket
-from urllib2 import urlopen
+from urllib.request import urlopen
 from select import select
-from urlparse import urlunparse, urlparse
+from urllib.parse import urlunparse, urlparse
 
 mydir = dirname(abspath(__file__))
 sslDir = join(mydir, 'ssl')
