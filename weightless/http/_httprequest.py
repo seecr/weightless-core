@@ -116,7 +116,7 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
         if ssl:
             sok = yield _sslHandshake(sok, this, suspend, prio)
 
-        suspend._reactor.addWriter(sok, this.next, prio=prio)
+        suspend._reactor.addWriter(sok, this.__next__, prio=prio)
         try:
             yield
             err = sok.getsockopt(SOL_SOCKET, SO_ERROR)

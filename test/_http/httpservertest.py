@@ -37,6 +37,7 @@ from zlib import compress
 from gzip import GzipFile
 
 from weightless.http import HttpServer, _httpserver, REGEXP
+from weightless.http._httpserver import GzipCompress
 from weightless.core import Yield, compose
 
 from weightless.http._httpserver import updateResponseHeaders, parseContentEncoding, parseAcceptEncoding, CRLF, CRLF_LEN
@@ -147,10 +148,10 @@ class HttpServerTest(WeightlessTestCase):
             for c in rawResponse:
                 yield Yield
                 yield c
-        _bio = BytesIO()
-        _gzFileObj = GzipFile(filename=None, mode='wb', compresslevel=6, fileobj=_bio)
-        _gzFileObj.write(rawBody); _gzFileObj.close()
-        compressedBody = _bio.getvalue()
+        
+        _compress = GzipCompress()
+        compressedBody = _compress.compress(rawBody)
+        compressedBody += _compress.flush()
 
         compressedResponse = rawHeaders.replace(b'Content-Length: 12345\r\n', b'') + b'Content-Encoding: gzip\r\n\r\n' + compressedBody
         with Reactor() as reactor:

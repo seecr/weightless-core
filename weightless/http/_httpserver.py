@@ -36,6 +36,7 @@ from email.parser import BytesParser
 from zlib import compressobj as deflateCompress
 from zlib import decompressobj as deflateDeCompress
 from zlib import Z_DEFAULT_COMPRESSION, DEFLATED, MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY
+
 from OpenSSL import SSL
 from random import randint
 from time import time
@@ -259,10 +260,10 @@ class GzipDeCompress(object):
         # See for more info:
         #   - zlib's zlib.h inflateInit2 comment
         #   - Python sources: Modules/zlibmodule.c PyZlib_decompressobj
-        self._decompressObj = deflateDeCompress(MAX_WBITS+16)  # wbits=15+16; "The default value is 15 ..." "... windowBits can also be greater than 15 for optional gzip decoding. ..." "... or add 16 to decode only the gzip format"
+        self._decompressObj = deflateDeCompress()  # wbits=15+16; "The default value is 15 ..." "... windowBits can also be greater than 15 for optional gzip decoding. ..." "... or add 16 to decode only the gzip format"
 
     def decompress(self, data):
-        return self._decompressObj.decompress(data)
+        return self._decompressObj.decompress(data, 48) # wbits=16+32; decompress gzip-stream only
 
     def flush(self):
         return self._decompressObj.flush()
@@ -537,16 +538,15 @@ class HttpHandler(object):
                                 data = _statusLineAndHeaders + encodedStuff
                         else:
                             continue
-                    elif not self._rest:
-                        data = encodeResponseBody.compress(data.encode(self._defaultEncoding))
+                    else:
+                        data = encodeResponseBody.compress(data)
                         if type(data) is str:
                             data = data.encode()
-                if data:
-                    sent = self._sok.send(data, MSG_DONTWAIT)
-                    if sent < len(data):
-                        self._rest = data[sent:]
-                    else:
-                        self._rest = None
+                sent = self._sok.send(data, MSG_DONTWAIT)
+                if sent < len(data):
+                    self._rest = data[sent:]
+                else:
+                    self._rest = None
             except StopIteration:
                 if encodeResponseBody:
                     self._rest = encodeResponseBody.flush()
