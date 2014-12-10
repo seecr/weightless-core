@@ -27,7 +27,7 @@
 from contextlib import contextmanager
 from operator import xor
 from random import randint
-from socket import socket, AF_INET, SOCK_STREAM
+from socket import AF_INET, SOCK_STREAM, socket
 from time import time
 
 from os.path import join, dirname, abspath
@@ -168,7 +168,7 @@ class WeightlessTestCase(TestCase):
     def referenceHttpServer(self, port, request, ssl=False, streamingData=None):
         def server(httpd):
             try:
-                httpd.serve_forever()
+                httpd.serve_forever(poll_interval=0.05)
             finally:
                 httpd.shutdown()
         class Handler(BaseHTTPRequestHandler):
@@ -210,7 +210,7 @@ class WeightlessTestCase(TestCase):
         thread=Thread(None, lambda: server(httpd))
         thread.daemon = True
         thread.start()
-        return thread
+        return (thread, httpd)
 
     def proxyServer(self, port, request):
         def server(httpd):

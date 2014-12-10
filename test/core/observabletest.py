@@ -567,15 +567,15 @@ class ObservableTest(TestCase):
             #            ['aCall']
             stack = \
                 ['testTransparentUnknownImplementationIsVisibleOnTraceback'] + \
-                    ['call', 'any', 'all'] + \
+                    ['call'] + \
                         ['call_unknown', 'unknown'] + \
-                            ['call', 'any', 'all', 'aCall']                            
+                            ['call', 'aCall']                            
             if cextension:
                 stack = \
                 ['testTransparentUnknownImplementationIsVisibleOnTraceback'] + \
-                    ['call', 'any'] + \
+                    ['call'] + \
                         ['call_unknown', 'unknown'] + \
-                            ['call', 'any', 'aCall']                            
+                            ['call', 'aCall']                            
             self.assertFunctionsOnTraceback(*stack)
 
         try:
@@ -664,10 +664,7 @@ class ObservableTest(TestCase):
         try:
             observable.call.a()
         except Exception:
-            if cextension:
-                self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "call", "any", "a")
-            else:
-                self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "call", "any", "all", "a")
+            self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "call", "a")
         else:
             self.fail('Should not happen.')
 
@@ -710,10 +707,7 @@ class ObservableTest(TestCase):
             a.a()
             self.fail('should raise exception')
         except:
-            if cextension:
-                self.assertFunctionsOnTraceback("testMoreElaborateExceptionCleaning", "a", "call", "any", "b", "call", "any", "c", "call", "any", "d")
-            else:
-                self.assertFunctionsOnTraceback("testMoreElaborateExceptionCleaning", "a", "call", "any", "all", "b", "call", "any", "all", "c", "call", "any", "all", "d")
+            self.assertFunctionsOnTraceback("testMoreElaborateExceptionCleaning", "a", "call", "b", "call", "c", "call", "d")
 
     def testObserverInit(self):
         initcalled = [0]
@@ -975,13 +969,9 @@ StopIteration: Stop!
             self.assertFunctionsOnTraceback(
                 'testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages',
                 'call', # XXX
-                'any',  # XXX
-                'all',  # XXX
                 'call_unknown',  # From Transparent, is supposed to be on the stack to aid retracing the path taken for a messages.
                 'unknown', # XXX
                 'call',    # XXX
-                'any',     # XXX
-                'all',     # XXX
                 'handleNonGeneratorGeneratorExceptions')
         else: self.fail('Should not happen')
 
@@ -998,13 +988,9 @@ GeneratorExit: Exit!
             self.assertFunctionsOnTraceback(
                 'testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages',
                 'call', # XXX
-                'any',  # XXX
-                'all',  # XXX
                 'call_unknown',  # From Transparent, is supposed to be on the stack to aid retracing the path taken for a messages.
                 'unknown', # XXX
                 'call',    # XXX
-                'any',     # XXX
-                'all',     # XXX
                 'handleNonGeneratorGeneratorExceptions')
         else: self.fail('Should not happen')
 

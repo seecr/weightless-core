@@ -1212,7 +1212,9 @@ AssertionError: Generator already used.\n""" % {
                     return tostring(o)
                 except:
                     return repr(o)
+            
             gc.collect()
+
             #for obj in self.get_tracked_objects():
             #    self.assertTrue(obj in self._baseline, obj) #tostr(obj))
             del self._baseline

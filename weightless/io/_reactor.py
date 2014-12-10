@@ -99,7 +99,7 @@ class Reactor(object):
         if process in self._processes:
             raise ValueError('Process is already in processes')
         self._processes[process] = Context(process, prio)
-        write(self._processWritePipe, b'x')
+        self._writeProcessPipe()
 
     def addTimer(self, seconds, callback):
         """Add a timer that calls callback() after the specified number of seconds. Afterwards, the timer is deleted.  It returns a token for removeTimer()."""
@@ -174,19 +174,12 @@ class Reactor(object):
         __reactor__ = self
 
         self._prio = (self._prio + 1) % Reactor.MAXPRIO
-        if self._timers:
-            timeout = max(0, self._timers[0].time - time())
-        else:
-            timeout = None
+        timeout = max(0, self._timers[0].time - time()) if self._timers else None
 
         try:
             readers = list(self._readers.keys()) + [self._processReadPipe]
             rReady, wReady, ignored = self._select(readers, list(self._writers.keys()), [], timeout)
-        except TypeError:
-            print_exc()
-            self._findAndRemoveBadFd()
-            return self
-        except ValueError:
+        except (TypeError, ValueError):
             print_exc()
             self._findAndRemoveBadFd()
             return self
@@ -286,5 +279,5 @@ class Reactor(object):
         read(self._processReadPipe, 1)
 
     def _writeProcessPipe(self):
-        write(self._processWritePipe, 'x')
+        write(self._processWritePipe, b'x')
 

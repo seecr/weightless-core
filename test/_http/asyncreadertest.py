@@ -24,11 +24,10 @@
 #
 ## end license ##
 
-
 from sys import exc_info, version_info
 from time import sleep
 from traceback import format_exception
-from socket import socket, gaierror as SocketGaiError
+from socket import gaierror as SocketGaiError, socket
 from random import randint
 from re import sub
 from .httpreadertest import server as testserver
@@ -73,11 +72,10 @@ class AsyncReaderTest(WeightlessTestCase):
         expectedrequest = "GET /depot?arg=1&arg=2 HTTP/1.0\r\n\r\n"
         responses = (i for i in [b'hel', b'lo!'])
         backofficeserver = testserver(backofficeport, responses, expectedrequest)
-        client = clientget('localhost', self.port, '/depot?arg=1&arg=2')
-        self._loopReactorUntilDone()
-        response = client.recv(99)
-        self.assertEqual(b'hello!', response)
-        client.close()
+        with clientget('localhost', self.port, '/depot?arg=1&arg=2') as client:
+            self._loopReactorUntilDone()
+            response = client.recv(99)
+            self.assertEqual(b'hello!', response)
 
     @stderr_replaced
     def testConnectFails(self):
@@ -86,7 +84,8 @@ class AsyncReaderTest(WeightlessTestCase):
 
         self.handler = failingserver
 
-        clientget('localhost', self.port, '/').close()
+        with clientget('localhost', self.port, '/') as client:
+            pass
         target = ('localhost', 'port', '/') # non-numeric port
         self._loopReactorUntilDone()
 
@@ -163,17 +162,20 @@ ValueError: need more than 1 value to unpack
         self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(''.join(format_exception(*self.error))))
 
         target = ('localhost', 87, '/') # invalid port
-        clientget('localhost', self.port, '/').close()
+        with clientget('localhost', self.port, '/') as client:
+            pass
         self._loopReactorUntilDone()
         self.assertEqual(IOError, self.error[0])
 
         target = ('UEYR^$*FD(#>NDJ.khfd9.(*njnd', 9876, '/') # invalid host
-        clientget('localhost', self.port, '/').close()
+        with clientget('localhost', self.port, '/') as client:
+            pass
         self._loopReactorUntilDone()
         self.assertEqual(SocketGaiError, self.error[0])
 
         target = ('127.0.0.255', 9876, '/')
-        clientget('localhost', self.port, '/').close()
+        with clientget('localhost', self.port, '/') as client:
+            pass
         self._loopReactorUntilDone()
         self.assertEqual(IOError, self.error[0])
         self.assertEqual('111', str(self.error[1]))
@@ -197,7 +199,8 @@ ValueError: need more than 1 value to unpack
             originalRequestLine = httpRequestModule._requestLine
             httpRequestModule._requestLine = requestLine
 
-            clientget('localhost', self.port, '/').close()
+            with clientget('localhost', self.port, '/') as client:
+                pass
             with stderr_replaced():
                 self._loopReactorUntilDone()
             if cextension:     
@@ -259,7 +262,8 @@ RuntimeError: Boom!""" % fileDict)
             yield response
             responses.append(response.decode())
         self.handler = posthandler
-        clientget('localhost', self.port, '/').close()
+        with clientget('localhost', self.port, '/') as client:
+            pass
         self._loopReactorUntilDone()
 
         self.assertTrue("POST RESPONSE" in responses[0], responses[0])
@@ -280,7 +284,8 @@ RuntimeError: Boom!""" % fileDict)
             yield response
             responses.append(response.decode())
         self.handler = posthandler
-        clientget('localhost', self.port, '/').close()
+        with clientget('localhost', self.port, '/') as client:
+            pass
         self._loopReactorUntilDone()
 
         self.assertTrue("POST RESPONSE" in responses[0], responses[0])
@@ -303,7 +308,8 @@ RuntimeError: Boom!""" % fileDict)
             yield response
             responses.append(response.decode())
         self.handler = posthandler
-        clientget('localhost', self.port, '/').close()
+        with clientget('localhost', self.port, '/') as client:
+            pass
         self._loopReactorUntilDone()
 
         self.assertTrue("POST RESPONSE" in responses[0], responses[0])
@@ -330,7 +336,8 @@ RuntimeError: Boom!""" % fileDict)
             finally:
                 responses.append(response.decode())
         self.handler = gethandler
-        clientget('localhost', self.port, '/').close()
+        with clientget('localhost', self.port, '/') as client:
+            pass
         self._loopReactorUntilDone()
 
         self.assertTrue("GET RESPONSE" in responses[0], responses[0])
@@ -359,7 +366,8 @@ RuntimeError: Boom!""" % fileDict)
             finally:
                 responses.append(response.decode())
         self.handler = gethandler
-        clientget('localhost', self.port, '/').close()
+        with clientget('localhost', self.port, '/') as client:
+            pass
         self._loopReactorUntilDone()
         headers = get_request[0]['headers']._headers
         headersAsDict = dict(headers)
@@ -375,36 +383,40 @@ RuntimeError: Boom!""" % fileDict)
             get_request = []
             port = self.port + 1 + useSsl
             streamingData = StreamingData(data=[c for c in "STREAMING GET RESPONSE"])
-            self.referenceHttpServer(port, get_request, ssl=useSsl, streamingData=streamingData)
+            thread, httpd = self.referenceHttpServer(port, get_request, ssl=useSsl, streamingData=streamingData)
+            try:
+                dataHandled = []
+                def handleDataFragment(data):
+                    dataHandled.append(data.decode())
+                    if '\r\n\r\n' in ''.join(dataHandled):
+                        streamingData.doNext()
 
-            dataHandled = []
-            def handleDataFragment(data):
-                dataHandled.append(data.decode())
-                if '\r\n\r\n' in ''.join(dataHandled):
-                    streamingData.doNext()
+                responses = []
+                def gethandler(*args, **kwargs):
+                    f = httpsget if useSsl else httpget
+                    response = 'no response yet'
+                    try:
+                        response = yield f('localhost', port, '/path',
+                            headers={'Accept': 'text/plain'},
+                            handlePartialResponse=handleDataFragment,
+                        )
+                    finally:
+                        responses.append(response)
+                self.handler = gethandler
+                with clientget('localhost', self.port, '/') as client:
+                    pass
+                self._loopReactorUntilDone()
 
-            responses = []
-            def gethandler(*args, **kwargs):
-                f = httpsget if useSsl else httpget
-                response = 'no response yet'
-                try:
-                    response = yield f('localhost', port, '/path',
-                        headers={'Accept': 'text/plain'},
-                        handlePartialResponse=handleDataFragment,
-                    )
-                finally:
-                    responses.append(response)
-            self.handler = gethandler
-            clientget('localhost', self.port, '/').close()
-            self._loopReactorUntilDone()
-
-            self.assertEqual([None], responses)
-            self.assertTrue("STREAMING GET RESPONSE" in ''.join(dataHandled), dataHandled)
-            self.assertTrue(len(dataHandled) > len("STREAMING GET RESPONSE"), dataHandled)
-            self.assertEqual('GET', get_request[0]['command'])
-            self.assertEqual('/path', get_request[0]['path'])
-            headers = get_request[0]['headers']
-            self.assertEqual('Accept: text/plain\n\n', headers.as_string())
+                self.assertEqual([None], responses)
+                self.assertTrue("STREAMING GET RESPONSE" in ''.join(dataHandled), dataHandled)
+                self.assertTrue(len(dataHandled) > len("STREAMING GET RESPONSE"), dataHandled)
+                self.assertEqual('GET', get_request[0]['command'])
+                self.assertEqual('/path', get_request[0]['path'])
+                headers = get_request[0]['headers']
+                self.assertEqual('Accept: text/plain\n\n', headers.as_string())
+            finally:
+                httpd.shutdown()
+                httpd.socket.close()
 
     def testHttpsGet(self):
         get_request = []
@@ -419,7 +431,8 @@ RuntimeError: Boom!""" % fileDict)
             yield response
             responses.append(response.decode())
         self.handler = gethandler
-        clientget('localhost', self.port, '/').close()
+        with clientget('localhost', self.port, '/') as client:
+            pass
 
         self._loopReactorUntilDone()
 

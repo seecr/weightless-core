@@ -46,6 +46,6 @@ for t in $tests; do
     for pycmd in $pyversions; do
         echo "================ $t with $pycmd _alltests.py $@ ================"
         #WEIGHTLESS_COMPOSE_TEST=$t gdb --args $pycmd _alltests.py "$@"
-        WEIGHTLESS_COMPOSE_TEST=$t $pycmd _alltests.py "$@"
+        WEIGHTLESS_COMPOSE_TEST=$t $pycmd -W ignore _alltests.py "$@"
     done
 done

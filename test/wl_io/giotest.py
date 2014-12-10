@@ -24,8 +24,8 @@
 # 
 ## end license ##
 
-from socket import socketpair, socket
-from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_CORK, TCP_NODELAY
+from socket import socketpair, socket, socket
+from socket import SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_CORK, TCP_NODELAY
 from struct import pack
 from time import sleep
 from random import randint
@@ -125,8 +125,10 @@ class GioTest(WeightlessTestCase):
 
     def testNesting(self):
         done = []
-        open(self.tempdir+'/1', 'w').write('1234')
-        open(self.tempdir+'/2', 'w').write('abcd')
+        with open(self.tempdir+'/1', 'w') as fp:
+            fp.write('1234')
+        with open(self.tempdir+'/2', 'w') as fp:
+            fp.write('abcd')
         def swapContents():
             numbersStream = giopen(self.tempdir+'/1', 'rw')
             lettersStream = giopen(self.tempdir+'/2', 'rw')
