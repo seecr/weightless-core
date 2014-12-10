@@ -25,7 +25,8 @@
 ## end license ##
 
 from weightlesstestcase import WeightlessTestCase, MATCHALL
-from socket import socket
+from socket import socket, error as SocketError
+from errno import EAGAIN
 from select import select
 from weightless.io import Reactor
 from time import sleep
@@ -35,6 +36,7 @@ from io import StringIO, BytesIO
 from sys import getdefaultencoding
 from zlib import compress
 from gzip import GzipFile
+from random import random
 
 from weightless.http import HttpServer, _httpserver, REGEXP
 from weightless.http._httpserver import GzipCompress
@@ -47,27 +49,50 @@ def inmydir(p):
 
 class HttpServerTest(WeightlessTestCase):
 
-    def sendRequestAndReceiveResponse(self, reactor, request, response='The Response', recvSize=4096, compressResponse=False, extraStepAfterCompress=True):
+    def sendRequestAndReceiveResponse(self, reactor, request, response='The Response', recvSize=4096, compressResponse=False, extraStepsAfterCompress=1, stepWatcher=None):
         self.responseCalled = False
         @compose
         def responseGenFunc(**kwargs):
             yield response
             yield ''
             self.responseCalled = True
+
+        def clientRecv(sok):
+            clientResponse = BytesIO()
+            while True:
+                try:
+                    r = sok.recv(4096)
+                except SocketError as e: 
+                    if e.errno == EAGAIN:
+                        break
+                    raise
+                if not r:
+                    break
+                clientResponse.write(r)
+            return clientResponse.getvalue()
+
         with HttpServer(reactor, self.port, responseGenFunc, recvSize=recvSize, compressResponse=compressResponse) as server:
             server.listen()
             with socket() as sok:
                 sok.connect(('localhost', self.port))
                 sok.send(request)
+                sok.setblocking(0)
 
-                mockStdout = None
-                # with self.stdout_replaced() as mockStdout:
+                clientResponse = BytesIO()
                 while not self.responseCalled:
                     reactor.step()
-                if compressResponse and extraStepAfterCompress: #not everythingSent???:
-                    reactor.step()
-                r = sok.recv(4096)
-                return r
+                    if stepWatcher:
+                        stepWatcher(reactor)
+                    clientResponse.write(clientRecv(sok))
+                if compressResponse and extraStepsAfterCompress:
+                    for _ in range(extraStepsAfterCompress):
+                        reactor.step()
+                        clientResponse.write(clientRecv(sok))
+
+                clientResponse.write(clientRecv(sok))
+        sok.close()
+        return clientResponse.getvalue()
+
 
     def testConnect(self):
         self.req = False
@@ -155,7 +180,9 @@ class HttpServerTest(WeightlessTestCase):
 
         compressedResponse = rawHeaders.replace(b'Content-Length: 12345\r\n', b'') + b'Content-Encoding: gzip\r\n\r\n' + compressedBody
         with Reactor() as reactor:
-            response = self.sendRequestAndReceiveResponse(reactor, b'GET /path/here HTTP/1.0\r\nAccept-Encoding: gzip;q=0.999, deflate;q=0.998, dontknowthisone;q=1\r\n\r\n', response=rawResponser(), compressResponse=True)
+            response = self.sendRequestAndReceiveResponse(reactor, 
+                b'GET /path/here HTTP/1.0\r\nAccept-Encoding: gzip;q=0.999, deflate;q=0.998, dontknowthisone;q=1\r\n\r\n', 
+                response=rawResponser(), compressResponse=True)
             self.assertEqual(compressedResponse, response)
 
     def testOnlyCompressBodyWhenCompressResponseIsOn(self):
@@ -168,11 +195,66 @@ class HttpServerTest(WeightlessTestCase):
                 yield c
 
         with Reactor() as reactor:
-            response = self.sendRequestAndReceiveResponse(reactor, b'GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=False)
+            response = self.sendRequestAndReceiveResponse(reactor, 
+                b'GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=False)
             self.assertEqual(rawResponse, response)
 
-            response = self.sendRequestAndReceiveResponse(reactor, b'GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
+            response = self.sendRequestAndReceiveResponse(reactor, 
+                b'GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True)
             self.assertNotEqual(rawResponse, response)
+
+    def testDontCompressRestMoreThanOnce(self):
+        rawHeaders = b'HTTP/1.1 200 OK\r\n'
+        rawBody = BytesIO()
+        for i in range(int((1024 ** 2 / 5))):  # * len(str(random())) (+/- 14)
+            rawBody.write(str(random()).encode())
+        rawBody = rawBody.getvalue()
+        rawResponse = rawHeaders + b'\r\n' + rawBody
+        def rawResponser():
+            responseCopy = rawResponse
+            while len(responseCopy) > 0:
+                randomSize = int(random()*384*1024)
+                yield responseCopy[:randomSize]
+                responseCopy = responseCopy[randomSize:]
+
+        # Value *must* be larger than size used for a TCP Segment.
+        self.assertTrue(1000000 < len(compress(rawBody)))
+        with Reactor() as reactor:
+            response = self.sendRequestAndReceiveResponse(reactor, 
+                b'GET /path/here HTTP/1.0\r\nAccept-Encoding: gzip\r\n\r\n', 
+                response=rawResponser(), compressResponse=True, extraStepsAfterCompress=1)
+            compressed_response = response.split(b'\r\n\r\n', 1)[1]
+            decompressed_response = GzipFile(None, fileobj=BytesIO(compressed_response)).read()
+
+            self.assertEqual(decompressed_response, rawBody)
+
+            # White box, more than one sock.send(...) -> uses self._rest -> must not be compressed again.
+            stepWatcher = StepWatcher()
+            response = self.sendRequestAndReceiveResponse(reactor, 
+                b'GET /path/here HTTP/1.0\r\nAccept-Encoding: gzip\r\n\r\n', 
+                response=rawResponser(), compressResponse=True, stepWatcher=stepWatcher.onStep, extraStepsAfterCompress=1)
+            compressed_response = response.split(b'\r\n\r\n', 1)[1]
+            decompressed_response = GzipFile(None, fileobj=BytesIO(compressed_response)).read()
+            self.assertEqual(decompressed_response, rawBody)
+            self.assertTrue(all(stepWatcher.sokSends))
+            self.assertTrue(6 <= len(stepWatcher.sokSends) <= 25, len(stepWatcher.sokSends))
+
+    def testCompressLargerBuggerToTriggerCompressionBuffersToFlush(self):
+        rawHeaders = b'HTTP/1.1 200 OK\r\nSome: Header\r\nAnother: Header\r\n\r\n'
+        def rawResponser():
+            yield rawHeaders
+            for _ in range(4500):
+                yield str(random()) * 3 + str(random()) * 2 + str(random())
+
+        stepWatcher = StepWatcher()
+
+        with Reactor() as reactor:
+            response = self.sendRequestAndReceiveResponse(reactor, 
+                b'GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', 
+                response=rawResponser(), compressResponse=True, stepWatcher=stepWatcher.onStep, extraStepsAfterCompress=1)
+
+            self.assertTrue(3 < len(stepWatcher.sokSends) < 100, len(stepWatcher.sokSends))  # Not sent in one bulk-response.
+            self.assertTrue(all(d for d in stepWatcher.sokSends))  # No empty strings
 
     def testGetCompressedResponse_uncompressedWhenContentEncodingPresent(self):
         rawHeaders = b'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nContent-Encoding: enlightened\r\n'
@@ -183,7 +265,9 @@ class HttpServerTest(WeightlessTestCase):
             for c in rawResponse:
                 yield c
         with Reactor() as reactor:
-            response = self.sendRequestAndReceiveResponse(reactor, b'GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True, extraStepAfterCompress=False)
+            response = self.sendRequestAndReceiveResponse(reactor, 
+                b'GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', 
+                response=rawResponser(), compressResponse=True, extraStepsAfterCompress=0)
             self.assertEqual(rawResponse, response)
 
     def testParseContentEncoding(self):
@@ -430,6 +514,30 @@ class HttpServerTest(WeightlessTestCase):
                     self.assertTrue('Headers' in self.requestData)
                     headers = self.requestData['Headers']
                     self.assertEqual('POST', self.requestData['Method'])
+                    self.assertEqual('application/x-www-form-urlencoded', headers['Content-Type'])
+                    self.assertEqual(8, int(headers['Content-Length']))
+
+                    self.assertTrue('Body' in self.requestData)
+                    self.assertEqual(b'bodydata', self.requestData['Body'])
+
+    def testPutMethodReadsBody(self):
+        self.requestData = None
+        def handler(**kwargs):
+            self.requestData = kwargs
+
+        with Reactor(log=StringIO()) as reactor:
+            with HttpServer(reactor, self.port, handler, timeout=0.01) as server:
+                server.listen()
+                with socket() as sok:
+                    sok.connect(('localhost', self.port))
+                    sok.send(b'PUT / HTTP/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\nbodydata')
+
+                    while not self.requestData:
+                        reactor.step()
+                    self.assertEqual(dict, type(self.requestData))
+                    self.assertTrue('Headers' in self.requestData)
+                    headers = self.requestData['Headers']
+                    self.assertEqual('PUT', self.requestData['Method'])
                     self.assertEqual('application/x-www-form-urlencoded', headers['Content-Type'])
                     self.assertEqual(8, int(headers['Content-Length']))
 
@@ -858,4 +966,49 @@ class HttpServerTest(WeightlessTestCase):
                         set(['lazy_END']),
                         set(['work_part_2', 'work_END']),
                    ], loopWithYield(True))
+
+class SendLoggingMockSock(object):
+    def __init__(self, bucket, origSock):
+        self._bucket = bucket
+        self._orig = origSock
+
+    def send(self, data, *args, **kwargs):
+        self._bucket.append(data)
+        return self._orig.send(data, *args, **kwargs)
+
+    def __getattr__(self, attr):
+        return getattr(self._orig, attr)
+
+class StepWatcher(object):
+    def __init__(self):
+        self._alreadyWrappedSocket = False
+        self.sokSends = []
+
+    def onStep(self, reactor):
+        if self._alreadyWrappedSocket:
+            return
+
+        httpHandlerObj = self._extractWriteResponsesHttpHandlerObj(reactor)
+        if not httpHandlerObj:
+            return
+
+        # Wrap it!
+        self._alreadyWrappedSocket = True
+        origSock = httpHandlerObj._sok
+        origCloseConnection = httpHandlerObj._closeConnection
+
+        def cleanupAndDelegate(*args, **kwargs):
+            httpHandlerObj._sok = origSock
+            httpHandlerObj._closeConnection = origCloseConnection
+            return httpHandlerObj._closeConnection(*args, **kwargs)
+
+        httpHandlerObj._sok = SendLoggingMockSock(bucket=self.sokSends, origSock=origSock)
+        httpHandlerObj._closeConnection = cleanupAndDelegate
+
+    @staticmethod
+    def _extractWriteResponsesHttpHandlerObj(reactor):
+        result = [ctx.callback.__self__.gi_frame.f_locals['self'] for ctx in reactor._writers.values() if ctx.callback.__self__.gi_frame.f_code.co_name == '_writeResponse']
+        if result:
+            return result[0]
+        return None
 

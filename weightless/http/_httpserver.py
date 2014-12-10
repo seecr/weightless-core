@@ -337,7 +337,7 @@ class HttpHandler(object):
         
         self._dataBuffer = self._dataBuffer[endHeaderMarkerLocation:]
         self.request = match.groupdict()
-        self.request['Body'] = b''
+        self.request['Body'] = BytesIO()
         self.request['Headers'] = parseHeaders(self.request['_headers'])
         if 'Content-Type' in self.request['Headers']:
             cType, pDict = parseHeader(self.request['Headers']['Content-Type'])
@@ -426,10 +426,10 @@ class HttpHandler(object):
             return
 
         if self._decodeRequestBody is not None:
-            self.request['Body'] = self._decodeRequestBody.decompress(self._dataBuffer)
-            self.request['Body'] += self._decodeRequestBody.flush()
+            self.request['Body'] = BytesIO(self._decodeRequestBody.decompress(self._dataBuffer))
+            self.request['Body'].write(self._decodeRequestBody.flush())
         else:
-            self.request['Body'] = self._dataBuffer
+            self.request['Body'].write(self._dataBuffer)
 
         self.finalize()
 
@@ -444,7 +444,7 @@ class HttpHandler(object):
     def _readChunkBody(self):
         if self._chunkSize == 0:
             if self._decodeRequestBody is not None:
-                self.request['Body'] += self._decodeRequestBody.flush()
+                self.request['Body'].write(self._decodeRequestBody.flush())
             return self.finalize()
 
         if len(self._dataBuffer) < self._chunkSize + CRLF_LEN:
@@ -452,9 +452,9 @@ class HttpHandler(object):
 
         chunk = self._dataBuffer[:self._chunkSize]
         if self._decodeRequestBody is not None:
-            self.request['Body'] += self._decodeRequestBody.decompress(chunk)
+            self.request['Body'].write(self._decodeRequestBody.decompress(chunk))
         else:
-            self.request['Body'] += chunk
+            self.request['Body'].write(chunk)
         self._dataBuffer = self._dataBuffer[self._chunkSize + CRLF_LEN:]
         self.setCallDealer(self._readChunk)
 
@@ -469,6 +469,7 @@ class HttpHandler(object):
 
     def _finalize(self, finalizeMethod):
         del self.request['_headers']
+        self.request['Body'] = self.request['Body'].getvalue()
 
         encoding = None
         if self._compressResponse == True:
@@ -538,15 +539,16 @@ class HttpHandler(object):
                                 data = _statusLineAndHeaders + encodedStuff
                         else:
                             continue
-                    else:
+                    elif not self._rest:
                         data = encodeResponseBody.compress(data)
                         if type(data) is str:
                             data = data.encode()
-                sent = self._sok.send(data, MSG_DONTWAIT)
-                if sent < len(data):
-                    self._rest = data[sent:]
-                else:
-                    self._rest = None
+                if data:
+                    sent = self._sok.send(data, MSG_DONTWAIT)
+                    if sent < len(data):
+                        self._rest = data[sent:]
+                    else:
+                        self._rest = None
             except StopIteration:
                 if encodeResponseBody:
                     self._rest = encodeResponseBody.flush()

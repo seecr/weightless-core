@@ -320,6 +320,22 @@ RuntimeError: Boom!""" % fileDict)
             ), set(headers.as_string().split("\n"))
         self.assertEqual(body, post_request[0]['body'].decode())
 
+    @stderr_replaced
+    def testHttpsPostOnIncorrectPort(self):
+        responses = []
+        def posthandler(*args, **kwargs):
+            response = yield httpspost('localhost', self.port + 1, '/path', "body",
+                    headers={'Content-Type': 'text/plain'}
+            )
+            yield response
+            responses.append(response)
+        self.handler = posthandler
+        clientget('localhost', self.port, '/')
+        self._loopReactorUntilDone()
+
+        self.assertTrue(self.error[0] is IOError)
+        self.assertEqual("111", str(self.error[1]))
+
     def testHttpGet(self):
         get_request = []
         port = self.port + 1
@@ -441,6 +457,31 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEqual('/path', get_request[0]['path'])
         headers = get_request[0]['headers']
         self.assertEqual(set(["Content-Length: 0","Content-Type: text/plain", "", ""]), set(headers.as_string().split("\n")))
+
+    def testHttpGetViaProxy(self):
+        get_request = []
+        port = self.port + 1
+        proxyPort = port + 1
+        self.proxyServer(proxyPort, get_request)
+        self.referenceHttpServer(port, get_request)
+
+        responses = []
+        def gethandler(*args, **kwargs):
+            response = yield httpget('localhost', port, '/path',
+                headers={'Content-Type': 'text/plain', 'Content-Length': 0},
+                proxyServer="http://localhost:%s" % proxyPort
+            )
+            yield response
+            responses.append(response.decode())
+        self.handler = gethandler
+        clientget('localhost', self.port, '/').close()
+
+        self._loopReactorUntilDone()
+        self.assertTrue("GET RESPONSE" in responses[0], responses[0])
+        self.assertEqual('CONNECT', get_request[0]['command'])
+        self.assertEqual('localhost:%s' % port, get_request[0]['path'])
+        self.assertEqual('GET', get_request[1]['command'])
+        self.assertEqual('/path', get_request[1]['path'])
 
     def _dispatch(self, *args, **kwargs):
         def handle():

@@ -59,7 +59,7 @@ class ServerTest(WeightlessTestCase):
     def testShutdownAndClose(self):
         class Interceptor(object):
             def processConnection(self):
-                yield 'over en uit'
+                yield b'over en uit'
         with Server(self.reactor, self.port) as server:
             server.addObserver(Interceptor())
             with self.send('localhost', self.port, b'a message') as connection:

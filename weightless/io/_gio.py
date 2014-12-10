@@ -141,7 +141,7 @@ class FdContext(Context):
     def write(self,response):
         self.gio.addWriter(self)
         self.onExit(curry(self.gio.removeWriter, self))
-        buff = response.encode()
+        buff = response
         try:
             while len(buff) > 0:
                 yield

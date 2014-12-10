@@ -32,6 +32,7 @@ from functools import partial
 from weightless.io import Suspend
 from weightless.core import compose, identify
 from urllib.parse import urlsplit
+from io import BytesIO
 
 
 def _httpRequest(host, port, request, body=None, headers=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None, method='GET'):
@@ -93,22 +94,22 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
 
         if proxyServer:
             sok.sendall(  # hotfix EG d.d. 1/3/14
-                ("CONNECT %s:%d HTTP/1.0\r\n" +
-                "Host: %s:%d\r\n\r\n") % (origHost, origPort, origHost, origPort))
-            suspend._reactor.addReader(sok, this.next, prio=prio)
+                (("CONNECT %s:%d HTTP/1.0\r\n" +
+                "Host: %s:%d\r\n\r\n") % (origHost, origPort, origHost, origPort)).encode())
+            suspend._reactor.addReader(sok, this.__next__, prio=prio)
             try:
                 # hotfix EG d.d. 1/3/14
-                response = ''
+                response = BytesIO()
                 while True:
                     yield
                     fragment = sok.recv(4096)
-                    if fragment == '':
+                    if len(fragment) == 0:
                         break
-                    response += fragment
-                    if "\r\n\r\n" in response:
+                    response.write(fragment)
+                    if b"\r\n\r\n" in response.getvalue():
                         break
-                status = response.split()[:2]
-                if not "200" in status:
+                status = response.getvalue().split()[:2]
+                if not b"200" in status:
                     raise ValueError("Failed to connect through proxy")
                 # end hotfix
             finally:
