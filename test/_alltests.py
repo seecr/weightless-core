@@ -75,5 +75,15 @@ from wl_io.servertest import ServerTest
 #import gc
 #gc.set_debug(gc.DEBUG_UNCOLLECTABLE)
 
+def run_with_profile():
+    from cProfile import Profile
+    profiler = Profile()
+    try:
+        profiler.runcall(main)
+    finally:
+        from pyprof2calltree import convert, visualize
+        visualize(profiler.getstats())
+
 if __name__ == '__main__':
+    #run_with_profile()
     main()

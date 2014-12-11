@@ -27,14 +27,10 @@
 export LANG=en_US.UTF-8
 export PYTHONPATH=.:"$PYTHONPATH"
 
-pyversions="python3"
-echo Found Python versions: $pyversions
 option=$1
 if [ "$option" == "--python" ]; then
-        shift
         tests=PYTHON
 elif [ "$option" == "--c" ]; then
-        shift
         tests=C
 else
     tests="C PYTHON"
