@@ -3,7 +3,7 @@
 #
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
-# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2014 Seecr (Seek You Too B.V.) http://seecr.nl
 # Copyright (C) 2011 Seek You Too (CQ2) http://www.cq2.nl
 #
 # This file is part of "Weightless"
@@ -27,14 +27,10 @@
 export LANG=en_US.UTF-8
 export PYTHONPATH=.:"$PYTHONPATH"
 
-pyversions="python3"
-echo Found Python versions: $pyversions
 option=$1
 if [ "$option" == "--python" ]; then
-        shift
         tests=PYTHON
 elif [ "$option" == "--c" ]; then
-        shift
         tests=C
 else
     tests="C PYTHON"
@@ -46,6 +42,6 @@ for t in $tests; do
     for pycmd in $pyversions; do
         echo "================ $t with $pycmd _alltests.py $@ ================"
         #WEIGHTLESS_COMPOSE_TEST=$t gdb --args $pycmd _alltests.py "$@"
-        WEIGHTLESS_COMPOSE_TEST=$t $pycmd _alltests.py "$@"
+        WEIGHTLESS_COMPOSE_TEST=$t $pycmd -W ignore _alltests.py "$@"
     done
 done

@@ -4,7 +4,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2012, 2014 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -35,7 +35,7 @@ from tempfile import TemporaryFile
 from email.parser import BytesParser
 from zlib import compressobj as deflateCompress
 from zlib import decompressobj as deflateDeCompress
-from gzip import GzipFile
+from zlib import Z_DEFAULT_COMPRESSION, DEFLATED, MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY
 
 from OpenSSL import SSL
 from random import randint
@@ -45,12 +45,10 @@ from struct import pack
 from sys import getdefaultencoding, stderr
 import collections
 
-
 RECVSIZE = 4096
 CRLF = b'\r\n'
 CRLF_LEN = 2
 CRLF_STR = "\r\n"
-
 
 class HttpServer(object):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
@@ -244,24 +242,28 @@ def updateResponseHeaders(headers, headersEndMarker, addHeaders=None, removeHead
 
 class GzipCompress(object):
     def __init__(self):
-        self._buffer = BytesIO()
-        self._gzipFileObj = GzipFile(filename=None, mode='wb', compresslevel=6, fileobj=self._buffer)
+        # See for more info:
+        #   - zlib's zlib.h deflateInit2 comment
+        #   - Python sources: Modules/zlibmodule.c PyZlib_compressobj
+        # compressobj([level[, method[, wbits[, memlevel[, strategy]]]]])
+        self._compressObj = deflateCompress(Z_DEFAULT_COMPRESSION, DEFLATED, MAX_WBITS+16, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY)  # wbits=15+16; "The default value is 15 ..." "windowBits can also be greater than 15 for optional gzip encoding.  Add 16 to windowBits to write a simple gzip header and trailer around the compressed data instead of a zlib wrapper."
 
     def compress(self, data):
-        self._gzipFileObj.write(data)
-        return ''
+        return self._compressObj.compress(data)
 
     def flush(self):
-        self._gzipFileObj.close()
-        return self._buffer.getvalue()
+        return self._compressObj.flush()
 
 
 class GzipDeCompress(object):
     def __init__(self):
-        self._decompressObj = deflateDeCompress()
+        # See for more info:
+        #   - zlib's zlib.h inflateInit2 comment
+        #   - Python sources: Modules/zlibmodule.c PyZlib_decompressobj
+        self._decompressObj = deflateDeCompress()  # wbits=15+16; "The default value is 15 ..." "... windowBits can also be greater than 15 for optional gzip decoding. ..." "... or add 16 to decode only the gzip format"
 
     def decompress(self, data):
-        return self._decompressObj.decompress(data, 48)  # wbits=16+32; decompress gzip-stream only
+        return self._decompressObj.decompress(data, 48) # wbits=16+32; decompress gzip-stream only
 
     def flush(self):
         return self._decompressObj.flush()
@@ -335,7 +337,7 @@ class HttpHandler(object):
         
         self._dataBuffer = self._dataBuffer[endHeaderMarkerLocation:]
         self.request = match.groupdict()
-        self.request['Body'] = b''
+        self.request['Body'] = BytesIO()
         self.request['Headers'] = parseHeaders(self.request['_headers'])
         if 'Content-Type' in self.request['Headers']:
             cType, pDict = parseHeader(self.request['Headers']['Content-Type'])
@@ -351,7 +353,7 @@ class HttpHandler(object):
         if self._reactor.getOpenConnections() > self._maxConnections:
             self.request['ResponseCode'] = 503
             return self._finalize(self._errorHandler)
-        if self.request['Method'] == 'POST':
+        if self.request['Method'] in ['POST', 'PUT']:
             self.setCallDealer(self._readBody)
         else:
             self.finalize()
@@ -424,10 +426,10 @@ class HttpHandler(object):
             return
 
         if self._decodeRequestBody is not None:
-            self.request['Body'] = self._decodeRequestBody.decompress(self._dataBuffer)
-            self.request['Body'] += self._decodeRequestBody.flush()
+            self.request['Body'] = BytesIO(self._decodeRequestBody.decompress(self._dataBuffer))
+            self.request['Body'].write(self._decodeRequestBody.flush())
         else:
-            self.request['Body'] = self._dataBuffer
+            self.request['Body'].write(self._dataBuffer)
 
         self.finalize()
 
@@ -442,7 +444,7 @@ class HttpHandler(object):
     def _readChunkBody(self):
         if self._chunkSize == 0:
             if self._decodeRequestBody is not None:
-                self.request['Body'] += self._decodeRequestBody.flush()
+                self.request['Body'].write(self._decodeRequestBody.flush())
             return self.finalize()
 
         if len(self._dataBuffer) < self._chunkSize + CRLF_LEN:
@@ -450,9 +452,9 @@ class HttpHandler(object):
 
         chunk = self._dataBuffer[:self._chunkSize]
         if self._decodeRequestBody is not None:
-            self.request['Body'] += self._decodeRequestBody.decompress(chunk)
+            self.request['Body'].write(self._decodeRequestBody.decompress(chunk))
         else:
-            self.request['Body'] += chunk
+            self.request['Body'].write(chunk)
         self._dataBuffer = self._dataBuffer[self._chunkSize + CRLF_LEN:]
         self.setCallDealer(self._readChunk)
 
@@ -467,6 +469,7 @@ class HttpHandler(object):
 
     def _finalize(self, finalizeMethod):
         del self.request['_headers']
+        self.request['Body'] = self.request['Body'].getvalue()
 
         encoding = None
         if self._compressResponse == True:
@@ -536,15 +539,16 @@ class HttpHandler(object):
                                 data = _statusLineAndHeaders + encodedStuff
                         else:
                             continue
-                    else:
+                    elif not self._rest:
                         data = encodeResponseBody.compress(data)
                         if type(data) is str:
                             data = data.encode()
-                sent = self._sok.send(data)
-                if sent < len(data):
-                    self._rest = data[sent:]
-                else:
-                    self._rest = None
+                if data:
+                    sent = self._sok.send(data, MSG_DONTWAIT)
+                    if sent < len(data):
+                        self._rest = data[sent:]
+                    else:
+                        self._rest = None
             except StopIteration:
                 if encodeResponseBody:
                     self._rest = encodeResponseBody.flush()

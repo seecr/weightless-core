@@ -26,9 +26,8 @@
 from unittest import TestCase
 from random import randint
 from time import sleep
-from socket import socket, timeout
+from socket import timeout, socket
 from threading import Thread, Event
-
 
 from weightless.io import Reactor
 from weightless.http import HttpReader
@@ -42,41 +41,39 @@ from weightlesstestcase import MATCHALL
 def server(port, response, expectedrequest, delay=0, loop=50):
     isListening = Event()
     def serverProcess():
-        serverSok = socket()
-        serverSok.bind(('0.0.0.0', port))
-        serverSok.listen(1)
-        isListening.set()
-        newSok, addr = serverSok.accept()
-        try:
-            newSok.settimeout(1)
+        with socket() as serverSok:
+            serverSok.bind(('0.0.0.0', port))
+            serverSok.listen(1)
+            isListening.set()
+            newSok, addr = serverSok.accept()
+            try:
+                newSok.settimeout(1)
 
-            msg = ''
-            for i in range(loop):
-                if expectedrequest:
-                    try:
-                        msg += newSok.recv(4096).decode()
-                        if msg == expectedrequest:
-                            break
-                        if len(msg) >= len(expectedrequest):
-                            print("hihi")
-                            raise timeout
-                    except timeout:
-                        print(("Received:", repr(msg)))
-                        print(("expected:", repr(expectedrequest)))
-                        return
-            if response:
-                if hasattr(response, '__next__'):
-                    for r in response:
-                        newSok.send(r)
+                msg = ''
+                for i in range(loop):
+                    if expectedrequest:
+                        try:
+                            msg += newSok.recv(4096).decode()
+                            if msg == expectedrequest:
+                                break
+                            if len(msg) >= len(expectedrequest):
+                                raise timeout
+                        except timeout:
+                            print(("Received:", repr(msg)))
+                            print(("expected:", repr(expectedrequest)))
+                            return
+                if response:
+                    if hasattr(response, '__next__'):
+                        for r in response:
+                            newSok.send(r)
+                    else:
+                        newSok.send(response.encode())
+                    sleep(delay)
+                    newSok.close()
                 else:
-                    newSok.send(response.encode())
-                sleep(delay)
+                    sleep(0.5)
+            finally:
                 newSok.close()
-            else:
-                sleep(0.5)
-        finally:
-            newSok.close()
-        serverSok.close()
 
     thread=Thread(None, serverProcess)
     thread.start()

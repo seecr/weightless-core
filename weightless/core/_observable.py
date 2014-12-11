@@ -5,7 +5,7 @@
 #
 # Copyright (C) 2006-2010 Seek You Too (CQ2) http://www.cq2.nl
 # Copyright (C) 2011 Seecr http://seecr.nl
-# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2014 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -111,8 +111,7 @@ class MessageBase(object):
                     except (StopIteration, GeneratorExit):
                         c, v, t = exc_info()
                         handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
-                    if __debug__:
-                        self.verifyMethodResult(method, result)
+                    self.verifyMethodResult(method, result)
                     _ = yield result
                 except DeclineMessage:
                     continue
@@ -149,14 +148,22 @@ class CallMessage(MessageBase):
     altname = 'call_unknown'
 
     def call(self, *args, **kwargs):
-        try:
-            return next(self.any(*args, **kwargs))
-        except:
-            c, v, t = exc_info(); raise v.with_traceback(t.tb_next)
+        for method in self.methods:
+            try:
+                try:
+                    return method(*args, **kwargs)
+                except (StopIteration, GeneratorExit):
+                    c, v, t = exc_info()
+                    handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
+            except DeclineMessage:
+                continue
+            except:
+                c, v, t = exc_info(); raise v.with_traceback(t.tb_next)
+        raise NoneOfTheObserversRespond(
+                unansweredMessage=self._message,
+                nrOfObservers=len(list(self._observers)))
     __call__ = call
 
-    def verifyMethodResult(self, method, result):
-        pass
 
 class DoMessage(MessageBase):
     altname = 'do_unknown'

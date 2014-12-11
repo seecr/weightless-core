@@ -23,7 +23,6 @@
 # 
 ## end license ##
 
-
 from urllib.request import urlopen, Request, urlopen
 from io import StringIO
 from socket import socket, SHUT_RD, SHUT_WR, SHUT_RDWR, SO_REUSEADDR, SOL_SOCKET

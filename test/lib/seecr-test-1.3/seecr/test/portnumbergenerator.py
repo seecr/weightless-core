@@ -27,22 +27,21 @@ from struct import pack
 from time import sleep
 
 class PortNumberGenerator(object):
-    _ephemeralPortLow, _ephemeralPortHigh = [int(p) for p in open('/proc/sys/net/ipv4/ip_local_port_range', 'r').read().strip().split('\t', 1)]  # low\thigh
+    _ephemeralPortLow, _ephemeralPortHigh = [int(p) for p in open('/proc/sys/net/ipv4/ip_local_port_range', 'r').read().strip().split('\t', 1)]  # low\high
     _maxTries = (_ephemeralPortHigh - _ephemeralPortLow) / 2
     _usedPorts = set([])
 
     @classmethod
     def next(cls):
         for i in range(cls._maxTries):
-            sok = socket()
-            sok.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
-            sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-            sok.bind(('127.0.0.1', 0))
-            ignoredHost, port = sok.getsockname()
-            sok.close()
-            if port not in cls._usedPorts:
-                cls._usedPorts.add(port)
-                return port
+            with socket() as sok:
+                sok.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
+                sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+                sok.bind(('127.0.0.1', 0))
+                ignoredHost, port = sok.getsockname()
+                if port not in cls._usedPorts:
+                    cls._usedPorts.add(port)
+                    return port
 
         raise RuntimeError('Not been able to get an new uniqe free port within a reasonable amount (%s) of tries.' % cls._maxTries)
 

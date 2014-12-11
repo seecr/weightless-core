@@ -1160,6 +1160,23 @@ AssertionError: Generator already used.\n""" % {
                 'cLine': cLine,
                 'genYieldLine': genYieldLine,
             }
+            else:
+                stackText = """\
+Traceback (most recent call last):
+  File "%(__file__)s", line %(cLine)s, in testUnsuitableGeneratorTraceback
+    next(composed)
+  File "%(_compose_py)s", line 139, in _compose
+    raise exception[1].with_traceback(exception[2])
+  File "%(__file__)s", line %(genYieldLine)s, in gen
+    yield genF
+  File "%(_compose_py)s", line 106, in _compose
+    if cpython: assert frame.f_lineno == frame.f_code.co_firstlineno, 'Generator already used.'
+AssertionError: Generator already used.\n""" % {
+                '__file__': fileDict['__file__'],
+                '_compose_py': fileDict['_compose_py'],
+                'cLine': cLine,
+                'genYieldLine': genYieldLine,
+            }
             tbString = format_exc()
             self.assertEqual(stackText, tbString)
         else:
@@ -1212,6 +1229,7 @@ AssertionError: Generator already used.\n""" % {
                     return tostring(o)
                 except:
                     return repr(o)
+            
             gc.collect()
             #for obj in self.get_tracked_objects():
             #    self.assertTrue(obj in self._baseline, obj) #tostr(obj))

@@ -33,15 +33,9 @@ from weightless.http import HttpsServer
 
 from OpenSSL import SSL
 from subprocess import Popen, PIPE
+from io import StringIO
 
 class HttpsServerTest(TestCase):
-
-    def setUp(self):
-        self.reactor = Reactor()
-
-    def tearDown(self):
-        self.reactor.shutdown()
-        self.reactor = None
 
     def testConnect(self):
         self.req = False
@@ -51,31 +45,28 @@ class HttpsServerTest(TestCase):
             self.req = True
 
         port = randint(15000, 16000)
-        reactor = Reactor()
-        try:
-            server = HttpsServer(reactor, port, onRequest, keyfile='ssl/server.pkey', certfile='ssl/server.cert')
-            server.listen()
+        with Reactor(log=StringIO()) as reactor:
+            with HttpsServer(reactor, port, onRequest, keyfile='ssl/server.pkey', certfile='ssl/server.cert') as server:
+                server.listen()
 
-            p = Popen('wget -O - --no-check-certificate --quiet https://localhost:%s' % port, shell=True, stdout=PIPE)
+                p = Popen('wget -O - --no-check-certificate --quiet https://localhost:%s' % port, shell=True, stdout=PIPE)
 
-            popenStdout = []
-            def readPopenStdout():
-                popenStdout.append(p.stdout.read())
-            reactor.addReader(p.stdout, readPopenStdout)
+                popenStdout = []
+                def readPopenStdout():
+                    popenStdout.append(p.stdout.read())
+                reactor.addReader(p.stdout, readPopenStdout)
 
-            while not self.req:
-               reactor.step()
+                while not self.req:
+                   reactor.step()
 
-            reactor.step()
-            self.assertEqual(1, len(popenStdout))
-            self.assertEqual(serverResponse.encode(), popenStdout[0])
-        finally:
-            server.shutdown()
+                reactor.step()
+                self.assertEqual(1, len(popenStdout))
+                self.assertEqual(serverResponse.encode(), popenStdout[0])
 
     def testConnectBindAddress(self):
         reactor = CallTrace()
         port = randint(15000, 16000)
-        server = HttpsServer(reactor, port, lambda **kwargs: None, bindAddress='127.0.0.1', keyfile='ssl/server.pkey', certfile='ssl/server.cert')
-        server.listen()
-        self.assertEqual(('127.0.0.1', port), server._sok.getsockname())
+        with HttpsServer(reactor, port, lambda **kwargs: None, bindAddress='127.0.0.1', keyfile='ssl/server.pkey', certfile='ssl/server.cert') as server:
+            server.listen()
+            self.assertEqual(('127.0.0.1', port), server._sok.getsockname())
 

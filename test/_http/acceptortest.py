@@ -59,12 +59,11 @@ class AcceptorTest(TestCase):
         self.acceptor = Acceptor(reactor, port, lambda sok: None)
         self.assertEqual('addReader', reactor.calledMethods[0].name)
         acceptCallback = reactor.calledMethods[0].args[1]
-        sok = socket()
-        sok.connect(('localhost', port))
-        acceptCallback()
-        self.assertEqual(['addReader'], reactor.calledMethodNames())
-        reactor.calledMethods[0].args[0].close()
-        sok.close()
+        with socket() as sok:
+            sok.connect(('localhost', port))
+            acceptCallback()
+            self.assertEqual(['addReader'], reactor.calledMethodNames())
+            reactor.calledMethods[0].args[0].close()
 
     def testCreateSink(self):
         reactor = CallTrace('reactor')
@@ -73,14 +72,13 @@ class AcceptorTest(TestCase):
             def __init__(inner, *args, **kwargs): self.args, self.kwargs = args, kwargs
         self.acceptor = Acceptor(reactor, port, sinkFactory)
         acceptCallback = reactor.calledMethods[0].args[1]
-        sok = socket()
-        sok.connect(('localhost', port))
-        acceptCallback()
-        self.assertEqual('addReader', reactor.calledMethods[1].name)
-        sink = reactor.calledMethods[1].args[1]
-        self.assertEqual(socket, type(self.args[0]))
-        reactor.calledMethods[0].args[0].close()
-        sok.close()
+        with socket() as sok:
+            sok.connect(('localhost', port))
+            acceptCallback()
+            self.assertEqual('addReader', reactor.calledMethods[1].name)
+            sink = reactor.calledMethods[1].args[1]
+            self.assertEqual(socket, type(self.args[0]))
+            reactor.calledMethods[0].args[0].close()
 
     def testReadData(self):
         reactor = CallTrace('reactor')
@@ -92,36 +90,33 @@ class AcceptorTest(TestCase):
                 self.next = True
         self.acceptor = Acceptor(reactor, port, sinkFactory)
         acceptCallback = reactor.calledMethods[0].args[1]
-        sok = socket()
-        sok.connect(('localhost', port))
-        acceptCallback()
-        sink = reactor.calledMethods[1].args[1]
-        self.next = False
-        next(sink)
-        self.assertTrue(self.next)
-        reactor.calledMethods[0].args[0].close()
-        sok.close()
+        with socket() as sok:
+            sok.connect(('localhost', port))
+            acceptCallback()
+            sink = reactor.calledMethods[1].args[1]
+            self.next = False
+            next(sink)
+            self.assertTrue(self.next)
+            reactor.calledMethods[0].args[0].close()
 
     def testReuseAddress(self):
         reactor = CallTrace()
         port = randint(2**10, 2**16)
         self.acceptor = Acceptor(reactor, port, lambda sok: None)
-        client = socket()
-        client.connect(('127.0.0.1', port))
-        self.acceptor._accept()
-        self.acceptor.close()
-        self.acceptor = Acceptor(reactor, port, lambda sok: None)
-        client.close()
+        with socket() as client:
+            client.connect(('127.0.0.1', port))
+            self.acceptor._accept()
+            self.acceptor.close()
+            self.acceptor = Acceptor(reactor, port, lambda sok: None)
 
     def testAcceptorWithPrio(self):
         reactor = CallTrace()
         port = randint(2**10, 2**16)
         self.acceptor = Acceptor(reactor, port, lambda sok: None, prio=5)
-        client = socket()
-        client.connect(('127.0.0.1', port))
-        self.acceptor._accept()
-        self.assertEqual(5, reactor.calledMethods[0].kwargs['prio'])
-        client.close()
+        with socket() as client:
+            client.connect(('127.0.0.1', port))
+            self.acceptor._accept()
+            self.assertEqual(5, reactor.calledMethods[0].kwargs['prio'])
 
     def testBindAddress_DefaultsTo_0_0_0_0(self):
         reactor = CallTrace()

@@ -3,7 +3,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2010-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2014 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -31,43 +31,113 @@ from functools import partial
 
 from weightless.io import Suspend
 from weightless.core import compose, identify
+from urllib.parse import urlsplit
+from io import BytesIO
 
 
-def httpget(host, port, request, headers=None, body=None, ssl=False, prio=None, handlePartialResponse=None):
-    return _httpRequest(method='GET', host=host, port=port, request=request, body=body, headers=headers, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse)
-
-def httppost(host, port, request, body, headers=None, ssl=False, prio=None, handlePartialResponse=None):
-    return _httpRequest(method='POST', host=host, port=port, request=request, body=body, headers=headers, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse)
-
-httpsget = partial(httpget, ssl=True)
-httpspost = partial(httppost, ssl=True)
-
-
-def _httpRequest(host, port, request, body=None, headers=None, ssl=False, prio=None, handlePartialResponse=None, method='GET'):
-    s = Suspend(_do(method, host=host, port=port, request=request, headers=headers, body=body, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse).send)
+def _httpRequest(host, port, request, body=None, headers=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None, method='GET'):
+    s = Suspend(_do(method, host=host, port=port, request=request, headers=headers, proxyServer=proxyServer, body=body, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse).send)
     yield s
     result = s.getResult()
     raise StopIteration(result)
 
+httpget = _httpRequest
+httppost = partial(_httpRequest, method='POST')
+httpdelete = partial(_httpRequest, method='DELETE')
+httpput = partial(_httpRequest, method='PUT')
+
+httpsget = partial(httpget, ssl=True)
+httpspost = partial(httppost, ssl=True)
+httpsdelete = partial(httpdelete, ssl=True)
+httpsput = partial(httpput, ssl=True)
+
+def _createSocket():
+    sok = socket()
+    sok.setblocking(0)
+    sok.setsockopt(SOL_SOCKET, SO_KEEPALIVE, 1)
+    sok.setsockopt(SOL_TCP, TCP_KEEPIDLE, 60*10)
+    sok.setsockopt(SOL_TCP, TCP_KEEPINTVL, 75)
+    sok.setsockopt(SOL_TCP, TCP_KEEPCNT, 9)
+    return sok
+
 @identify
 @compose
-def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=None, handlePartialResponse=None):
+def _do(method, host, port, request, body=None, headers=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None):
     headers = headers or {}
     this = yield # this generator, from @identify
     suspend = yield # suspend object, from Suspend.__call__
-    with socket() as sok:
-        sok.setblocking(0)
-        sok.setsockopt(SOL_SOCKET, SO_KEEPALIVE, 1)
-        sok.setsockopt(SOL_TCP, TCP_KEEPIDLE, 60*10)
-        sok.setsockopt(SOL_TCP, TCP_KEEPINTVL, 75)
-        sok.setsockopt(SOL_TCP, TCP_KEEPCNT, 9)
-        try:
-            sok.connect((host, port))
-        except (TypeError, SocketError) as error:
-            (errno, msg) = error.args
-            if errno != EINPROGRESS:
-                raise
 
+    sok = _createSocket()
+    if proxyServer:
+        proxy = urlsplit(proxyServer)
+        origHost = host
+        origPort = port
+        host = proxy.hostname
+        port = proxy.port or 80
+
+    try:
+        sok.connect((host, port))
+    except (TypeError, SocketError) as error:
+        (errno, msg) = error.args
+        if errno != EINPROGRESS:
+            raise
+
+    try:
+        suspend._reactor.addWriter(sok, this.__next__, prio=prio)
+        try:
+            yield
+            err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
+            if err != 0:    # connection created succesfully?
+                raise IOError(err)
+        finally:
+            suspend._reactor.removeWriter(sok)
+
+        if proxyServer:
+            sok.sendall(  # hotfix EG d.d. 1/3/14
+                (("CONNECT %s:%d HTTP/1.0\r\n" +
+                "Host: %s:%d\r\n\r\n") % (origHost, origPort, origHost, origPort)).encode())
+            suspend._reactor.addReader(sok, this.__next__, prio=prio)
+            try:
+                # hotfix EG d.d. 1/3/14
+                response = BytesIO()
+                while True:
+                    yield
+                    fragment = sok.recv(4096)
+                    if len(fragment) == 0:
+                        break
+                    response.write(fragment)
+                    if b"\r\n\r\n" in response.getvalue():
+                        break
+                status = response.getvalue().split()[:2]
+                if not b"200" in status:
+                    raise ValueError("Failed to connect through proxy")
+                # end hotfix
+            finally:
+                suspend._reactor.removeReader(sok)
+        if ssl:
+            sok = yield _sslHandshake(sok, this, suspend, prio)
+
+        suspend._reactor.addWriter(sok, this.__next__, prio=prio)
+        try:
+            yield
+            err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
+            if err != 0:    # connection created succesfully?
+                raise IOError(err)
+            yield
+            # error checking
+            if body:
+                data = body
+                if type(data) is str:
+                    data = data.encode()
+                headers.update({'Content-Length': len(data)})
+            yield _sendHttpHeaders(sok, method, request, headers)
+            if body:
+                yield _asyncSend(sok, data)
+        finally:
+            suspend._reactor.removeWriter(sok)
+        suspend._reactor.addReader(sok, this.__next__, prio=prio)
+        responses = []
+    
         try:
             if ssl:
                 sok = yield _sslHandshake(sok, this, suspend, prio)
@@ -79,42 +149,26 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=No
                 if err != 0:    # connection created succesfully?
                     raise IOError(err)
                 yield
-                # error checking
-                if body:
-                    data = body
-                    if type(data) is str:
-                        data = data.encode()
-                    headers.update({'Content-Length': len(data)})
-                yield _sendHttpHeaders(sok, method, request, headers)
-                if body:
-                    yield _asyncSend(sok, data)
-            finally:
-                suspend._reactor.removeWriter(sok)
-            suspend._reactor.addReader(sok, this.__next__, prio=prio)
-            responses = []
-            try:
-                while True:
-                    yield
-                    try:
-                        response = sok.recv(4096) # error checking
-                    except SSLError as e:
-                        if e.errno != SSL_ERROR_WANT_READ:
-                            raise
-                        continue
-                    if response == b'':
-                        break
+                try:
+                    response = sok.recv(4096) # error checking
+                except SSLError as e:
+                    if e.errno != SSL_ERROR_WANT_READ:
+                        raise
+                    continue
+                if response == b'':
+                    break
 
-                    if handlePartialResponse:
-                        handlePartialResponse(response)
-                    else:
-                        responses.append(response)
-            finally:
-                suspend._reactor.removeReader(sok)
-            # sok.shutdown(SHUT_RDWR)
-            sok.close()
-            suspend.resume(None if handlePartialResponse else b''.join(responses))
-        except Exception:
-            suspend.throw(*exc_info())
+                if handlePartialResponse:
+                    handlePartialResponse(response)
+                else:
+                    responses.append(response)
+        finally:
+            suspend._reactor.removeReader(sok)
+        # sok.shutdown(SHUT_RDWR)
+        sok.close()
+        suspend.resume(None if handlePartialResponse else b''.join(responses))
+    except Exception:
+        suspend.throw(*exc_info())
     # Uber finally: sok.close() from line 108
     yield
 
@@ -127,7 +181,9 @@ def _sslHandshake(sok, this, suspend, prio):
     suspend._reactor.removeWriter(sok)
 
     sok = wrap_socket(sok, do_handshake_on_connect=False)
-    while True:
+    count = 0
+    while count < 254:
+        count += 1
         try:
             sok.do_handshake()
             break
@@ -140,6 +196,10 @@ def _sslHandshake(sok, this, suspend, prio):
                 suspend._reactor.addWriter(sok, this.__next__, prio=prio)
                 yield
                 suspend._reactor.removeWriter(sok)
+            else:
+                raise
+    if count == 254:
+        raise ValueError("SSL handshake failed.")
     raise StopIteration(sok)
 
 def _asyncSend(sok, data):

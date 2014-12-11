@@ -4,7 +4,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2014 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -99,7 +99,7 @@ class Reactor(object):
         if process in self._processes:
             raise ValueError('Process is already in processes')
         self._processes[process] = Context(process, prio)
-        write(self._processWritePipe, b'x')
+        self._writeProcessPipe()
 
     def addTimer(self, seconds, callback):
         """Add a timer that calls callback() after the specified number of seconds. Afterwards, the timer is deleted.  It returns a token for removeTimer()."""
@@ -118,7 +118,7 @@ class Reactor(object):
     def removeProcess(self, process=None):
         if process is None:
             process = self.currentcontext.callback
-        read(self._processReadPipe, 1)
+        self._readProcessPipe()
         del self._processes[process]
 
     def removeTimer(self, token):
@@ -132,7 +132,8 @@ class Reactor(object):
     def suspend(self):
         self._readers.pop(self.currenthandle, None)
         self._writers.pop(self.currenthandle, None)
-        self._processes.pop(self.currenthandle, None)
+        if self._processes.pop(self.currenthandle, None):
+            self._readProcessPipe()
         self._suspended[self.currenthandle] = self.currentcontext
         return self.currenthandle
 
@@ -144,6 +145,7 @@ class Reactor(object):
 
     def resumeProcess(self, handle):
         self._processes[handle] = self._suspended.pop(handle)
+        self._writeProcessPipe()
 
     def shutdown(self):
         for contextDict in [
@@ -172,19 +174,12 @@ class Reactor(object):
         __reactor__ = self
 
         self._prio = (self._prio + 1) % Reactor.MAXPRIO
-        if self._timers:
-            timeout = max(0, self._timers[0].time - time())
-        else:
-            timeout = None
+        timeout = max(0, self._timers[0].time - time()) if self._timers else None
 
         try:
             readers = list(self._readers.keys()) + [self._processReadPipe]
             rReady, wReady, ignored = self._select(readers, list(self._writers.keys()), [], timeout)
-        except TypeError:
-            print_exc()
-            self._findAndRemoveBadFd()
-            return self
-        except ValueError:
+        except (TypeError, ValueError):
             print_exc()
             self._findAndRemoveBadFd()
             return self
@@ -279,3 +274,10 @@ class Reactor(object):
             pass
         self._processReadPipe = None
         self._processWritePipe = None
+
+    def _readProcessPipe(self):
+        read(self._processReadPipe, 1)
+
+    def _writeProcessPipe(self):
+        write(self._processWritePipe, b'x')
+

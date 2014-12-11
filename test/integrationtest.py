@@ -39,6 +39,7 @@ from weightless.io import Reactor
 from weightless.http import HttpServer
 from socket import socket
 from time import sleep
+from io import StringIO
 
 class IntegrationTest(TestCase):
     def testPostWithNoBodyDoesNotStartInfiniteLoop(self):
@@ -47,17 +48,18 @@ class IntegrationTest(TestCase):
         def connect(*args, **kwargs):
             yield "HTTP 200 ok\r\n\r\nHello World!"
 
-        server = HttpServer(reactor, port, connect, timeout=1)
-        server.listen()
-        s = socket()
-        s.connect(('localhost', port))
-        reactor.step()
-        self.assertEquals(2, len(reactor._readers))
+        with Reactor(log=StringIO()) as reactor:
+            with HttpServer(reactor, port, connect, timeout=1) as server:
+                server.listen()
+                with socket() as s:
+                    s.connect(('localhost', port))
+                    reactor.step()
+                    self.assertEquals(2, len(reactor._readers))
 
-        s.send('POST / HTTP/1.0\r\n\r\n')
-        reactor.step()
-        s.close()
-        self.assertEquals(1, len(reactor._readers))
+                    s.send('POST / HTTP/1.0\r\n\r\n')
+                    reactor.step()
+                    s.close()
+                self.assertEquals(1, len(reactor._readers))
 
     def testUnknownMethodDoesNotStartInfiniteLoop(self):
         reactor = Reactor()
