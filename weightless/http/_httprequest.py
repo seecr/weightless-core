@@ -139,15 +139,7 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
         responses = []
     
         try:
-            if ssl:
-                sok = yield _sslHandshake(sok, this, suspend, prio)
-
-            suspend._reactor.addWriter(sok, this.__next__, prio=prio)
-            try:
-                yield
-                err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
-                if err != 0:    # connection created succesfully?
-                    raise IOError(err)
+            while True:
                 yield
                 try:
                     response = sok.recv(4096) # error checking
