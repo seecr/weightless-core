@@ -27,6 +27,7 @@
 from weightlesstestcase import WeightlessTestCase, MATCHALL
 from socket import socket, error as SocketError
 from errno import EAGAIN
+from select import select
 from weightless.io import Reactor
 from time import sleep
 from seecr.test import CallTrace
@@ -91,6 +92,7 @@ class HttpServerTest(WeightlessTestCase):
                 clientResponse.write(clientRecv(sok))
         sok.close()
         return clientResponse.getvalue()
+
 
     def testConnect(self):
         self.req = False
