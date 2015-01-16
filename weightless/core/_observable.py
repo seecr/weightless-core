@@ -181,13 +181,14 @@ class DoMessage(MessageBase):
 
 class OnceMessage(MessageBase):
     def once(self, *args, **kwargs):
-        done = set()
-        return self._callonce(self._observers, args, kwargs, done)
+        self.seen = set()
+        self.called = set()
+        return self._callonce(self._observers, args, kwargs, self.seen)
     __call__ = once
 
-    def _callonce(self, observers, args, kwargs, done):
-        for observer in (o for o in observers if o not in done):
-            done.add(observer)
+    def _callonce(self, observers, args, kwargs, seen):
+        for observer in (o for o in observers if o not in seen):
+            seen.add(observer)
             try:
                 method = getattr(observer, self._message)
             except AttributeError:
@@ -195,6 +196,7 @@ class OnceMessage(MessageBase):
             else:
                 try:
                     try:
+                        self.called.add(observer)
                         _ = methodResult = method(*args, **kwargs)
                     except (StopIteration, GeneratorExit):
                         c, v, t = exc_info()
@@ -206,7 +208,7 @@ class OnceMessage(MessageBase):
                 assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
             if isinstance(observer, Observable):
                 try:
-                    _ = yield self._callonce(observer._observers, args, kwargs, done)
+                    _ = yield self._callonce(observer._observers, args, kwargs, seen)
                 except:
                     c, v, t = exc_info(); raise c, v, t.tb_next
                 assert _ is None, "OnceMessage of %s returned '%s', but must always be None" % (self._observable, _)

@@ -29,7 +29,7 @@ export PYTHONPATH=.:"$PYTHONPATH"
 
 option=$1
 pyversions=""
-for pythonVersion in python2.6 python2.7
+for pythonVersion in python2.6 python2.7 python3.2
 do
     if command -v ${pythonVersion} > /dev/null; then
         pyversions="${pyversions} ${pythonVersion}"

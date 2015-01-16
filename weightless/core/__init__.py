@@ -56,7 +56,7 @@ try:
     from ext import compose as _compose, local, tostring, Yield, is_generator, DeclineMessage
     cextension = True
     ComposeType = _compose
-except ImportError, e:
+except ImportError as e:
     from warnings import warn
     warn("Using Python version of compose(), local() and tostring()", stacklevel=2)
     def is_generator(o):

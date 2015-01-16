@@ -36,6 +36,7 @@ from types import GeneratorType
 from functools import partial
 from weightless.core import compose, Yield, Observable, Transparent, be, tostring, NoneOfTheObserversRespond, DeclineMessage, cextension
 from weightless.core._observable import AllMessage, AnyMessage, DoMessage, OnceMessage
+from weightless.core import consume
 from unittest import TestCase
 from seecr.test import CallTrace
 
@@ -214,7 +215,7 @@ class ObservableTest(TestCase):
         mockedSelf = MockedOnceMessageSelf(observers=oncedObservable._observers, message='noRelevantMethodHere', observable='AnObservableObject(name=None)')
         mockedSelf._callonce = retvalGen
 
-        composed = compose(OnceMessage._callonce(mockedSelf, observers=[AnObservable()], args=(), kwargs={}, done=set()))
+        composed = compose(OnceMessage._callonce(mockedSelf, observers=[AnObservable()], args=(), kwargs={}, seen=set()))
         try:
             composed.next()
             self.fail("Should not happen")
@@ -655,7 +656,7 @@ class ObservableTest(TestCase):
                 initcalled[0] += 1
         root = be((Observable(), (MyObserver(),)))
         self.assertEquals([0], initcalled)
-        list(compose(root.once.observer_init()))
+        consume(root.once.observer_init())
         self.assertEquals([1], initcalled)
 
     def testAddObserversOnce(self):
@@ -696,8 +697,11 @@ class ObservableTest(TestCase):
             )
         root = be(dna)
         collector = []
-        list(compose(root.once.methodOnlyCalledOnce(collector)))
+        methodOnlyCalledOnce = root.once.methodOnlyCalledOnce
+        consume(methodOnlyCalledOnce(collector))
         self.assertEquals(['once'], collector)
+        self.assertTrue(once in methodOnlyCalledOnce.seen)
+        self.assertTrue(once in methodOnlyCalledOnce.called)
 
     def testOnceCalledMethodsMustResultInAGeneratorOrComposeOrNone(self):
         callLog = []
@@ -748,19 +752,28 @@ class ObservableTest(TestCase):
                 aList.append('once')
                 return
                 yield
-        once = MyObserver()
+        t1 = Transparent(name="A")
+        t2 = Transparent(name="B")
+        t3 = Transparent(name="C")
+        once = MyObserver("D")
         diamond = \
-            (Transparent(),
-                (Transparent(),
+            (t1,
+                (t2,
                     (once,)
                 ),
-                (Transparent(),
+                (t3,
                     (once,)
                 )
             )
         root = be(diamond)
         collector = []
-        list(compose(root.once.methodOnlyCalledOnce(collector)))
+        methodOnlyCalledOnce = root.once.methodOnlyCalledOnce
+        consume(methodOnlyCalledOnce(collector))
+        self.assertTrue(once in methodOnlyCalledOnce.seen)
+        self.assertTrue(t2 in methodOnlyCalledOnce.seen)
+        self.assertTrue(t3 in methodOnlyCalledOnce.seen)
+        self.assertEquals(3, len(methodOnlyCalledOnce.seen))
+        self.assertEquals(set([once]), methodOnlyCalledOnce.called)
         self.assertEquals(['once'], collector)
 
     def testPropagateThroughAllObservablesInDiamondWithNONTransparentObservablesWithoutUnknownMethodDelegatingUnknownCalls(self):
