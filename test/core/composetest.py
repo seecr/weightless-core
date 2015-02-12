@@ -1,26 +1,26 @@
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
 # Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 from unittest import TestCase
@@ -52,7 +52,7 @@ def __NEXTLINE__(offset=0):
 class ATrackedObj(object):
     def __init__(self):
         self.l = []
-        
+
 class _ComposeTest(TestCase):
 
     def testCallCompose(self):
@@ -682,7 +682,7 @@ class _ComposeTest(TestCase):
             self.assertEquals('testExceptionsHaveGeneratorCallStackAsBackTrace', exTraceback.tb_frame.f_code.co_name)
             self.assertEquals('g', exTraceback.tb_next.tb_frame.f_code.co_name)
             self.assertEquals('f', exTraceback.tb_next.tb_next.tb_frame.f_code.co_name)
-    
+
     def testToStringForSimpleGenerator(self):
         line = __NEXTLINE__()
         def f():
@@ -999,6 +999,7 @@ class _ComposeTest(TestCase):
         def f():
             yield "a"
         self.assertEquals(["a"], list(f()))
+        self.assertEquals('f', f.__name__)
 
     def testEmptyArgsInStopIteration(self):
         def f1():
@@ -1120,13 +1121,13 @@ class _ComposeTest(TestCase):
             yield genF
 
         composed = compose(gen())
-        
+
         try:
             cLine = __NEXTLINE__()
             composed.next()
         except AssertionError, e:
             self.assertEquals('Generator already used.', str(e))
-        
+
             stackText = """\
 Traceback (most recent call last):
   File "%(__file__)s", line %(cLine)s, in testUnsuitableGeneratorTraceback
@@ -1173,7 +1174,7 @@ AssertionError: Generator already used.\n""" % {
             self.assertEquals([True], ok)
 
     def get_tracked_objects(self):
-        return [o for o in gc.get_objects() if type(o) in 
+        return [o for o in gc.get_objects() if type(o) in
                 (compose, GeneratorType, Exception, StopIteration, ATrackedObj)]
 
     def setUp(self):
@@ -1245,7 +1246,7 @@ class ComposeCTest(_ComposeTest):
         except RuntimeError, e:
             self.fail('must not raise %s' % e)
 
-        max_recursion_depth += 1 # <== 
+        max_recursion_depth += 1 # <==
         c = compose(f())
         try:
             list(c)
@@ -1254,7 +1255,7 @@ class ComposeCTest(_ComposeTest):
             self.assertEquals('maximum recursion depth exceeded (compose)', str(e))
 
     def testDECREF_in_compose_clear(self):
-        """A bit strange, but this triggers a bug with 
+        """A bit strange, but this triggers a bug with
         DECREF(<temporary>) in compose_clear()"""
         def f():
             msg = yield
@@ -1293,4 +1294,4 @@ def gettypeerrormsg():
         compose()
     except TypeError, e:
         return str(e)
- 
+
