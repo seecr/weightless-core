@@ -1,1 +1,1 @@
-python-openssl
+python3-openssl
