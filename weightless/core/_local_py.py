@@ -23,7 +23,10 @@
 # 
 ## end license ##
 
+import sys
+from sys import exc_info
 from inspect import currentframe
+
 
 def findInLocals(f_locals, localName):
     if localName in f_locals:
@@ -37,15 +40,18 @@ def findInLocals(f_locals, localName):
     raise AttributeError(localName)
 
 def findLocalInFrame(frame, localName):
-    if not frame:
-        raise AttributeError(localName)
-    try:
-        return findInLocals(frame.f_locals, localName)
-    except AttributeError:
-        pass
-    return findLocalInFrame(frame.f_back, localName)
+    while frame:
+        try:
+            return findInLocals(frame.f_locals, localName)
+        except AttributeError:
+            pass
+        frame = frame.f_back
+
+    raise AttributeError(localName)
 
 def local(localName):
     frame = currentframe().f_back
-    return findLocalInFrame(frame, localName)
-
+    try:
+        return findLocalInFrame(frame, localName)
+    except AttributeError:
+        raise AttributeError(localName)

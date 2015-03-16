@@ -24,7 +24,9 @@
 ## end license ##
 
 from unittest import TestCase
-from weightless.core import local
+from sys import exc_info
+from weightless.core import local, consume, cextension
+
 
 class LocalTest(TestCase):
 
@@ -44,6 +46,43 @@ class LocalTest(TestCase):
             self.fail()
         except AttributeError:
             pass
+
+    def testNotFoundStacktraceCleanNormalFunctions(self):
+        def a():
+            b()
+        def b():
+            local('no_such_thing')
+        try:
+            a()
+            self.fail()
+        except AttributeError:
+            c, v, t = exc_info()
+            self.assertEquals("no_such_thing", str(v))
+            names = []
+            while t:
+                names.append(t.tb_frame.f_code.co_name)
+                t = t.tb_next
+            self.assertEquals(['testNotFoundStacktraceCleanNormalFunctions', 'a', 'b'] + ([] if cextension else ['local']), names)
+
+    def testNotFoundStacktraceCleanGeneratorFunctions(self):
+        def a():
+            yield b()
+        def b():
+            yield c()
+        def c():
+            yield local('no_such_thing')
+
+        try:
+            consume(a())
+            self.fail()
+        except AttributeError:
+            c, v, t = exc_info()
+            self.assertEquals("no_such_thing", str(v))
+            names = []
+            while t:
+                names.append(t.tb_frame.f_code.co_name)
+                t = t.tb_next
+            self.assertEquals(['testNotFoundStacktraceCleanGeneratorFunctions', 'consume', 'a', 'b', 'c'] + ([] if cextension else ['local']), names)
 
     def testVariousTypes(self):
         strArgument = 'string'
