@@ -23,7 +23,6 @@
 # 
 ## end license ##
 
-import sys
 from sys import exc_info
 from inspect import currentframe
 
