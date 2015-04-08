@@ -32,7 +32,7 @@ from socket import socket, gaierror as SocketGaiError
 from random import randint
 from re import sub
 from httpreadertest import server as testserver
-from weightless.http import HttpServer, httpget, httppost, httpspost, httpsget
+from weightless.http import HttpServer, httprequest, httpget, httppost, httpspost, httpsget
 from weightless.io import Reactor, Suspend
 from weightless.core import compose
 
@@ -57,7 +57,7 @@ class AsyncReaderTest(WeightlessTestCase):
         self.httpserver.shutdown()
         WeightlessTestCase.tearDown(self)
 
-    def testHttpRequest(self):
+    def testRequestLine(self):
         self.assertEquals('GET / HTTP/1.0\r\n', _requestLine('GET', '/'))
         self.assertEquals('POST / HTTP/1.0\r\n', _requestLine('POST', '/'))
 
@@ -92,7 +92,7 @@ class AsyncReaderTest(WeightlessTestCase):
       yield self.handler(*args, **kwargs)
   File "%(__file__)s", line 85, in failingserver
     response = yield httpget(*target)
-  File "%(httprequest.py)s", line 78, in _httpRequest
+  File "%(httprequest.py)s", line 78, in httprequest
     result = s.getResult()
   File "%(suspend.py)s", line 34, in __call__
     self._doNext(self)
@@ -107,7 +107,7 @@ TypeError: an integer is required
       yield self.handler(*args, **kwargs)
   File "%(__file__)s", line 85, in failingserver
     response = yield httpget(*target)
-  File "%(httprequest.py)s", line 78, in _httpRequest
+  File "%(httprequest.py)s", line 78, in httprequest
     result = s.getResult()
   File "%(suspend.py)s", line 34, in __call__
     self._doNext(self)
@@ -164,7 +164,7 @@ TypeError: an integer is required
       yield self.handler(*args, **kwargs)
   File "%(__file__)s", line 192, in failingserver
     response = yield httpget(*target)
-  File "%(httprequest.py)s", line 129, in _httpRequest
+  File "%(httprequest.py)s", line 129, in httprequest
     result = s.getResult()
   File "%(httprequest.py)s", line 83, in _do
     yield _sendHttpHeaders(sok, method, request, headers)
@@ -262,7 +262,6 @@ RuntimeError: Boom!""" % fileDict)
         self.assertTrue(self.error[0] is IOError)
         self.assertEquals("111", str(self.error[1]))
 
-
     def testHttpGet(self):
         get_request = []
         port = self.port + 1
@@ -287,6 +286,27 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEquals('/path', get_request[0]['path'])
         headers = get_request[0]['headers'].headers
         self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
+
+    def testHttpRequest(self):
+        get_request = []
+        port = self.port + 1
+        self.referenceHttpServer(port, get_request)
+
+        responses = []
+        def gethandler(*args, **kwargs):
+            response = 'no response yet'
+            try:
+                response = yield httprequest(method='MYMETHOD', host='localhost', port=port, request='/path',
+                    headers={'Content-Type': 'text/plain', 'Content-Length': 0},
+                    prio=4
+                )
+            finally:
+                responses.append(response)
+        self.handler = gethandler
+        clientget('localhost', self.port, '/')
+        self._loopReactorUntilDone()
+
+        self.assertTrue("Message: Unsupported method ('MYMETHOD')" in responses[0], responses[0])
 
     def testHttpGetWithReallyLargeHeaders(self):
         get_request = []

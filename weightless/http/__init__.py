@@ -28,4 +28,4 @@ from httpspec import parseHeaders, parseHeader, HTTP, REGEXP, FORMAT
 from _httpreader import HttpReader
 from _httpserver import HttpServer, HttpsServer
 from _acceptor import Acceptor
-from _httprequest import httpget, httppost, httpsget, httpspost, httpput, httpdelete, httpsput, httpsdelete
+from _httprequest import httprequest, httpget, httppost, httpsget, httpspost, httpput, httpdelete, httpsput, httpsdelete

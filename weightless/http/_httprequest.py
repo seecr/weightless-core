@@ -34,16 +34,16 @@ from weightless.core import compose, identify
 from urlparse import urlsplit
 
 
-def _httpRequest(host, port, request, body=None, headers=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None, method='GET'):
+def httprequest(host, port, request, body=None, headers=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None, method='GET'):
     s = Suspend(_do(method, host=host, port=port, request=request, headers=headers, proxyServer=proxyServer, body=body, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse).send)
     yield s
     result = s.getResult()
     raise StopIteration(result)
 
-httpget = _httpRequest
-httppost = partial(_httpRequest, method='POST')
-httpdelete = partial(_httpRequest, method='DELETE')
-httpput = partial(_httpRequest, method='PUT')
+httpget = httprequest
+httppost = partial(httprequest, method='POST')
+httpdelete = partial(httprequest, method='DELETE')
+httpput = partial(httprequest, method='PUT')
 
 httpsget = partial(httpget, ssl=True)
 httpspost = partial(httppost, ssl=True)
