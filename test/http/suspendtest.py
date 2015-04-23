@@ -1,26 +1,26 @@
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2010-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+# Copyright (C) 2011-2012, 2015 Seecr (Seek You Too B.V.) http://seecr.nl
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 from __future__ import with_statement
@@ -51,6 +51,45 @@ fileDict = {
 }
 
 class SuspendTest(WeightlessTestCase):
+    def testResumeOrThrowOnlyOnce(self):
+        # A.k.a. Promise / Future like behaviour.
+        trace = CallTrace("Reactor")
+        def getSuspend():
+            trace.calledMethods.reset()
+            suspend = Suspend(doNext=trace.doNext)
+            self.assertEquals([], trace.calledMethodNames())
+
+            suspend(reactor=trace, whenDone=trace.whenDone)
+            self.assertEquals(['doNext', 'suspend'], trace.calledMethodNames())
+            doNextM, suspendM = trace.calledMethods
+            self.assertEquals(((suspend,), {}), (doNextM.args, doNextM.kwargs))
+            self.assertEquals(((), {}), (suspendM.args, suspendM.kwargs))
+            trace.calledMethods.reset()
+            return suspend
+
+        suspend = getSuspend()
+        suspend.resume(response='whatever')
+        self.assertEquals(['whenDone'], trace.calledMethodNames())
+        trace.calledMethods.reset()
+        # Below no change of result, no side-effects
+        self.assertEquals('whatever', suspend.getResult())
+        suspend.resume(response='DIFFERENT')
+        self.assertEquals('whatever', suspend.getResult())
+        suspend.throw(exc_type=Exception, exc_value=Exception('Very'), exc_traceback=None)
+        self.assertEquals('whatever', suspend.getResult())
+        self.assertEquals([], trace.calledMethodNames())
+
+        suspend = getSuspend()
+        suspend.throw(RuntimeError, RuntimeError('Very'), None)
+        self.assertEquals(['whenDone'], trace.calledMethodNames())
+        trace.calledMethods.reset()
+        # Below no change of result, no side-effects
+        self.assertRaises(RuntimeError, lambda: suspend.getResult())
+        suspend.resume(response='whatever')
+        self.assertRaises(RuntimeError, lambda: suspend.getResult())
+        suspend.throw(exc_type=Exception, exc_value=Exception('Very'), exc_traceback=None)
+        self.assertRaises(RuntimeError, lambda: suspend.getResult())
+        self.assertEquals([], trace.calledMethodNames())
 
     def testReactorSuspend(self):
         handle = ['initial value']
