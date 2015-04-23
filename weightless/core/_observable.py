@@ -5,7 +5,7 @@
 #
 # Copyright (C) 2006-2010 Seek You Too (CQ2) http://www.cq2.nl
 # Copyright (C) 2011 Seecr http://seecr.nl
-# Copyright (C) 2011-2014 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2015 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
