@@ -23,8 +23,11 @@
 # 
 ## end license ##
 
+class TimeoutException(Exception):
+    pass
+
 from _reactor import Reactor, reactor
 from _suspend import Suspend
 
-from _gio import Gio, open as giopen, SocketContext, TimeoutException, Timer
+from _gio import Gio, open as giopen, SocketContext, Timer
 from _server import Server

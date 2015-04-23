@@ -26,7 +26,10 @@
 from functools import partial as curry
 import os
 from socket import SOL_SOCKET, SO_RCVBUF, SHUT_RDWR
+
 from weightless.core import compose, local
+from . import TimeoutException
+
 
 class Gio(object):
     def __init__(self, reactor, generator):
@@ -179,9 +182,6 @@ class FileContext(FdContext):
 
 def open(*args, **kwargs):
     return FileContext(*args, **kwargs)
-
-class TimeoutException(Exception):
-    pass
 
 class CloseException(Exception):
     pass

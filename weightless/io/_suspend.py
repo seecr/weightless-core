@@ -26,11 +26,19 @@
 from traceback import print_exc
 from sys import exc_info
 
+from . import TimeoutException
+
+
 class Suspend(object):
-    def __init__(self, doNext=lambda this: None):
+    def __init__(self, doNext=lambda this: None, timeout=None, onTimeout=None):
         self._doNext = doNext
+        if not ((timeout is None) == (onTimeout is None)):
+            raise ValueError('Either both or neither of timeout and onTimeout must be set.')
+        self._timeout = timeout
+        self._onTimeout = onTimeout
         self._exception = None
         self._settled = False
+        self._timer = None
 
     def __call__(self, reactor, whenDone):
         self._reactor = reactor
@@ -41,11 +49,15 @@ class Suspend(object):
             print_exc()
         else:
             self._whenDone = whenDone
+            if self._timeout is not None:
+                self._timer = self._reactor.addTimer(seconds=self._timeout, callback=self._timedOut)
             self._handle = reactor.suspend()
 
     def resume(self, response=None):
         if self._settled:
             return
+        if self._timer is not None:
+            self._reactor.removeTimer(token=self._timer)
 
         self._response = response
         self._settled = True
@@ -55,6 +67,8 @@ class Suspend(object):
         """Accepts either a full exception triple or only a single exception instance (not encouraged as it loses traceback information)."""
         if self._settled:
             return
+        if self._timer is not None:
+            self._reactor.removeTimer(token=self._timer)
 
         if exc_value is None and exc_traceback is None:
             self._exception = type(exc_type), exc_type, None
@@ -79,4 +93,9 @@ class Suspend(object):
         if self._exception:
             raise self._exception[0], self._exception[1], self._exception[2]
         return self._response
+
+    def _timedOut(self):
+        self._timer = None
+        self._onTimeout()
+        self.throw(TimeoutException, TimeoutException(), None)
 

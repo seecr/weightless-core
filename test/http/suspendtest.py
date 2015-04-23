@@ -35,7 +35,7 @@ from traceback import format_exc
 from weightlesstestcase import WeightlessTestCase
 from seecr.test import CallTrace
 
-from weightless.io import Reactor, Suspend
+from weightless.io import Reactor, Suspend, TimeoutException
 from weightless.http import HttpServer
 
 class MockSocket(object):
@@ -275,6 +275,47 @@ ValueError: BAD VALUE
         self.assertEquals('before suspend', listener.data[0])
         self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
         self.assertEquals('after suspend', listener.data[2])
+
+    def testSuspendTimingOut(self):
+        # with calltrace; happy path
+        trace = CallTrace()
+        suspend = Suspend(doNext=trace.doNext, timeout=3.14, onTimeout=trace.onTimeout)
+        self.assertEquals([], trace.calledMethodNames())
+
+        suspend(reactor=trace, whenDone=trace.whenDone)
+        self.assertEquals(['doNext', 'addTimer', 'suspend'], trace.calledMethodNames())
+        addTimer = trace.calledMethods[1]
+        self.assertEquals(((), {'seconds': 3.14, 'callback': suspend._timedOut}), (addTimer.args, addTimer.kwargs))
+
+        trace.calledMethods.reset()
+        suspend._timedOut()
+        self.assertEquals(['onTimeout', 'whenDone'], trace.calledMethodNames())
+        onTimeout = trace.calledMethods[0]
+        self.assertEquals(((), {}), (onTimeout.args, onTimeout.kwargs))
+
+        self.assertRaises(TimeoutException, lambda: suspend.getResult())
+
+    def testSuspendTimeoutArguments(self):
+        self.assertRaises(ValueError, lambda: Suspend(timeout=3))
+        self.assertRaises(ValueError, lambda: Suspend(onTimeout=lambda: None))
+        Suspend(timeout=3, onTimeout=lambda: None)
+
+    def testSuspendTimeoutTodo(self):
+        self.fail("""TODO:
+         - Both timeout and onTimeout must be given, or none.
+         - testSuspendCouldTimeoutButDidNot
+           With variants:
+            * .resume(<retval>)
+            * .throw(Ex, Ex('X'), <tb>)
+         - testSuspendTimeoutOnTimeoutCallbackGivesException
+            * sys.stdout.write('Weird stuff, ignoring exception:\n')
+              print_exc()
+         - testSuspendTimeoutSettlesSuspend
+            * Addition to testResumeOrThrowOnlyOnce
+         - testSuspendTimeout*Protocol tests
+            * a.k.a. with a real reactor & driver ...
+            * ... for **each** functionality tested where real / mocked reactor difference is important.
+        """)
 
     def testDoNextErrorReRaisedOnGetResult(self):
         def razor(ignored):
