@@ -298,11 +298,11 @@ ValueError: BAD VALUE
     def testSuspendTimeoutArguments(self):
         self.assertRaises(ValueError, lambda: Suspend(timeout=3))
         self.assertRaises(ValueError, lambda: Suspend(onTimeout=lambda: None))
+        Suspend()
         Suspend(timeout=3, onTimeout=lambda: None)
 
     def testSuspendTimeoutTodo(self):
         self.fail("""TODO:
-         - Both timeout and onTimeout must be given, or none.
          - testSuspendCouldTimeoutButDidNot
            With variants:
             * .resume(<retval>)

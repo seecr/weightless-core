@@ -32,7 +32,7 @@ from . import TimeoutException
 class Suspend(object):
     def __init__(self, doNext=lambda this: None, timeout=None, onTimeout=None):
         self._doNext = doNext
-        if not ((timeout is None) == (onTimeout is None)):
+        if (timeout is None) != (onTimeout is None):
             raise ValueError('Either both or neither of timeout and onTimeout must be set.')
         self._timeout = timeout
         self._onTimeout = onTimeout
