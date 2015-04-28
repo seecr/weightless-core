@@ -29,6 +29,7 @@ import sys
 from StringIO import StringIO
 from re import sub
 from sys import exc_info
+from time import sleep
 from traceback import format_exc
 
 from seecr.test import CallTrace
@@ -36,6 +37,7 @@ from seecr.test.io import stderr_replaced
 
 from weightlesstestcase import WeightlessTestCase
 
+from weightless.core import identify, compose, Yield
 from weightless.io import Reactor, Suspend, TimeoutException
 from weightless.http import HttpServer
 
@@ -434,6 +436,83 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
         Suspend()
         Suspend(timeout=3, onTimeout=lambda: None)
 
+    def testSuspendTimingOutProtocol(self):
+        # happy path
+        testRun = []
+        def test():
+            count = []
+            timedOut = []
+            @identify
+            def workInSuspendGenF():
+                this = yield
+                suspend = yield
+                suspend._reactor.addProcess(this.next)
+                try:
+                    for i in xrange(5):
+                        count.append(True)
+                        yield
+                    while True:
+                        sleep(0.0001)
+                        yield
+                except TimeoutException:
+                    timedOut.append(True)
+                finally:
+                    suspend._reactor.removeProcess(this.next)
+                yield  # Wait for GC
+
+            def workInSuspend():
+                g = workInSuspendGenF()
+                def doNext(suspend):
+                    g.send(suspend)
+                def onTimeout():
+                    g.throw(TimeoutException, TimeoutException(), None)
+                return doNext, onTimeout
+
+            def suspendWrap():
+                doNext, onTimeout = workInSuspend()
+                s = Suspend(doNext=doNext, timeout=0.01, onTimeout=onTimeout)
+                yield s
+                result = s.getResult()
+                self.fail('Should not have come here')
+
+            try:
+                result = yield suspendWrap()
+                self.fail()
+            except TimeoutException:
+                self.assertEquals(5, len(count))
+                self.assertEquals(True, bool(timedOut))
+
+            testRun.append(True)
+
+        # Simple driver
+        miniDriver(self.reactor, test())
+        self.assertEquals(True, bool(testRun))
+
+        self.fail('Fails below, works above ...')
+        return
+        # http server
+        def reqHandler(**whatever):
+            def inner():
+                yield test()
+                yield 'HTTP/1.0 200 OK\r\n\r\n'
+            return compose(inner())
+        #servert = HttpServer(reactor=self.reactor, port=4096, generatorFactory=reqHandler) # , bindAddress='127.0.0.1')  #@@
+
+        del testRun[:]
+        print 'HIERO'; sys.stdout.flush()
+        #servert.listen()
+        print 'DAARO'; sys.stdout.flush()
+        with self.loopingReactor():
+            print 'INLOO'; sys.stdout.flush()
+            sok = self.httpGet(host='127.42.42.42', port=4096, path='/ignored')
+            allData = ''
+            try:
+                while allData != 'HTTP/1.0 200 OK\r\n\r\n':
+                    allData += sok.recv(4096)
+            finally:
+                servert.shutdown()
+        self.assertEquals(True, bool(testRun))
+
     def testSuspendTimeoutTodo(self):
         self.fail("""
          - testSuspendTimeout*Protocol tests
@@ -567,6 +646,36 @@ ValueError: BAD VALUE
         reactor.cleanup(3)
         self.assertFalse(3 in reactor._suspended)
 
+
+def miniDriver(reactor, g):
+
+    @identify
+    def wrapper(generator):
+        this = yield
+        reactor.addProcess(process=this.next)
+        try:
+            yield
+            g = compose(generator)
+            while True:
+                _response = g.next()
+                if _response is Yield:
+                    continue
+                if _response is not Yield and callable(_response):
+                    _response(reactor, this.next)
+                    yield
+                    _response.resumeProcess()
+                yield
+        finally:
+            reactor.removeProcess(process=this.next)
+
+    wrapper(g)
+    try:
+        reactor.loop()
+    except StopIteration, e:
+        if e.args:
+            return e.args[0]
+
+
 class MyMockSocket(object):
     def __init__(self, data=None):
         self.data = [] if data is None else data
@@ -585,6 +694,7 @@ class MyMockSocket(object):
     def send(self, chunk, options):
         self.data.append(chunk)
         return len(chunk)
+
 
 def ignoreLineNumbers(s):
     return sub("line \d+,", "line [#],", s)
