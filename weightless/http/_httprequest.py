@@ -153,6 +153,8 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
         sok.shutdown(SHUT_RDWR)
         sok.close()
         suspend.resume(None if handlePartialResponse else ''.join(responses))
+    except (AssertionError, KeyboardInterrupt, SystemExit):
+        raise
     except Exception:
         suspend.throw(*exc_info())
     # Uber finally: sok.close() from line 108

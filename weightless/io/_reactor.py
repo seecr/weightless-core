@@ -246,24 +246,24 @@ class Reactor(object):
         for sok in self._readers:
             try:
                 select([sok], [], [], 0)
-            except:
+            except Exception:
                 self._readers.pop(sok).callback()
                 return
         for sok in self._writers:
             try:
                 select([], [sok], 0)
-            except:
+            except Exception:
                 self._writers.pop(sok).callback()
                 return
 
     def _closeProcessPipe(self):
         try:
             close(self._processReadPipe)
-        except:
+        except Exception:
             pass
         try:
             close(self._processWritePipe)
-        except:
+        except Exception:
             pass
         self._processReadPipe = None
         self._processWritePipe = None
