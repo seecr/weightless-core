@@ -23,8 +23,9 @@
 #
 ## end license ##
 
-from traceback import print_exc
+import sys
 from sys import exc_info
+from traceback import print_exc
 
 from . import TimeoutException
 
@@ -44,6 +45,8 @@ class Suspend(object):
         self._reactor = reactor
         try:
             self._doNext(self)
+        except (AssertionError, KeyboardInterrupt, SystemExit):
+            raise
         except Exception:
             self._exception = exc_info()
             print_exc()
@@ -96,6 +99,12 @@ class Suspend(object):
 
     def _timedOut(self):
         self._timer = None
-        self._onTimeout()
+        try:
+            self._onTimeout()
+        except (AssertionError, KeyboardInterrupt, SystemExit):
+            raise
+        except Exception:
+            sys.stderr.write("Unexpected exception raised on Suspend's onTimeout callback (ignored):\n")
+            print_exc()
         self.throw(TimeoutException, TimeoutException(), None)
 

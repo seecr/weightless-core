@@ -26,17 +26,19 @@
 from __future__ import with_statement
 
 import sys
-from sys import exc_info
 from StringIO import StringIO
-
 from re import sub
+from sys import exc_info
 from traceback import format_exc
 
-from weightlesstestcase import WeightlessTestCase
 from seecr.test import CallTrace
+from seecr.test.io import stderr_replaced
+
+from weightlesstestcase import WeightlessTestCase
 
 from weightless.io import Reactor, Suspend, TimeoutException
 from weightless.http import HttpServer
+
 
 class MockSocket(object):
     def close(self):
@@ -278,22 +280,153 @@ ValueError: BAD VALUE
 
     def testSuspendTimingOut(self):
         # with calltrace; happy path
-        trace = CallTrace()
+        trace = CallTrace(returnValues={'addTimer': 'timerToken'})
         suspend = Suspend(doNext=trace.doNext, timeout=3.14, onTimeout=trace.onTimeout)
         self.assertEquals([], trace.calledMethodNames())
+        self.assertEquals(None, suspend._timer)
 
         suspend(reactor=trace, whenDone=trace.whenDone)
         self.assertEquals(['doNext', 'addTimer', 'suspend'], trace.calledMethodNames())
-        addTimer = trace.calledMethods[1]
-        self.assertEquals(((), {'seconds': 3.14, 'callback': suspend._timedOut}), (addTimer.args, addTimer.kwargs))
+        doNextM, addTimerM, suspendM = trace.calledMethods
+        self.assertEquals(((suspend,), {}), (doNextM.args, doNextM.kwargs))
+        self.assertEquals(((), {'seconds': 3.14, 'callback': suspend._timedOut}), (addTimerM.args, addTimerM.kwargs))
+        self.assertEquals(((), {}), (suspendM.args, suspendM.kwargs))
+        self.assertEquals('timerToken', suspend._timer)
 
         trace.calledMethods.reset()
         suspend._timedOut()
         self.assertEquals(['onTimeout', 'whenDone'], trace.calledMethodNames())
-        onTimeout = trace.calledMethods[0]
-        self.assertEquals(((), {}), (onTimeout.args, onTimeout.kwargs))
+        onTimeoutM, whenDoneM = trace.calledMethods
+        self.assertEquals(((), {}), (onTimeoutM.args, onTimeoutM.kwargs))
+        self.assertEquals(((), {}), (whenDoneM.args, whenDoneM.kwargs))
+        self.assertEquals(None, suspend._timer)
 
         self.assertRaises(TimeoutException, lambda: suspend.getResult())
+
+    def testSuspendTimeoutSettlesSuspend(self):
+        def prepare():
+            trace = CallTrace(returnValues={'addTimer': 'timerToken'})
+            suspend = Suspend(doNext=trace.doNext, timeout=3.14, onTimeout=trace.onTimeout)
+            suspend(reactor=trace, whenDone=trace.whenDone)
+            self.assertEquals(['doNext', 'addTimer', 'suspend'], trace.calledMethodNames())
+
+            trace.calledMethods.reset()
+            suspend._timedOut()
+            self.assertEquals(['onTimeout', 'whenDone'], trace.calledMethodNames())
+            self.assertEquals(True, suspend._settled)
+            trace.calledMethods.reset()
+            return trace, suspend
+
+        # basic invariant
+        trace, suspend = prepare()
+        self.assertRaises(TimeoutException, lambda: suspend.getResult())
+
+        # resume on settled is a no-op
+        trace, suspend = prepare()
+        suspend.resume('whatever')
+        self.assertEquals([], trace.calledMethodNames())
+        self.assertRaises(TimeoutException, lambda: suspend.getResult())
+
+        # throw on settled is a no-op
+        trace, suspend = prepare()
+        suspend.throw(RuntimeError, RuntimeError('R'), None)
+        self.assertEquals([], trace.calledMethodNames())
+        self.assertRaises(TimeoutException, lambda: suspend.getResult())
+
+    def testSuspendCouldTimeoutButDidNot(self):
+        # with calltrace
+        def prepare():
+            trace = CallTrace(returnValues={'addTimer': 'timerToken'})
+            suspend = Suspend(doNext=trace.doNext, timeout=3.14, onTimeout=trace.onTimeout)
+            self.assertEquals([], trace.calledMethodNames())
+
+            suspend(reactor=trace, whenDone=trace.whenDone)
+            self.assertEquals(['doNext', 'addTimer', 'suspend'], trace.calledMethodNames())
+            doNextM, addTimerM, suspendM = trace.calledMethods
+            self.assertEquals(((suspend,), {}), (doNextM.args, doNextM.kwargs))
+            self.assertEquals(((), {'seconds': 3.14, 'callback': suspend._timedOut}), (addTimerM.args, addTimerM.kwargs))
+            self.assertEquals(((), {}), (suspendM.args, suspendM.kwargs))
+
+            trace.calledMethods.reset()
+            return trace, suspend
+
+        # with resume
+        trace, suspend = prepare()
+        suspend.resume('retval')
+        self.assertEquals(['removeTimer', 'whenDone'], trace.calledMethodNames())
+        removeTimerM, whenDoneM = trace.calledMethods
+        self.assertEquals(((), {'token': 'timerToken'}), (removeTimerM.args, removeTimerM.kwargs))
+        self.assertEquals(((), {}), (whenDoneM.args, whenDoneM.kwargs))
+
+        self.assertEquals('retval', suspend.getResult())
+
+        # with throw
+        trace, suspend = prepare()
+        suspend.throw(RuntimeError, RuntimeError('R'), None)
+        self.assertEquals(['removeTimer', 'whenDone'], trace.calledMethodNames())
+        removeTimerM, whenDoneM = trace.calledMethods
+        self.assertEquals(((), {'token': 'timerToken'}), (removeTimerM.args, removeTimerM.kwargs))
+        self.assertEquals(((), {}), (whenDoneM.args, whenDoneM.kwargs))
+
+        self.assertRaises(RuntimeError, lambda: suspend.getResult())
+
+    def testSuspendTimeoutOnTimeoutCallbackGivesException(self):
+        def prepare(_onTimeout):
+            # Use indirect tracing of onTimeout call (otherwise CallTrace internals leak into the stacktrace).
+            trace = CallTrace(returnValues={'addTimer': 'timerToken'})
+            onTimeoutM = trace.onTimeout
+            def onTimeoutTraced():
+                onTimeoutM()  # We have been called Watson!
+                return _onTimeout()
+            trace.onTimeout = onTimeoutTraced
+
+            suspend = Suspend(doNext=trace.doNext, timeout=3.14, onTimeout=trace.onTimeout)
+            suspend(reactor=trace, whenDone=trace.whenDone)
+            self.assertEquals(['doNext', 'addTimer', 'suspend'], trace.calledMethodNames())
+            trace.calledMethods.reset()
+            return trace, suspend
+
+        # basic invariant
+        trace, suspend = prepare(lambda: None)
+        suspend._timedOut()
+        self.assertEquals(['onTimeout', 'whenDone'], trace.calledMethodNames())
+        self.assertRaises(TimeoutException, lambda: suspend.getResult())
+
+        # normal exceptions
+        def onTimeout():
+            raise Exception("This Should Never Happen But Don't Expose Exception If It Does Anyway !")
+        trace, suspend = prepare(onTimeout)
+        with stderr_replaced() as err:
+            suspend._timedOut()
+            expectedTraceback = ignoreLineNumbers('''Unexpected exception raised on Suspend's onTimeout callback (ignored):
+Traceback (most recent call last):
+  File "%(suspend.py)s", line 101, in _timedOut
+    self._onTimeout()
+  File "%(__file__)s", line 382, in onTimeoutTraced
+    return _onTimeout()
+  File "%(__file__)s", line 398, in onTimeout
+    raise Exception("This Should Never Happen But Don't Expose Exception If It Does Anyway !")
+Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway !
+                ''' % fileDict)
+            self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(err.getvalue()))
+        self.assertEquals(['onTimeout', 'whenDone'], trace.calledMethodNames())
+        self.assertRaises(TimeoutException, lambda: suspend.getResult())
+
+        # fatal exceptions
+        def suspendCallWithOnTimeoutRaising(exception):
+            def onTimeout():
+                raise exception
+            trace, suspend = prepare(onTimeout)
+            try:
+                suspend._timedOut()
+            except:
+                c, v, t = exc_info()
+                self.assertEquals(['onTimeout'], trace.calledMethodNames())
+                raise c, v, t.tb_next
+
+        self.assertRaises(KeyboardInterrupt, lambda: suspendCallWithOnTimeoutRaising(KeyboardInterrupt()))
+        self.assertRaises(SystemExit, lambda: suspendCallWithOnTimeoutRaising(SystemExit()))
+        self.assertRaises(AssertionError, lambda: suspendCallWithOnTimeoutRaising(AssertionError()))
 
     def testSuspendTimeoutArguments(self):
         self.assertRaises(ValueError, lambda: Suspend(timeout=3))
@@ -302,16 +435,7 @@ ValueError: BAD VALUE
         Suspend(timeout=3, onTimeout=lambda: None)
 
     def testSuspendTimeoutTodo(self):
-        self.fail("""TODO:
-         - testSuspendCouldTimeoutButDidNot
-           With variants:
-            * .resume(<retval>)
-            * .throw(Ex, Ex('X'), <tb>)
-         - testSuspendTimeoutOnTimeoutCallbackGivesException
-            * sys.stdout.write('Weird stuff, ignoring exception:\n')
-              print_exc()
-         - testSuspendTimeoutSettlesSuspend
-            * Addition to testResumeOrThrowOnlyOnce
+        self.fail("""
          - testSuspendTimeout*Protocol tests
             * a.k.a. with a real reactor & driver ...
             * ... for **each** functionality tested where real / mocked reactor difference is important.
@@ -344,6 +468,17 @@ ZeroDivisionError: integer division or modulo by zero
         """ % fileDict)
         self.assertEquals(ZeroDivisionError, exc_type)
         self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(format_exc(exc_traceback)))
+
+    def testDoNextThrowsImmediatelyOnFatalExceptions(self):
+        def suspendWithDoNextException(exception):
+            def doNextRaising(suspend):
+                raise exception
+            suspend = Suspend(doNext=doNextRaising)
+            suspend(reactor=CallTrace(), whenDone="not called")
+
+        self.assertRaises(KeyboardInterrupt, lambda: suspendWithDoNextException(KeyboardInterrupt('err')))
+        self.assertRaises(SystemExit, lambda: suspendWithDoNextException(SystemExit('err')))
+        self.assertRaises(AssertionError, lambda: suspendWithDoNextException(AssertionError('err')))
 
     def testSuspendThrowBackwardsCompatibleWithInstanceOnlyThrow_YouWillMissTracebackHistory(self):
         reactor = Reactor(select_func=mockselect)
