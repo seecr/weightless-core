@@ -78,9 +78,13 @@ class SuspendTest(WeightlessTestCase):
         trace.calledMethods.reset()
         # Below no change of result, no side-effects
         self.assertEquals('whatever', suspend.getResult())
-        suspend.resume(response='DIFFERENT')
+        try:
+            suspend.resume(response='DIFFERENT')
+        except AssertionError, e:
+            self.assertEquals('Suspend already settled.', str(e))
+        else: self.fail()
         self.assertEquals('whatever', suspend.getResult())
-        suspend.throw(exc_type=Exception, exc_value=Exception('Very'), exc_traceback=None)
+        self.assertRaises(AssertionError, lambda: suspend.throw(exc_type=Exception, exc_value=Exception('Very'), exc_traceback=None))
         self.assertEquals('whatever', suspend.getResult())
         self.assertEquals([], trace.calledMethodNames())
 
@@ -90,9 +94,9 @@ class SuspendTest(WeightlessTestCase):
         trace.calledMethods.reset()
         # Below no change of result, no side-effects
         self.assertRaises(RuntimeError, lambda: suspend.getResult())
-        suspend.resume(response='whatever')
+        self.assertRaises(AssertionError, lambda: suspend.resume(response='whatever'))
         self.assertRaises(RuntimeError, lambda: suspend.getResult())
-        suspend.throw(exc_type=Exception, exc_value=Exception('Very'), exc_traceback=None)
+        self.assertRaises(AssertionError, lambda: suspend.throw(exc_type=Exception, exc_value=Exception('Very'), exc_traceback=None))
         self.assertRaises(RuntimeError, lambda: suspend.getResult())
         self.assertEquals([], trace.calledMethodNames())
 
@@ -326,13 +330,13 @@ ValueError: BAD VALUE
 
         # resume on settled is a no-op
         trace, suspend = prepare()
-        suspend.resume('whatever')
+        self.assertRaises(AssertionError, lambda: suspend.resume('whatever'))
         self.assertEquals([], trace.calledMethodNames())
         self.assertRaises(TimeoutException, lambda: suspend.getResult())
 
         # throw on settled is a no-op
         trace, suspend = prepare()
-        suspend.throw(RuntimeError, RuntimeError('R'), None)
+        self.assertRaises(AssertionError, lambda: suspend.throw(RuntimeError, RuntimeError('R'), None))
         self.assertEquals([], trace.calledMethodNames())
         self.assertRaises(TimeoutException, lambda: suspend.getResult())
 

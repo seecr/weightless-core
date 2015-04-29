@@ -58,7 +58,7 @@ class Suspend(object):
 
     def resume(self, response=None):
         if self._settled:
-            return
+            raise AssertionError('Suspend already settled.')
         if self._timer is not None:
             self._reactor.removeTimer(token=self._timer)
 
@@ -69,7 +69,7 @@ class Suspend(object):
     def throw(self, exc_type, exc_value=None, exc_traceback=None):
         """Accepts either a full exception triple or only a single exception instance (not encouraged as it loses traceback information)."""
         if self._settled:
-            return
+            raise AssertionError('Suspend already settled.')
         if self._timer is not None:
             self._reactor.removeTimer(token=self._timer)
 
