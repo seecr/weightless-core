@@ -25,22 +25,25 @@
 ## end license ##
 
 from __future__ import with_statement
+from random import randint
+from re import sub
+from socket import socket, gaierror as SocketGaiError
 from sys import exc_info, version_info
 from time import sleep
 from traceback import format_exception
-from socket import socket, gaierror as SocketGaiError
-from random import randint
-from re import sub
-from httpreadertest import server as testserver
-from weightless.http import HttpServer, httprequest, httpget, httppost, httpspost, httpsget
-from weightless.io import Reactor, Suspend
+
 from weightless.core import compose
+from weightless.http import HttpServer, httprequest, httpget, httppost, httpspost, httpsget
+from weightless.io import Reactor, Suspend, TimeoutException
 
 from weightless.http._httprequest import _requestLine
 from weightless.http import _httprequest as httpRequestModule
 
-from weightlesstestcase import WeightlessTestCase, StreamingData
 from seecr.test.io import stderr_replaced, stdout_replaced
+from seecr.test.portnumbergenerator import PortNumberGenerator
+from weightlesstestcase import WeightlessTestCase, StreamingData
+from httpreadertest import server as testserver
+
 
 PYVERSION = '%s.%s' % version_info[:2]
 
@@ -307,6 +310,53 @@ RuntimeError: Boom!""" % fileDict)
         self._loopReactorUntilDone()
 
         self.assertTrue("Message: Unsupported method ('MYMETHOD')" in responses[0], responses[0])
+
+    def testHttpRequestWithTimeout(self):
+        # And thus too http(s)get/post/... and friends.
+        get_request = []
+        port = PortNumberGenerator.next()
+        def slowData():
+            for i in xrange(5):
+                yield i
+                sleep(0.01)
+
+        responses = []
+        def handlerFactory(timeout):
+            def gethandler(*args, **kwargs):
+                try:
+                    response = yield httprequest(method='GET', host='localhost', port=port, request='/path',
+                        headers={'Content-Type': 'text/plain', 'Content-Length': 0, 'Host': 'localhost'},
+                        timeout=timeout,
+                    )
+                    responses.append(response)
+                except TimeoutException, e:
+                    responses.append(e)
+                finally:
+                    assert responses, 'Either a timeout or response should have occurred.'
+            return gethandler
+
+        # Not timing out
+        self.referenceHttpServer(port=port, request=get_request, streamingData=slowData())
+        self.handler = handlerFactory(timeout=0.5)
+        clientget('localhost', self.port, '/')
+        self._loopReactorUntilDone()
+        self.assertTrue(len(responses) >= 1)
+        responseText = ''.join(responses)
+        self.assertTrue(responseText.startswith('HTTP/1.0 200 OK'), responseText)
+        self.assertTrue('01234' in responseText, responseText)
+        self.assertEquals(1, len(get_request))
+
+        # Timing out
+        del get_request[:]
+        del responses[:]
+        port = PortNumberGenerator.next()
+        self.referenceHttpServer(port=port, request=get_request, streamingData=slowData())
+        self.handler = handlerFactory(timeout=0.02)
+        clientget('localhost', self.port, '/')
+        self._loopReactorUntilDone()
+        self.assertEquals([TimeoutException], [type(r) for r in responses])
+        self.assertEquals(1, len(get_request))
+        self.assertEquals('GET', get_request[0]['command'])
 
     def testHttpGetWithReallyLargeHeaders(self):
         get_request = []

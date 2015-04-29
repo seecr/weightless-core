@@ -29,13 +29,24 @@ from errno import EINPROGRESS
 from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
 from functools import partial
 
-from weightless.io import Suspend
+from weightless.io import Suspend, TimeoutException
 from weightless.core import compose, identify
 from urlparse import urlsplit
 
 
-def httprequest(host, port, request, body=None, headers=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None, method='GET'):
-    s = Suspend(_do(method, host=host, port=port, request=request, headers=headers, proxyServer=proxyServer, body=body, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse).send)
+def httprequest(host, port, request, body=None, headers=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None, method='GET', timeout=None):
+    g = _do(method, host=host, port=port, request=request, headers=headers, proxyServer=proxyServer, body=body, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse)
+    kw = {}
+    if timeout is not None:
+        def onTimeout():
+            g.throw(TimeoutException, TimeoutException(), None)
+
+        kw = {
+            'timeout': timeout,
+            'onTimeout': onTimeout,
+        }
+
+    s = Suspend(doNext=g.send, **kw)
     yield s
     result = s.getResult()
     raise StopIteration(result)
@@ -155,6 +166,8 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
         suspend.resume(None if handlePartialResponse else ''.join(responses))
     except (AssertionError, KeyboardInterrupt, SystemExit):
         raise
+    except TimeoutException:
+        pass
     except Exception:
         suspend.throw(*exc_info())
     # Uber finally: sok.close() from line 108
