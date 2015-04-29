@@ -126,14 +126,14 @@ class WeightlessTestCase(TestCase):
         timerHasFired = []
         def timeOut():
             timerHasFired.append(True)
-        timer = self.reactor.addTimer(timeOutInSec, timeOut)
+        timer = self.reactor.addTimer(seconds=timeOutInSec, callback=timeOut)
         def loop():
             while not(timerHasFired or blockEnd):
-                t = self.reactor.addTimer(0.01, lambda: None)
+                t = self.reactor.addTimer(seconds=0.01, callback=lambda: None)
                 try:
                     self.reactor.step()
                 finally:
-                    try: self.reactor.removeTimer(t)
+                    try: self.reactor.removeTimer(token=t)
                     except ValueError: pass
         thread = Thread(None, loop)
         thread.daemon = True
@@ -143,7 +143,7 @@ class WeightlessTestCase(TestCase):
         finally:
             blockEnd = True
             assert not timerHasFired
-            self.reactor.removeTimer(timer)
+            self.reactor.removeTimer(token=timer)
             thread.join()
 
     @contextmanager
