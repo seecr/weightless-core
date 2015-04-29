@@ -34,6 +34,7 @@ from traceback import format_exc
 
 from seecr.test import CallTrace
 from seecr.test.io import stderr_replaced
+from seecr.test.portnumbergenerator import PortNumberGenerator
 
 from weightlesstestcase import WeightlessTestCase
 
@@ -436,28 +437,30 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
         Suspend()
         Suspend(timeout=3, onTimeout=lambda: None)
 
-    def testSuspendTimingOutProtocol(self):
-        # happy path
-        testRun = []
-        def test():
+    def testSuspendTimingProtocol(self):
+        # happy path for timing out and not timing out
+        def test(expectTimeout):
             count = []
             timedOut = []
             @identify
             def workInSuspendGenF():
                 this = yield
                 suspend = yield
-                suspend._reactor.addProcess(this.next)
+                suspend._reactor.addProcess(process=this.next)
                 try:
                     for i in xrange(5):
                         count.append(True)
                         yield
                     while True:
                         sleep(0.0001)
+                        if not expectTimeout:
+                            break
                         yield
+                    suspend.resume('retval')
                 except TimeoutException:
                     timedOut.append(True)
                 finally:
-                    suspend._reactor.removeProcess(this.next)
+                    suspend._reactor.removeProcess(process=this.next)
                 yield  # Wait for GC
 
             def workInSuspend():
@@ -473,38 +476,47 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
                 s = Suspend(doNext=doNext, timeout=0.01, onTimeout=onTimeout)
                 yield s
                 result = s.getResult()
-                self.fail('Should not have come here')
+                if expectTimeout:
+                    self.fail('Should not have come here')
+                raise StopIteration(result)
 
             try:
                 result = yield suspendWrap()
-                self.fail()
+                if expectTimeout:
+                    self.fail()
             except TimeoutException:
                 self.assertEquals(5, len(count))
-                self.assertEquals(True, bool(timedOut))
+                self.assertEquals(expectTimeout, bool(timedOut))
+
+            if not expectTimeout:
+                self.assertEquals('retval', result)
 
             testRun.append(True)
 
-        # Simple driver
-        miniDriver(self.reactor, test())
+        # Simple driver - timing out
+        testRun = []
+        miniDriver(test(expectTimeout=True))
         self.assertEquals(True, bool(testRun))
 
-        self.fail('Fails below, works above ...')
-        return
-        # http server
+        # Simple driver - not timing out
+        del testRun[:]
+        miniDriver(test(expectTimeout=False))
+        self.assertEquals(True, bool(testRun))
+
+        # http server - timing out
+        self.reactor = Reactor()
+        del testRun[:]
+        port = PortNumberGenerator.next()
         def reqHandler(**whatever):
             def inner():
-                yield test()
+                yield test(expectTimeout=True)
                 yield 'HTTP/1.0 200 OK\r\n\r\n'
             return compose(inner())
-        #servert = HttpServer(reactor=self.reactor, port=4096, generatorFactory=reqHandler) # , bindAddress='127.0.0.1')  #@@
+        servert = HttpServer(reactor=self.reactor, port=port, generatorFactory=reqHandler, bindAddress='127.42.42.42')
 
-        del testRun[:]
-        print 'HIERO'; sys.stdout.flush()
-        #servert.listen()
-        print 'DAARO'; sys.stdout.flush()
+        servert.listen()
         with self.loopingReactor():
-            print 'INLOO'; sys.stdout.flush()
-            sok = self.httpGet(host='127.42.42.42', port=4096, path='/ignored')
+            sok = self.httpGet(host='127.42.42.42', port=port, path='/ignored')
             allData = ''
             try:
                 while allData != 'HTTP/1.0 200 OK\r\n\r\n':
@@ -513,12 +525,27 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
                 servert.shutdown()
         self.assertEquals(True, bool(testRun))
 
-    def testSuspendTimeoutTodo(self):
-        self.fail("""
-         - testSuspendTimeout*Protocol tests
-            * a.k.a. with a real reactor & driver ...
-            * ... for **each** functionality tested where real / mocked reactor difference is important.
-        """)
+        # http server - not timing out
+        self.reactor = Reactor()
+        del testRun[:]
+        port = PortNumberGenerator.next()
+        def reqHandler(**whatever):
+            def inner():
+                yield test(expectTimeout=False)
+                yield 'HTTP/1.0 200 OK\r\n\r\n'
+            return compose(inner())
+        servert = HttpServer(reactor=self.reactor, port=port, generatorFactory=reqHandler, bindAddress='127.42.42.42')
+
+        servert.listen()
+        with self.loopingReactor():
+            sok = self.httpGet(host='127.42.42.42', port=port, path='/ignored')
+            allData = ''
+            try:
+                while allData != 'HTTP/1.0 200 OK\r\n\r\n':
+                    allData += sok.recv(4096)
+            finally:
+                servert.shutdown()
+        self.assertEquals(True, bool(testRun))
 
     def testDoNextErrorReRaisedOnGetResult(self):
         def razor(ignored):
@@ -647,7 +674,8 @@ ValueError: BAD VALUE
         self.assertFalse(3 in reactor._suspended)
 
 
-def miniDriver(reactor, g):
+def miniDriver(g):
+    reactor = Reactor()
 
     @identify
     def wrapper(generator):
