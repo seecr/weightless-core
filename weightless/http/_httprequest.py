@@ -62,7 +62,8 @@ httpsdelete = partial(httpdelete, ssl=True)
 httpsput = partial(httpput, ssl=True)
 
 class HttpRequest(object):
-    def httprequest(self, **kwargs):
+    @staticmethod
+    def httprequest(**kwargs):
         result = yield httprequest(**kwargs)
         raise StopIteration(result)
 
