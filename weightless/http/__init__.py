@@ -3,7 +3,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2014 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2015 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -28,4 +28,4 @@ from httpspec import parseHeaders, parseHeader, HTTP, REGEXP, FORMAT
 from _httpreader import HttpReader
 from _httpserver import HttpServer, HttpsServer
 from _acceptor import Acceptor
-from _httprequest import httprequest, httpget, httppost, httpsget, httpspost, httpput, httpdelete, httpsput, httpsdelete
+from _httprequest import httprequest, httpget, httppost, httpsget, httpspost, httpput, httpdelete, httpsput, httpsdelete, HttpRequest

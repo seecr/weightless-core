@@ -61,6 +61,11 @@ httpspost = partial(httppost, ssl=True)
 httpsdelete = partial(httpdelete, ssl=True)
 httpsput = partial(httpput, ssl=True)
 
+class HttpRequest(object):
+    def httprequest(self, **kwargs):
+        result = yield httprequest(**kwargs)
+        raise StopIteration(result)
+
 def _createSocket():
     sok = socket()
     sok.setblocking(0)
@@ -211,4 +216,6 @@ def _sendHttpHeaders(sok, method, request, headers):
         data += ''.join('%s: %s\r\n' % i for i in headers.items())
     data += '\r\n'
     yield _asyncSend(sok, data)
+
+
 

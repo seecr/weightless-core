@@ -33,7 +33,7 @@ from time import sleep
 from traceback import format_exception
 
 from weightless.core import compose
-from weightless.http import HttpServer, httprequest, httpget, httppost, httpspost, httpsget
+from weightless.http import HttpServer, httprequest, httpget, httppost, httpspost, httpsget, HttpRequest
 from weightless.io import Reactor, Suspend, TimeoutException
 
 from weightless.http._httprequest import _requestLine
@@ -69,6 +69,21 @@ class AsyncReaderTest(WeightlessTestCase):
         def passthruhandler(*args, **kwargs):
             request = kwargs['RequestURI']
             response = yield httpget('localhost', backofficeport, request)
+            yield response
+        self.handler = passthruhandler
+        expectedrequest = "GET /depot?arg=1&arg=2 HTTP/1.0\r\n\r\n"
+        responses = (i for i in ['hel', 'lo!'])
+        backofficeserver = testserver(backofficeport, responses, expectedrequest)
+        client = clientget('localhost', self.port, '/depot?arg=1&arg=2')
+        self._loopReactorUntilDone()
+        response = client.recv(99)
+        self.assertEquals('hello!', response)
+
+    def testPassRequestThruToBackOfficeServerWithHttpRequest(self):
+        backofficeport = self.port + 1
+        def passthruhandler(*args, **kwargs):
+            request = kwargs['RequestURI']
+            response = yield HttpRequest().httprequest(host='localhost', port=backofficeport, request=request)
             yield response
         self.handler = passthruhandler
         expectedrequest = "GET /depot?arg=1&arg=2 HTTP/1.0\r\n\r\n"
