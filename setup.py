@@ -1,50 +1,46 @@
 #!/usr/bin/env python
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+# Copyright (C) 2011-2012, 2015 Seecr (Seek You Too B.V.) http://seecr.nl
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 from distutils.core import setup
 from distutils.extension import Extension
-from os import getcwd
-from os.path import split
-from sys import argv
+from os import walk
 
-version = '$Version: trunk$'[9:-1].strip()
+version = '$Version: 0.9.x$'[9:-1].strip()
+
+packages = []
+for path, dirs, files in walk('weightless'):
+    if '__init__.py' in files:
+        packagename = path.replace('/', '.')
+        packages.append(packagename)
+
 
 setup(
     name='weightless-core',
     version=version,
-    packages=[
-        'weightless', 
-        'weightless.core', 
-        'weightless.core.utils',
-        'weightless.http', 
-        'weightless.httpng', 
-        'weightless.io',
-        'weightless.udp',
-		'weightless.examples',
-    ],
+    packages=packages,
     url='http://www.weightless.io',
     author='Erik J. Groeneveld',
     author_email='erik@seecr.nl',
