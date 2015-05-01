@@ -26,18 +26,21 @@
 #
 from __future__ import with_statement
 
-from time import time, sleep
-from signal import signal, SIGALRM, alarm
-from select import error as ioerror, select
-import os, sys
-from tempfile import mkstemp
-from StringIO import StringIO
-
 from weightlesstestcase import WeightlessTestCase
-from weightless.core.utils import identify
-from weightless.io import Reactor
+
+import os, sys
+from StringIO import StringIO
+from select import error as ioerror, select
+from signal import signal, SIGALRM, alarm
 from socket import socketpair, error, socket
+from tempfile import mkstemp
 from threading import Thread
+from time import time, sleep
+
+from weightless.core.utils import identify
+from weightless.io import Reactor, reactor
+from weightless.io.utils import asProcess
+
 
 class ReactorTest(WeightlessTestCase):
 
@@ -743,7 +746,7 @@ class ReactorTest(WeightlessTestCase):
         processCallback = []
         timerCallback = []
         reactor = Reactor()
-        reactor.addTimer(1, lambda: None)
+        reactor.addTimer(1, self.fail)
         t = Thread(target=reactor.step)
         t.start()
         proc = lambda: processCallback.append(True)
