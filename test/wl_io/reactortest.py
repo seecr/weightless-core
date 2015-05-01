@@ -181,6 +181,121 @@ class ReactorTest(WeightlessTestCase):
         reactor.removeTimer(token1)
         self.assertEquals([], reactor._timers)
 
+    def testRemoveEffectiveImmediately(self):
+        readAndWritable = lambda: os.tmpfile()
+
+        log = []
+        processDone = []
+        @identify
+        def run():
+            del log[:]
+            del processDone[:]
+            this = yield
+            yield  # wait for reactor
+            _reactor = reactor()
+            one, two = eitherOr(), eitherOr()
+            one.send(two); two.send(one)
+            token = _reactor.addTimer(seconds=1, callback=lambda: self.fail('hangs'))
+            while len(processDone) != 2:
+                yield
+
+            _reactor.removeTimer(token=token)
+            processDone.append(True)
+
+        # process removing process
+        @identify
+        def eitherOr():
+            this = yield
+            other = yield
+            _reactor = reactor()
+            _reactor.addProcess(process=this.next)
+            try:
+                yield  # Wait for reactor's step
+                other.throw(Exception, Exception('Stop Please'), None)  # I'll do the work, other should not bother.
+                log.append('work')
+            except Exception, e:
+                self.assertEquals('Stop Please', str(e))
+                log.append('abort')
+            _reactor.removeProcess(process=this.next)
+            processDone.append(True)
+            yield  # wait for GC
+            self.fail('Called After Remove!')
+
+        asProcess(run())
+        self.assertEquals(['abort', 'work'], log)
+        self.assertEquals(3, len(processDone))
+
+        # reader removing reader
+        @identify
+        def eitherOr():
+            this = yield
+            other = yield
+            _reactor = reactor()
+            rw = readAndWritable()
+            _reactor.addReader(sok=rw, sink=this.next)
+            try:
+                yield  # Wait for reactor's step
+                other.throw(Exception, Exception('Stop Please'), None)  # I'll do the work, other should not bother.
+                log.append('work')
+            except Exception, e:
+                self.assertEquals('Stop Please', str(e))
+                log.append('abort')
+            _reactor.removeReader(sok=rw)
+            processDone.append(True)
+            yield  # wait for GC
+            self.fail('Called Twice!')
+
+        asProcess(run())
+        self.assertEquals(['abort', 'work'], log)
+        self.assertEquals(3, len(processDone))
+
+        # writer removing writer
+        @identify
+        def eitherOr():
+            this = yield
+            other = yield
+            _reactor = reactor()
+            rw = readAndWritable()
+            _reactor.addWriter(sok=rw, source=this.next)
+            try:
+                yield  # Wait for reactor's step
+                other.throw(Exception, Exception('Stop Please'), None)  # I'll do the work, other should not bother.
+                log.append('work')
+            except Exception, e:
+                self.assertEquals('Stop Please', str(e))
+                log.append('abort')
+            _reactor.removeWriter(sok=rw)
+            processDone.append(True)
+            yield  # wait for GC
+            self.fail('Called Twice!')
+
+        asProcess(run())
+        self.assertEquals(['abort', 'work'], log)
+        self.assertEquals(3, len(processDone))
+
+        # timer removing timer
+        @identify
+        def eitherOr():
+            this = yield
+            other = yield
+            _reactor = reactor()
+            token = _reactor.addTimer(seconds=0, callback=this.next)
+            try:
+                yield  # Wait for reactor's step
+                other.throw(Exception, Exception('Stop Please'), None)  # I'll do the work, other should not bother.
+                log.append('work')
+            except Exception, e:
+                self.assertEquals('Stop Please', str(e))
+                _reactor.removeTimer(token=token)
+                log.append('abort')
+            processDone.append(True)
+            yield  # wait for GC
+            self.fail('Called Twice!')
+
+        asProcess(run())
+        self.assertEquals(['abort', 'work'], log)
+        self.assertEquals(3, len(processDone))
+
     def testExceptionInTimeoutCallback(self):
         sys.stderr = StringIO()
         try:

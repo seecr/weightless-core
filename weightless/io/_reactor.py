@@ -222,6 +222,8 @@ class Reactor(object):
         for timer in timers[:]:
             if timer.time > currentTime:
                 break
+            if timer not in timers:
+                continue
             self.currentcontext = timer
             self.removeTimer(timer)
             try:
@@ -233,7 +235,7 @@ class Reactor(object):
 
     def _processCallbacks(self, processes):
         for self.currenthandle, context in processes.items():
-            if context.prio <= self._prio:
+            if self.currenthandle in processes and context.prio <= self._prio:
                 self.currentcontext = context
                 try:
                     context.callback()
