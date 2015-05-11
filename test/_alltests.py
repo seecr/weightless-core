@@ -55,12 +55,13 @@ from core.observabledirectedmessagingtest import ObservableDirectedMessagingTest
 from core.utilstest import UtilsTest
 
 from http.acceptortest import AcceptorTest
+from http.asyncreadertest import AsyncReaderTest
 from http.httpreadertest import HttpReaderTest
 from http.httpservertest import HttpServerTest
 from http.httpspectest import HttpSpecTest
 from http.httpsservertest import HttpsServerTest
+from http.persistenthttprequesttest import PersistentHttpRequestTest
 from http.suspendtest import SuspendTest
-from http.asyncreadertest import AsyncReaderTest
 
 from udp.acceptortest import UdpAcceptorTest
 
