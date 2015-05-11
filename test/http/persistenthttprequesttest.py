@@ -54,7 +54,7 @@ class PersistentHttpRequestTest(WeightlessTestCase):
     def setUp(self):
         WeightlessTestCase.setUp(self)
         self.reactor = Reactor()
-        self.port = randint(2**10, 2**16)
+        self.port = PortNumberGenerator.next()
         self.httpserver = HttpServer(self.reactor, self.port, self._dispatch)
         self.httpserver.listen()
 
@@ -409,42 +409,6 @@ RuntimeError: Boom!""" % fileDict)
         self.assertTrue("GET RESPONSE" in responses[0], responses[0])
         self.assertEquals('GET', get_request[0]['command'])
         self.assertEquals('/path', get_request[0]['path'])
-
-    def testHttpAndHttpsGetStreaming(self):
-        for useSsl in [False, True]:
-            get_request = []
-            port = self.port + 1 + useSsl
-            streamingData = StreamingData(data=[c for c in "STREAMING GET RESPONSE"])
-            self.referenceHttpServer(port, get_request, ssl=useSsl, streamingData=streamingData)
-
-            dataHandled = []
-            def handleDataFragment(data):
-                dataHandled.append(data)
-                if '\r\n\r\n' in ''.join(dataHandled):
-                    streamingData.doNext()
-
-            responses = []
-            def gethandler(*args, **kwargs):
-                f = httpsget if useSsl else httpget
-                response = 'no response yet'
-                try:
-                    response = yield f('localhost', port, '/path',
-                        headers={'Accept': 'text/plain'},
-                        handlePartialResponse=handleDataFragment,
-                    )
-                finally:
-                    responses.append(response)
-            self.handler = gethandler
-            clientget('localhost', self.port, '/')
-            self._loopReactorUntilDone()
-
-            self.assertEquals([None], responses)
-            self.assertTrue("STREAMING GET RESPONSE" in ''.join(dataHandled), dataHandled)
-            self.assertTrue(len(dataHandled) > len("STREAMING GET RESPONSE"), dataHandled)
-            self.assertEquals('GET', get_request[0]['command'])
-            self.assertEquals('/path', get_request[0]['path'])
-            headers = get_request[0]['headers'].headers
-            self.assertEquals(['Accept: text/plain\r\n'], headers)
 
     def testHttpsGet(self):
         get_request = []

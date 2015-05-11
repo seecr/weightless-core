@@ -39,8 +39,8 @@ from urlparse import urlsplit
 # - should retry failed requests on pooled sockets
 
 
-def httprequest(host, port, request, body=None, headers=None, ssl=False, prio=None, handlePartialResponse=None, method='GET', timeout=None):
-    g = _do(method, host=host, port=port, request=request, headers=headers, body=body, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse)
+def httprequest(host, port, request, body=None, headers=None, ssl=False, prio=None, method='GET', timeout=None):
+    g = _do(method, host=host, port=port, request=request, headers=headers, body=body, ssl=ssl, prio=prio)
     kw = {}
     if timeout is not None:
         def onTimeout():
@@ -77,7 +77,7 @@ class HttpRequest(object):
 
 @identify
 @compose
-def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=None, handlePartialResponse=None):
+def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=None):
     headers = headers or {}
     pool = POOL_REFACTOR_ME
     this = yield # this generator, from @identify
@@ -114,15 +114,12 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=No
                 if response == '':
                     break
 
-                if handlePartialResponse:
-                    handlePartialResponse(response)
-                else:
-                    responses.append(response)
+                responses.append(response)
         finally:
             suspend._reactor.removeReader(sok)
         sok.shutdown(SHUT_RDWR)
         sok.close()
-        suspend.resume(None if handlePartialResponse else ''.join(responses))
+        suspend.resume(''.join(responses))
     except (AssertionError, KeyboardInterrupt, SystemExit):
         raise
     except TimeoutException:
