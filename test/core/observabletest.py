@@ -1208,6 +1208,7 @@ GeneratorExit: Exit!
                     AllMessage, AnyMessage, DoMessage, OnceMessage)]
  
     def setUp(self):
+        TestCase.setUp(self)
         gc.collect()
         self._baseline = self.get_tracked_objects()
 
@@ -1230,6 +1231,7 @@ GeneratorExit: Exit!
                 print tostr(o)
         del self._baseline
         gc.collect()
+        TestCase.tearDown(self)
 
 
 class Responder(Observable):

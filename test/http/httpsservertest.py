@@ -37,11 +37,13 @@ from subprocess import Popen, PIPE
 class HttpsServerTest(TestCase):
 
     def setUp(self):
+        TestCase.setUp(self)
         self.reactor = Reactor()
 
     def tearDown(self):
         self.reactor.shutdown()
         self.reactor = None
+        TestCase.tearDown(self)
 
     def testConnect(self):
         self.req = False

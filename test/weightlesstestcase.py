@@ -24,6 +24,9 @@
 #
 ## end license ##
 
+from unittest import TestCase
+from seecr.test.portnumbergenerator import PortNumberGenerator
+
 from contextlib import contextmanager
 from operator import xor
 from random import randint
@@ -36,7 +39,6 @@ import sys, string, os
 from tempfile import mkdtemp, mkstemp
 from shutil import rmtree
 
-from unittest import TestCase
 from threading import Thread, Event
 from weightless.io import Reactor
 
@@ -54,12 +56,13 @@ sslDir = join(mydir, 'ssl')
 class WeightlessTestCase(TestCase):
 
     def setUp(self):
+        TestCase.setUp(self)
         self.tempdir = mkdtemp()
         fd, self.tempfile = mkstemp()
         os.close(fd)
         self.reactor = Reactor()
         self.mockreactor = Reactor(lambda r, w, o, t: (r, w, o))
-        self.port = randint(2**15, 2**16)
+        self.port = PortNumberGenerator.next()
 
     def tearDown(self):
         t0 = time()
@@ -79,6 +82,7 @@ class WeightlessTestCase(TestCase):
         self.mockreactor.shutdown()
         rmtree(self.tempdir)
         os.remove(self.tempfile)
+        TestCase.tearDown(self)
 
     def select(self, aString, index):
         while index < len(aString):

@@ -23,6 +23,10 @@
 #
 ## end license ##
 
+from seecr.test import CallTrace
+from seecr.test.portnumbergenerator import PortNumberGenerator
+from weightlesstestcase import MATCHALL
+
 from unittest import TestCase
 from random import randint
 from time import sleep
@@ -36,8 +40,6 @@ from weightless.core import VERSION as WlVersion
 from weightless.http._httpreader import HttpReaderFacade, Connector, HandlerFacade, _httpParseUrl
 import sys
 from StringIO import StringIO
-from seecr.test import CallTrace
-from weightlesstestcase import MATCHALL
 
 def server(port, response, expectedrequest, delay=0, loop=50):
     isListening = Event()
@@ -81,6 +83,9 @@ def server(port, response, expectedrequest, delay=0, loop=50):
     return thread
 
 class HttpReaderTest(TestCase):
+    def setUp(self):
+        TestCase.setUp(self)
+        self.port = PortNumberGenerator.next()
 
     def testRequestAndHeaders(self):
         port = randint(2**10, 2**16)

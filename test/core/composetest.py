@@ -1178,6 +1178,7 @@ AssertionError: Generator already used.\n""" % {
                 (compose, GeneratorType, Exception, StopIteration, ATrackedObj)]
 
     def setUp(self):
+        TestCase.setUp(self)
         if cpython:
             gc.collect()
             self._baseline = self.get_tracked_objects()
@@ -1194,6 +1195,8 @@ AssertionError: Generator already used.\n""" % {
                 self.assertTrue(obj in self._baseline, obj) #tostr(obj))
             del self._baseline
             gc.collect()
+        TestCase.tearDown(self)
+
 
 class ComposePyTest(_ComposeTest):
     def setUp(self):

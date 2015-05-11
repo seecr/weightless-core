@@ -39,12 +39,14 @@ class MockTimer(object):
 class HttpProtocolTest(TestCase):
 
     def setUp(self):
+        TestCase.setUp(self)
         self._timer = HttpProtocol.Timer
         HttpProtocol.Timer = MockTimer
         self.p = HttpProtocol()
 
     def tearDown(self):
         HttpProtocol.Timer = self._timer
+        TestCase.tearDown(self)
 
     def addHandler(self, handler):
         self.p.addObserver(handler)
