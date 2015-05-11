@@ -84,7 +84,7 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=No
     suspend = yield # suspend object, from Suspend.__call__
 
     try:
-        sok = yield _getOrCreateSocket(host, port, pool)
+        fromPool, sok = yield _getOrCreateSocket(host, port, ssl, pool, this, suspend, prio)
 
         suspend._reactor.addWriter(sok, this.next, prio=prio)
         yield
@@ -133,17 +133,22 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=No
     yield
 
 
-def getOrCreateSocket(host, port, pool):
-    sok = pool.get(host, port)
-    if sok:
-        raise StopIteration((True, sok))  # cached, <sok>
-
-    sok = _createSocket()
+def _getOrCreateSocket(host, port, ssl, pool, this, suspend, prio):
+    suspend._reactor.addProcess(process=this.next, prio=prio)
+    yield  # First "yield <data>" since start-of-composed & (this/g).send(<SuspendObj>).  After this yield, Suspend._whenDone filled-in and thus throwing is safe again.
     try:
-        sok.connect((host, port))
-    except SocketError, (errno, msg):
-        if errno != EINPROGRESS:
-            raise
+        sok = pool.get(host, port)
+        if sok:
+            raise StopIteration((True, sok))  # fromPool, <sok>
+
+        sok = _createSocket()
+        try:
+            sok.connect((host, port))
+        except SocketError, (errno, msg):
+            if errno != EINPROGRESS:
+                raise
+    finally:
+        suspend._reactor.removeProcess(process=this.next)
 
     suspend._reactor.addWriter(sok, this.next, prio=prio)
     try:
@@ -156,7 +161,7 @@ def getOrCreateSocket(host, port, pool):
 
     if ssl:
         sok = yield _sslHandshake(sok, this, suspend, prio)
-    raise StopIteration((False, sok))
+    raise StopIteration((False, sok))  # fromPool, <sok>
 
 
 class SocketPool(object):
@@ -171,6 +176,9 @@ class SocketPool(object):
     def get(self, host, port):
         key = (host, port)
         socks = self._pool.get(key)
+        if socks is None:
+            return None
+
         try:
             return socks.pop(0)
         except IndexError:
