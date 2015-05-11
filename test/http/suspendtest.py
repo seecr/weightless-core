@@ -40,6 +40,7 @@ from weightlesstestcase import WeightlessTestCase
 
 from weightless.core import identify, compose, Yield
 from weightless.io import Reactor, Suspend, TimeoutException
+from weightless.io.utils import asProcess
 from weightless.http import HttpServer
 
 
@@ -499,12 +500,12 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
 
         # Simple driver - timing out
         testRun = []
-        miniDriver(test(expectTimeout=True))
+        asProcess(test(expectTimeout=True))
         self.assertEquals(True, bool(testRun))
 
         # Simple driver - not timing out
         del testRun[:]
-        miniDriver(test(expectTimeout=False))
+        asProcess(test(expectTimeout=False))
         self.assertEquals(True, bool(testRun))
 
         # http server - timing out
@@ -676,36 +677,6 @@ ValueError: BAD VALUE
         self.assertTrue(3 in reactor._suspended)
         reactor.cleanup(3)
         self.assertFalse(3 in reactor._suspended)
-
-
-def miniDriver(g):
-    reactor = Reactor()
-
-    @identify
-    def wrapper(generator):
-        this = yield
-        reactor.addProcess(process=this.next)
-        try:
-            yield
-            g = compose(generator)
-            while True:
-                _response = g.next()
-                if _response is Yield:
-                    continue
-                if _response is not Yield and callable(_response):
-                    _response(reactor, this.next)
-                    yield
-                    _response.resumeProcess()
-                yield
-        finally:
-            reactor.removeProcess(process=this.next)
-
-    wrapper(g)
-    try:
-        reactor.loop()
-    except StopIteration, e:
-        if e.args:
-            return e.args[0]
 
 
 class MyMockSocket(object):
