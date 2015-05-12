@@ -3,7 +3,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2013, 2015 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -28,7 +28,6 @@ from seecr.test.portnumbergenerator import PortNumberGenerator
 from weightlesstestcase import MATCHALL
 
 from unittest import TestCase
-from random import randint
 from time import sleep
 from socket import socket, timeout
 from threading import Thread, Event
@@ -88,11 +87,10 @@ class HttpReaderTest(TestCase):
         self.port = PortNumberGenerator.next()
 
     def testRequestAndHeaders(self):
-        port = randint(2**10, 2**16)
         v = 'vx.y.z'
         expectedrequest = "GET /aap/noot/mies HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/%s\r\n\r\n" % v
         dataReceived = []
-        serverThread = server(port, "HTTP/1.1 200 OK\r\ncOnteNt-type: text/html\r\n\r\nHello World!", expectedrequest)
+        serverThread = server(self.port, "HTTP/1.1 200 OK\r\ncOnteNt-type: text/html\r\n\r\nHello World!", expectedrequest)
         class Generator(object):
             def __init__(self):
                 self.throw = None
@@ -100,7 +98,7 @@ class HttpReaderTest(TestCase):
             def send(self, data):
                 dataReceived.append(data)
         reactor = Reactor()
-        connection = Connector(reactor, 'localhost', port)
+        connection = Connector(reactor, 'localhost', self.port)
         reader = HttpReader(reactor, connection, Generator(), 'GET', 'localhost', '/aap/noot/mies', recvSize=7)
         reactor.addTimer(0.1, lambda: self.fail("Test Stuck"))
         while 'Hello World!' != "".join((x for x in dataReceived[1:] if x)):
@@ -124,44 +122,40 @@ class HttpReaderTest(TestCase):
         self.assertEquals(5000, port)
         self.assertEquals('/page?x=1', path)
 
-
     def testEmptyPath(self):
-        port = randint(2**10, 2**16)
         reactor = Reactor()
         request = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
-        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\n", request)
-        reader = HttpReaderFacade(reactor, "http://localhost:%s" % port, lambda data: 'a')
+        serverThread = server(self.port, "HTTP/1.1 200 OK\r\n\r\n", request)
+        reader = HttpReaderFacade(reactor, "http://localhost:%s" % self.port, lambda data: 'a')
         reactor.step()
         reactor.step()
         serverThread.join()
         #self.assertTrue(request[0].startswith('GET / HTTP/1.1\r\n'), request[0])
 
     def testTimeoutOnInvalidRequest(self):
-        port = randint(2**10, 2**16)
         reactor = Reactor()
         expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
-        serverThread = server(port, "HTTP/1.1 *invalid reponse* 200 OK\r\n\r\n", expectedrequest)
+        serverThread = server(self.port, "HTTP/1.1 *invalid reponse* 200 OK\r\n\r\n", expectedrequest)
         errorArgs = []
         def error(exception):
             errorArgs.append(exception)
-        reader = HttpReaderFacade(reactor, "http://localhost:%s" % port, None, error, timeout=0.01)
+        reader = HttpReaderFacade(reactor, "http://localhost:%s" % self.port, None, error, timeout=0.01)
         while not errorArgs:
             reactor.step()
         serverThread.join()
         self.assertEquals('timeout while receiving data', str(errorArgs[0]))
 
     def testTimeoutOnSilentServer(self):
-        port = randint(2**10, 2**16)
         reactor = Reactor()
         expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
-        serverThread = server(port, "", expectedrequest)
+        serverThread = server(self.port, "", expectedrequest)
         errorArgs = []
         class Handler:
             def throw(self, exception):
                 errorArgs.append(exception)
         def error(exception):
             errorArgs.append(exception)
-        reader = HttpReader(reactor, Connector(reactor, 'localhost', port), Handler(), "GET", "localhost", "/", timeout=0.01)
+        reader = HttpReader(reactor, Connector(reactor, 'localhost', self.port), Handler(), "GET", "localhost", "/", timeout=0.01)
         reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
         while not errorArgs:
             reactor.step()
@@ -169,10 +163,9 @@ class HttpReaderTest(TestCase):
         self.assertEquals('timeout while receiving data', str(errorArgs[0]))
 
     def testTimeoutOnServerGoingSilentAfterHeaders(self):
-        port = randint(2**10, 2**16)
         reactor = Reactor()
         expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
-        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\n", expectedrequest, delay=1)
+        serverThread = server(self.port, "HTTP/1.1 200 OK\r\n\r\n", expectedrequest, delay=1)
         errorArgs = []
         class Handler:
             def send(self, data):
@@ -181,7 +174,7 @@ class HttpReaderTest(TestCase):
                 errorArgs.append(exception)
         def error(exception):
             errorArgs.append(exception)
-        reader = HttpReader(reactor, Connector(reactor, 'localhost', port), Handler(), "GET", "localhost", "/", timeout=0.01)
+        reader = HttpReader(reactor, Connector(reactor, 'localhost', self.port), Handler(), "GET", "localhost", "/", timeout=0.01)
         reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
         while not errorArgs:
             reactor.step()
@@ -189,17 +182,16 @@ class HttpReaderTest(TestCase):
         self.assertEquals('timeout while receiving data', str(errorArgs[0]))
 
     def testClearTimer(self):
-        port = randint(2**10, 2**16)
         reactor = Reactor()
         expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
-        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\nresponse", expectedrequest)
+        serverThread = server(self.port, "HTTP/1.1 200 OK\r\n\r\nresponse", expectedrequest)
         self.exception = None
         sentData = []
         def send(data):
             sentData.append(data)
         def throw(exception):
             self.exception = exception
-        reader = HttpReaderFacade(reactor, "http://localhost:%s" % port, send, throw, timeout=0.01, recvSize=3)
+        reader = HttpReaderFacade(reactor, "http://localhost:%s" % self.port, send, throw, timeout=0.01, recvSize=3)
         while not self.exception:
             reactor.step()
         sleep(0.02) # 2 * timeout, just to be sure
@@ -207,10 +199,9 @@ class HttpReaderTest(TestCase):
         self.assertTrue(isinstance(self.exception, StopIteration))
 
     def testPost(self):
-        port = randint(2048, 4096)
         reactor = Reactor()
         request = "POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nSOAPAction: blah\r\nUser-Agent: Weightless/v%s\r\n\r\n1\r\nA\r\n1\r\nB\r\n1\r\nC\r\n0\r\n\r\n" % WlVersion
-        serverThread = server(port, "HTTP/1.1 200 OK\r\n\r\nresponse", request, loop=9)
+        serverThread = server(self.port, "HTTP/1.1 200 OK\r\n\r\nresponse", request, loop=9)
         sentData = []
         done = []
         def send(data):
@@ -224,7 +215,7 @@ class HttpReaderTest(TestCase):
             yield "C"
             yield None
 
-        reader = HttpReaderFacade(reactor, "http://localhost:%s" % port, send, errorHandler=throw, timeout=0.5, headers={'SOAPAction': 'blah'}, bodyHandler=next)
+        reader = HttpReaderFacade(reactor, "http://localhost:%s" % self.port, send, errorHandler=throw, timeout=0.5, headers={'SOAPAction': 'blah'}, bodyHandler=next)
 
         reactor.addTimer(3.0, lambda: self.fail("Test Stuck"))
         while not done:
@@ -241,12 +232,11 @@ class HttpReaderTest(TestCase):
         self.assertEquals('A\r\n' + 10*'B' + '\r\n', reader._createChunk(10*'B'))
 
     def testDealWithChunkedResponse(self):
-        port = randint(2048, 4096)
         reactor = Reactor()
         sentData = []
         done = []
         expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
-        serverThread = server(port, "\r\n".join("""HTTP/1.1 302 Found
+        serverThread = server(self.port, "\r\n".join("""HTTP/1.1 302 Found
 Date: Fri, 26 Oct 2007 07:23:26 GMT
 Server: Apache/2.2.3 (Debian) mod_python/3.2.10 Python/2.4.4 mod_ssl/2.2.3 OpenSSL/0.9.8c
 Location: /page/softwarestudio.page/show
@@ -266,7 +256,7 @@ Content-Type: text/html; charset=utf-8
             def throw(self, exception):
                 if isinstance(exception, StopIteration):
                     done.append(True)
-        reader = HttpReader(reactor, Connector(reactor, 'localhost', int(port)), Handler(), 'GET', 'localhost', '/', recvSize=5)
+        reader = HttpReader(reactor, Connector(reactor, 'localhost', int(self.port)), Handler(), 'GET', 'localhost', '/', recvSize=5)
 
         reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
         while not done:

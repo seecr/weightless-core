@@ -3,7 +3,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2013, 2015 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -24,9 +24,10 @@
 ## end license ##
 
 from unittest import TestCase
-from socket import socket, AF_INET, SOCK_DGRAM
 from seecr.test import CallTrace
-from random import randint
+from seecr.test.portnumbergenerator import PortNumberGenerator
+
+from socket import socket, AF_INET, SOCK_DGRAM
 from subprocess import Popen, PIPE
 
 from weightless.udp import Acceptor
@@ -35,7 +36,7 @@ from weightless.udp import Acceptor
 class UdpAcceptorTest(TestCase):
     def testStartListening(self):
         reactor = CallTrace()
-        port = randint(2**10, 2**16)
+        port = PortNumberGenerator.next()
         Acceptor(reactor, port, lambda sok: lambda: None)
         self.assertEquals('addReader', reactor.calledMethods[0].name)
         sok = reactor.calledMethods[0].args[0]
@@ -52,7 +53,7 @@ class UdpAcceptorTest(TestCase):
                 data.append(sock.recvfrom(2048))
             return handle
         reactor = CallTrace()
-        port = randint(2**10, 2**16)
+        port = PortNumberGenerator.next()
         Acceptor(reactor, port, sinkFactory)
         self.assertEquals('addReader', reactor.calledMethods[0].name)
         handleCallback = reactor.calledMethods[0].args[1]
@@ -69,7 +70,7 @@ class UdpAcceptorTest(TestCase):
 
     def testAcceptorWithPrio(self):
         reactor = CallTrace()
-        port = randint(2**10, 2**16)
+        port = PortNumberGenerator.next()
         Acceptor(reactor, port, lambda sok: None, prio=5)
         self.assertEquals('addReader', reactor.calledMethods[0].name)
         self.assertEquals(5, reactor.calledMethods[0].kwargs['prio'])

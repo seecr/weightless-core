@@ -3,7 +3,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2013, 2015 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -28,7 +28,6 @@ from seecr.test.portnumbergenerator import PortNumberGenerator
 
 from socket import socket
 from seecr.test import CallTrace
-from random import randint
 from os import system
 from subprocess import Popen, PIPE
 

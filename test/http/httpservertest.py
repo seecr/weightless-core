@@ -4,7 +4,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2012, 2015 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -32,7 +32,7 @@ from StringIO import StringIO
 from errno import EAGAIN
 from gzip import GzipFile
 from os.path import join, abspath, dirname
-from random import randint, random
+from random import random
 from seecr.test import CallTrace
 from select import select
 from socket import socket, error as SocketError

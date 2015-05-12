@@ -1,36 +1,36 @@
 from __future__ import with_statement
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2006-2009 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+# Copyright (C) 2011-2012, 2015 Seecr (Seek You Too B.V.) http://seecr.nl
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
-from socket import socketpair, socket
+from weightlesstestcase import WeightlessTestCase
+from seecr.test.portnumbergenerator import PortNumberGenerator
+
 from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_CORK, TCP_NODELAY
+from socket import socketpair, socket
 from struct import pack
 from time import sleep
-from random import randint
-
-from weightlesstestcase import WeightlessTestCase
 
 from weightless.io import Reactor, Gio, giopen
 from weightless.io._gio import Context, SocketContext, Timer, TimeoutException
@@ -180,7 +180,7 @@ class GioTest(WeightlessTestCase):
         self.assertEquals(messageSize, len(''.join(messages)))
 
     def testHowToCreateAHttpServer(self):
-        port = randint(1024, 64000)
+        port = PortNumberGenerator.next()
         # SERVER
         class HttpServer:
             def __init__(self, reactor, port):

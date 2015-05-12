@@ -25,7 +25,6 @@
 ## end license ##
 
 from __future__ import with_statement
-from random import randint
 from re import sub
 from socket import socket, gaierror as SocketGaiError
 from sys import exc_info, version_info
@@ -52,7 +51,7 @@ class AsyncReaderTest(WeightlessTestCase):
     def setUp(self):
         WeightlessTestCase.setUp(self)
         self.reactor = Reactor()
-        self.port = randint(2**10, 2**16)
+        self.port = PortNumberGenerator.next()
         self.httpserver = HttpServer(self.reactor, self.port, self._dispatch)
         self.httpserver.listen()
 
@@ -65,7 +64,7 @@ class AsyncReaderTest(WeightlessTestCase):
         self.assertEquals('POST / HTTP/1.0\r\n', _requestLine('POST', '/'))
 
     def testPassRequestThruToBackOfficeServer(self):
-        backofficeport = self.port + 1
+        backofficeport = PortNumberGenerator.next()
         def passthruhandler(*args, **kwargs):
             request = kwargs['RequestURI']
             response = yield httpget('localhost', backofficeport, request)
@@ -80,7 +79,7 @@ class AsyncReaderTest(WeightlessTestCase):
         self.assertEquals('hello!', response)
 
     def testPassRequestThruToBackOfficeServerWithHttpRequest(self):
-        backofficeport = self.port + 1
+        backofficeport = PortNumberGenerator.next()
         def passthruhandler(*args, **kwargs):
             request = kwargs['RequestURI']
             response = yield HttpRequest().httprequest(host='localhost', port=backofficeport, request=request)
@@ -143,12 +142,12 @@ TypeError: an integer is required
         self._loopReactorUntilDone()
         self.assertEquals(IOError, self.error[0])
 
-        target = ('UEYR^$*FD(#>NDJ.khfd9.(*njnd', 9876, '/') # invalid host
+        target = ('UEYR^$*FD(#>NDJ.khfd9.(*njnd', PortNumberGenerator.next(), '/') # invalid host
         clientget('localhost', self.port, '/')
         self._loopReactorUntilDone()
         self.assertEquals(SocketGaiError, self.error[0])
 
-        target = ('127.0.0.255', 9876, '/')
+        target = ('127.0.0.1', PortNumberGenerator.next(), '/')  # No-one listens
         clientget('localhost', self.port, '/')
         self._loopReactorUntilDone()
         self.assertEquals(IOError, self.error[0])
@@ -156,7 +155,7 @@ TypeError: an integer is required
 
     @stdout_replaced
     def testTracebackPreservedAcrossSuspend(self):
-        backofficeport = self.port + 1
+        backofficeport = PortNumberGenerator.next()
         expectedrequest = ''
         testserver(backofficeport, [], expectedrequest)
         target = ('localhost', backofficeport, '/')
@@ -199,7 +198,7 @@ RuntimeError: Boom!""" % fileDict)
 
     def testHttpPost(self):
         post_request = []
-        port = self.port + 1
+        port = PortNumberGenerator.next()
         self.referenceHttpServer(port, post_request)
         body = u"BÖDY" * 20000
         responses = []
@@ -222,7 +221,7 @@ RuntimeError: Boom!""" % fileDict)
 
     def testHttpPostWithoutHeaders(self):
         post_request = []
-        port = self.port + 1
+        port = PortNumberGenerator.next()
         self.referenceHttpServer(port, post_request)
         body = u"BÖDY" * 20000
         responses = []
@@ -243,7 +242,7 @@ RuntimeError: Boom!""" % fileDict)
 
     def testHttpsPost(self):
         post_request = []
-        port = self.port + 1
+        port = PortNumberGenerator.next()
         self.referenceHttpServer(port, post_request, ssl=True)
         body = u"BÖDY" * 20000
         responses = []
@@ -268,7 +267,7 @@ RuntimeError: Boom!""" % fileDict)
     def testHttpsPostOnIncorrectPort(self):
         responses = []
         def posthandler(*args, **kwargs):
-            response = yield httpspost('localhost', self.port + 1, '/path', "body",
+            response = yield httpspost('localhost', PortNumberGenerator.next(), '/path', "body",
                     headers={'Content-Type': 'text/plain'}
             )
             yield response
@@ -282,7 +281,7 @@ RuntimeError: Boom!""" % fileDict)
 
     def testHttpGet(self):
         get_request = []
-        port = self.port + 1
+        port = PortNumberGenerator.next()
         self.referenceHttpServer(port, get_request)
 
         responses = []
@@ -307,7 +306,7 @@ RuntimeError: Boom!""" % fileDict)
 
     def testHttpRequest(self):
         get_request = []
-        port = self.port + 1
+        port = PortNumberGenerator.next()
         self.referenceHttpServer(port, get_request)
 
         responses = []
@@ -375,7 +374,7 @@ RuntimeError: Boom!""" % fileDict)
 
     def testHttpGetWithReallyLargeHeaders(self):
         get_request = []
-        port = self.port + 1
+        port = PortNumberGenerator.next()
         self.referenceHttpServer(port, get_request)
 
         responses = []
@@ -408,7 +407,7 @@ RuntimeError: Boom!""" % fileDict)
     def testHttpAndHttpsGetStreaming(self):
         for useSsl in [False, True]:
             get_request = []
-            port = self.port + 1 + useSsl
+            port = PortNumberGenerator.next()
             streamingData = StreamingData(data=[c for c in "STREAMING GET RESPONSE"])
             self.referenceHttpServer(port, get_request, ssl=useSsl, streamingData=streamingData)
 
@@ -443,7 +442,7 @@ RuntimeError: Boom!""" % fileDict)
 
     def testHttpsGet(self):
         get_request = []
-        port = self.port + 1
+        port = PortNumberGenerator.next()
         self.referenceHttpServer(port, get_request, ssl=True)
 
         responses = []
@@ -466,8 +465,8 @@ RuntimeError: Boom!""" % fileDict)
 
     def testHttpGetViaProxy(self):
         get_request = []
-        port = self.port + 1
-        proxyPort = port + 1
+        port = PortNumberGenerator.next()
+        proxyPort = PortNumberGenerator.next()
         self.proxyServer(proxyPort, get_request)
         self.referenceHttpServer(port, get_request)
 

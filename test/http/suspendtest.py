@@ -220,7 +220,7 @@ class SuspendTest(WeightlessTestCase):
             yield "result = %s" % suspend.getResult()
             yield 'after suspend'
         listener = MyMockSocket()
-        port = 9
+        port = PortNumberGenerator.next()
         httpserver = HttpServer(reactor, port, handler, sok=listener)
         httpserver.listen()
         reactor.removeReader(listener) # avoid new connections
@@ -251,7 +251,7 @@ class SuspendTest(WeightlessTestCase):
                 yield "result = %s" % tbstring
             yield 'after suspend'
         listener = MyMockSocket()
-        port = 9
+        port = PortNumberGenerator.next()
         httpserver = HttpServer(reactor, port, handler, sok=listener)
         httpserver.listen()
         reactor.removeReader(listener) # avoid new connections
@@ -605,7 +605,7 @@ ZeroDivisionError: integer division or modulo by zero
                 yield "result = %s" % tbstring
             yield 'after suspend'
         listener = MyMockSocket()
-        port = 9
+        port = PortNumberGenerator.next()
         httpserver = HttpServer(reactor, port, handler, sok=listener)
         httpserver.listen()
         reactor.removeReader(listener) # avoid new connections

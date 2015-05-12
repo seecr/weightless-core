@@ -29,7 +29,6 @@ from seecr.test.portnumbergenerator import PortNumberGenerator
 
 from contextlib import contextmanager
 from operator import xor
-from random import randint
 from socket import socket, AF_INET, SOCK_STREAM
 from time import time
 

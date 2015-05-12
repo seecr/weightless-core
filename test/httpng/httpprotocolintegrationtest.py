@@ -1,39 +1,42 @@
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2006-2009 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+# Copyright (C) 2011-2012, 2015 Seecr (Seek You Too B.V.) http://seecr.nl
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 from __future__ import with_statement
-from urllib2 import urlopen, Request, urlopen
-from StringIO import StringIO
-from socket import socket, SHUT_RDWR, SO_REUSEADDR, SOL_SOCKET
-from select import select
-import sys
-from subprocess import Popen, PIPE
-from re import compile
-from time import sleep
 
 from weightlesstestcase import WeightlessTestCase
+from seecr.test.portnumbergenerator import PortNumberGenerator
+
+import sys
+from StringIO import StringIO
+from re import compile
+from select import select
+from socket import socket, SHUT_RDWR, SO_REUSEADDR, SOL_SOCKET
+from subprocess import Popen, PIPE
+from time import sleep
+from urllib2 import urlopen, Request, urlopen
+
 from weightless.core import compose, Observable, Transparant, be, autostart
 from weightless.io import Gio, Reactor, Server
 from weightless.httpng import HttpProtocol, http
@@ -290,7 +293,7 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
         sok.close()
 
     def testReuseAddress(self):
-        remoteport = self.port + 1
+        remoteport = PortNumberGenerator.next()
         server = socket()
         server.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         server.bind(('127.0.0.1', remoteport))
@@ -306,7 +309,7 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
             self.fail('bind must succeed')
 
     def testCloseStatesRemoteFirst(self):
-        remoteport = self.port+1
+        remoteport = PortNumberGenerator.next()
         server = socket()
         server.bind(('127.0.0.1', remoteport))
         server.listen(1)
@@ -338,7 +341,7 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
 
 
     def testCloseStatesLocalFirst(self):
-        remoteport = self.port+1
+        remoteport = PortNumberGenerator.next()
         server = socket()
         server.bind(('localhost', remoteport))
         server.listen(1)
