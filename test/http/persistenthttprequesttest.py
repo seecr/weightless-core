@@ -72,7 +72,7 @@ class PersistentHttpRequestTest(WeightlessTestCase):
         self.reactor = Reactor()
         self.port = PortNumberGenerator.next()
 
-    def startReferenceHttpServer(self):
+    def startWeightlessHttpServer(self):
         self.httpserver = HttpServer(self.reactor, self.port, self._dispatch)
         self.httpserver.listen()
 
@@ -94,7 +94,7 @@ class PersistentHttpRequestTest(WeightlessTestCase):
     ### Old (Unported) Tests Demarkation ###
     ###                                  ###
     def testPassRequestThruToBackOfficeServer(self):
-        self.startReferenceHttpServer()
+        self.startWeightlessHttpServer()
         backofficeport = PortNumberGenerator.next()
         def passthruhandler(*args, **kwargs):
             request = kwargs['RequestURI']
@@ -110,7 +110,7 @@ class PersistentHttpRequestTest(WeightlessTestCase):
         self.assertEquals('hello!', response)
 
     def testPassRequestThruToBackOfficeServerWithHttpRequest(self):
-        self.startReferenceHttpServer()
+        self.startWeightlessHttpServer()
         backofficeport = PortNumberGenerator.next()
         def passthruhandler(*args, **kwargs):
             request = kwargs['RequestURI']
@@ -127,7 +127,7 @@ class PersistentHttpRequestTest(WeightlessTestCase):
 
     @stderr_replaced
     def testConnectFails(self):
-        self.startReferenceHttpServer()
+        self.startWeightlessHttpServer()
         def failingserver(*args, **kwarg):
             response = yield httpget(*target)
 
@@ -189,7 +189,7 @@ TypeError: an integer is required
 
     @stdout_replaced
     def testTracebackPreservedAcrossSuspend(self):
-        self.startReferenceHttpServer()
+        self.startWeightlessHttpServer()
         backofficeport = PortNumberGenerator.next()
         expectedrequest = ''
         testserver(backofficeport, [], expectedrequest)
@@ -234,7 +234,7 @@ RuntimeError: Boom!""" % fileDict)
             persistentHttpRequestModule._requestLine = originalRequestLine
 
     def testHttpPost(self):
-        self.startReferenceHttpServer()
+        self.startWeightlessHttpServer()
         post_request = []
         port = PortNumberGenerator.next()
         self.referenceHttpServer(port, post_request)
@@ -258,7 +258,7 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEquals(body, post_request[0]['body'])
 
     def testHttpPostWithoutHeaders(self):
-        self.startReferenceHttpServer()
+        self.startWeightlessHttpServer()
         post_request = []
         port = PortNumberGenerator.next()
         self.referenceHttpServer(port, post_request)
@@ -280,7 +280,7 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEquals(body, post_request[0]['body'])
 
     def testHttpsPost(self):
-        self.startReferenceHttpServer()
+        self.startWeightlessHttpServer()
         post_request = []
         port = PortNumberGenerator.next()
         self.referenceHttpServer(port, post_request, ssl=True)
@@ -305,7 +305,7 @@ RuntimeError: Boom!""" % fileDict)
 
     @stderr_replaced
     def testHttpsPostOnIncorrectPort(self):
-        self.startReferenceHttpServer()
+        self.startWeightlessHttpServer()
         responses = []
         def posthandler(*args, **kwargs):
             response = yield httpspost('localhost', PortNumberGenerator.next(), '/path', "body",
@@ -321,7 +321,7 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEquals("111", str(self.error[1]))
 
     def testHttpGet(self):
-        self.startReferenceHttpServer()
+        self.startWeightlessHttpServer()
         get_request = []
         port = PortNumberGenerator.next()
         self.referenceHttpServer(port, get_request)
@@ -347,7 +347,7 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
 
     def testHttpRequest(self):
-        self.startReferenceHttpServer()
+        self.startWeightlessHttpServer()
         get_request = []
         port = PortNumberGenerator.next()
         self.referenceHttpServer(port, get_request)
@@ -371,7 +371,7 @@ RuntimeError: Boom!""" % fileDict)
     # FIXME: Re-Enable me (gives referenceHttpServer printed stacktraces (another thread))!
     def testHttpRequestWithTimeout(self):
         # And thus too http(s)get/post/... and friends.
-        self.startReferenceHttpServer()
+        self.startWeightlessHttpServer()
         get_request = []
         port = PortNumberGenerator.next()
         def slowData():
@@ -418,7 +418,7 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEquals('GET', get_request[0]['command'])
 
     def testHttpGetWithReallyLargeHeaders(self):
-        self.startReferenceHttpServer()
+        self.startWeightlessHttpServer()
         get_request = []
         port = PortNumberGenerator.next()
         self.referenceHttpServer(port, get_request)
@@ -451,7 +451,7 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEquals('/path', get_request[0]['path'])
 
     def testHttpsGet(self):
-        self.startReferenceHttpServer()
+        self.startWeightlessHttpServer()
         get_request = []
         port = PortNumberGenerator.next()
         self.referenceHttpServer(port, get_request, ssl=True)
@@ -492,7 +492,6 @@ RuntimeError: Boom!""" % fileDict)
 
     def testMockSocketServerOneRequestExpectedAndCompleted(self):
         def r1(sok, remoteAddress, connectionNr):
-            sys.stdout.flush()
             #data = yield read(forSeconds=0.1)
             data = yield read(untilExpected='GET / HTTP/1.1\r\n\r\n')  # ??: host headers mandatory!
             yield write(data='HTTP/1.1 200 Okidokie\r\nContent-Length: 0\r\n\r\n')
