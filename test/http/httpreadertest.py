@@ -76,7 +76,8 @@ def server(port, response, expectedrequest, delay=0, loop=50):
             sleep(0.5)
         serverSok.close()
 
-    thread=Thread(None, serverProcess)
+    thread = Thread(None, serverProcess)
+    thread.daemon = True
     thread.start()
     isListening.wait()
     return thread
