@@ -143,7 +143,6 @@ class _ComposeTest(TestCase):
         except AssertionError, e:
             self.fail('NoneProtocol not triggered!, got AssertionError: %s' % str(e))
 
-
     def testResumecompose(self):
         def thread():
             yield 'A'
@@ -190,6 +189,18 @@ class _ComposeTest(TestCase):
         g = compose(parent())
         list(g)
         self.assertEquals('result', data[0])
+
+    def testReturnEmptyString(self):
+        data = []
+        def child():
+            raise StopIteration('')
+            yield
+        def parent():
+            result = yield child()
+            data.append(result)
+        g = compose(parent())
+        list(g)
+        self.assertEquals('', data[0])
 
     def testReturnThree(self):
         data = []

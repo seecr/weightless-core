@@ -126,8 +126,6 @@ def _compose(initial, stepping):
             generators.pop()
             retvals = returnValue.args
             if retvals:
-                if retvals == ('',): #jython
-                    retvals = (None,)
                 messages[0:0] = retvals
             else:
                 generators and messages.insert(0, None)
