@@ -33,7 +33,7 @@ from httpreadertest import server as testserver
 
 import sys
 from re import sub
-from socket import socket, gaierror as SocketGaiError, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_NODELAY, SHUT_RDWR
+from socket import socket, gaierror as SocketGaiError, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_NODELAY, SHUT_RDWR, SHUT_RD
 from struct import pack
 from sys import exc_info, version_info
 from time import sleep, time
@@ -56,7 +56,7 @@ PYVERSION = '%s.%s' % version_info[:2]
 # - Request always HTTP/1.1
 # - Requests always have Content-Length: <n> specified (less logic / no need for request chunking - or detection if the server is capable of recieving it)
 # - Never send "Connection: close"; after processing request, determine if "back-in-Pool" or close.
-# - Server response usually HTTP/1.1, HTTP/1.0 handled via closing socket (thus being persistent [FIXME: should we warn in that situation?]!)
+# - Server response usually HTTP/1.1, HTTP/1.0 handled via closing socket (thus not being persistent [FIXME: should we warn in that situation?]!)
 # - Pool semantics extremly simple, more complex / tested behaviour only when extracted (DNA/Dependency Injection) and in a separate testcase covered!
 # - Variables are:
 #   {
@@ -69,10 +69,10 @@ PYVERSION = '%s.%s' % version_info[:2]
 class PersistentHttpRequestTest(WeightlessTestCase):
     def setUp(self):
         WeightlessTestCase.setUp(self)
-        self.reactor = Reactor()
-        self.port = PortNumberGenerator.next()
 
     def startWeightlessHttpServer(self):
+        self.reactor = Reactor()  # FXIME: Also set from WeightlessTestCase
+        self.port = PortNumberGenerator.next()  # FXIME: Also set from WeightlessTestCase
         self.httpserver = HttpServer(self.reactor, self.port, self._dispatch)
         self.httpserver.listen()
 
@@ -90,41 +90,77 @@ class PersistentHttpRequestTest(WeightlessTestCase):
         # {http: 1.1, EOR: content-length, comms: ok}
         self.fail()
 
+    def testHttpRequestWorksWhenDrivenByHttpServer(self):
+        # Old name: testPassRequestThruToBackOfficeServer
+        expectedrequest = "GET /path?arg=1&arg=2 HTTP/1.1\r\n\r\n"
+
+        def r1(sok, log, remoteAddress, connectionNr):
+            # Request
+            data = yield read(untilExpected=expectedrequest)
+            self.assertEquals(expectedrequest, data)
+
+            # Response
+            _headers = 'HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\n'
+            yield write(data=_headers)
+            yield write(data='hel')
+            yield write(data='lo!')
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies([r1])
+            @compose
+            def _passthruhandler(*args, **kwargs):
+                request = kwargs['RequestURI']
+                response = yield httprequest(host='localhost', port=mss.port, request=request)
+                yield response
+            wlPort = PortNumberGenerator.next()
+            wlHttp = HttpServer(reactor=reactor(), port=wlPort, generatorFactory=_passthruhandler)
+
+            wlHttp.listen()
+            mss.listen()
+            try:
+                response = yield httpget(host='localhost', port=wlPort, request='/path?arg=1&arg=2', timeout=1.0)
+                self.assertEquals('HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nhello!', response)
+            finally:
+                wlHttp.shutdown()
+                mss.close()
+
+        asProcess(test())
+
+    def testHttpRequestObj(self):
+        # Old name: testPassRequestThruToBackOfficeServerWithHttpRequest
+        expectedrequest = "GET /path?arg=1&arg=2 HTTP/1.1\r\n\r\n"
+
+        def r1(sok, log, remoteAddress, connectionNr):
+            # Request
+            data = yield read(untilExpected=expectedrequest)
+            self.assertEquals(expectedrequest, data)
+
+            # Response
+            _headers = 'HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\n'
+            yield write(data=_headers)
+            yield write(data='hel')
+            yield write(data='lo!')
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies([r1])
+            mss.listen()
+            try:
+                response = yield HttpRequest().httprequest(host='localhost', port=mss.port, request='/path?arg=1&arg=2')
+                self.assertEquals('HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nhello!', response)
+            finally:
+                mss.close()
+
+        asProcess(test())
+
+
+
     ###                                  ###
     ### Old (Unported) Tests Demarkation ###
     ###                                  ###
-    def testPassRequestThruToBackOfficeServer(self):
-        self.startWeightlessHttpServer()
-        backofficeport = PortNumberGenerator.next()
-        def passthruhandler(*args, **kwargs):
-            request = kwargs['RequestURI']
-            response = yield httpget('localhost', backofficeport, request)
-            yield response
-        self.handler = passthruhandler
-        expectedrequest = "GET /depot?arg=1&arg=2 HTTP/1.1\r\n\r\n"
-        responses = (i for i in ['hel', 'lo!'])
-        backofficeserver = testserver(backofficeport, responses, expectedrequest)
-        client = clientget('localhost', self.port, '/depot?arg=1&arg=2')
-        self._loopReactorUntilDone()
-        response = client.recv(99)
-        self.assertEquals('hello!', response)
-
-    def testPassRequestThruToBackOfficeServerWithHttpRequest(self):
-        self.startWeightlessHttpServer()
-        backofficeport = PortNumberGenerator.next()
-        def passthruhandler(*args, **kwargs):
-            request = kwargs['RequestURI']
-            response = yield HttpRequest().httprequest(host='localhost', port=backofficeport, request=request)
-            yield response
-        self.handler = passthruhandler
-        expectedrequest = "GET /depot?arg=1&arg=2 HTTP/1.1\r\n\r\n"
-        responses = (i for i in ['hel', 'lo!'])
-        backofficeserver = testserver(backofficeport, responses, expectedrequest)
-        client = clientget('localhost', self.port, '/depot?arg=1&arg=2')
-        self._loopReactorUntilDone()
-        response = client.recv(99)
-        self.assertEquals('hello!', response)
-
     @stderr_replaced
     def testConnectFails(self):
         self.startWeightlessHttpServer()
@@ -368,7 +404,7 @@ RuntimeError: Boom!""" % fileDict)
 
         self.assertTrue("Message: Unsupported method ('MYMETHOD')" in responses[0], responses[0])
 
-    # FIXME: Re-Enable me (gives referenceHttpServer printed stacktraces (another thread))!
+    # FIXME: gives referenceHttpServer printed stacktraces (another thread) - mostly only when running with "--c"!
     def testHttpRequestWithTimeout(self):
         # And thus too http(s)get/post/... and friends.
         self.startWeightlessHttpServer()
@@ -491,7 +527,7 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEquals(0, len(serverFailsRequestDoesNot))
 
     def testMockSocketServerOneRequestExpectedAndCompleted(self):
-        def r1(sok, remoteAddress, connectionNr):
+        def r1(sok, log, remoteAddress, connectionNr):
             #data = yield read(forSeconds=0.1)
             data = yield read(untilExpected='GET / HTTP/1.1\r\n\r\n')  # ??: host headers mandatory!
             yield write(data='HTTP/1.1 200 Okidokie\r\nContent-Length: 0\r\n\r\n')
@@ -500,22 +536,22 @@ RuntimeError: Boom!""" % fileDict)
 
         def run():
             mss = MockSocketServer()
-            mss.setHandlers(replies=[r1])
+            mss.setReplies(replies=[r1])
             mss.listen()
-
-            response = yield httprequest(method='GET', host='127.0.0.1', port=mss.port, request='/')
-            self.assertEquals('HTTP/1.1 200 Okidokie\r\nContent-Length: 0\r\n\r\n', response)
-            self.assertEquals(1, mss.nrOfRequests)
-            self.assertEquals({1: 'GET / HTTP/1.1\r\n\r\n'}, mss.connectionHandler.returnValues)
-
-            mss.close()
+            try:
+                response = yield httprequest(method='GET', host='127.0.0.1', port=mss.port, request='/')
+                self.assertEquals('HTTP/1.1 200 Okidokie\r\nContent-Length: 0\r\n\r\n', response)
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals({1: ('GET / HTTP/1.1\r\n\r\n', [])}, mss.state.connections)
+            finally:
+                mss.close()
             raise StopIteration(response)
 
         result = asProcess(run())
 
 
 
-    ## referenceHttpServer helpers ##
+    ## Weightless HttpServer helpers ##
     def _dispatch(self, *args, **kwargs):
         def handle():
             try:
@@ -545,20 +581,18 @@ class MockSocketServer(object):
     def __init__(self):
         self.port = PortNumberGenerator.next()
         self.nrOfRequests = 0
-        self.setHandlers()  # Default handler - any connection fails.
+        self.setReplies()  # Default handler - any connection fails.
 
-    def setHandlers(self, replies=None):
+    def setReplies(self, replies=None):
         replies = replies or []
-        self.connectionHandler = _ExactExpectationHandler(server=self, replies=replies)
+        self.state = _ExactExpectationHandler(server=self, replies=replies)
 
     def listen(self):
-        # setblocking(0) would be nice, but no novelty in testing code here :-s
-        # @@ TODO: fix todo's and imports, ...
         self._listenSok = socket()
         self._listenSok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         self._listenSok.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
         self._listenSok.bind(('127.0.0.1', self.port))
-        self._listenSok.listen(5)  # FIXME: 1, ..., 5, ..., n ??
+        self._listenSok.listen(5)  # Kindof arbitrary.
         reactor().addReader(sok=self._listenSok, sink=self._accept)
 
     def close(self, exclude=None):
@@ -568,15 +602,15 @@ class MockSocketServer(object):
         self._listenSok.shutdown(SHUT_RDWR)
         self._listenSok.close()
         self._listenSok = None
-        self.connectionHandler.close(exclude=exclude)
+        self.state.close(exclude=exclude)
 
     def _accept(self):
         self.nrOfRequests += 1
         newConnection, remoteAddress = self._listenSok.accept()
-        #newConnection.setblocking(0)
-        newConnection.setsockopt(SOL_TCP, TCP_NODELAY, 1)
-        #newConnection.setsockopt(SOL_TCP, TCP_CORK, 1)
-        self.connectionHandler(sok=newConnection, remoteAddress=remoteAddress, connectionNr=self.nrOfRequests)
+        newConnection.setblocking(0)  # Won't hang, some tests may be simples when (briefly) setting it to blocking again.
+        newConnection.setsockopt(SOL_TCP, TCP_NODELAY, 1)  # Many small packets in a hurry.
+        #newConnection.setsockopt(SOL_TCP, TCP_CORK, 1)  # Few large package waiting a bit for more data.
+        self.state(sok=newConnection, remoteAddress=remoteAddress, connectionNr=self.nrOfRequests)
 
 
 class _ExactExpectationHandler(object):
@@ -585,15 +619,21 @@ class _ExactExpectationHandler(object):
         self._replies = replies
 
         self._replyIndex = -1
-        self._busy = set()
-        self.returnValues = {}
+        self.busy = set()
+        self.connections = {}
 
     def __call__(self, sok, remoteAddress, connectionNr):
         self._replyIndex += 1
         if self._replyIndex >= len(self._replies):
-            return self.noConnectionHandler(sok=sok, remoteAddress=remoteAddress, connectionNr=connectionNr)
+            return self._noConnectionHandler(sok=sok, remoteAddress=remoteAddress, connectionNr=connectionNr)
 
         return self._startAndTrackCompletion(gf=self._replies[self._replyIndex], sok=sok, remoteAddress=remoteAddress, connectionNr=connectionNr)
+
+    def close(self, exclude=None):
+        for handler in self.busy:
+            if handler == exclude:
+                continue  # If set, excluded itself is initiating the close because of a fatal error.
+            handler.throw(AbortException, AbortException('Handler not completed on time'), None)
 
     def _startAndTrackCompletion(self, gf, sok, remoteAddress, connectionNr):
         @identify
@@ -601,18 +641,20 @@ class _ExactExpectationHandler(object):
         def wrapper():
             # Arguments easily callstack-retrievable.
             __sok__ = sok
+            __log__ = log = []
             __remoteAddress__ = remoteAddress
             __connectionNr__ = connectionNr
 
             this = __this__ = yield
-            self._busy.add(this)
+            self.busy.add(this)
+            self.connections[connectionNr] = (IN_PROGRESS, log)
             reactor().addProcess(process=this.next)
             yield
             try:
                 try:
-                    g = compose(gf(sok=sok, remoteAddress=remoteAddress, connectionNr=connectionNr))
+                    g = compose(gf(sok=sok, log=log, remoteAddress=remoteAddress, connectionNr=connectionNr))
                 except Exception, e:
-                    raise AssertionError('Test error, MockSocketServer handler riased %s - should have resulted in a generator' % repr(e))
+                    raise AssertionError('Test error: MockSocketServer connection reply #{connectionNr} riased %{error}s - should have resulted in a generator'.format({'error': repr(e), 'connectionNr': connectionNr}))
 
                 try:
                     try:
@@ -627,6 +669,16 @@ class _ExactExpectationHandler(object):
                             yield
                     except StopIteration, e:
                         retval = e.args[0] if e.args else None
+                except AssertionError:
+                    c, v, t = exc_info()
+                    msg = 'Connection reply #{nr} from {host}:{port} failed with:\n'.format(**{
+                        'nr': connectionNr,
+                        'host': remoteAddress[0],
+                        'port': remoteAddress[1],
+                    }) + str(v)
+                    raise c, c(msg), t
+                except (KeyboardInterrupt, SystemExit):
+                    raise
                 except Exception, e:
                     print_exc()  # HCK
                     retval = e
@@ -636,23 +688,20 @@ class _ExactExpectationHandler(object):
                 raise
             finally:
                 reactor().removeProcess(process=this.next)
-                self._busy.remove(this)
+                self.busy.remove(this)
 
-            self.returnValues[connectionNr] = retval
+            self.connections[connectionNr] = (retval, log)
             yield  # Wait for GC
 
         wrapper()
 
-    def close(self, exclude=None):
-        for handler in self._busy:
-            if handler == exclude:
-                continue  # If set, excluded itself is initiating the close because of a fatal error.
-            handler.throw(AbortException, AbortException('Handler not completed on time'), None)
-
-    def noConnectionHandler(self, sok, remoteAddress, connectionNr):
+    def _noConnectionHandler(self, sok, remoteAddress, connectionNr):
         sok.shutdown(SHUT_RDWR); sok.close()
         self._server.close()  # cleans up server and self.
         raise AssertionError('Unexpected Connection #{0} from: {1}:{2}!'.format(connectionNr, *remoteAddress))
+
+
+IN_PROGRESS = type('IN_PROGRESS', (object,), {})()
 
 
 def read(bytes=None, forSeconds=None, untilExpected=None, timeout=1.0):
@@ -666,6 +715,8 @@ def read(bytes=None, forSeconds=None, untilExpected=None, timeout=1.0):
         Attempt to read as much as possible within the given time.
     untilExpected:
         Expected string (startswith check) or function which must return true when read data is "expected."
+    timeout:
+        Must be set to some sane, low value - otherwise test hangs indefinitely.
     """
     if not (sum((int(bytes is not None), int(forSeconds is not None), int(untilExpected is not None))) == 1):
         raise AssertionError('One of either bytes, forSeconds or untilExpected must be given.')
@@ -694,8 +745,18 @@ def read(bytes=None, forSeconds=None, untilExpected=None, timeout=1.0):
         except (AssertionError, KeyboardInterrupt, SystemExit):
             raise
         except TimeoutException:
-            if not forSeconds:
-                raise AssertionError('Timeout reached.')
+            if forSeconds is None:
+                msg = '''Timeout reached while trying:
+    read(bytes={bytes}, forSeconds={forSeconds}, untilExpected={untilExpected}, timeout={timeout})
+
+Read so far:\n{bytesRead}'''.format(**{
+                    'bytes': bytes,
+                    'forSeconds': forSeconds,
+                    'untilExpected': repr(untilExpected),
+                    'timeout': timeout,
+                    'bytesRead': repr(bytesRead),
+                })
+                raise AssertionError(msg)
 
     raise StopIteration(bytesRead)
 
@@ -710,6 +771,7 @@ def _readOnce(timeout):
     raise StopIteration(result)
 
 @identify
+@compose
 def _readOnceGF(sok):
     this = yield
     suspend = yield
@@ -735,6 +797,11 @@ def write(data, timeout=1.0):
     """
     MockSocketServer' handler helper functions.
     Use these instead of recv/write yourself.
+
+    data:
+        Data to write (minimum)
+    timeout:
+        Must be set to some sane, low value - otherwise test hangs indefinitely.
     """
 
     startTime = time()
@@ -742,7 +809,18 @@ def write(data, timeout=1.0):
     remaining = data
 
     while remaining:
-        remaining = yield _writeOnce(remaining, timeout=timeoutRelative())
+        try:
+            remaining = yield _writeOnce(remaining, timeout=timeoutRelative())
+        except TimeoutException:
+            msg = '''Timeout reached while trying:
+    write(data={data}, timeout={timeout})
+
+Written so far:\n{written}'''.format(**{
+                'data': repr(data),
+                'timeout': timeout,
+                'written': repr(data[:-len(remaining)]),
+            })
+            raise AssertionError(msg)
 
 
 def _writeOnce(data, timeout):
@@ -759,6 +837,7 @@ def _writeOnce(data, timeout):
     raise StopIteration(result)
 
 @identify
+@compose
 def _writeOnceGF(sok, data):
     this = yield
     suspend = yield
@@ -780,6 +859,22 @@ def _writeOnceGF(sok, data):
         suspend.throw(*exc_info())
     yield  # wait for GC
 
+def zleep(seconds):
+    def doNext():
+        suspend = yield  # from Suspend.__call__
+        yield  # Wait for timeout
+        yield  # wait for GC
+
+    g = doNext()
+    s = Suspend(doNext=g.send, timeout=seconds, onTimeout=g.next)
+    yield s
+    try:
+        s.getResult()
+        self.fail()
+    except TimeoutException:
+        pass
+
+    raise StopIteration(None)
 
 class AbortException(Exception):
     pass
