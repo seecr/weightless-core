@@ -32,6 +32,8 @@ from weightlesstestcase import WeightlessTestCase, StreamingData
 from httpreadertest import server as testserver
 
 import sys
+from collections import namedtuple
+from functools import wraps
 from re import sub
 from socket import socket, gaierror as SocketGaiError, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_NODELAY, SHUT_RDWR, SHUT_RD
 from struct import pack
@@ -510,6 +512,7 @@ RuntimeError: Boom!""" % fileDict)
         headers = get_request[0]['headers'].headers
         self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
 
+    ##
     ## MockSocketServer tests (incomplete / rough) ##
     def testMockSocketServerFailsOnUnexpectedRequests(self):
         serverFailsRequestDoesNot = []
@@ -548,8 +551,6 @@ RuntimeError: Boom!""" % fileDict)
             raise StopIteration(response)
 
         result = asProcess(run())
-
-
 
     ## Weightless HttpServer helpers ##
     def _dispatch(self, *args, **kwargs):
@@ -630,10 +631,10 @@ class _ExactExpectationHandler(object):
         return self._startAndTrackCompletion(gf=self._replies[self._replyIndex], sok=sok, remoteAddress=remoteAddress, connectionNr=connectionNr)
 
     def close(self, exclude=None):
-        for handler in self.busy:
+        for handler in list(self.busy):
             if handler == exclude:
                 continue  # If set, excluded itself is initiating the close because of a fatal error.
-            handler.throw(AbortException, AbortException('Handler not completed on time'), None)
+            handler.throw(AbortException, AbortException('Closing MockSocketServer connections'), None)
 
     def _startAndTrackCompletion(self, gf, sok, remoteAddress, connectionNr):
         @identify
@@ -647,8 +648,9 @@ class _ExactExpectationHandler(object):
 
             this = __this__ = yield
             self.busy.add(this)
-            self.connections[connectionNr] = (IN_PROGRESS, log)
+            self.connections[connectionNr] = _Connection(IN_PROGRESS, log)
             reactor().addProcess(process=this.next)
+            _removeProcess = True
             yield
             try:
                 try:
@@ -664,7 +666,9 @@ class _ExactExpectationHandler(object):
                             sys.stdout.flush()
                             if _response is not Yield and callable(_response):
                                 _response(reactor(), this.next)
+                                _removeProcess = False
                                 yield
+                                _removeProcess = True
                                 _response.resumeProcess()
                             yield
                     except StopIteration, e:
@@ -682,15 +686,15 @@ class _ExactExpectationHandler(object):
                 except Exception, e:
                     print_exc()  # HCK
                     retval = e
-                    # or: retval = exc_info() for TB stuff?
             except (AssertionError, KeyboardInterrupt, SystemExit):
                 self._server.close(exclude=this)  # cleans up server and self.
                 raise
             finally:
-                reactor().removeProcess(process=this.next)
+                if _removeProcess:
+                    reactor().removeProcess(process=this.next)
                 self.busy.remove(this)
 
-            self.connections[connectionNr] = (retval, log)
+            self.connections[connectionNr] = _Connection(retval, log)
             yield  # Wait for GC
 
         wrapper()
@@ -865,7 +869,7 @@ def zleep(seconds):
         yield  # Wait for timeout
         yield  # wait for GC
 
-    g = doNext()
+    g = doNext(); g.next()  # + autostart
     s = Suspend(doNext=g.send, timeout=seconds, onTimeout=g.next)
     yield s
     try:
@@ -879,6 +883,30 @@ def zleep(seconds):
 class AbortException(Exception):
     pass
 
+_Connection = namedtuple('Connection', ['value', 'log'])
+
+# FIXME: De-uglify this one...
+def dieAfter(seconds=5.0):
+    def dieAfter(generatorFunction):
+        @wraps(generatorFunction)
+        @identify
+        def helper(*args, **kwargs):
+            this = yield
+            yield
+            tokenList = []
+            def cb():
+                tokenList.pop()
+                this.throw(AssertionError, AssertionError('dieAfter triggered after %s seconds.' % seconds), None)
+            tokenList.append(reactor().addTimer(seconds=seconds, callback=cb))
+            try:
+                retval = yield generatorFunction(*args, **kwargs)
+            except:
+                c, v, t = exc_info()
+                if tokenList:
+                    reactor().removeTimer(token=tokenList[0])
+                raise c, v, t
+        return helper
+    return dieAfter
 
 def clientget(host, port, path):
     client = socket()
