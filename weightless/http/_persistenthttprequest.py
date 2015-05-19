@@ -23,15 +23,16 @@
 #
 ## end license ##
 
-from sys import exc_info, getdefaultencoding
-from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_RDWR, SOL_TCP, TCP_KEEPINTVL, TCP_KEEPIDLE, TCP_KEEPCNT, SO_KEEPALIVE
 from errno import EINPROGRESS
-from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
 from functools import partial
-
-from weightless.io import Suspend, TimeoutException
-from weightless.core import compose, identify
+from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_RDWR, SOL_TCP, TCP_KEEPINTVL, TCP_KEEPIDLE, TCP_KEEPCNT, SO_KEEPALIVE
+from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
+from sys import exc_info, getdefaultencoding
 from urlparse import urlsplit
+
+from weightless.core import compose, identify, Observable
+from weightless.io import Suspend, TimeoutException
+from weightless.http import REGEXP
 
 
 # TODO:
@@ -39,52 +40,39 @@ from urlparse import urlsplit
 # - should retry failed requests on pooled sockets
 
 
-def httprequest(host, port, request, body=None, headers=None, ssl=False, prio=None, method='GET', timeout=None):
-    g = _do(method, host=host, port=port, request=request, headers=headers, body=body, ssl=ssl, prio=prio)
-    kw = {}
-    if timeout is not None:
-        def onTimeout():
-            g.throw(TimeoutException, TimeoutException(), None)
+class HttpRequest1_1(Observable):
+    """
+    Uses minimal HTTP/1.1 implementation for Persistent Connections.
+    """
 
-        kw = {
-            'timeout': timeout,
-            'onTimeout': onTimeout,
-        }
+    def httprequest1_1(self, host, port, request, body=None, headers=None, ssl=False, prio=None, method='GET', timeout=None):
+        g = _do(method=method, host=host, port=port, request=request, headers=headers, body=body, ssl=ssl, prio=prio, observable=self)
+        kw = {}
+        if timeout is not None:
+            def onTimeout():
+                g.throw(TimeoutException, TimeoutException(), None)
 
-    s = Suspend(doNext=g.send, **kw)
-    yield s
-    result = s.getResult()
-    raise StopIteration(result)
+            kw = {
+                'timeout': timeout,
+                'onTimeout': onTimeout,
+            }
 
-# FIXME: meh...
-httpget = httprequest
-httppost = partial(httprequest, method='POST')
-httpdelete = partial(httprequest, method='DELETE')
-httpput = partial(httprequest, method='PUT')
-
-httpsget = partial(httpget, ssl=True)
-httpspost = partial(httppost, ssl=True)
-httpsdelete = partial(httpdelete, ssl=True)
-httpsput = partial(httpput, ssl=True)
-
-
-class HttpRequest(object):
-    @staticmethod
-    def httprequest(**kwargs):
-        result = yield httprequest(**kwargs)
+        s = Suspend(doNext=g.send, **kw)
+        yield s
+        result = s.getResult()
         raise StopIteration(result)
 
 
 @identify
 @compose
-def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=None):
+def _do(observable, method, host, port, request, body=None, headers=None, ssl=False, prio=None):
     headers = headers or {}
     pool = POOL_REFACTOR_ME
     this = yield # this generator, from @identify
     suspend = yield # suspend object, from Suspend.__call__
 
     try:
-        fromPool, sok = yield _getOrCreateSocket(host, port, ssl, pool, this, suspend, prio)
+        fromPool, sok = yield _getOrCreateSocket(host, port, ssl, pool, this, suspend, prio)  # FIXME: Use an Observer / dependency injection
 
         suspend._reactor.addWriter(sok, this.next, prio=prio)
         yield
@@ -101,25 +89,13 @@ def _do(method, host, port, request, body=None, headers=None, ssl=False, prio=No
         finally:
             suspend._reactor.removeWriter(sok)
         suspend._reactor.addReader(sok, this.next, prio=prio)
-        responses = []
         try:
-            while True:
-                yield
-                try:
-                    response = sok.recv(4096) # error checking
-                except SSLError as e:
-                    if e.errno != SSL_ERROR_WANT_READ:
-                        raise
-                    continue
-                if response == '':
-                    break
-
-                responses.append(response)
+            headerAndBody = yield _readHeaderAndBody(sok)
         finally:
             suspend._reactor.removeReader(sok)
         sok.shutdown(SHUT_RDWR)
         sok.close()
-        suspend.resume(''.join(responses))
+        suspend.resume(headerAndBody)
     except (AssertionError, KeyboardInterrupt, SystemExit):
         raise
     except TimeoutException:
@@ -220,6 +196,7 @@ def _sslHandshake(sok, this, suspend, prio):
     raise StopIteration(sok)
 
 def _sendHttpHeaders(sok, method, request, headers):
+    # TODO: add Host header iff not given
     data = _requestLine(method, request)
     if headers:
         data += ''.join('%s: %s\r\n' % i for i in headers.items())
@@ -229,10 +206,71 @@ def _sendHttpHeaders(sok, method, request, headers):
 def _requestLine(method, request):
     return "%s %s HTTP/1.1\r\n" % (method, request)
 
+def _readHeaderAndBody(sok):
+    parsedHeader, rawHeader, isClosed, rest = yield _readHeader(sok)
+    if isClosed:
+        raise StopIteration(rawHeader)  #@@
+    body, isClosed = yield _readBody(sok, rest)
+    raise StopIteration(rawHeader + body)
+    # TODO: cannot produce sensible 'response' from invalid/incomplete server response.
+
+def _readHeader(sok):
+    responses = ''
+    rest = ''
+    isClosed = False
+    while True:
+        response = yield _asyncRead(sok)
+        if response is _CLOSED:
+            isClosed = True
+            break
+        responses += response
+
+        match = REGEXP.RESPONSE.match(responses)
+        if not match:
+            # TODO: check some max. statusline + header size (or bail).
+            continue
+
+        # Matched:
+        if match.end() < len(responses):
+            rawHeaders = responses[:match.end()]
+            rest = responses[match.end():]
+        else:
+            rawHeaders = responses
+
+        break   #@@
+        # TODO: Handle 100 Continue stuff.
+    raise StopIteration((None, (responses if isClosed else rawHeaders), isClosed, rest))
+
+def _readBody(sok, rest):
+    responses = rest  # Must be empty-string at least
+    isClosed = False
+    while True:
+        response = yield _asyncRead(sok)
+        if response is _CLOSED:
+            isClosed = True
+            break
+        responses += response
+    raise StopIteration((responses, isClosed))
+
 def _asyncSend(sok, data):
     while data != "":
         size = sok.send(data)
         data = data[size:]
         yield
 
+def _asyncRead(sok):
+    while True:
+        yield
+        try:
+            response = sok.recv(4096) # error checking
+        except SSLError as e:
+            if e.errno != SSL_ERROR_WANT_READ:
+                raise
+            continue
+
+        if response == '':
+            raise StopIteration(_CLOSED)
+        raise StopIteration(response)
+
+_CLOSED = type('CLOSED', (object,), {})()
 POOL_REFACTOR_ME = SocketPool()

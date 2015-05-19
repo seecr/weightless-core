@@ -41,15 +41,16 @@ from sys import exc_info, version_info
 from time import sleep, time
 from traceback import format_exception, print_exc
 
-from weightless.core import compose, identify, is_generator, Yield, local
+from weightless.core import compose, identify, is_generator, Yield, local, be, Observable
 from weightless.io import Reactor, Suspend, TimeoutException, reactor
 from weightless.io.utils import asProcess
 from weightless.http import HttpServer
-from weightless.http._persistenthttprequest import httprequest, httpget, httppost, httpspost, httpsget, HttpRequest
+from weightless.http._persistenthttprequest import HttpRequest1_1
 
 from weightless.http._persistenthttprequest import _requestLine
 from weightless.http import _persistenthttprequest as persistentHttpRequestModule
 
+httprequest1_1 = HttpRequest1_1().httprequest1_1
 
 PYVERSION = '%s.%s' % version_info[:2]
 
@@ -67,6 +68,9 @@ PYVERSION = '%s.%s' % version_info[:2]
 #       explicit-close: <True/(False|Missing)>  # Wether, irrespective of EOR-signaling, the server wants to close the connection at EOR.
 #       comms: <ok/retry/double-fail/pooled-unusable>  # Comms goes awry somehow.
 #   }
+
+# TODO: save raw-bytes-recieved for errors (and give it back then)
+
 
 class PersistentHttpRequestTest(WeightlessTestCase):
     def setUp(self):
@@ -89,8 +93,70 @@ class PersistentHttpRequestTest(WeightlessTestCase):
 
     def testHttp11WithoutResponseChunkingOrDataReusedOnce(self):
         # Happy-Path, least complex, still persisted
-        # {http: 1.1, EOR: content-length, comms: ok}
-        self.fail()
+        # {http: 1.1, EOR: content-length, explicit-close: False, comms: ok}
+        def r1(sok, log, remoteAddress, connectionNr):
+            log.append(remoteAddress)
+            # Request
+            toRead = 'GET /first HTTP/1.1\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            # Response statusline & headers
+            yield write(data='HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\n')
+            yield zleep(seconds=0.05)
+
+            # Response body
+            yield write(data='ACK')
+            yield zleep(seconds=0.05)
+
+            # FIXME: Works with line below, but should work without!
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r2(sok, log, remoteAddress, connectionNr):
+            log.append(remoteAddress)
+            # Request
+            toRead = 'GET /second HTTP/1.1\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            # Response statusline & headers
+            yield write(data='HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\n')
+            yield zleep(seconds=0.05)
+
+            # Response body
+            yield write(data='ACK')
+            yield zleep(seconds=0.05)
+
+            # FIXME: Works with line below, but should work without!
+            sok.shutdown(SHUT_RDWR); sok.close()
+            return
+            yield
+
+        @dieAfter(seconds=5.0)
+        def test():
+            if False:
+                yield
+            mss = MockSocketServer()
+            mss.setReplies([r1, r2])
+            mss.listen()
+            try:
+                top = be((Observable(),
+                    (HttpRequest1_1(),
+                    ),
+                ))
+                response1 = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first', timeout=1.0)
+                self.assertEquals('HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nACK', response1)
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals(None, mss.state.connections.get(1).value)
+                remoteAddress1 = mss.state.connections.get(1).log[0]
+                self.assertEquals('127.0.0.1', remoteAddress1[0])
+
+                response2 = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/second')
+                self.fail()  #@@
+            finally:
+                mss.close()
+
+        asProcess(test())
 
     def testHttpRequestWorksWhenDrivenByHttpServer(self):
         # Old name: testPassRequestThruToBackOfficeServer
@@ -114,7 +180,7 @@ class PersistentHttpRequestTest(WeightlessTestCase):
             @compose
             def _passthruhandler(*args, **kwargs):
                 request = kwargs['RequestURI']
-                response = yield httprequest(host='localhost', port=mss.port, request=request)
+                response = yield httprequest1_1(host='localhost', port=mss.port, request=request)
                 yield response
             wlPort = PortNumberGenerator.next()
             wlHttp = HttpServer(reactor=reactor(), port=wlPort, generatorFactory=_passthruhandler)
@@ -122,7 +188,9 @@ class PersistentHttpRequestTest(WeightlessTestCase):
             wlHttp.listen()
             mss.listen()
             try:
-                response = yield httpget(host='localhost', port=wlPort, request='/path?arg=1&arg=2', timeout=1.0)
+                response = yield httprequest1_1(host='localhost', port=wlPort, request='/path?arg=1&arg=2', timeout=1.0)
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals({1: (None, [])}, mss.state.connections)
                 self.assertEquals('HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nhello!', response)
             finally:
                 wlHttp.shutdown()
@@ -151,13 +219,37 @@ class PersistentHttpRequestTest(WeightlessTestCase):
             mss.setReplies([r1])
             mss.listen()
             try:
-                response = yield HttpRequest().httprequest(host='localhost', port=mss.port, request='/path?arg=1&arg=2')
+                response = yield HttpRequest1_1().httprequest1_1(host='localhost', port=mss.port, request='/path?arg=1&arg=2')
                 self.assertEquals('HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nhello!', response)
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals({1: (None, [])}, mss.state.connections)
             finally:
                 mss.close()
 
         asProcess(test())
 
+    def testHttpPost(self):
+        # Implementation test.
+        post_request = []
+        port = PortNumberGenerator.next()
+        self.referenceHttpServer(port, post_request)
+        body = u"BÖDY" * 20000
+
+        def test():
+            response = yield httprequest1_1(method='POST', host='localhost', port=port, request='/path', body=body,
+                    headers={'Content-Type': 'text/plain'}
+            )
+            self.assertTrue("POST RESPONSE" in response, response)
+
+        asProcess(test())
+
+        self.assertEquals(1, len(post_request))
+        post_req = post_request[0]
+        self.assertEquals('POST', post_req['command'])
+        self.assertEquals('/path', post_req['path'])
+        headers = post_req['headers'].headers
+        self.assertEquals(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n'], headers)
+        self.assertEquals(body, post_req['body'])
 
 
     ###                                  ###
@@ -167,20 +259,20 @@ class PersistentHttpRequestTest(WeightlessTestCase):
     def testConnectFails(self):
         self.startWeightlessHttpServer()
         def failingserver(*args, **kwarg):
-            response = yield httpget(*target)
+            response = yield httprequest1_1(**target)
 
         self.handler = failingserver
 
         clientget('localhost', self.port, '/')
-        target = ('localhost', 'port', '/') # non-numeric port
+        target = {'host': 'localhost', 'port': 'port', 'request': '/'} # non-numeric port
         self._loopReactorUntilDone()
 
         expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
   File "%(__file__)s", line 0, in handle
       yield self.handler(*args, **kwargs)
   File "%(__file__)s", line 85, in failingserver
-    response = yield httpget(*target)
-  File "%(httprequest.py)s", line 78, in httprequest
+    response = yield httprequest1_1(**target)
+  File "%(httprequest.py)s", line 78, in httprequest1_1
     result = s.getResult()
   File "%(suspend.py)s", line 34, in __call__
     self._doNext(self)
@@ -194,8 +286,8 @@ TypeError: an integer is required
   File "%(__file__)s", line 0, in handle
       yield self.handler(*args, **kwargs)
   File "%(__file__)s", line 85, in failingserver
-    response = yield httpget(*target)
-  File "%(httprequest.py)s", line 78, in httprequest
+    response = yield httprequest1_1(**target)
+  File "%(httprequest.py)s", line 78, in httprequest1_1
     result = s.getResult()
   File "%(suspend.py)s", line 34, in __call__
     self._doNext(self)
@@ -209,17 +301,17 @@ TypeError: an integer is required
         # FIXME: re-enable traceback testing (below)!
         #self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(''.join(format_exception(*self.error))))
 
-        target = ('localhost', 87, '/') # invalid port
+        target = {'host': 'localhost', 'port': 87, 'request': '/'}  # invalid port
         clientget('localhost', self.port, '/')
         self._loopReactorUntilDone()
         self.assertEquals(IOError, self.error[0])
 
-        target = ('UEYR^$*FD(#>NDJ.khfd9.(*njnd', 9876, '/') # invalid host
+        target = {'host': 'UEYR^$*FD(#>NDJ.khfd9.(*njnd', 'port': 9876, 'request': '/'}  # invalid host
         clientget('localhost', self.port, '/')
         self._loopReactorUntilDone()
         self.assertEquals(SocketGaiError, self.error[0])
 
-        target = ('127.0.0.1', PortNumberGenerator.next(), '/')  # No-one listens
+        target = {'host': '127.0.0.1', 'port': PortNumberGenerator.next(), 'request': '/'}  # No-one listens
         clientget('localhost', self.port, '/')
         self._loopReactorUntilDone()
         self.assertEquals(IOError, self.error[0])
@@ -231,11 +323,11 @@ TypeError: an integer is required
         backofficeport = PortNumberGenerator.next()
         expectedrequest = ''
         testserver(backofficeport, [], expectedrequest)
-        target = ('localhost', backofficeport, '/')
+        target = {'host': 'localhost', 'port': backofficeport, 'request': '/'}
 
         exceptions = []
         def failingserver(*args, **kwarg):
-            response = yield httpget(*target)
+            response = yield httprequest1_1(**target)
         self.handler = failingserver
 
         def requestLine(self, *args, **kwargs):
@@ -253,8 +345,8 @@ TypeError: an integer is required
   File "%(__file__)s", line 0, in handle
       yield self.handler(*args, **kwargs)
   File "%(__file__)s", line 192, in failingserver
-    response = yield httpget(*target)
-  File "%(httprequest.py)s", line 129, in httprequest
+    response = yield httprequest1_1(**target)
+  File "%(httprequest.py)s", line 129, in httprequest1_1
     result = s.getResult()
   File "%(httprequest.py)s", line 83, in _do
     yield _sendHttpHeaders(sok, method, request, headers)
@@ -271,30 +363,6 @@ RuntimeError: Boom!""" % fileDict)
         finally:
             persistentHttpRequestModule._requestLine = originalRequestLine
 
-    def testHttpPost(self):
-        self.startWeightlessHttpServer()
-        post_request = []
-        port = PortNumberGenerator.next()
-        self.referenceHttpServer(port, post_request)
-        body = u"BÖDY" * 20000
-        responses = []
-        def posthandler(*args, **kwargs):
-            response = yield httppost('localhost', port, '/path', body,
-                    headers={'Content-Type': 'text/plain'}
-            )
-            yield response
-            responses.append(response)
-        self.handler = posthandler
-        clientget('localhost', self.port, '/')
-        self._loopReactorUntilDone()
-
-        self.assertTrue("POST RESPONSE" in responses[0], responses[0])
-        self.assertEquals('POST', post_request[0]['command'])
-        self.assertEquals('/path', post_request[0]['path'])
-        headers = post_request[0]['headers'].headers
-        self.assertEquals(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n'], headers)
-        self.assertEquals(body, post_request[0]['body'])
-
     def testHttpPostWithoutHeaders(self):
         self.startWeightlessHttpServer()
         post_request = []
@@ -303,7 +371,9 @@ RuntimeError: Boom!""" % fileDict)
         body = u"BÖDY" * 20000
         responses = []
         def posthandler(*args, **kwargs):
-            response = yield httppost('localhost', port, '/path', body)
+            response = yield httprequest1_1(
+                method='POST', host='localhost', port=port, request='/path', body=body,
+            )
             yield response
             responses.append(response)
         self.handler = posthandler
@@ -325,8 +395,9 @@ RuntimeError: Boom!""" % fileDict)
         body = u"BÖDY" * 20000
         responses = []
         def posthandler(*args, **kwargs):
-            response = yield httpspost('localhost', port, '/path', body,
-                    headers={'Content-Type': 'text/plain'}
+            response = yield httprequest1_1(
+                method='POST', host='localhost', port=port, request='/path', body=body,
+                headers={'Content-Type': 'text/plain'}, ssl=True,
             )
             yield response
             responses.append(response)
@@ -346,8 +417,9 @@ RuntimeError: Boom!""" % fileDict)
         self.startWeightlessHttpServer()
         responses = []
         def posthandler(*args, **kwargs):
-            response = yield httpspost('localhost', PortNumberGenerator.next(), '/path', "body",
-                    headers={'Content-Type': 'text/plain'}
+            response = yield httprequest1_1(
+                method='POST', host='localhost', port=PortNumberGenerator.next(), request='/path', body="body",
+                headers={'Content-Type': 'text/plain'}, ssl=True,
             )
             yield response
             responses.append(response)
@@ -368,7 +440,8 @@ RuntimeError: Boom!""" % fileDict)
         def gethandler(*args, **kwargs):
             response = 'no response yet'
             try:
-                response = yield httpget('localhost', port, '/path',
+                response = yield httprequest1_1(
+                    host='localhost', port=port, request='/path',
                         headers={'Content-Type': 'text/plain', 'Content-Length': 0},
                         prio=4
                 )
@@ -394,7 +467,8 @@ RuntimeError: Boom!""" % fileDict)
         def gethandler(*args, **kwargs):
             response = 'no response yet'
             try:
-                response = yield httprequest(method='MYMETHOD', host='localhost', port=port, request='/path',
+                response = yield httprequest1_1(
+                    method='MYMETHOD', host='localhost', port=port, request='/path',
                     headers={'Content-Type': 'text/plain', 'Content-Length': 0},
                     prio=4
                 )
@@ -421,7 +495,8 @@ RuntimeError: Boom!""" % fileDict)
         def handlerFactory(timeout):
             def gethandler(*args, **kwargs):
                 try:
-                    response = yield httprequest(method='GET', host='localhost', port=port, request='/path',
+                    response = yield httprequest1_1(
+                        method='GET', host='localhost', port=port, request='/path',
                         headers={'Content-Type': 'text/plain', 'Content-Length': 0, 'Host': 'localhost'},
                         timeout=timeout,
                     )
@@ -470,7 +545,8 @@ RuntimeError: Boom!""" % fileDict)
         def gethandler(*args, **kwargs):
             response = 'no response yet'
             try:
-                response = yield httpget('localhost', port, '/path',
+                response = yield httprequest1_1(
+                    host='localhost', port=port, request='/path',
                     headers=headersOrig,
                 )
             finally:
@@ -496,8 +572,10 @@ RuntimeError: Boom!""" % fileDict)
 
         responses = []
         def gethandler(*args, **kwargs):
-            response = yield httpsget('localhost', port, '/path',
-                    headers={'Content-Type': 'text/plain', 'Content-Length': 0}
+            response = yield httprequest1_1(
+                    host='localhost', port=port, request='/path',
+                    headers={'Content-Type': 'text/plain', 'Content-Length': 0},
+                    ssl=True,
             )
             yield response
             responses.append(response)
@@ -518,11 +596,11 @@ RuntimeError: Boom!""" % fileDict)
         serverFailsRequestDoesNot = []
         def run():
             mss = MockSocketServer(); mss.listen()
-            yield httprequest(method='GET', host='127.0.0.1', port=mss.port, request='/')
+            yield httprequest1_1(method='GET', host='127.0.0.1', port=mss.port, request='/')
             serverFailsRequestDoesNot.append("Won't come here.")
 
         try:
-            with stdout_replaced():  # Ignore reactor.shutdown() noticing httprequest still in-the-air.
+            with stdout_replaced():  # Ignore reactor.shutdown() noticing httprequest1_1 still in-the-air.
                 asProcess(run())
         except AssertionError, e:
             self.assertTrue(str(e).startswith('Unexpected Connection #1 from: 127.0.0.1:'), str(e))
@@ -542,7 +620,7 @@ RuntimeError: Boom!""" % fileDict)
             mss.setReplies(replies=[r1])
             mss.listen()
             try:
-                response = yield httprequest(method='GET', host='127.0.0.1', port=mss.port, request='/')
+                response = yield httprequest1_1(method='GET', host='127.0.0.1', port=mss.port, request='/')
                 self.assertEquals('HTTP/1.1 200 Okidokie\r\nContent-Length: 0\r\n\r\n', response)
                 self.assertEquals(1, mss.nrOfRequests)
                 self.assertEquals({1: ('GET / HTTP/1.1\r\n\r\n', [])}, mss.state.connections)
