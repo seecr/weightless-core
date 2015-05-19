@@ -92,7 +92,7 @@ class PersistentHttpRequestTest(WeightlessTestCase):
         self.assertEquals('POST / HTTP/1.1\r\n', _requestLine('POST', '/'))
 
     def testHttp11WithoutResponseChunkingOrDataReusedOnce(self):
-        # Happy-Path, least complex, still persisted
+        # Happy-Path, least complex, still persisted - /w 100 Continue
         # {http: 1.1, EOR: content-length, explicit-close: False, comms: ok}
         def r1(sok, log, remoteAddress, connectionNr):
             log.append(remoteAddress)
@@ -100,6 +100,9 @@ class PersistentHttpRequestTest(WeightlessTestCase):
             toRead = 'GET /first HTTP/1.1\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEquals(toRead, data)
+
+            # Weird servers say 100 Continue after request - even when not requested to do so.
+            yield write(data='HTTP/1.1 100 Continue\r\nwEiRd: Header\r\n\r\n')
 
             # Response statusline & headers
             yield write(data='HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\n')
@@ -144,8 +147,14 @@ class PersistentHttpRequestTest(WeightlessTestCase):
                     (HttpRequest1_1(),
                     ),
                 ))
-                response1 = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first', timeout=1.0)
-                self.assertEquals('HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nACK', response1)
+                statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first', timeout=1.0)
+                self.assertEquals({
+                        'HTTPVersion': '1.1',
+                        'StatusCode': '200',
+                        'ReasonPhrase': 'OK',
+                        'Headers': {'Content-Length': '3'},
+                    }, statusAndHeaders)
+                self.assertEquals('ACK', body)
                 self.assertEquals(1, mss.nrOfRequests)
                 self.assertEquals(None, mss.state.connections.get(1).value)
                 remoteAddress1 = mss.state.connections.get(1).log[0]

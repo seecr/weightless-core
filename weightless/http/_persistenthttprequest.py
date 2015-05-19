@@ -23,6 +23,7 @@
 #
 ## end license ##
 
+import sys
 from errno import EINPROGRESS
 from functools import partial
 from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_RDWR, SOL_TCP, TCP_KEEPINTVL, TCP_KEEPIDLE, TCP_KEEPCNT, SO_KEEPALIVE
@@ -32,7 +33,7 @@ from urlparse import urlsplit
 
 from weightless.core import compose, identify, Observable
 from weightless.io import Suspend, TimeoutException
-from weightless.http import REGEXP
+from weightless.http import REGEXP, parseHeaders
 
 
 # TODO:
@@ -90,12 +91,12 @@ def _do(observable, method, host, port, request, body=None, headers=None, ssl=Fa
             suspend._reactor.removeWriter(sok)
         suspend._reactor.addReader(sok, this.next, prio=prio)
         try:
-            headerAndBody = yield _readHeaderAndBody(sok)
+            parsedHeader, body = yield _readHeaderAndBody(sok)
         finally:
             suspend._reactor.removeReader(sok)
         sok.shutdown(SHUT_RDWR)
         sok.close()
-        suspend.resume(headerAndBody)
+        suspend.resume((parsedHeader, body))
     except (AssertionError, KeyboardInterrupt, SystemExit):
         raise
     except TimeoutException:
@@ -207,21 +208,17 @@ def _requestLine(method, request):
     return "%s %s HTTP/1.1\r\n" % (method, request)
 
 def _readHeaderAndBody(sok):
-    parsedHeader, rawHeader, isClosed, rest = yield _readHeader(sok)
-    if isClosed:
-        raise StopIteration(rawHeader)  #@@
-    body, isClosed = yield _readBody(sok, rest)
-    raise StopIteration(rawHeader + body)
     # TODO: cannot produce sensible 'response' from invalid/incomplete server response.
+    parsedHeader, rest = yield _readHeader(sok)
+    body = yield _readBody(sok, rest)
+    raise StopIteration((parsedHeader, body))
 
-def _readHeader(sok):
-    responses = ''
+def _readHeader(sok, rest=''):
+    responses = rest
     rest = ''
-    isClosed = False
     while True:
         response = yield _asyncRead(sok)
-        if response is _CLOSED:
-            isClosed = True
+        if response is _CLOSED:  # TODO: Test & Fix premature and expected closing.
             break
         responses += response
 
@@ -232,25 +229,29 @@ def _readHeader(sok):
 
         # Matched:
         if match.end() < len(responses):
-            rawHeaders = responses[:match.end()]
             rest = responses[match.end():]
-        else:
-            rawHeaders = responses
 
-        break   #@@
-        # TODO: Handle 100 Continue stuff.
-    raise StopIteration((None, (responses if isClosed else rawHeaders), isClosed, rest))
+        statusAndHeaders = match.groupdict()
+        headers = parseHeaders(statusAndHeaders['_headers'])
+        del statusAndHeaders['_headers']
+        statusAndHeaders['Headers'] = headers
+
+        if statusAndHeaders['StatusCode'] == '100':
+            # 100 Continue response, eaten it - now read the real response.
+            statusAndHeaders, rest = yield _readHeader(sok, rest=rest)
+
+        raise StopIteration((statusAndHeaders, rest))
+
+    raise ValueError('TODO')
 
 def _readBody(sok, rest):
     responses = rest  # Must be empty-string at least
-    isClosed = False
     while True:
         response = yield _asyncRead(sok)
         if response is _CLOSED:
-            isClosed = True
             break
         responses += response
-    raise StopIteration((responses, isClosed))
+    raise StopIteration(responses)
 
 def _asyncSend(sok, data):
     while data != "":
