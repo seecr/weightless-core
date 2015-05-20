@@ -237,7 +237,7 @@ def _readHeader(sok, rest=''):
         statusAndHeaders['Headers'] = headers
 
         if statusAndHeaders['StatusCode'] == '100':
-            # 100 Continue response, eaten it - now read the real response.
+            # 100 Continue response, eaten it - and then read the real response.
             statusAndHeaders, rest = yield _readHeader(sok, rest=rest)
 
         raise StopIteration((statusAndHeaders, rest))
