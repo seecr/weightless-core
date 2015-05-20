@@ -61,6 +61,7 @@ from http.httpservertest import HttpServerTest
 from http.httpspectest import HttpSpecTest
 from http.httpsservertest import HttpsServerTest
 from http.persistenthttprequesttest import PersistentHttpRequestTest
+from http.socketpooltest import SocketPoolTest
 from http.suspendtest import SuspendTest
 
 from udp.acceptortest import UdpAcceptorTest
