@@ -22,5 +22,22 @@
 #
 ## end license ##
 
-from asprocess import asProcess
-from _sleep import sleep
+from weightless.io import Suspend, TimeoutException
+
+
+def sleep(seconds):
+    def doNext():
+        suspend = yield  # from Suspend.__call__
+        yield  # Wait for timeout
+        yield  # wait for GC
+
+    g = doNext(); g.next()  # + autostart
+    s = Suspend(doNext=g.send, timeout=seconds, onTimeout=g.next)
+    yield s
+    try:
+        s.getResult()
+    except TimeoutException:
+        pass
+
+    raise StopIteration(None)
+
