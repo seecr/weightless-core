@@ -32,7 +32,7 @@ from weightless.core import retval, be, Observable
 from weightless.io import reactor
 from weightless.io.utils import asProcess, sleep
 
-from weightless.http._socketpool import SocketPool
+from weightless.http import SocketPool
 
 
 class SocketPoolTest(SeecrTestCase):

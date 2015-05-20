@@ -24,8 +24,6 @@
 #
 ## end license ##
 
-from __future__ import with_statement
-
 from seecr.test.io import stderr_replaced, stdout_replaced
 from seecr.test.portnumbergenerator import PortNumberGenerator
 from weightlesstestcase import WeightlessTestCase, StreamingData
@@ -43,14 +41,18 @@ from traceback import format_exception, print_exc
 
 from weightless.core import compose, identify, is_generator, Yield, local, be, Observable
 from weightless.io import Reactor, Suspend, TimeoutException, reactor
-from weightless.io.utils import asProcess
-from weightless.http import HttpServer
+from weightless.io.utils import asProcess, sleep as zleep
+from weightless.http import HttpServer, SocketPool
 from weightless.http._persistenthttprequest import HttpRequest1_1
 
 from weightless.http._persistenthttprequest import _requestLine
 from weightless.http import _persistenthttprequest as persistentHttpRequestModule
 
-httprequest1_1 = HttpRequest1_1().httprequest1_1
+httprequest1_1 = be(
+    (HttpRequest1_1(),
+        (SocketPool(reactor='WhatEver'),),
+    )
+).httprequest1_1
 
 PYVERSION = '%s.%s' % version_info[:2]
 
@@ -145,6 +147,7 @@ class PersistentHttpRequestTest(WeightlessTestCase):
             try:
                 top = be((Observable(),
                     (HttpRequest1_1(),
+                        (SocketPool(reactor=reactor()),),
                     ),
                 ))
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first', timeout=1.0)
@@ -406,7 +409,7 @@ RuntimeError: Boom!""" % fileDict)
         def posthandler(*args, **kwargs):
             response = yield httprequest1_1(
                 method='POST', host='localhost', port=port, request='/path', body=body,
-                headers={'Content-Type': 'text/plain'}, ssl=True,
+                headers={'Content-Type': 'text/plain'}, secure=True,
             )
             yield response
             responses.append(response)
@@ -428,7 +431,7 @@ RuntimeError: Boom!""" % fileDict)
         def posthandler(*args, **kwargs):
             response = yield httprequest1_1(
                 method='POST', host='localhost', port=PortNumberGenerator.next(), request='/path', body="body",
-                headers={'Content-Type': 'text/plain'}, ssl=True,
+                headers={'Content-Type': 'text/plain'}, secure=True,
             )
             yield response
             responses.append(response)
@@ -584,7 +587,7 @@ RuntimeError: Boom!""" % fileDict)
             response = yield httprequest1_1(
                     host='localhost', port=port, request='/path',
                     headers={'Content-Type': 'text/plain', 'Content-Length': 0},
-                    ssl=True,
+                    secure=True,
             )
             yield response
             responses.append(response)
@@ -949,23 +952,6 @@ def _writeOnceGF(sok, data):
     except Exception:
         suspend.throw(*exc_info())
     yield  # wait for GC
-
-def zleep(seconds):
-    def doNext():
-        suspend = yield  # from Suspend.__call__
-        yield  # Wait for timeout
-        yield  # wait for GC
-
-    g = doNext(); g.next()  # + autostart
-    s = Suspend(doNext=g.send, timeout=seconds, onTimeout=g.next)
-    yield s
-    try:
-        s.getResult()
-        self.fail()
-    except TimeoutException:
-        pass
-
-    raise StopIteration(None)
 
 class AbortException(Exception):
     pass

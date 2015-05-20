@@ -37,7 +37,6 @@ from weightless.http import REGEXP, parseHeaders
 
 
 # TODO:
-# - extract socketPool
 # - should retry failed requests on pooled sockets
 
 
@@ -46,8 +45,8 @@ class HttpRequest1_1(Observable):
     Uses minimal HTTP/1.1 implementation for Persistent Connections.
     """
 
-    def httprequest1_1(self, host, port, request, body=None, headers=None, ssl=False, prio=None, method='GET', timeout=None):
-        g = _do(method=method, host=host, port=port, request=request, headers=headers, body=body, ssl=ssl, prio=prio, observable=self)
+    def httprequest1_1(self, host, port, request, body=None, headers=None, secure=False, prio=None, method='GET', timeout=None):
+        g = _do(method=method, host=host, port=port, request=request, headers=headers, body=body, secure=secure, prio=prio, observable=self)
         kw = {}
         if timeout is not None:
             def onTimeout():
@@ -66,18 +65,28 @@ class HttpRequest1_1(Observable):
 
 @identify
 @compose
-def _do(observable, method, host, port, request, body=None, headers=None, ssl=False, prio=None):
+def _do(observable, method, host, port, request, body=None, headers=None, secure=False, prio=None):
     headers = headers or {}
-    pool = POOL_REFACTOR_ME
+    retryOnce = False
     this = yield # this generator, from @identify
     suspend = yield # suspend object, from Suspend.__call__
 
     try:
-        fromPool, sok = yield _getOrCreateSocket(host, port, ssl, pool, this, suspend, prio)  # FIXME: Use an Observer / dependency injection
+        suspend._reactor.addProcess(process=this.next, prio=prio)
+        try:
+            yield  # After this yield, Suspend._whenDone filled-in (by Suspend.__call__(reactor, whenDone)) and thus throwing is safe again.
+            sok = yield observable.any.getPooledSocket(host=host, port=port)
+        finally:
+            suspend._reactor.removeProcess(process=this.next)
+
+        if sok:
+            retryOnce = True
+        else:
+            sok = yield _createSocket(host, port, secure, this, suspend, prio)
 
         suspend._reactor.addWriter(sok, this.next, prio=prio)
-        yield
         try:
+            yield
             # error checking
             if body:
                 data = body
@@ -95,7 +104,7 @@ def _do(observable, method, host, port, request, body=None, headers=None, ssl=Fa
         finally:
             suspend._reactor.removeReader(sok)
         sok.shutdown(SHUT_RDWR)
-        sok.close()
+        sok.close()  # FIXME: Explicit sok.close() on some error / timeout.
         suspend.resume((parsedHeader, body))
     except (AssertionError, KeyboardInterrupt, SystemExit):
         raise
@@ -103,11 +112,37 @@ def _do(observable, method, host, port, request, body=None, headers=None, ssl=Fa
         pass
     except Exception:
         suspend.throw(*exc_info())
-    # Uber finally: sok.close() from line 108
-    yield
+    yield  # wait for GC
 
 
-def _getOrCreateSocket(host, port, ssl, pool, this, suspend, prio):
+def _createSocket(host, port, secure, this, suspend, prio):
+    # No "yield", so add*/remove* not needed.
+    sok = socket()
+    sok.setblocking(0)
+    sok.setsockopt(SOL_SOCKET, SO_KEEPALIVE, 1)
+    sok.setsockopt(SOL_TCP, TCP_KEEPIDLE, 60*10)
+    sok.setsockopt(SOL_TCP, TCP_KEEPINTVL, 75)
+    sok.setsockopt(SOL_TCP, TCP_KEEPCNT, 9)
+    try:
+        sok.connect((host, port))
+    except SocketError, (errno, msg):
+        if errno != EINPROGRESS:
+            raise
+
+    suspend._reactor.addWriter(sok, this.next, prio=prio)
+    try:
+        yield
+        err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
+        if err != 0:    # connection created succesfully?
+            raise IOError(err)
+    finally:
+        suspend._reactor.removeWriter(sok)
+
+    if secure:
+        sok = yield _sslHandshake(sok, this, suspend, prio)
+    raise StopIteration(sok)
+
+def _getOrCreateSocket(host, port, secure, pool, this, suspend, prio):
     suspend._reactor.addProcess(process=this.next, prio=prio)
     yield  # First "yield <data>" since start-of-composed & (this/g).send(<SuspendObj>).  After this yield, Suspend._whenDone filled-in and thus throwing is safe again.
     try:
@@ -115,7 +150,7 @@ def _getOrCreateSocket(host, port, ssl, pool, this, suspend, prio):
         if sok:
             raise StopIteration((True, sok))  # fromPool, <sok>
 
-        sok = _createSocket()
+        sok = _OLDcreateSocket()
         try:
             sok.connect((host, port))
         except SocketError, (errno, msg):
@@ -133,38 +168,12 @@ def _getOrCreateSocket(host, port, ssl, pool, this, suspend, prio):
     finally:
         suspend._reactor.removeWriter(sok)
 
-    if ssl:
+    if secure:
         sok = yield _sslHandshake(sok, this, suspend, prio)
     raise StopIteration((False, sok))  # fromPool, <sok>
 
 
-class SocketPool(object):
-    # TODO:
-    # - maximum size ("per destination" and "total in pool")
-    # - maximum age
-    # - periodically check for remotely killed sockets?
-
-    def __init__(self):
-        self._pool = {}
-
-    def get(self, host, port):
-        key = (host, port)
-        socks = self._pool.get(key)
-        if socks is None:
-            return None
-
-        try:
-            return socks.pop(0)
-        except IndexError:
-            del self._pool[key]
-            return None
-
-    def put(self, host, port, sock):
-        key = (host, port)
-        self._pool.setdefault(key, []).append(sock)
-
-
-def _createSocket():
+def _OLDcreateSocket():
     sok = socket()
     sok.setblocking(0)
     sok.setsockopt(SOL_SOCKET, SO_KEEPALIVE, 1)
@@ -274,4 +283,3 @@ def _asyncRead(sok):
         raise StopIteration(response)
 
 _CLOSED = type('CLOSED', (object,), {})()
-POOL_REFACTOR_ME = SocketPool()
