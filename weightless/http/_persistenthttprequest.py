@@ -106,7 +106,7 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
         ## Read response (& handle 100 Continue #fail)
         suspend._reactor.addReader(sok, this.next, prio=prio)
         try:
-            parsedHeader, body, doClose = yield _readHeaderAndBody(sok)
+            statusAndHeaders, body, doClose = yield _readHeaderAndBody(sok, method, requestHeaders=headers)
         finally:
             suspend._reactor.removeReader(sok)
 
@@ -119,7 +119,7 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
                 yield observable.any.putSocketInPool(host=host, port=port, sock=sok)
             finally:
                 suspend._reactor.removeProcess(process=this.next)
-        suspend.resume((parsedHeader, body))
+        suspend.resume((statusAndHeaders, body))
     except (AssertionError, KeyboardInterrupt, SystemExit):
         raise
     except TimeoutException:
@@ -232,11 +232,74 @@ def _sendHttpHeaders(sok, method, request, headers):
 def _requestLine(method, request):
     return "%s %s HTTP/1.1\r\n" % (method, request)
 
-def _readHeaderAndBody(sok):
+def _readHeaderAndBody(sok, method, requestHeaders):
     # TODO: cannot produce sensible 'response' from invalid/incomplete server response.
-    parsedHeader, rest = yield _readHeader(sok)
-    body, doClose = yield _readBody(sok, rest)
-    raise StopIteration((parsedHeader, body, doClose))
+    statusAndHeaders, rest = yield _readHeader(sok)
+    readStrategy, _doClose1 = _determineBodyReadStrategy(statusAndHeaders=statusAndHeaders, method=method, requestHeaders=requestHeaders)
+    body, _doClose2 = yield readStrategy(sok, rest)
+    raise StopIteration((statusAndHeaders, body, any((_doClose1, _doClose2))))
+
+def _determineBodyReadStrategy(statusAndHeaders, method, requestHeaders):
+    doClose = False
+    if _determineDoCloseFromConnection(requestHeaders) or _determineDoCloseFromConnection(statusAndHeaders['Headers']):
+        doClose = True
+    statusCode = statusAndHeaders['StatusCode']
+    contentLength = statusAndHeaders['Headers'].get('Content-Length')
+    if contentLength:
+        contentLength = int(contentLength.strip())
+    transferEncoding = _parseTransferEncoding(statusAndHeaders['Headers'])
+
+    ## HTTP/1.0
+    if statusAndHeaders['HTTPVersion'] != '1.1':
+        doClose = True
+        if _bodyDisallowed(method, statusCode):
+            return _readAssertNoBody, doClose
+        if contentLength is None:
+            return _readCloseDelimitedBody, doClose
+        return partial(_readContentLengthDelimitedBody, contentLength=contentLength), doClose
+
+    ## HTTP/1.1
+    if _bodyDisallowed(method, statusCode):
+        return _readAssertNoBody, doClose
+
+    if transferEncoding and transferEncoding[-1:] == ['chunked']:
+        return _readChunkedDelimitedBody, doClose  # FIXME: implement
+    elif contentLength is not None:
+        return partial(_readContentLengthDelimitedBody, contentLength=contentLength), doClose  # FIXME: implement
+    return _readCloseDelimitedBody, doClose
+
+def _readAssertNoBody(sok, rest):
+    if rest:
+        raise ValueError('Body not empty.')
+    return '', False
+
+def _bodyDisallowed(method, statusCode):
+    # Status-codes also without body, but should never happen:
+    #   - 1XX:
+    #       * 100 (continue) already handled.
+    #       * 101 (switching protocols) not supported - just don't send the "Upgrade" request header.
+    #
+    # Methods unsupported:
+    #  - CONNECT (tunneling / proxy-stuff).
+    if method == 'CONNECT' or statusCode.startswith('1'):
+        raise ValueError('CONNECT method or 1XX status code recieved.')
+    return method == 'HEAD' or statusCode in ['204', '304']
+
+def _determineDoCloseFromConnection(headers):
+    connectionHeaderValue = headers.get('Connection')
+    if connectionHeaderValue:
+        connection = [v.strip() for v in connectionHeaderValue.lower().strip().split(',')]
+        if 'close' in connection:
+            return True
+
+    return False
+
+def _parseTransferEncoding(responseHeaders):
+    transferEncoding = responseHeaders.get('Transfer-Encoding')
+    if transferEncoding:
+        # transfer-extension's should be parsed differently - but not important here.
+        transferEncoding = [v.strip() for v in transferEncoding.lower().strip().split(',')]
+        return transferEncoding
 
 def _readHeader(sok, rest=''):
     responses = rest
@@ -267,16 +330,14 @@ def _readHeader(sok, rest=''):
 
         raise StopIteration((statusAndHeaders, rest))
 
-def _readBody(sok, rest):
+def _readCloseDelimitedBody(sok, rest):
     responses = rest  # Must be empty-string at least
-    doClose = False
     while True:
         response = yield _asyncRead(sok)
         if response is _CLOSED:
-            doClose = True
             break
         responses += response
-    raise StopIteration((responses, doClose))
+    raise StopIteration((responses, True))
 
 def _asyncSend(sok, data):
     while data != "":
