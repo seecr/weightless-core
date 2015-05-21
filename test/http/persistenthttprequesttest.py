@@ -24,9 +24,12 @@
 #
 ## end license ##
 
+from weightlesstestcase import WeightlessTestCase, StreamingData
+
+from seecr.test import CallTrace
 from seecr.test.io import stderr_replaced, stdout_replaced
 from seecr.test.portnumbergenerator import PortNumberGenerator
-from weightlesstestcase import WeightlessTestCase, StreamingData
+
 from httpreadertest import server as testserver
 
 import sys
@@ -45,7 +48,7 @@ from weightless.io.utils import asProcess, sleep as zleep
 from weightless.http import HttpServer, SocketPool
 from weightless.http._persistenthttprequest import HttpRequest1_1
 
-from weightless.http._persistenthttprequest import _requestLine
+from weightless.http._persistenthttprequest import _requestLine, _shutAndCloseOnce
 from weightless.http import _persistenthttprequest as persistentHttpRequestModule
 
 httprequest1_1 = be(
@@ -601,6 +604,58 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEquals('/path', get_request[0]['path'])
         headers = get_request[0]['headers'].headers
         self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
+
+    def testShutdownAndCloseOnce_OnlyOnce(self):
+        sok = CallTrace()
+        cb = _shutAndCloseOnce(sok)
+        self.assertEquals([], sok.calledMethodNames())
+
+        cb()
+        self.assertEquals(['shutdown', 'close'], sok.calledMethodNames())
+        shutdown, close = sok.calledMethods
+        self.assertEquals(((), {}), (close.args, close.kwargs))
+        self.assertEquals(((SHUT_RDWR,), {}), (shutdown.args, shutdown.kwargs))
+
+        sok.calledMethods.reset()
+        cb()
+        self.assertEquals([], sok.calledMethodNames())
+
+    def testShutdownAndCloseOnce_Exceptions(self):
+        sok = CallTrace()
+        sok.exceptions['shutdown'] = Exception('xcptn')
+        cb = _shutAndCloseOnce(sok)
+        self.assertEquals([], sok.calledMethodNames())
+
+        self.assertRaises(Exception, lambda: cb())
+        self.assertEquals(['shutdown'], sok.calledMethodNames())
+        shutdown = sok.calledMethods[0]
+        self.assertEquals(((SHUT_RDWR,), {}), (shutdown.args, shutdown.kwargs))
+
+        sok.calledMethods.reset()
+        cb()
+        self.assertEquals(['close'], sok.calledMethodNames())
+        close = sok.calledMethods[0]
+        self.assertEquals(((), {}), (close.args, close.kwargs))
+
+        sok.calledMethods.reset()
+        cb()
+        self.assertEquals([], sok.calledMethodNames())
+
+    def testShutdownAndCloseOnce_IgnoreExceptions(self):
+        sok = CallTrace()
+        sok.exceptions['shutdown'] = Exception('xcptn')
+        cb = _shutAndCloseOnce(sok)
+        self.assertEquals([], sok.calledMethodNames())
+
+        cb(ignoreExceptions=True)
+        self.assertEquals(['shutdown', 'close'], sok.calledMethodNames())
+        shutdown, close = sok.calledMethods
+        self.assertEquals(((SHUT_RDWR,), {}), (shutdown.args, shutdown.kwargs))
+        self.assertEquals(((), {}), (close.args, close.kwargs))
+
+        sok.calledMethods.reset()
+        cb(ignoreExceptions=True)
+        self.assertEquals([], sok.calledMethodNames())
 
     ##
     ## MockSocketServer tests (incomplete / rough) ##

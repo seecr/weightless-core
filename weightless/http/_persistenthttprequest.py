@@ -68,10 +68,12 @@ class HttpRequest1_1(Observable):
 def _do(observable, method, host, port, request, body=None, headers=None, secure=False, prio=None):
     headers = headers or {}
     retryOnce = False
+    shutAndCloseOnce = _NOOP
     this = yield # this generator, from @identify
     suspend = yield # suspend object, from Suspend.__call__
 
     try:
+        ## Connect or re-use from pool.
         suspend._reactor.addProcess(process=this.next, prio=prio)
         try:
             yield  # After this yield, Suspend._whenDone filled-in (by Suspend.__call__(reactor, whenDone)) and thus throwing is safe again.
@@ -83,7 +85,9 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
             retryOnce = True
         else:
             sok = yield _createSocket(host, port, secure, this, suspend, prio)
+        shutAndCloseOnce = _shutAndCloseOnce(sok)
 
+        ## Send Request-Line and Headers.
         suspend._reactor.addWriter(sok, this.next, prio=prio)
         try:
             yield
@@ -98,13 +102,23 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
                 yield _asyncSend(sok, data)
         finally:
             suspend._reactor.removeWriter(sok)
+
+        ## Read response (& handle 100 Continue #fail)
         suspend._reactor.addReader(sok, this.next, prio=prio)
         try:
-            parsedHeader, body = yield _readHeaderAndBody(sok)
+            parsedHeader, body, doClose = yield _readHeaderAndBody(sok)
         finally:
             suspend._reactor.removeReader(sok)
-        sok.shutdown(SHUT_RDWR)
-        sok.close()  # FIXME: Explicit sok.close() on some error / timeout.
+
+        ## Either put socket in a pool or close when we must.
+        if doClose:
+            shutAndCloseOnce()
+        else:
+            suspend._reactor.addProcess(process=this.next, prio=prio)
+            try:
+                yield observable.any.putSocketInPool(host=host, port=port, sock=sok)
+            finally:
+                suspend._reactor.removeProcess(process=this.next)
         suspend.resume((parsedHeader, body))
     except (AssertionError, KeyboardInterrupt, SystemExit):
         raise
@@ -112,6 +126,8 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
         pass
     except Exception:
         suspend.throw(*exc_info())
+    finally:
+        shutAndCloseOnce(ignoreExceptions=True)  # If there is a socket, close it sooner rather than later (at GC).
     yield  # wait for GC
 
 
@@ -219,16 +235,16 @@ def _requestLine(method, request):
 def _readHeaderAndBody(sok):
     # TODO: cannot produce sensible 'response' from invalid/incomplete server response.
     parsedHeader, rest = yield _readHeader(sok)
-    body = yield _readBody(sok, rest)
-    raise StopIteration((parsedHeader, body))
+    body, doClose = yield _readBody(sok, rest)
+    raise StopIteration((parsedHeader, body, doClose))
 
 def _readHeader(sok, rest=''):
     responses = rest
     rest = ''
     while True:
         response = yield _asyncRead(sok)
-        if response is _CLOSED:  # TODO: Test & Fix premature and expected closing.
-            break
+        if response is _CLOSED:
+            raise ValueError('Premature close')  # TODO: handle this.
         responses += response
 
         match = REGEXP.RESPONSE.match(responses)
@@ -251,16 +267,16 @@ def _readHeader(sok, rest=''):
 
         raise StopIteration((statusAndHeaders, rest))
 
-    raise ValueError('TODO')
-
 def _readBody(sok, rest):
     responses = rest  # Must be empty-string at least
+    doClose = False
     while True:
         response = yield _asyncRead(sok)
         if response is _CLOSED:
+            doClose = True
             break
         responses += response
-    raise StopIteration(responses)
+    raise StopIteration((responses, doClose))
 
 def _asyncSend(sok, data):
     while data != "":
@@ -281,5 +297,27 @@ def _asyncRead(sok):
         if response == '':
             raise StopIteration(_CLOSED)
         raise StopIteration(response)
+
+def _shutAndCloseOnce(sok):
+    state = []
+    def shutAndCloseOnce(ignoreExceptions=False):
+        if 's' not in state:
+            state.append('s')
+            if ignoreExceptions:
+                try:
+                    sok.shutdown(SHUT_RDWR)
+                except (AssertionError, KeyboardInterrupt, SystemExit):
+                    raise
+                except Exception:
+                    pass
+            else:
+                sok.shutdown(SHUT_RDWR)
+        if 'c' not in state:
+            state.append('c')
+            sok.close()
+    return shutAndCloseOnce
+
+def _NOOP():
+    pass
 
 _CLOSED = type('CLOSED', (object,), {})()
