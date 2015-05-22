@@ -68,7 +68,6 @@ class HttpRequest1_1(Observable):
 def _do(observable, method, host, port, request, body=None, headers=None, secure=False, prio=None):
     headers = headers or {}
     retryOnce = False
-    shutAndCloseOnce = _NOOP
     this = yield # this generator, from @identify
     suspend = yield # suspend object, from Suspend.__call__
 
@@ -86,48 +85,49 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
         else:
             sok = yield _createSocket(host, port, secure, this, suspend, prio)
         shutAndCloseOnce = _shutAndCloseOnce(sok)
-
-        ## Send Request-Line and Headers.
-        suspend._reactor.addWriter(sok, this.next, prio=prio)
         try:
-            yield
-            # error checking
-            if body:
-                data = body
-                if type(data) is unicode:
-                    data = data.encode(getdefaultencoding())
-                headers.update({'Content-Length': len(data)})
-            yield _sendHttpHeaders(sok, method, request, headers)
-            if body:
-                yield _asyncSend(sok, data)
-        finally:
-            suspend._reactor.removeWriter(sok)
-
-        ## Read response (& handle 100 Continue #fail)
-        suspend._reactor.addReader(sok, this.next, prio=prio)
-        try:
-            statusAndHeaders, body, doClose = yield _readHeaderAndBody(sok, method, requestHeaders=headers)
-        finally:
-            suspend._reactor.removeReader(sok)
-
-        ## Either put socket in a pool or close when we must.
-        if doClose:
-            shutAndCloseOnce()
-        else:
-            suspend._reactor.addProcess(process=this.next, prio=prio)
+            ## Send Request-Line and Headers.
+            suspend._reactor.addWriter(sok, this.next, prio=prio)
             try:
-                yield observable.any.putSocketInPool(host=host, port=port, sock=sok)
+                yield
+                # error checking
+                if body:
+                    data = body
+                    if type(data) is unicode:
+                        data = data.encode(getdefaultencoding())
+                    headers.update({'Content-Length': len(data)})
+                yield _sendHttpHeaders(sok, method, request, headers)
+                if body:
+                    yield _asyncSend(sok, data)
             finally:
-                suspend._reactor.removeProcess(process=this.next)
-        suspend.resume((statusAndHeaders, body))
+                suspend._reactor.removeWriter(sok)
+
+            ## Read response (& handle 100 Continue #fail)
+            suspend._reactor.addReader(sok, this.next, prio=prio)
+            try:
+                statusAndHeaders, body, doClose = yield _readHeaderAndBody(sok, method, requestHeaders=headers)
+            finally:
+                suspend._reactor.removeReader(sok)
+
+            ## Either put socket in a pool or close when we must.
+            if doClose:
+                shutAndCloseOnce()
+            else:
+                suspend._reactor.addProcess(process=this.next, prio=prio)
+                try:
+                    yield observable.any.putSocketInPool(host=host, port=port, sock=sok)
+                finally:
+                    suspend._reactor.removeProcess(process=this.next)
+            suspend.resume((statusAndHeaders, body))
+        except BaseException:
+            shutAndCloseOnce(ignoreExceptions=True)
+            raise
     except (AssertionError, KeyboardInterrupt, SystemExit):
         raise
     except TimeoutException:
         pass
     except Exception:
         suspend.throw(*exc_info())
-    finally:
-        shutAndCloseOnce(ignoreExceptions=True)  # If there is a socket, close it sooner rather than later (at GC).
     yield  # wait for GC
 
 
@@ -268,11 +268,6 @@ def _determineBodyReadStrategy(statusAndHeaders, method, requestHeaders):
         return partial(_readContentLengthDelimitedBody, contentLength=contentLength), doClose  # FIXME: implement
     return _readCloseDelimitedBody, doClose
 
-def _readAssertNoBody(sok, rest):
-    if rest:
-        raise ValueError('Body not empty.')
-    return '', False
-
 def _bodyDisallowed(method, statusCode):
     # Status-codes also without body, but should never happen:
     #   - 1XX:
@@ -339,6 +334,26 @@ def _readCloseDelimitedBody(sok, rest):
         responses += response
     raise StopIteration((responses, True))
 
+def _readContentLengthDelimitedBody(sok, rest, contentLength):
+    responses = rest  # Must be empty-string at least
+    bytesToRead = contentLength - len(rest)
+    if bytesToRead < 0:
+        raise ValueError('Excess bytes (> Content-Length) read.')
+
+    while bytesToRead:
+        response = yield _asyncRead(sok)
+        if response is _CLOSED:
+            raise ValueError('Premature close')
+        responses += response
+        bytesToRead -= len(response)
+    raise StopIteration((responses, False))
+
+def _readAssertNoBody(sok, rest):
+    if rest:
+        raise ValueError('Body not empty.')
+    return '', False
+
+
 def _asyncSend(sok, data):
     while data != "":
         size = sok.send(data)
@@ -377,8 +392,5 @@ def _shutAndCloseOnce(sok):
             state.append('c')
             sok.close()
     return shutAndCloseOnce
-
-def _NOOP():
-    pass
 
 _CLOSED = type('CLOSED', (object,), {})()

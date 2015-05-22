@@ -96,7 +96,7 @@ class PersistentHttpRequestTest(WeightlessTestCase):
         self.assertEquals('GET / HTTP/1.1\r\n', _requestLine('GET', '/'))
         self.assertEquals('POST / HTTP/1.1\r\n', _requestLine('POST', '/'))
 
-    def testHttp11WithoutResponseChunkingOrDataReusedOnce(self):
+    def testHttp11ContentLengthDelimitedReusedOnce(self):
         # Happy-Path, least complex, still persisted - /w 100 Continue
         # {http: 1.1, EOR: content-length, explicit-close: False, comms: ok}
         def r1(sok, log, remoteAddress, connectionNr):
@@ -115,37 +115,31 @@ class PersistentHttpRequestTest(WeightlessTestCase):
 
             # Response body
             yield write(data='ACK')
+            log.append('Response1Done')
+
+            # Delay before answering the 2nd request.
             yield zleep(seconds=0.05)
 
-            # FIXME: Works with line below, but should work without!
-            sok.shutdown(SHUT_RDWR); sok.close()
-
-        def r2(sok, log, remoteAddress, connectionNr):
-            log.append(remoteAddress)
             # Request
             toRead = 'GET /second HTTP/1.1\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEquals(toRead, data)
 
             # Response statusline & headers
-            yield write(data='HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\n')
-            yield zleep(seconds=0.05)
+            yield write(data='HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n')
+            log.append('Response2Done')
+            sok.shutdown(SHUT_RDWR); sok.close()  # Server may do this, even if not advertised with "Connection: close"
 
-            # Response body
-            yield write(data='ACK')
-            yield zleep(seconds=0.05)
-
-            # FIXME: Works with line below, but should work without!
-            sok.shutdown(SHUT_RDWR); sok.close()
-            return
-            yield
+            # Socket dead, but no-one currently uses it (in pool), so not noticed.
+            yield zleep(0.05)
+            raise StopIteration('Finished')
 
         @dieAfter(seconds=5.0)
         def test():
             if False:
                 yield
             mss = MockSocketServer()
-            mss.setReplies([r1, r2])
+            mss.setReplies([r1])
             mss.listen()
             try:
                 top = be((Observable(),
@@ -162,12 +156,28 @@ class PersistentHttpRequestTest(WeightlessTestCase):
                     }, statusAndHeaders)
                 self.assertEquals('ACK', body)
                 self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals(None, mss.state.connections.get(1).value)
-                remoteAddress1 = mss.state.connections.get(1).log[0]
-                self.assertEquals('127.0.0.1', remoteAddress1[0])
+                self.assertEquals(IN_PROGRESS, mss.state.connections.get(1).value)
+                conn1Log = mss.state.connections.get(1).log
+                remoteAddress1Host = conn1Log[0][0]
+                self.assertEquals('127.0.0.1', remoteAddress1Host)
+                self.assertEquals(['Response1Done'], conn1Log[1:])
 
-                response2 = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/second')
-                self.fail()  #@@
+                statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/second')
+                self.assertEquals({
+                        'HTTPVersion': '1.1',
+                        'StatusCode': '200',
+                        'ReasonPhrase': 'OK',
+                        'Headers': {'Content-Length': '0'},
+                    }, statusAndHeaders)
+                self.assertEquals('', body)
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals(IN_PROGRESS, mss.state.connections.get(1).value)
+                conn1Log = mss.state.connections.get(1).log
+                self.assertEquals(['Response1Done', 'Response2Done'], conn1Log[1:])
+
+                yield zleep(0.06)
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals('Finished', mss.state.connections.get(1).value)
             finally:
                 mss.close()
 
@@ -829,7 +839,8 @@ class _ExactExpectationHandler(object):
                 except (KeyboardInterrupt, SystemExit):
                     raise
                 except Exception, e:
-                    print_exc()  # HCK
+                    if not isinstance(e, AbortException):
+                        print_exc()  # HCK
                     retval = e
             except (AssertionError, KeyboardInterrupt, SystemExit):
                 self._server.close(exclude=this)  # cleans up server and self.
