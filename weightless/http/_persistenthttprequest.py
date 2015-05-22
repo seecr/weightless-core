@@ -23,6 +23,7 @@
 #
 ## end license ##
 
+import re
 import sys
 from errno import EINPROGRESS
 from functools import partial
@@ -31,10 +32,11 @@ from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
 from sys import exc_info, getdefaultencoding
 from urlparse import urlsplit
 
-from weightless.core import compose, identify, Observable
+from weightless.core import compose, identify, Observable, autostart
 from weightless.io import Suspend, TimeoutException
-from weightless.http import REGEXP, parseHeaders
+from weightless.http import REGEXP, HTTP, parseHeaders
 
+CRLF = HTTP.CRLF
 
 # TODO:
 # - should retry failed requests on pooled sockets
@@ -347,6 +349,75 @@ def _readContentLengthDelimitedBody(sok, rest, contentLength):
         responses += response
         bytesToRead -= len(response)
     raise StopIteration((responses, False))
+
+def _readChunkedDelimitedBody(sok, rest):
+    responses = ''
+    g = _deChunk()
+    if rest:
+        resp = g.send(rest)
+        if resp is not None:
+            responses += resp
+    else:
+        resp = None
+
+    while True:
+        if resp is None:
+            message = yield _asyncRead(sok)
+            if message is _CLOSED:
+                raise ValueError('Premature close')
+        else:
+            responses += resp
+            message = None
+
+        resp = g.send(message)
+    raise StopIteration((responses, False))
+
+@autostart
+@compose
+def _deChunk():
+    while True:
+        chunk = yield _oneChunk()
+        if not chunk:
+            break
+
+        yield chunk
+
+    #while True:
+    #    trailers = yield _trailers()
+
+    #raise ValueError('Data after last chunk')
+
+_TRAILERS_RE = re.compile("(?:(?P<_trailers>(?:" + HTTP.message_header + ')+)' + CRLF + '|' + CRLF + ')')  #@@  TODO: Check RE.
+
+def _trailers():
+    return
+    yield
+
+def _oneChunk():
+    data = ''
+    while True:
+        try:
+            _in = yield
+        except StopIteration:
+            raise ValueError('Incomplete chunked data')
+
+        data += _in
+        match = _CHUNK_RE.match(data)
+        if match:
+            break
+
+    size = int(match.group(1), 16)
+    if size == 0:
+        print '>> size 0'; sys.stdout.flush()
+        return
+
+    end = match.end()
+    chunk = data[end:(end + size)]
+    data = data[(end + size):]
+    print '>> size n'; sys.stdout.flush()
+    raise StopIteration(chunk, data)  # chunk and pushback of unprocessed data.
+
+_CHUNK_RE = re.compile(r'([0-9a-fA-F]+)(?:;[^\r\n]+|)\r\n')  # Ignores chunk-extensions
 
 def _readAssertNoBody(sok, rest):
     if rest:

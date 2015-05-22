@@ -48,7 +48,7 @@ from weightless.io.utils import asProcess, sleep as zleep
 from weightless.http import HttpServer, SocketPool
 from weightless.http._persistenthttprequest import HttpRequest1_1
 
-from weightless.http._persistenthttprequest import _requestLine, _shutAndCloseOnce
+from weightless.http._persistenthttprequest import _requestLine, _shutAndCloseOnce, _CHUNK_RE, _deChunk
 from weightless.http import _persistenthttprequest as persistentHttpRequestModule
 
 httprequest1_1 = be(
@@ -95,6 +95,63 @@ class PersistentHttpRequestTest(WeightlessTestCase):
     def testRequestLine(self):
         self.assertEquals('GET / HTTP/1.1\r\n', _requestLine('GET', '/'))
         self.assertEquals('POST / HTTP/1.1\r\n', _requestLine('POST', '/'))
+
+    def testDeChunk(self):
+        #@@ TODO: finish me
+        dc = _deChunk()
+        try:
+            dc.send('0\r\n\r\n')
+            self.fail()
+        except StopIteration, e:
+            self.assertEquals('', e.args[0])
+
+    def testTrailersRe(self):
+        self.fail()
+
+    def testChunkRe(self):
+        def m(s):
+            return _CHUNK_RE.match(s)
+
+        s = '0\r\n'
+        self.assertTrue(m(s))
+        self.assertEquals((0, 1), (m(s).start(1), m(s).end(1)))
+        self.assertEquals('0\r\n', m(s).group())
+        self.assertEquals('0\r\n', m(s).group(0))
+        self.assertEquals('0', m(s).group(1))
+        self.assertEquals((0, 3), (m(s).start(), m(s).end()))
+        self.assertEquals((0, 3), (m(s).start(0), m(s).end(0)))
+
+        s = 'a05fBc\r\n'
+        self.assertTrue(m(s))
+        self.assertEquals(s, m(s).group())
+        self.assertEquals('a05fBc', m(s).group(1))
+
+        s = 'a5;chunky=extension;q=x;aap=noot\r\n'
+        self.assertTrue(m(s))
+        self.assertEquals(s, m(s).group())
+        self.assertEquals('a5', m(s).group(1))
+
+        s = 'a5;&*!@)_==++>>WHATEVER<<\r\n'  # We're more permissive than needed.
+        self.assertTrue(m(s))
+        self.assertEquals(s, m(s).group())
+        self.assertEquals('a5', m(s).group(1))
+
+        s = 'a5\r\nb4\r\n'
+        self.assertTrue(m(s))
+        self.assertEquals('a5\r\n', m(s).group())
+        self.assertEquals('a5', m(s).group(1))
+
+        self.assertFalse(m(''))
+        self.assertFalse(m('g1\r\n'))  # Not hexadecimal.
+        self.assertFalse(m('\r\n1\r\n'))
+        self.assertFalse(m('\n1\r\n'))
+        self.assertFalse(m('12'))
+        self.assertFalse(m('12\r'))
+        self.assertFalse(m('12\r\r'))
+        self.assertFalse(m('12\r\r\n'))
+        self.assertFalse(m('12\n'))
+        self.assertFalse(m('12\n\r'))
+        self.assertFalse(m('12\n\r\n'))
 
     def testHttp11ContentLengthDelimitedReusedOnce(self):
         # Happy-Path, least complex, still persisted - /w 100 Continue
@@ -176,6 +233,107 @@ class PersistentHttpRequestTest(WeightlessTestCase):
                 self.assertEquals(['Response1Done', 'Response2Done'], conn1Log[1:])
 
                 yield zleep(0.06)
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals('Finished', mss.state.connections.get(1).value)
+            finally:
+                mss.close()
+
+        asProcess(test())
+
+    def testHttp11ChunkedDelimitedReused(self):
+        # Happy-Path, no trailers, still persisted
+        # {http: 1.1, EOR: chunking, explicit-close: False, comms: ok}
+        def r1(sok, log, remoteAddress, connectionNr):
+            # Request 1
+            toRead = 'GET /first HTTP/1.1\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            # Response statusline & headers
+            yield write(data='HTTP/1.1 200 OK\r\nTransfer')
+            yield zleep(seconds=0.01)
+            yield write(data='-Encoding: chunked\r\n')
+            yield zleep(seconds=0.01)
+
+            # Last CRLF of header, begin Response body
+            yield write(data='\r\na\r\n0123456789\r\n1;chunk-ext-name=chunk-ext-value;cen=cev\r\nA\r\n0\r\n\r\n')
+            log.append('Response1Done')
+
+            # Request 2
+            toRead = 'GET /second HTTP/1.1\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            # Response statusline & headers
+            yield write(data='HTTP/1.1 200 oK\r\nTRANSFER-encoding: blue, GREEN, Banana, GZip, ChunKeD\r\n\r\n1\r\nx\r\n0\r\n\r\n')  # As long as chunked is last, whatever.
+            log.append('Response2Done')
+            sok.shutdown(SHUT_RDWR); sok.close()  # Server may do this, even if not advertised with "Connection: close"
+
+            # Request 3
+            toRead = 'GET /third HTTP/1.1\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            # Response statusline & headers
+            yield write(data='HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n')
+            log.append('Response3Done')
+            sok.shutdown(SHUT_RDWR); sok.close()  # Server may do this, even if not advertised with "Connection: close"
+
+            # Socket dead, but no-one currently uses it (in pool), so not noticed.
+            yield zleep(0.01)
+            raise StopIteration('Finished')
+
+        @dieAfter(seconds=5.0)
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies([r1])
+            mss.listen()
+            try:
+                top = be((Observable(),
+                    (HttpRequest1_1(),
+                        (SocketPool(reactor=reactor()),),
+                    ),
+                ))
+                statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first', timeout=1.0)
+                self.assertEquals({
+                        'HTTPVersion': '1.1',
+                        'StatusCode': '200',
+                        'ReasonPhrase': 'OK',
+                        'Headers': {'Transfer-Encoding': 'chunked'},
+                    }, statusAndHeaders)
+                self.assertEquals('0123456789A', body)
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals(IN_PROGRESS, mss.state.connections.get(1).value)
+                conn1Log = mss.state.connections.get(1).log
+                self.assertEquals(['Response1Done'], conn1Log)
+
+                statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/second')
+                self.assertEquals({
+                        'HTTPVersion': '1.1',
+                        'StatusCode': '200',
+                        'ReasonPhrase': 'oK',
+                        'Headers': {'Transfer-Encoding': 'blue, GREEN, Banana, GZip, ChunKeD'},
+                    }, statusAndHeaders)
+                self.assertEquals('x', body)
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals(IN_PROGRESS, mss.state.connections.get(1).value)
+                conn1Log = mss.state.connections.get(1).log
+                self.assertEquals(['Response1Done', 'Response2Done'], conn1Log[1:])
+
+                statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/third')
+                self.assertEquals({
+                        'HTTPVersion': '1.1',
+                        'StatusCode': '200',
+                        'ReasonPhrase': 'OK',
+                        'Headers': {'Transfer-Encoding': 'chunked'},
+                    }, statusAndHeaders)
+                self.assertEquals('', body)
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals(IN_PROGRESS, mss.state.connections.get(1).value)
+                conn1Log = mss.state.connections.get(1).log
+                self.assertEquals(['Response1Done', 'Response2Done', 'Response3Done'], conn1Log[1:])
+
+                yield zleep(0.015)
                 self.assertEquals(1, mss.nrOfRequests)
                 self.assertEquals('Finished', mss.state.connections.get(1).value)
             finally:
