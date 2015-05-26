@@ -195,7 +195,6 @@ def _requestLine(method, request):
     return "%s %s HTTP/1.1\r\n" % (method, request)
 
 def _readHeaderAndBody(sok, method, requestHeaders):
-    # TODO: cannot produce sensible 'response' from invalid/incomplete server response.
     statusAndHeaders, rest = yield _readHeader(sok)
     readStrategy, doClose = _determineBodyReadStrategy(statusAndHeaders=statusAndHeaders, method=method, requestHeaders=requestHeaders)
     body = yield readStrategy(sok, rest)
@@ -256,7 +255,7 @@ def _determineDoCloseFromConnection(headers):
 def _parseTransferEncoding(responseHeaders):
     transferEncoding = responseHeaders.get('Transfer-Encoding')
     if transferEncoding:
-        # transfer-extension's should be parsed differently - but not important here.
+        # transfer-extension's should be parsed differently (see: https://tools.ietf.org/html/rfc7230#section-4 ) - but not important here.
         transferEncoding = [v.strip() for v in transferEncoding.lower().strip().split(',')]
         return transferEncoding
 
@@ -266,28 +265,27 @@ def _readHeader(sok, rest=''):
     while True:
         response = yield _asyncRead(sok)
         if response is _CLOSED:
-            raise ValueError('Premature close')  # TODO: handle this.
+            raise ValueError('Premature close')
         responses += response
 
         match = REGEXP.RESPONSE.match(responses)
-        if not match:
+        if match:
             # TODO: check some max. statusline + header size (or bail).
-            continue
+            break
 
-        # Matched:
-        if match.end() < len(responses):
-            rest = responses[match.end():]
+    if match.end() < len(responses):
+        rest = responses[match.end():]
 
-        statusAndHeaders = match.groupdict()
-        headers = parseHeaders(statusAndHeaders['_headers'])
-        del statusAndHeaders['_headers']
-        statusAndHeaders['Headers'] = headers
+    statusAndHeaders = match.groupdict()
+    headers = parseHeaders(statusAndHeaders['_headers'])
+    del statusAndHeaders['_headers']
+    statusAndHeaders['Headers'] = headers
 
-        if statusAndHeaders['StatusCode'] == '100':
-            # 100 Continue response, eaten it - and then read the real response.
-            statusAndHeaders, rest = yield _readHeader(sok, rest=rest)
+    if statusAndHeaders['StatusCode'] == '100':
+        # 100 Continue response, eaten it - and then read the real response.
+        statusAndHeaders, rest = yield _readHeader(sok, rest=rest)
 
-        raise StopIteration((statusAndHeaders, rest))
+    raise StopIteration((statusAndHeaders, rest))
 
 def _readCloseDelimitedBody(sok, rest):
     responses = rest  # Must be empty-string at least
