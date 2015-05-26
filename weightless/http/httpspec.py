@@ -88,7 +88,6 @@ class HTTP:
     Response = Status_Line + Headers + CRLF
 
 
-
 class REGEXP:
     RESPONSE = compile(HTTP.Response)
     REQUEST = compile(HTTP.Request)

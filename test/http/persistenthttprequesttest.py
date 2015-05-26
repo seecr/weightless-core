@@ -45,10 +45,10 @@ from traceback import format_exception, print_exc
 from weightless.core import compose, identify, is_generator, Yield, local, be, Observable
 from weightless.io import Reactor, Suspend, TimeoutException, reactor
 from weightless.io.utils import asProcess, sleep as zleep
-from weightless.http import HttpServer, SocketPool
+from weightless.http import HttpServer, SocketPool, parseHeaders
 from weightless.http._persistenthttprequest import HttpRequest1_1
 
-from weightless.http._persistenthttprequest import _requestLine, _shutAndCloseOnce, _CHUNK_RE, _deChunk
+from weightless.http._persistenthttprequest import _requestLine, _shutAndCloseOnce, _CHUNK_RE, _deChunk, _TRAILERS_RE
 from weightless.http import _persistenthttprequest as persistentHttpRequestModule
 
 httprequest1_1 = be(
@@ -106,7 +106,47 @@ class PersistentHttpRequestTest(WeightlessTestCase):
             self.assertEquals('', e.args[0])
 
     def testTrailersRe(self):
-        self.fail()
+        def m(s):
+            return _TRAILERS_RE.match(s)
+
+        s = '\r\n'
+        self.assertTrue(m(s))
+        self.assertEquals('\r\n', m(s).group())
+        self.assertEquals(0, m(s).start())
+        self.assertEquals(2, m(s).end())
+        self.assertEquals({'_trailers': None}, m(s).groupdict())
+
+        s = 'Head: Er\r\n\r\n'
+        self.assertEquals(0, m(s).start())
+        self.assertEquals(12, m(s).end())
+        self.assertEquals({'_trailers': 'Head: Er\r\n'}, m(s).groupdict())
+
+        s = 'H1: V1\r\nH2: V2\r\n\r\n'
+        self.assertEquals(0, m(s).start())
+        self.assertEquals(18, m(s).end())
+        self.assertEquals({'_trailers': 'H1: V1\r\nH2: V2\r\n'}, m(s).groupdict())
+
+        s = 'H1: V1\r\nH2: V2\r\nH3: V3\r\n\r\n'
+        self.assertEquals(0, m(s).start())
+        self.assertEquals(26, m(s).end())
+        self.assertEquals({'_trailers': 'H1: V1\r\nH2: V2\r\nH3: V3\r\n'}, m(s).groupdict())
+
+        # trailers parsable as headers
+        self.assertEquals({
+                'H1': 'V1',
+                'H2': 'V2',
+                'H3': 'V3',
+            },
+            parseHeaders(m(s).groupdict()['_trailers'])
+        )
+
+        self.assertFalse(m('\n\n'))
+        self.assertFalse(m('\n\r'))
+        self.assertFalse(m('\r\r'))
+        self.assertFalse(m('\n\n\n'))
+        self.assertFalse(m('\n\n\r'))
+        self.assertFalse(m('\n\r\n'))
+        self.assertFalse(m('\r\r\n'))
 
     def testChunkRe(self):
         def m(s):
