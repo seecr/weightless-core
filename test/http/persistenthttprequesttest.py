@@ -92,9 +92,47 @@ class PersistentHttpRequestTest(WeightlessTestCase):
             self.httpserver.shutdown()
         WeightlessTestCase.tearDown(self)
 
-    def testRequestLine(self):
-        self.assertEquals('GET / HTTP/1.1\r\n', _requestLine('GET', '/'))
-        self.assertEquals('POST / HTTP/1.1\r\n', _requestLine('POST', '/'))
+    def testHttpRequestBasics(self):
+        expectedrequest = "GET /path?arg=1&arg=2 HTTP/1.1\r\n\r\n"
+
+        def r1(sok, log, remoteAddress, connectionNr):
+            # Request
+            data = yield read(untilExpected=expectedrequest)
+            self.assertEquals(expectedrequest, data)
+
+            # Response
+            _headers = 'HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\n'
+            yield write(data=_headers)
+            yield write(data='hel')
+            yield write(data='lo!')
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies([r1])
+            mss.listen()
+            top = be((Observable(),
+                (HttpRequest1_1(),
+                    (SocketPool(reactor=reactor()),),
+                )
+            ))
+            try:
+                statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/path?arg=1&arg=2')
+                self.assertEquals({
+                        'HTTPVersion': '1.1',
+                        'Headers': {'Content-Length': '6'},
+                        'ReasonPhrase': 'OK',
+                        'StatusCode': '200',
+                    },
+                    statusAndHeaders
+                )
+                self.assertEquals('hello!', body)
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals({1: (None, [])}, mss.state.connections)
+            finally:
+                mss.close()
+
+        asProcess(test())
 
     def testDeChunk(self):
         # Initial size 0 - all-in-one "packet".
@@ -178,94 +216,6 @@ class PersistentHttpRequestTest(WeightlessTestCase):
             dc.send('\nX')
         except ValueError, e:
             self.assertEquals('Data after last chunk', str(e))
-
-    def testTrailersRe(self):
-        def m(s):
-            return _TRAILERS_RE.match(s)
-
-        s = '\r\n'
-        self.assertTrue(m(s))
-        self.assertEquals('\r\n', m(s).group())
-        self.assertEquals(0, m(s).start())
-        self.assertEquals(2, m(s).end())
-        self.assertEquals({'_trailers': None}, m(s).groupdict())
-
-        s = 'Head: Er\r\n\r\n'
-        self.assertEquals(0, m(s).start())
-        self.assertEquals(12, m(s).end())
-        self.assertEquals({'_trailers': 'Head: Er\r\n'}, m(s).groupdict())
-
-        s = 'H1: V1\r\nH2: V2\r\n\r\n'
-        self.assertEquals(0, m(s).start())
-        self.assertEquals(18, m(s).end())
-        self.assertEquals({'_trailers': 'H1: V1\r\nH2: V2\r\n'}, m(s).groupdict())
-
-        s = 'H1: V1\r\nH2: V2\r\nH3: V3\r\n\r\n'
-        self.assertEquals(0, m(s).start())
-        self.assertEquals(26, m(s).end())
-        self.assertEquals({'_trailers': 'H1: V1\r\nH2: V2\r\nH3: V3\r\n'}, m(s).groupdict())
-
-        # trailers parsable as headers
-        self.assertEquals({
-                'H1': 'V1',
-                'H2': 'V2',
-                'H3': 'V3',
-            },
-            parseHeaders(m(s).groupdict()['_trailers'])
-        )
-
-        self.assertFalse(m('\n\n'))
-        self.assertFalse(m('\n\r'))
-        self.assertFalse(m('\r\r'))
-        self.assertFalse(m('\n\n\n'))
-        self.assertFalse(m('\n\n\r'))
-        self.assertFalse(m('\n\r\n'))
-        self.assertFalse(m('\r\r\n'))
-
-    def testChunkRe(self):
-        def m(s):
-            return _CHUNK_RE.match(s)
-
-        s = '0\r\n'
-        self.assertTrue(m(s))
-        self.assertEquals((0, 1), (m(s).start(1), m(s).end(1)))
-        self.assertEquals('0\r\n', m(s).group())
-        self.assertEquals('0\r\n', m(s).group(0))
-        self.assertEquals('0', m(s).group(1))
-        self.assertEquals((0, 3), (m(s).start(), m(s).end()))
-        self.assertEquals((0, 3), (m(s).start(0), m(s).end(0)))
-
-        s = 'a05fBc\r\n'
-        self.assertTrue(m(s))
-        self.assertEquals(s, m(s).group())
-        self.assertEquals('a05fBc', m(s).group(1))
-
-        s = 'a5;chunky=extension;q=x;aap=noot\r\n'
-        self.assertTrue(m(s))
-        self.assertEquals(s, m(s).group())
-        self.assertEquals('a5', m(s).group(1))
-
-        s = 'a5;&*!@)_==++>>WHATEVER<<\r\n'  # We're more permissive than needed.
-        self.assertTrue(m(s))
-        self.assertEquals(s, m(s).group())
-        self.assertEquals('a5', m(s).group(1))
-
-        s = 'a5\r\nb4\r\n'
-        self.assertTrue(m(s))
-        self.assertEquals('a5\r\n', m(s).group())
-        self.assertEquals('a5', m(s).group(1))
-
-        self.assertFalse(m(''))
-        self.assertFalse(m('g1\r\n'))  # Not hexadecimal.
-        self.assertFalse(m('\r\n1\r\n'))
-        self.assertFalse(m('\n1\r\n'))
-        self.assertFalse(m('12'))
-        self.assertFalse(m('12\r'))
-        self.assertFalse(m('12\r\r'))
-        self.assertFalse(m('12\r\r\n'))
-        self.assertFalse(m('12\n'))
-        self.assertFalse(m('12\n\r'))
-        self.assertFalse(m('12\n\r\n'))
 
     def testHttp11ContentLengthDelimitedReusedOnce(self):
         # Happy-Path, least complex, still persisted - /w 100 Continue
@@ -475,50 +425,22 @@ class PersistentHttpRequestTest(WeightlessTestCase):
             @compose
             def _passthruhandler(*args, **kwargs):
                 request = kwargs['RequestURI']
-                response = yield httprequest1_1(host='localhost', port=mss.port, request=request)
-                yield response
+                statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request=request)
+                yield 'HTTP/1.0 200 Ok\r\n\r\n'
+                yield statusAndHeaders['StatusCode'] + '\n' + body
             wlPort = PortNumberGenerator.next()
             wlHttp = HttpServer(reactor=reactor(), port=wlPort, generatorFactory=_passthruhandler)
 
             wlHttp.listen()
             mss.listen()
             try:
-                response = yield httprequest1_1(host='localhost', port=wlPort, request='/path?arg=1&arg=2', timeout=1.0)
+                statusAndHeaders, body = yield httprequest1_1(host='localhost', port=wlPort, request='/path?arg=1&arg=2', timeout=1.0)
                 self.assertEquals(1, mss.nrOfRequests)
                 self.assertEquals({1: (None, [])}, mss.state.connections)
-                self.assertEquals('HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nhello!', response)
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEquals('200\nhello!', body)
             finally:
                 wlHttp.shutdown()
-                mss.close()
-
-        asProcess(test())
-
-    def testHttpRequestObj(self):
-        # Old name: testPassRequestThruToBackOfficeServerWithHttpRequest
-        expectedrequest = "GET /path?arg=1&arg=2 HTTP/1.1\r\n\r\n"
-
-        def r1(sok, log, remoteAddress, connectionNr):
-            # Request
-            data = yield read(untilExpected=expectedrequest)
-            self.assertEquals(expectedrequest, data)
-
-            # Response
-            _headers = 'HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\n'
-            yield write(data=_headers)
-            yield write(data='hel')
-            yield write(data='lo!')
-            sok.shutdown(SHUT_RDWR); sok.close()
-
-        def test():
-            mss = MockSocketServer()
-            mss.setReplies([r1])
-            mss.listen()
-            try:
-                response = yield HttpRequest1_1().httprequest1_1(host='localhost', port=mss.port, request='/path?arg=1&arg=2')
-                self.assertEquals('HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nhello!', response)
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals({1: (None, [])}, mss.state.connections)
-            finally:
                 mss.close()
 
         asProcess(test())
@@ -936,6 +858,98 @@ RuntimeError: Boom!""" % fileDict)
         sok.calledMethods.reset()
         cb(ignoreExceptions=True)
         self.assertEquals([], sok.calledMethodNames())
+
+    def testRequestLine(self):
+        self.assertEquals('GET / HTTP/1.1\r\n', _requestLine('GET', '/'))
+        self.assertEquals('POST / HTTP/1.1\r\n', _requestLine('POST', '/'))
+
+    def testChunkRe(self):
+        def m(s):
+            return _CHUNK_RE.match(s)
+
+        s = '0\r\n'
+        self.assertTrue(m(s))
+        self.assertEquals((0, 1), (m(s).start(1), m(s).end(1)))
+        self.assertEquals('0\r\n', m(s).group())
+        self.assertEquals('0\r\n', m(s).group(0))
+        self.assertEquals('0', m(s).group(1))
+        self.assertEquals((0, 3), (m(s).start(), m(s).end()))
+        self.assertEquals((0, 3), (m(s).start(0), m(s).end(0)))
+
+        s = 'a05fBc\r\n'
+        self.assertTrue(m(s))
+        self.assertEquals(s, m(s).group())
+        self.assertEquals('a05fBc', m(s).group(1))
+
+        s = 'a5;chunky=extension;q=x;aap=noot\r\n'
+        self.assertTrue(m(s))
+        self.assertEquals(s, m(s).group())
+        self.assertEquals('a5', m(s).group(1))
+
+        s = 'a5;&*!@)_==++>>WHATEVER<<\r\n'  # We're more permissive than needed.
+        self.assertTrue(m(s))
+        self.assertEquals(s, m(s).group())
+        self.assertEquals('a5', m(s).group(1))
+
+        s = 'a5\r\nb4\r\n'
+        self.assertTrue(m(s))
+        self.assertEquals('a5\r\n', m(s).group())
+        self.assertEquals('a5', m(s).group(1))
+
+        self.assertFalse(m(''))
+        self.assertFalse(m('g1\r\n'))  # Not hexadecimal.
+        self.assertFalse(m('\r\n1\r\n'))
+        self.assertFalse(m('\n1\r\n'))
+        self.assertFalse(m('12'))
+        self.assertFalse(m('12\r'))
+        self.assertFalse(m('12\r\r'))
+        self.assertFalse(m('12\r\r\n'))
+        self.assertFalse(m('12\n'))
+        self.assertFalse(m('12\n\r'))
+        self.assertFalse(m('12\n\r\n'))
+
+    def testTrailersRe(self):
+        def m(s):
+            return _TRAILERS_RE.match(s)
+
+        s = '\r\n'
+        self.assertTrue(m(s))
+        self.assertEquals('\r\n', m(s).group())
+        self.assertEquals(0, m(s).start())
+        self.assertEquals(2, m(s).end())
+        self.assertEquals({'_trailers': None}, m(s).groupdict())
+
+        s = 'Head: Er\r\n\r\n'
+        self.assertEquals(0, m(s).start())
+        self.assertEquals(12, m(s).end())
+        self.assertEquals({'_trailers': 'Head: Er\r\n'}, m(s).groupdict())
+
+        s = 'H1: V1\r\nH2: V2\r\n\r\n'
+        self.assertEquals(0, m(s).start())
+        self.assertEquals(18, m(s).end())
+        self.assertEquals({'_trailers': 'H1: V1\r\nH2: V2\r\n'}, m(s).groupdict())
+
+        s = 'H1: V1\r\nH2: V2\r\nH3: V3\r\n\r\n'
+        self.assertEquals(0, m(s).start())
+        self.assertEquals(26, m(s).end())
+        self.assertEquals({'_trailers': 'H1: V1\r\nH2: V2\r\nH3: V3\r\n'}, m(s).groupdict())
+
+        # trailers parsable as headers
+        self.assertEquals({
+                'H1': 'V1',
+                'H2': 'V2',
+                'H3': 'V3',
+            },
+            parseHeaders(m(s).groupdict()['_trailers'])
+        )
+
+        self.assertFalse(m('\n\n'))
+        self.assertFalse(m('\n\r'))
+        self.assertFalse(m('\r\r'))
+        self.assertFalse(m('\n\n\n'))
+        self.assertFalse(m('\n\n\r'))
+        self.assertFalse(m('\n\r\n'))
+        self.assertFalse(m('\r\r\n'))
 
     ##
     ## MockSocketServer tests (incomplete / rough) ##
