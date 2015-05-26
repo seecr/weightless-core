@@ -446,17 +446,21 @@ class PersistentHttpRequestTest(WeightlessTestCase):
         asProcess(test())
 
     def testHttpPost(self):
-        # Implementation test.
+        # Implementation-test for POST.
         post_request = []
         port = PortNumberGenerator.next()
         self.referenceHttpServer(port, post_request)
         body = u"BÖDY" * 20000
 
         def test():
-            response = yield httprequest1_1(method='POST', host='localhost', port=port, request='/path', body=body,
-                    headers={'Content-Type': 'text/plain'}
+            statusAndHeaders, _body = yield httprequest1_1(
+                method='POST', host='localhost', port=port, request='/path', body=body,
+                headers={
+                    'Content-Type': 'text/plain',
+                    'Host': 'vvvvvv.example.org',
+                },
             )
-            self.assertTrue("POST RESPONSE" in response, response)
+            self.assertTrue("POST RESPONSE" in _body, _body)
 
         asProcess(test())
 
@@ -465,8 +469,64 @@ class PersistentHttpRequestTest(WeightlessTestCase):
         self.assertEquals('POST', post_req['command'])
         self.assertEquals('/path', post_req['path'])
         headers = post_req['headers'].headers
-        self.assertEquals(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n'], headers)
-        self.assertEquals(body, post_req['body'])
+        self.assertEquals(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n', 'Host: vvvvvv.example.org\r\n'], sorted(headers))
+
+    def testHttpPostWithoutExplicitHeaders(self):
+        # Implementation-test:
+        # Host header added (from host argument) if not given explicitly.
+        post_request = []
+        port = PortNumberGenerator.next()
+        self.referenceHttpServer(port, post_request)
+        body = u"BÖDY" * 20000
+        def posthandler(*args, **kwargs):
+            response = yield httprequest1_1(
+                method='POST', host='localhost', port=port, request='/path', body=body,
+            )
+            yield response
+            responses.append(response)
+
+        def test():
+            statusAndHeaders, _body = yield httprequest1_1(method='POST', host='localhost', port=port, request='/path', body=body)
+            self.assertEquals('200', statusAndHeaders['StatusCode'])
+            self.assertEquals("POST RESPONSE", _body)
+
+        asProcess(test())
+
+        self.assertEquals('POST', post_request[0]['command'])
+        self.assertEquals('/path', post_request[0]['path'])
+        headers = post_request[0]['headers'].headers
+        self.assertEquals([
+                'Content-Length: 100000\r\n',
+                'Host: localhost\r\n',
+            ], sorted(headers))
+        self.assertEquals(body, post_request[0]['body'])
+
+    def testHttpsPost(self):
+        # Implementation-test: Testing SSL/TLS with a "real" server.
+        post_request = []
+        port = PortNumberGenerator.next()
+        self.referenceHttpServer(port, post_request, ssl=True)
+        body = u"BÖDY" * 20000
+
+        def test():
+            statusAndHeaders, _body = yield httprequest1_1(
+                method='POST', host='localhost', port=port, request='/path', body=body,
+                headers={'Content-Type': 'text/plain'}, secure=True,
+            )
+            self.assertEquals('200', statusAndHeaders['StatusCode'])
+            self.assertEquals("POST RESPONSE", _body)
+
+        asProcess(test())
+
+        self.assertEquals('POST', post_request[0]['command'])
+        self.assertEquals('/path', post_request[0]['path'])
+        headers = post_request[0]['headers'].headers
+        self.assertEquals([
+                'Content-Length: 100000\r\n',
+                'Content-Type: text/plain\r\n',
+                'Host: localhost\r\n',
+            ], sorted(headers))
+        self.assertEquals(body, post_request[0]['body'])
 
 
     ###                                  ###
@@ -580,55 +640,6 @@ RuntimeError: Boom!""" % fileDict)
         finally:
             persistentHttpRequestModule._requestLine = originalRequestLine
 
-    def testHttpPostWithoutHeaders(self):
-        self.startWeightlessHttpServer()
-        post_request = []
-        port = PortNumberGenerator.next()
-        self.referenceHttpServer(port, post_request)
-        body = u"BÖDY" * 20000
-        responses = []
-        def posthandler(*args, **kwargs):
-            response = yield httprequest1_1(
-                method='POST', host='localhost', port=port, request='/path', body=body,
-            )
-            yield response
-            responses.append(response)
-        self.handler = posthandler
-        clientget('localhost', self.port, '/')
-        self._loopReactorUntilDone()
-
-        self.assertTrue("POST RESPONSE" in responses[0], responses[0])
-        self.assertEquals('POST', post_request[0]['command'])
-        self.assertEquals('/path', post_request[0]['path'])
-        headers = post_request[0]['headers'].headers
-        self.assertEquals(['Content-Length: 100000\r\n'], headers)
-        self.assertEquals(body, post_request[0]['body'])
-
-    def testHttpsPost(self):
-        self.startWeightlessHttpServer()
-        post_request = []
-        port = PortNumberGenerator.next()
-        self.referenceHttpServer(port, post_request, ssl=True)
-        body = u"BÖDY" * 20000
-        responses = []
-        def posthandler(*args, **kwargs):
-            response = yield httprequest1_1(
-                method='POST', host='localhost', port=port, request='/path', body=body,
-                headers={'Content-Type': 'text/plain'}, secure=True,
-            )
-            yield response
-            responses.append(response)
-        self.handler = posthandler
-        clientget('localhost', self.port, '/')
-        self._loopReactorUntilDone()
-
-        self.assertTrue("POST RESPONSE" in responses[0], responses[0])
-        self.assertEquals('POST', post_request[0]['command'])
-        self.assertEquals('/path', post_request[0]['path'])
-        headers = post_request[0]['headers'].headers
-        self.assertEquals(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n'], headers)
-        self.assertEquals(body, post_request[0]['body'])
-
     @stderr_replaced
     def testHttpsPostOnIncorrectPort(self):
         self.startWeightlessHttpServer()
@@ -674,7 +685,7 @@ RuntimeError: Boom!""" % fileDict)
         headers = get_request[0]['headers'].headers
         self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
 
-    def testHttpRequest(self):
+    def testHttpWithUnsupportedMethod(self):
         self.startWeightlessHttpServer()
         get_request = []
         port = PortNumberGenerator.next()

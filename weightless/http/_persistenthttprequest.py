@@ -98,7 +98,7 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
                     if type(data) is unicode:
                         data = data.encode(getdefaultencoding())
                     headers.update({'Content-Length': len(data)})
-                yield _sendHttpHeaders(sok, method, request, headers)
+                yield _sendHttpHeaders(sok, method, request, headers, host)
                 if body:
                     yield _asyncSend(sok, data)
             finally:
@@ -183,11 +183,12 @@ def _sslHandshake(sok, this, suspend, prio):
         raise ValueError("SSL handshake failed.")
     raise StopIteration(sok)
 
-def _sendHttpHeaders(sok, method, request, headers):
+def _sendHttpHeaders(sok, method, request, headers, host):
     # TODO: add Host header iff not given
     data = _requestLine(method, request)
-    if headers:
-        data += ''.join('%s: %s\r\n' % i for i in headers.items())
+    if 'host' not in [k.lower() for k in headers.keys()]:
+        headers['Host'] = host
+    data += ''.join('%s: %s\r\n' % i for i in headers.items())
     data += '\r\n'
     yield _asyncSend(sok, data)
 
