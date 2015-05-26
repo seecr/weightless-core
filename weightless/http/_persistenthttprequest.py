@@ -353,23 +353,26 @@ def _readContentLengthDelimitedBody(sok, rest, contentLength):
 def _readChunkedDelimitedBody(sok, rest):
     responses = ''
     g = _deChunk()
-    if rest:
-        resp = g.send(rest)
-        if resp is not None:
-            responses += resp
-    else:
-        resp = None
-
-    while True:
-        if resp is None:
-            message = yield _asyncRead(sok)
-            if message is _CLOSED:
-                raise ValueError('Premature close')
+    try:
+        if rest:
+            resp = g.send(rest)
         else:
-            responses += resp
-            message = None
+            resp = None
 
-        resp = g.send(message)
+        while True:
+            if resp is None:
+                message = yield _asyncRead(sok)
+                if message is _CLOSED:
+                    g.close()
+                    raise ValueError('Premature close')
+            else:
+                responses += resp
+                message = None
+
+            resp = g.send(message)
+    except StopIteration:
+        pass
+
     raise StopIteration((responses, False))
 
 @autostart
@@ -382,41 +385,53 @@ def _deChunk():
 
         yield chunk
 
-    #while True:
-    #    trailers = yield _trailers()
+    trailersStr, rest = yield _trailers()
 
-    #raise ValueError('Data after last chunk')
+    if rest:
+        raise ValueError('Data after last chunk')
 
-_TRAILERS_RE = re.compile("(?:(?P<_trailers>(?:" + HTTP.message_header + ')+)' + CRLF + '|' + CRLF + ')')  #@@  TODO: Check RE.
+_TRAILERS_RE = re.compile("(?:(?P<_trailers>(?:" + HTTP.message_header + ')+)' + CRLF + '|' + CRLF + ')')
 
 def _trailers():
-    return
-    yield
+    data = ''
+    while True:
+        _in = yield
+        data += _in
+        match = _TRAILERS_RE.match(data)
+        if match:
+            break
+
+    trailersStr = match.groupdict()['_trailers']  # Unparsed trailers or None
+    end = match.end()
+    rest = data[end:]
+    raise StopIteration((trailersStr, rest))
 
 def _oneChunk():
     data = ''
     while True:
-        try:
-            _in = yield
-        except StopIteration:
-            raise ValueError('Incomplete chunked data')
-
+        _in = yield
         data += _in
         match = _CHUNK_RE.match(data)
         if match:
             break
 
     size = int(match.group(1), 16)
+    data = data[match.end():]
+
     if size == 0:
-        print '>> size 0'; sys.stdout.flush()
-        return
+        pushback = (data,) if data else ()
+        raise StopIteration(None, *pushback)
 
-    end = match.end()
-    chunk = data[end:(end + size)]
-    data = data[(end + size):]
-    print '>> size n'; sys.stdout.flush()
-    raise StopIteration(chunk, data)  # chunk and pushback of unprocessed data.
+    while (len(data) - _CRLF_LEN) < size:
+        _in = yield
+        data += _in
 
+    chunk = data[:size]
+    data = data[(size + _CRLF_LEN):]
+    pushback = (data,) if data else ()
+    raise StopIteration(chunk, *pushback)
+
+_CRLF_LEN = len(CRLF)
 _CHUNK_RE = re.compile(r'([0-9a-fA-F]+)(?:;[^\r\n]+|)\r\n')  # Ignores chunk-extensions
 
 def _readAssertNoBody(sok, rest):

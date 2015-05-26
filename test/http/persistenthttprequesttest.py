@@ -97,13 +97,87 @@ class PersistentHttpRequestTest(WeightlessTestCase):
         self.assertEquals('POST / HTTP/1.1\r\n', _requestLine('POST', '/'))
 
     def testDeChunk(self):
-        #@@ TODO: finish me
+        # Initial size 0 - all-in-one "packet".
         dc = _deChunk()
         try:
             dc.send('0\r\n\r\n')
             self.fail()
         except StopIteration, e:
-            self.assertEquals('', e.args[0])
+            self.assertEquals(0, len(e.args))
+
+        # Initial size 1; then 0 - all-in-one "packet".
+        dc = _deChunk()
+        self.assertEquals('A', dc.send('1\r\nA\r\n0\r\n\r\n'))
+        try:
+            dc.send(None)
+            self.fail()
+        except StopIteration, e:
+            self.assertEquals(0, len(e.args))
+
+        # Initial size 3; then 0 - multiple "packets".
+        dc = _deChunk()
+        self.assertEquals(None, dc.send('3\r'))
+        self.assertEquals(None, dc.send('\n'))
+        self.assertEquals(None, dc.send('A'))
+        self.assertEquals(None, dc.send('B'))
+        self.assertEquals(None, dc.send('C'))
+        self.assertEquals(None, dc.send('\r'))
+        self.assertEquals('ABC', dc.send('\n'))
+        self.assertEquals(None, dc.send(None))
+        self.assertEquals(None, dc.send('0'))
+        self.assertEquals(None, dc.send('\r'))
+        self.assertEquals(None, dc.send('\n'))
+        self.assertEquals(None, dc.send('\r'))
+        try:
+            dc.send('\n')
+            self.fail()
+        except StopIteration, e:
+            self.assertEquals(0, len(e.args))
+
+        # Initial size 2; then 3; then 0; then trailers - all-in-one "packet".
+        dc = _deChunk()
+        self.assertEquals('AB', dc.send('2\r\nAB\r\n3\r\nCDE\r\n0\r\nTrailing1: Header1\r\nTrailing2: Header2\r\n\r\n'))
+        self.assertEquals('CDE', dc.send(None))
+        try:
+            dc.send(None)
+            self.fail()
+        except StopIteration, e:
+            self.assertEquals(0, len(e.args))
+
+        # Initial size 2; then 3; then 0 - multiple "packets".
+        dc = _deChunk()
+        self.assertEquals(None, dc.send('2\r\nA'))
+        self.assertEquals('AB', dc.send('B\r\n3\r\nCDE\r'))
+        self.assertEquals(None, dc.send(None))
+        self.assertEquals('CDE', dc.send('\n0\r\nTrailing1: Header1\r'))
+        self.assertEquals(None, dc.send(None))
+        self.assertEquals(None, dc.send('\nTrailing2: Header2\r\n\r'))
+        try:
+            dc.send('\n')
+            self.fail()
+        except StopIteration, e:
+            self.assertEquals(0, len(e.args))
+
+    def testDeChunkFailsOnExcessData(self):
+        # Note: this can only reliably be detection if sok.recv(n) data
+        #       included (a bit of) excess-data.  Otherwise undetected
+        #       until socket-reuse fails horribly.
+
+        # after size 0
+        dc = _deChunk()
+        try:
+            dc.send('0\r\n\r\n<EXCESS-DATA>')
+            self.fail()
+        except ValueError, e:
+            self.assertEquals('Data after last chunk', str(e))
+
+        # after trailers
+        dc = _deChunk()
+        self.assertEquals(None, dc.send('0\r\nTrai: ler\r\n\r'))
+        try:
+            dc.send('\nX')
+        except ValueError, e:
+            self.assertEquals('Data after last chunk', str(e))
 
     def testTrailersRe(self):
         def m(s):
@@ -307,7 +381,6 @@ class PersistentHttpRequestTest(WeightlessTestCase):
             # Response statusline & headers
             yield write(data='HTTP/1.1 200 oK\r\nTRANSFER-encoding: blue, GREEN, Banana, GZip, ChunKeD\r\n\r\n1\r\nx\r\n0\r\n\r\n')  # As long as chunked is last, whatever.
             log.append('Response2Done')
-            sok.shutdown(SHUT_RDWR); sok.close()  # Server may do this, even if not advertised with "Connection: close"
 
             # Request 3
             toRead = 'GET /third HTTP/1.1\r\n\r\n'
@@ -357,8 +430,7 @@ class PersistentHttpRequestTest(WeightlessTestCase):
                 self.assertEquals('x', body)
                 self.assertEquals(1, mss.nrOfRequests)
                 self.assertEquals(IN_PROGRESS, mss.state.connections.get(1).value)
-                conn1Log = mss.state.connections.get(1).log
-                self.assertEquals(['Response1Done', 'Response2Done'], conn1Log[1:])
+                self.assertEquals(['Response1Done', 'Response2Done'], conn1Log)
 
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/third')
                 self.assertEquals({
@@ -371,7 +443,7 @@ class PersistentHttpRequestTest(WeightlessTestCase):
                 self.assertEquals(1, mss.nrOfRequests)
                 self.assertEquals(IN_PROGRESS, mss.state.connections.get(1).value)
                 conn1Log = mss.state.connections.get(1).log
-                self.assertEquals(['Response1Done', 'Response2Done', 'Response3Done'], conn1Log[1:])
+                self.assertEquals(['Response1Done', 'Response2Done', 'Response3Done'], conn1Log)
 
                 yield zleep(0.015)
                 self.assertEquals(1, mss.nrOfRequests)
