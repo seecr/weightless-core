@@ -160,46 +160,6 @@ def _createSocket(host, port, secure, this, suspend, prio):
         sok = yield _sslHandshake(sok, this, suspend, prio)
     raise StopIteration(sok)
 
-def _getOrCreateSocket(host, port, secure, pool, this, suspend, prio):
-    suspend._reactor.addProcess(process=this.next, prio=prio)
-    yield  # First "yield <data>" since start-of-composed & (this/g).send(<SuspendObj>).  After this yield, Suspend._whenDone filled-in and thus throwing is safe again.
-    try:
-        sok = pool.get(host, port)
-        if sok:
-            raise StopIteration((True, sok))  # fromPool, <sok>
-
-        sok = _OLDcreateSocket()
-        try:
-            sok.connect((host, port))
-        except SocketError, (errno, msg):
-            if errno != EINPROGRESS:
-                raise
-    finally:
-        suspend._reactor.removeProcess(process=this.next)
-
-    suspend._reactor.addWriter(sok, this.next, prio=prio)
-    try:
-        yield
-        err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
-        if err != 0:    # connection created succesfully?
-            raise IOError(err)
-    finally:
-        suspend._reactor.removeWriter(sok)
-
-    if secure:
-        sok = yield _sslHandshake(sok, this, suspend, prio)
-    raise StopIteration((False, sok))  # fromPool, <sok>
-
-
-def _OLDcreateSocket():
-    sok = socket()
-    sok.setblocking(0)
-    sok.setsockopt(SOL_SOCKET, SO_KEEPALIVE, 1)
-    sok.setsockopt(SOL_TCP, TCP_KEEPIDLE, 60*10)
-    sok.setsockopt(SOL_TCP, TCP_KEEPINTVL, 75)
-    sok.setsockopt(SOL_TCP, TCP_KEEPCNT, 9)
-    return sok
-
 def _sslHandshake(sok, this, suspend, prio):
     sok = wrap_socket(sok, do_handshake_on_connect=False)
     count = 0
@@ -237,9 +197,9 @@ def _requestLine(method, request):
 def _readHeaderAndBody(sok, method, requestHeaders):
     # TODO: cannot produce sensible 'response' from invalid/incomplete server response.
     statusAndHeaders, rest = yield _readHeader(sok)
-    readStrategy, _doClose1 = _determineBodyReadStrategy(statusAndHeaders=statusAndHeaders, method=method, requestHeaders=requestHeaders)
-    body, _doClose2 = yield readStrategy(sok, rest)
-    raise StopIteration((statusAndHeaders, body, any((_doClose1, _doClose2))))
+    readStrategy, doClose = _determineBodyReadStrategy(statusAndHeaders=statusAndHeaders, method=method, requestHeaders=requestHeaders)
+    body = yield readStrategy(sok, rest)
+    raise StopIteration((statusAndHeaders, body, doClose))
 
 def _determineBodyReadStrategy(statusAndHeaders, method, requestHeaders):
     doClose = False
@@ -265,9 +225,11 @@ def _determineBodyReadStrategy(statusAndHeaders, method, requestHeaders):
         return _readAssertNoBody, doClose
 
     if transferEncoding and transferEncoding[-1:] == ['chunked']:
-        return _readChunkedDelimitedBody, doClose  # FIXME: implement
+        return _readChunkedDelimitedBody, doClose
     elif contentLength is not None:
-        return partial(_readContentLengthDelimitedBody, contentLength=contentLength), doClose  # FIXME: implement
+        return partial(_readContentLengthDelimitedBody, contentLength=contentLength), doClose
+
+    doClose = True
     return _readCloseDelimitedBody, doClose
 
 def _bodyDisallowed(method, statusCode):
@@ -334,7 +296,7 @@ def _readCloseDelimitedBody(sok, rest):
         if response is _CLOSED:
             break
         responses += response
-    raise StopIteration((responses, True))
+    raise StopIteration(responses)
 
 def _readContentLengthDelimitedBody(sok, rest, contentLength):
     responses = rest  # Must be empty-string at least
@@ -348,7 +310,7 @@ def _readContentLengthDelimitedBody(sok, rest, contentLength):
             raise ValueError('Premature close')
         responses += response
         bytesToRead -= len(response)
-    raise StopIteration((responses, False))
+    raise StopIteration(responses)
 
 def _readChunkedDelimitedBody(sok, rest):
     responses = ''
@@ -373,7 +335,7 @@ def _readChunkedDelimitedBody(sok, rest):
     except StopIteration:
         pass
 
-    raise StopIteration((responses, False))
+    raise StopIteration(responses)
 
 @autostart
 @compose
@@ -437,8 +399,7 @@ _CHUNK_RE = re.compile(r'([0-9a-fA-F]+)(?:;[^\r\n]+|)\r\n')  # Ignores chunk-ext
 def _readAssertNoBody(sok, rest):
     if rest:
         raise ValueError('Body not empty.')
-    return '', False
-
+    raise StopIteration('')
 
 def _asyncSend(sok, data):
     while data != "":
