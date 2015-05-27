@@ -944,52 +944,50 @@ class PersistentHttpRequestTest(WeightlessTestCase):
     ###                                  ###
     ### Old (Unported) Tests Demarkation ###
     ###                                  ###
-    @stdout_replaced
     def testTracebackPreservedAcrossSuspend(self):
-        self.fail('rewrite')
-        return
-
-        self.startWeightlessHttpServer()
-        backofficeport = PortNumberGenerator.next()
-        expectedrequest = ''
-        testserver(backofficeport, [], expectedrequest)
-        target = {'host': 'localhost', 'port': backofficeport, 'request': '/'}
-
-        exceptions = []
-        def failingserver(*args, **kwarg):
-            response = yield httprequest1_1(**target)
-        self.handler = failingserver
-
         def requestLine(self, *args, **kwargs):
             raise RuntimeError("Boom!")
+
+        def r1(sok, log, remoteAddress, connectionNr):
+            yield zleep(0.01)
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies(replies=[r1])
+            mss.listen()
+            try:
+                _, _ = yield httprequest1_1(host='localhost', port=mss.port, request='/')
+            except RuntimeError, e:
+                c, v, t = exc_info()
+                resultingTraceback = ''.join(format_exception(c, v, t))
+                print '>>>', repr(resultingTraceback)
+                self.assertEquals('Boom!', str(e))
+            finally:
+                mss.close()
+
+            #@@
+            self.fail('Hier verder (TB testing)')
+            expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+  File "/data/home/zp/zp-story-persistent-connections/deps.d/weightless-core/test/http/persistenthttprequesttest.py", line 960, in test
+    _, _ = yield httprequest1_1(host='localhost', port=mss.port, request='/')
+  File "../weightless/http/_persistenthttprequest.py", line 64, in httprequest1_1
+    result = s.getResult()
+  File "../weightless/http/_persistenthttprequest.py", line 101, in _do
+    yield _sendHttpHeaders(sok, method, request, headers, host)
+  File "../weightless/http/_persistenthttprequest.py", line 188, in _sendHttpHeaders
+    data = _requestLine(method, request)
+  File "/data/home/zp/zp-story-persistent-connections/deps.d/weightless-core/test/http/persistenthttprequesttest.py", line 949, in requestLine
+    raise RuntimeError("Boom!")
+RuntimeError: Boom!""" % fileDict)
+            # FIXME: re-enable traceback testing (below)!
+            print '>>>', resultingTraceback; sys.stdout.flush()
+            #self.assertEquals(expectedTraceback, ignoreLineNumbers(resultingTraceback))
 
         try:
             originalRequestLine = persistentHttpRequestModule._requestLine
             persistentHttpRequestModule._requestLine = requestLine
-
-            clientget('localhost', self.port, '/')
-            with stderr_replaced():
-                self._loopReactorUntilDone()
-
-            expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
-  File "%(__file__)s", line 0, in handle
-      yield self.handler(*args, **kwargs)
-  File "%(__file__)s", line 192, in failingserver
-    response = yield httprequest1_1(**target)
-  File "%(httprequest.py)s", line 129, in httprequest1_1
-    result = s.getResult()
-  File "%(httprequest.py)s", line 83, in _do
-    yield _sendHttpHeaders(sok, method, request, headers)
-  File "%(httprequest.py)s", line 121, in _sendHttpHeaders
-    data = _requestLine(method, request)
-  File "%(__file__)s", line 198, in requestLine
-    raise RuntimeError("Boom!")
-RuntimeError: Boom!""" % fileDict)
-            resultingTraceback = ''.join(format_exception(*self.error))
-            # FIXME: re-enable traceback testing (below)!
-            #self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(resultingTraceback))
-            self.assertTrue('RuntimeError: Boom!' in resultingTraceback, resultingTraceback)
-
+            asProcess(test())
         finally:
             persistentHttpRequestModule._requestLine = originalRequestLine
 
