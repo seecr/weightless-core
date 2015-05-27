@@ -408,11 +408,6 @@ class PersistentHttpRequestTest(WeightlessTestCase):
         self.fail()
 
     def testWithTimeout(self):
-        #def slowData():
-            #for i in xrange(5):
-            #    yield i
-            #    sleep(0.01)
-
         def r1(sok, log, remoteAddress, connectionNr):
             s = 'GET /path HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=s)
@@ -580,6 +575,27 @@ class PersistentHttpRequestTest(WeightlessTestCase):
             ], sorted(headers))
         self.assertEquals(body, post_request[0]['body'])
 
+    def testHttpsGet(self):
+        # Implementation-test:
+        get_request = []
+        port = PortNumberGenerator.next()
+        self.referenceHttpServer(port, get_request, ssl=True)
+
+        def test():
+            statusAndHeaders, body = yield httprequest1_1(
+                    host='localhost', port=port, request='/path',
+                    secure=True,
+            )
+            self.assertEquals('200', statusAndHeaders['StatusCode'])
+            self.assertEquals("GET RESPONSE", body)
+
+        asProcess(test())
+
+        self.assertEquals('GET', get_request[0]['command'])
+        self.assertEquals('/path', get_request[0]['path'])
+        headers = get_request[0]['headers'].headers
+        self.assertEquals(['Host: localhost\r\n'], headers)
+
     def testHttpsPost(self):
         # Implementation-test: Testing SSL/TLS with a "real" server.
         post_request = []
@@ -666,6 +682,35 @@ class PersistentHttpRequestTest(WeightlessTestCase):
             self.assertTrue("Message: Unsupported method ('MYMETHOD')" in body, body)
 
         asProcess(test())
+
+    def testReallyLargeHeaders(self):
+        # Implementation-test:
+        get_request = []
+        port = PortNumberGenerator.next()
+        self.referenceHttpServer(port, get_request)
+
+        headersOrig = {'Accept': 'text/plain'}
+        headersOrig.update([
+            ('X-Really-Largely-Large-%s' % i, 'aLargelyLargeValue')
+            for i in range(10000)
+        ])
+        def test():
+            statusAndHeaders, body = yield httprequest1_1(
+                host='localhost', port=port, request='/path',
+                headers=headersOrig,
+            )
+            self.assertEquals('200', statusAndHeaders['StatusCode'])
+            self.assertEquals("GET RESPONSE", body)
+
+        asProcess(test())
+
+        headers = get_request[0]['headers'].headers
+        headersAsDict = dict([tuple(h.strip().split(': ', 1)) for h in headers])
+        self.assertEquals(len(headersOrig), len(headersAsDict))
+        self.assertEquals(headersOrig, headersAsDict)
+
+        self.assertEquals('GET', get_request[0]['command'])
+        self.assertEquals('/path', get_request[0]['path'])
 
     ###                                  ###
     ### Old (Unported) Tests Demarkation ###
@@ -777,66 +822,6 @@ RuntimeError: Boom!""" % fileDict)
 
         finally:
             persistentHttpRequestModule._requestLine = originalRequestLine
-
-    def testHttpGetWithReallyLargeHeaders(self):
-        self.startWeightlessHttpServer()
-        get_request = []
-        port = PortNumberGenerator.next()
-        self.referenceHttpServer(port, get_request)
-
-        responses = []
-        headersOrig = {'Accept': 'text/plain'}
-        headersOrig.update([
-            ('X-Really-Largely-Large-%s' % i, 'aLargelyLargeValue')
-            for i in range(10000)
-        ])
-        def gethandler(*args, **kwargs):
-            response = 'no response yet'
-            try:
-                response = yield httprequest1_1(
-                    host='localhost', port=port, request='/path',
-                    headers=headersOrig,
-                )
-            finally:
-                responses.append(response)
-        self.handler = gethandler
-        clientget('localhost', self.port, '/')
-        self._loopReactorUntilDone()
-
-        headers = get_request[0]['headers'].headers
-        headersAsDict = dict([tuple(h.strip().split(': ', 1)) for h in headers])
-        self.assertEquals(len(headersOrig), len(headersAsDict))
-        self.assertEquals(headersOrig, headersAsDict)
-
-        self.assertTrue("GET RESPONSE" in responses[0], responses[0])
-        self.assertEquals('GET', get_request[0]['command'])
-        self.assertEquals('/path', get_request[0]['path'])
-
-    def testHttpsGet(self):
-        self.startWeightlessHttpServer()
-        get_request = []
-        port = PortNumberGenerator.next()
-        self.referenceHttpServer(port, get_request, ssl=True)
-
-        responses = []
-        def gethandler(*args, **kwargs):
-            response = yield httprequest1_1(
-                    host='localhost', port=port, request='/path',
-                    headers={'Content-Type': 'text/plain', 'Content-Length': 0},
-                    secure=True,
-            )
-            yield response
-            responses.append(response)
-        self.handler = gethandler
-        clientget('localhost', self.port, '/')
-
-        self._loopReactorUntilDone()
-
-        self.assertTrue("GET RESPONSE" in responses[0], responses[0])
-        self.assertEquals('GET', get_request[0]['command'])
-        self.assertEquals('/path', get_request[0]['path'])
-        headers = get_request[0]['headers'].headers
-        self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
 
     def testShutdownAndCloseOnce_OnlyOnce(self):
         sok = CallTrace()
@@ -1002,7 +987,7 @@ RuntimeError: Boom!""" % fileDict)
     def testMockSocketServerOneRequestExpectedAndCompleted(self):
         def r1(sok, log, remoteAddress, connectionNr):
             #data = yield read(forSeconds=0.1)
-            data = yield read(untilExpected='GET / HTTP/1.1\r\n\r\n')  # ??: host headers mandatory!
+            data = yield read(untilExpected='GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n')
             yield write(data='HTTP/1.1 200 Okidokie\r\nContent-Length: 0\r\n\r\n')
             sok.shutdown(SHUT_RDWR); sok.close()
             raise StopIteration(data)
@@ -1012,15 +997,26 @@ RuntimeError: Boom!""" % fileDict)
             mss.setReplies(replies=[r1])
             mss.listen()
             try:
-                response = yield httprequest1_1(method='GET', host='127.0.0.1', port=mss.port, request='/')
-                self.assertEquals('HTTP/1.1 200 Okidokie\r\nContent-Length: 0\r\n\r\n', response)
+                statusAndHeaders, body = yield httprequest1_1(method='GET', host='127.0.0.1', port=mss.port, request='/')
+                self.assertEquals({
+                        'HTTPVersion': '1.1',
+                        'Headers': {
+                            'Content-Length': '0'
+                        },
+                        'ReasonPhrase': 'Okidokie',
+                        'StatusCode': '200'
+                    },
+                    statusAndHeaders
+                )
+                self.assertEquals('', body)
                 self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals({1: ('GET / HTTP/1.1\r\n\r\n', [])}, mss.state.connections)
+                self.assertEquals({1: ('GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n', [])}, mss.state.connections)
             finally:
                 mss.close()
-            raise StopIteration(response)
+            raise StopIteration(42)
 
         result = asProcess(run())
+        self.assertEquals(42, result)
 
     ## Weightless HttpServer helpers ##
     def _dispatch(self, *args, **kwargs):
