@@ -34,9 +34,10 @@ from httpreadertest import server as testserver
 
 import sys
 from collections import namedtuple
+from errno import ECONNREFUSED
 from functools import wraps
 from re import sub
-from socket import socket, gaierror as SocketGaiError, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_NODELAY, SHUT_RDWR, SHUT_RD
+from socket import socket, error as SocketError, gaierror as SocketGaiError, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_NODELAY, SHUT_RDWR, SHUT_RD
 from struct import pack
 from sys import exc_info, version_info
 from time import sleep, time
@@ -403,6 +404,84 @@ class PersistentHttpRequestTest(WeightlessTestCase):
 
         asProcess(test())
 
+    def testConnectMethodExplicitlyForbidden(self):
+        self.fail()
+
+    def testWithTimeout(self):
+        #def slowData():
+            #for i in xrange(5):
+            #    yield i
+            #    sleep(0.01)
+
+        def r1(sok, log, remoteAddress, connectionNr):
+            s = 'GET /path HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=s)
+            self.assertEquals(s, data)
+
+            # Force close, focus on timout testing without pooling here.
+            yield write('HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\n')
+
+            for i in xrange(5):
+                yield zleep(0.01)
+                yield write(str(i))
+
+            sok.shutdown(SHUT_RDWR); sok.close()
+            raise StopIteration('finished')
+
+        def r2(sok, log, remoteAddress, connectionNr):
+            s = 'GET /path HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=s)
+            self.assertEquals(s, data)
+
+            yield write('HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\n')
+            log.append('headers')
+
+            try:
+                for i in xrange(5):
+                    yield zleep(0.01)
+                    yield write(str(i))
+                    log.append(i)
+            except SocketError, e:
+                self.assertEquals(32, e.args[0])  # Broken pipe
+
+            sok.close()  # shutdown would fail with errno: 107 / "Transport endpoint is not connected".
+            raise StopIteration('finished')
+
+        def test():
+            port = []
+            staticArgs = dict(method='GET', host='localhost', request='/path')
+            mss = MockSocketServer()
+            mss.setReplies(replies=[r1, r2])
+            mss.listen()
+            try:
+                # Not timing out
+                statusAndHeaders, body = yield httprequest1_1(
+                    timeout=0.5, port=mss.port,
+                    **staticArgs
+                )
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEquals('01234', body)
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals(('finished', []), mss.state.connections.get(1))
+
+                # Timing out
+                try:
+                    _, _ = yield httprequest1_1(
+                        timeout=0.015, port=mss.port,
+                        **staticArgs
+                    )
+                    self.fail()
+                except TimeoutException:
+                    pass
+                self.assertEquals(2, mss.nrOfRequests)
+                self.assertEquals((IN_PROGRESS, ['headers', 0]), mss.state.connections.get(2))
+                yield zleep(0.025)
+                self.assertEquals(('finished', ['headers', 0, 1]), mss.state.connections.get(2))
+            finally:
+                mss.close()
+
+        asProcess(test())
+
     def testHttpRequestWorksWhenDrivenByHttpServer(self):
         # Old name: testPassRequestThruToBackOfficeServer
         expectedrequest = "GET /path?arg=1&arg=2 HTTP/1.1\r\n\r\n"
@@ -528,6 +607,65 @@ class PersistentHttpRequestTest(WeightlessTestCase):
             ], sorted(headers))
         self.assertEquals(body, post_request[0]['body'])
 
+    def testHttpsPostOnIncorrectPort(self):
+        @dieAfter(seconds=5.0)
+        def test():
+            try:
+                _, _ = yield httprequest1_1(
+                    method='POST', host='localhost', port=PortNumberGenerator.next(), request='/path', body="body",
+                    headers={'Content-Type': 'text/plain'}, secure=True,
+                )
+                self.fail()
+            except IOError, e:
+                self.assertEquals(ECONNREFUSED, e.args[0])  # errno: 111.
+
+        asProcess(test())
+
+    def testHttpGet(self):
+        # Implementation-test
+        get_request = []
+        port = PortNumberGenerator.next()
+        self.referenceHttpServer(port, get_request)
+
+        def test():
+            statusAndHeaders, body = yield httprequest1_1(
+                host='localhost', port=port, request='/path',
+                headers={
+                    'Content-Type': 'text/plain',
+                    'Content-Length': 0
+                },
+                prio=4
+            )
+            self.assertEquals('200', statusAndHeaders['StatusCode'])
+            self.assertEquals("GET RESPONSE", body)
+
+        asProcess(test())
+
+        self.assertEquals('GET', get_request[0]['command'])
+        self.assertEquals('/path', get_request[0]['path'])
+        headers = get_request[0]['headers'].headers
+        self.assertEquals(sorted([
+                'Content-Length: 0\r\n',
+                'Content-Type: text/plain\r\n',
+                'Host: localhost\r\n',
+            ]),
+            sorted(headers)
+        )
+
+    def testHttpWithUnsupportedMethod(self):
+        # Implementation-test:
+        get_request = []
+        port = PortNumberGenerator.next()
+        self.referenceHttpServer(port, get_request)
+
+        def test():
+            statusAndHeaders, body = yield httprequest1_1(
+                method='MYMETHOD', host='localhost', port=port, request='/path',
+            )
+            self.assertEquals('501', statusAndHeaders['StatusCode'])  # "Not Implemented"
+            self.assertTrue("Message: Unsupported method ('MYMETHOD')" in body, body)
+
+        asProcess(test())
 
     ###                                  ###
     ### Old (Unported) Tests Demarkation ###
@@ -639,124 +777,6 @@ RuntimeError: Boom!""" % fileDict)
 
         finally:
             persistentHttpRequestModule._requestLine = originalRequestLine
-
-    @stderr_replaced
-    def testHttpsPostOnIncorrectPort(self):
-        self.startWeightlessHttpServer()
-        responses = []
-        def posthandler(*args, **kwargs):
-            response = yield httprequest1_1(
-                method='POST', host='localhost', port=PortNumberGenerator.next(), request='/path', body="body",
-                headers={'Content-Type': 'text/plain'}, secure=True,
-            )
-            yield response
-            responses.append(response)
-        self.handler = posthandler
-        clientget('localhost', self.port, '/')
-        self._loopReactorUntilDone()
-
-        self.assertTrue(self.error[0] is IOError)
-        self.assertEquals("111", str(self.error[1]))
-
-    def testHttpGet(self):
-        self.startWeightlessHttpServer()
-        get_request = []
-        port = PortNumberGenerator.next()
-        self.referenceHttpServer(port, get_request)
-
-        responses = []
-        def gethandler(*args, **kwargs):
-            response = 'no response yet'
-            try:
-                response = yield httprequest1_1(
-                    host='localhost', port=port, request='/path',
-                        headers={'Content-Type': 'text/plain', 'Content-Length': 0},
-                        prio=4
-                )
-            finally:
-                responses.append(response)
-        self.handler = gethandler
-        clientget('localhost', self.port, '/')
-        self._loopReactorUntilDone()
-
-        self.assertTrue("GET RESPONSE" in responses[0], responses[0])
-        self.assertEquals('GET', get_request[0]['command'])
-        self.assertEquals('/path', get_request[0]['path'])
-        headers = get_request[0]['headers'].headers
-        self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
-
-    def testHttpWithUnsupportedMethod(self):
-        self.startWeightlessHttpServer()
-        get_request = []
-        port = PortNumberGenerator.next()
-        self.referenceHttpServer(port, get_request)
-
-        responses = []
-        def gethandler(*args, **kwargs):
-            response = 'no response yet'
-            try:
-                response = yield httprequest1_1(
-                    method='MYMETHOD', host='localhost', port=port, request='/path',
-                    headers={'Content-Type': 'text/plain', 'Content-Length': 0},
-                    prio=4
-                )
-            finally:
-                responses.append(response)
-        self.handler = gethandler
-        clientget('localhost', self.port, '/')
-        self._loopReactorUntilDone()
-
-        self.assertTrue("Message: Unsupported method ('MYMETHOD')" in responses[0], responses[0])
-
-    # FIXME: gives referenceHttpServer printed stacktraces (another thread) - mostly only when running with "--c"!
-    def testHttpRequestWithTimeout(self):
-        # And thus too http(s)get/post/... and friends.
-        self.startWeightlessHttpServer()
-        get_request = []
-        port = PortNumberGenerator.next()
-        def slowData():
-            for i in xrange(5):
-                yield i
-                sleep(0.01)
-
-        responses = []
-        def handlerFactory(timeout):
-            def gethandler(*args, **kwargs):
-                try:
-                    response = yield httprequest1_1(
-                        method='GET', host='localhost', port=port, request='/path',
-                        headers={'Content-Type': 'text/plain', 'Content-Length': 0, 'Host': 'localhost'},
-                        timeout=timeout,
-                    )
-                    responses.append(response)
-                except TimeoutException, e:
-                    responses.append(e)
-                finally:
-                    assert responses, 'Either a timeout or response should have occurred.'
-            return gethandler
-
-        # Not timing out
-        self.referenceHttpServer(port=port, request=get_request, streamingData=slowData())
-        self.handler = handlerFactory(timeout=0.5)
-        clientget('localhost', self.port, '/')
-        self._loopReactorUntilDone()
-        self.assertTrue(len(responses) >= 1)
-        responseText = ''.join(responses)
-        self.assertTrue(responseText.startswith('HTTP/1.0 200 OK'), responseText)
-        self.assertTrue('01234' in responseText, responseText)
-        self.assertEquals(1, len(get_request))
-
-        # Timing out
-        del get_request[:]
-        del responses[:]
-        port = PortNumberGenerator.next()
-        self.referenceHttpServer(port=port, request=get_request, streamingData=slowData())
-        self.handler = handlerFactory(timeout=0.02)
-        clientget('localhost', self.port, '/')
-        self._loopReactorUntilDone()
-        self.assertEquals([TimeoutException], [type(r) for r in responses])
-        self.assertEquals(1, len(get_request))
-        self.assertEquals('GET', get_request[0]['command'])
 
     def testHttpGetWithReallyLargeHeaders(self):
         self.startWeightlessHttpServer()
