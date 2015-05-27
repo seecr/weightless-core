@@ -94,7 +94,7 @@ class PersistentHttpRequestTest(WeightlessTestCase):
         WeightlessTestCase.tearDown(self)
 
     def testHttpRequestBasics(self):
-        expectedrequest = "GET /path?arg=1&arg=2 HTTP/1.1\r\n\r\n"
+        expectedrequest = "GET /path?arg=1&arg=2 HTTP/1.1\r\nHost: localhost\r\n\r\n"
 
         def r1(sok, log, remoteAddress, connectionNr):
             # Request
@@ -224,7 +224,7 @@ class PersistentHttpRequestTest(WeightlessTestCase):
         def r1(sok, log, remoteAddress, connectionNr):
             log.append(remoteAddress)
             # Request
-            toRead = 'GET /first HTTP/1.1\r\n\r\n'
+            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEquals(toRead, data)
 
@@ -243,7 +243,7 @@ class PersistentHttpRequestTest(WeightlessTestCase):
             yield zleep(seconds=0.05)
 
             # Request
-            toRead = 'GET /second HTTP/1.1\r\n\r\n'
+            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEquals(toRead, data)
 
@@ -310,7 +310,7 @@ class PersistentHttpRequestTest(WeightlessTestCase):
         # {http: 1.1, EOR: chunking, explicit-close: False, comms: ok}
         def r1(sok, log, remoteAddress, connectionNr):
             # Request 1
-            toRead = 'GET /first HTTP/1.1\r\n\r\n'
+            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEquals(toRead, data)
 
@@ -325,7 +325,7 @@ class PersistentHttpRequestTest(WeightlessTestCase):
             log.append('Response1Done')
 
             # Request 2
-            toRead = 'GET /second HTTP/1.1\r\n\r\n'
+            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEquals(toRead, data)
 
@@ -334,7 +334,7 @@ class PersistentHttpRequestTest(WeightlessTestCase):
             log.append('Response2Done')
 
             # Request 3
-            toRead = 'GET /third HTTP/1.1\r\n\r\n'
+            toRead = 'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEquals(toRead, data)
 
@@ -479,7 +479,7 @@ class PersistentHttpRequestTest(WeightlessTestCase):
 
     def testHttpRequestWorksWhenDrivenByHttpServer(self):
         # Old name: testPassRequestThruToBackOfficeServer
-        expectedrequest = "GET /path?arg=1&arg=2 HTTP/1.1\r\n\r\n"
+        expectedrequest = "GET /path?arg=1&arg=2 HTTP/1.1\r\nHost: localhost\r\n\r\n"
 
         def r1(sok, log, remoteAddress, connectionNr):
             # Request
@@ -712,117 +712,8 @@ class PersistentHttpRequestTest(WeightlessTestCase):
         self.assertEquals('GET', get_request[0]['command'])
         self.assertEquals('/path', get_request[0]['path'])
 
-    ###                                  ###
-    ### Old (Unported) Tests Demarkation ###
-    ###                                  ###
-    @stderr_replaced
-    def testConnectFails(self):
-        self.startWeightlessHttpServer()
-        def failingserver(*args, **kwarg):
-            response = yield httprequest1_1(**target)
-
-        self.handler = failingserver
-
-        clientget('localhost', self.port, '/')
-        target = {'host': 'localhost', 'port': 'port', 'request': '/'} # non-numeric port
-        self._loopReactorUntilDone()
-
-        expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
-  File "%(__file__)s", line 0, in handle
-      yield self.handler(*args, **kwargs)
-  File "%(__file__)s", line 85, in failingserver
-    response = yield httprequest1_1(**target)
-  File "%(httprequest.py)s", line 78, in httprequest1_1
-    result = s.getResult()
-  File "%(suspend.py)s", line 34, in __call__
-    self._doNext(self)
-  File "%(httprequest.py)s", line 35, in _do
-    sok.connect((host, port))
-  File "<string>", line 1, in connect
-TypeError: an integer is required
-       """ % fileDict)
-        if PYVERSION == "2.7":
-            expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
-  File "%(__file__)s", line 0, in handle
-      yield self.handler(*args, **kwargs)
-  File "%(__file__)s", line 85, in failingserver
-    response = yield httprequest1_1(**target)
-  File "%(httprequest.py)s", line 78, in httprequest1_1
-    result = s.getResult()
-  File "%(suspend.py)s", line 34, in __call__
-    self._doNext(self)
-  File "%(httprequest.py)s", line 35, in _do
-    sok.connect((host, port))
-  File "/usr/lib/python2.7/socket.py", line [#], in meth
-    return getattr(self._sock,name)(*args)
-TypeError: an integer is required
-       """ % fileDict)
-        self.assertEquals(TypeError, self.error[0])
-        # FIXME: re-enable traceback testing (below)!
-        #self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(''.join(format_exception(*self.error))))
-
-        target = {'host': 'localhost', 'port': 87, 'request': '/'}  # invalid port
-        clientget('localhost', self.port, '/')
-        self._loopReactorUntilDone()
-        self.assertEquals(IOError, self.error[0])
-
-        target = {'host': 'UEYR^$*FD(#>NDJ.khfd9.(*njnd', 'port': 9876, 'request': '/'}  # invalid host
-        clientget('localhost', self.port, '/')
-        self._loopReactorUntilDone()
-        self.assertEquals(SocketGaiError, self.error[0])
-
-        target = {'host': '127.0.0.1', 'port': PortNumberGenerator.next(), 'request': '/'}  # No-one listens
-        clientget('localhost', self.port, '/')
-        self._loopReactorUntilDone()
-        self.assertEquals(IOError, self.error[0])
-        self.assertEquals('111', str(self.error[1]))
-
-    @stdout_replaced
-    def testTracebackPreservedAcrossSuspend(self):
-        self.startWeightlessHttpServer()
-        backofficeport = PortNumberGenerator.next()
-        expectedrequest = ''
-        testserver(backofficeport, [], expectedrequest)
-        target = {'host': 'localhost', 'port': backofficeport, 'request': '/'}
-
-        exceptions = []
-        def failingserver(*args, **kwarg):
-            response = yield httprequest1_1(**target)
-        self.handler = failingserver
-
-        def requestLine(self, *args, **kwargs):
-            raise RuntimeError("Boom!")
-
-        try:
-            originalRequestLine = persistentHttpRequestModule._requestLine
-            persistentHttpRequestModule._requestLine = requestLine
-
-            clientget('localhost', self.port, '/')
-            with stderr_replaced():
-                self._loopReactorUntilDone()
-
-            expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
-  File "%(__file__)s", line 0, in handle
-      yield self.handler(*args, **kwargs)
-  File "%(__file__)s", line 192, in failingserver
-    response = yield httprequest1_1(**target)
-  File "%(httprequest.py)s", line 129, in httprequest1_1
-    result = s.getResult()
-  File "%(httprequest.py)s", line 83, in _do
-    yield _sendHttpHeaders(sok, method, request, headers)
-  File "%(httprequest.py)s", line 121, in _sendHttpHeaders
-    data = _requestLine(method, request)
-  File "%(__file__)s", line 198, in requestLine
-    raise RuntimeError("Boom!")
-RuntimeError: Boom!""" % fileDict)
-            resultingTraceback = ''.join(format_exception(*self.error))
-            # FIXME: re-enable traceback testing (below)!
-            #self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(resultingTraceback))
-            self.assertTrue('RuntimeError: Boom!' in resultingTraceback, resultingTraceback)
-
-        finally:
-            persistentHttpRequestModule._requestLine = originalRequestLine
-
+    #
+    # Internals
     def testShutdownAndCloseOnce_OnlyOnce(self):
         sok = CallTrace()
         cb = _shutAndCloseOnce(sok)
@@ -1018,24 +909,123 @@ RuntimeError: Boom!""" % fileDict)
         result = asProcess(run())
         self.assertEquals(42, result)
 
-    ## Weightless HttpServer helpers ##
-    def _dispatch(self, *args, **kwargs):
-        def handle():
-            try:
-                yield self.handler(*args, **kwargs)
-            except Exception:
-                self.error = exc_info()
-                raise
-            finally:
-                self.done = True
-        return compose(handle())
+    ###                                  ###
+    ### Old (Unported) Tests Demarkation ###
+    ###                                  ###
+    @stderr_replaced
+    def testConnectFails(self):
+        self.fail('rewrite')
+        return
 
-    def _loopReactorUntilDone(self):
-        self.done = False
-        self.error = None
-        with self.loopingReactor():
-            while not self.done:
-                sleep(0.01)
+        self.startWeightlessHttpServer()
+        def failingserver(*args, **kwarg):
+            response = yield httprequest1_1(**target)
+
+        self.handler = failingserver
+
+        clientget('localhost', self.port, '/')
+        target = {'host': 'localhost', 'port': 'port', 'request': '/'} # non-numeric port
+        self._loopReactorUntilDone()
+
+        expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+  File "%(__file__)s", line 0, in handle
+      yield self.handler(*args, **kwargs)
+  File "%(__file__)s", line 85, in failingserver
+    response = yield httprequest1_1(**target)
+  File "%(httprequest.py)s", line 78, in httprequest1_1
+    result = s.getResult()
+  File "%(suspend.py)s", line 34, in __call__
+    self._doNext(self)
+  File "%(httprequest.py)s", line 35, in _do
+    sok.connect((host, port))
+  File "<string>", line 1, in connect
+TypeError: an integer is required
+       """ % fileDict)
+        if PYVERSION == "2.7":
+            expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+  File "%(__file__)s", line 0, in handle
+      yield self.handler(*args, **kwargs)
+  File "%(__file__)s", line 85, in failingserver
+    response = yield httprequest1_1(**target)
+  File "%(httprequest.py)s", line 78, in httprequest1_1
+    result = s.getResult()
+  File "%(suspend.py)s", line 34, in __call__
+    self._doNext(self)
+  File "%(httprequest.py)s", line 35, in _do
+    sok.connect((host, port))
+  File "/usr/lib/python2.7/socket.py", line [#], in meth
+    return getattr(self._sock,name)(*args)
+TypeError: an integer is required
+       """ % fileDict)
+        self.assertEquals(TypeError, self.error[0])
+        # FIXME: re-enable traceback testing (below)!
+        #self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(''.join(format_exception(*self.error))))
+
+        target = {'host': 'localhost', 'port': 87, 'request': '/'}  # invalid port
+        clientget('localhost', self.port, '/')
+        self._loopReactorUntilDone()
+        self.assertEquals(IOError, self.error[0])
+
+        target = {'host': 'UEYR^$*FD(#>NDJ.khfd9.(*njnd', 'port': 9876, 'request': '/'}  # invalid host
+        clientget('localhost', self.port, '/')
+        self._loopReactorUntilDone()
+        self.assertEquals(SocketGaiError, self.error[0])
+
+        target = {'host': '127.0.0.1', 'port': PortNumberGenerator.next(), 'request': '/'}  # No-one listens
+        clientget('localhost', self.port, '/')
+        self._loopReactorUntilDone()
+        self.assertEquals(IOError, self.error[0])
+        self.assertEquals('111', str(self.error[1]))
+
+    @stdout_replaced
+    def testTracebackPreservedAcrossSuspend(self):
+        self.fail('rewrite')
+        return
+
+        self.startWeightlessHttpServer()
+        backofficeport = PortNumberGenerator.next()
+        expectedrequest = ''
+        testserver(backofficeport, [], expectedrequest)
+        target = {'host': 'localhost', 'port': backofficeport, 'request': '/'}
+
+        exceptions = []
+        def failingserver(*args, **kwarg):
+            response = yield httprequest1_1(**target)
+        self.handler = failingserver
+
+        def requestLine(self, *args, **kwargs):
+            raise RuntimeError("Boom!")
+
+        try:
+            originalRequestLine = persistentHttpRequestModule._requestLine
+            persistentHttpRequestModule._requestLine = requestLine
+
+            clientget('localhost', self.port, '/')
+            with stderr_replaced():
+                self._loopReactorUntilDone()
+
+            expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+  File "%(__file__)s", line 0, in handle
+      yield self.handler(*args, **kwargs)
+  File "%(__file__)s", line 192, in failingserver
+    response = yield httprequest1_1(**target)
+  File "%(httprequest.py)s", line 129, in httprequest1_1
+    result = s.getResult()
+  File "%(httprequest.py)s", line 83, in _do
+    yield _sendHttpHeaders(sok, method, request, headers)
+  File "%(httprequest.py)s", line 121, in _sendHttpHeaders
+    data = _requestLine(method, request)
+  File "%(__file__)s", line 198, in requestLine
+    raise RuntimeError("Boom!")
+RuntimeError: Boom!""" % fileDict)
+            resultingTraceback = ''.join(format_exception(*self.error))
+            # FIXME: re-enable traceback testing (below)!
+            #self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(resultingTraceback))
+            self.assertTrue('RuntimeError: Boom!' in resultingTraceback, resultingTraceback)
+
+        finally:
+            persistentHttpRequestModule._requestLine = originalRequestLine
+
 
 class MockSocketServer(object):
     """
