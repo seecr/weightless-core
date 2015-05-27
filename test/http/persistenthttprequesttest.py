@@ -637,6 +637,38 @@ class PersistentHttpRequestTest(WeightlessTestCase):
 
         asProcess(test())
 
+    def testConnectFails(self):
+        def test():
+            # Non-numeric port
+            try:
+                _, _ = yield httprequest1_1(host='localhost', port='PORT', request='/')
+                self.fail()
+            except TypeError, e:
+                self.assertEquals('an integer is required', str(e))
+            
+            #"Invalid" port (no-one listens)
+            try:
+                _, _ = yield httprequest1_1(host='localhost', port=87, request='/')  # 87 -> IANA: mfcobol (Micro Focus Cobol) "any private terminal link".
+                self.fail()
+            except IOError, e:
+                self.assertEquals(ECONNREFUSED, e.args[0])  # errno: 111.
+
+            # Invalid host
+            try:
+                _, _ = yield httprequest1_1(host='UEYR^$*FD(#>NDJ.khfd9.(*njnd', port=PortNumberGenerator.next(), request='/')
+                self.fail()
+            except SocketGaiError, e:
+                self.assertEquals(-2, e.args[0])
+                self.assertTrue('Name or service not known' in str(e), str(e))
+            # No-one listens
+            try:
+                _, _ = yield httprequest1_1(host='127.0.0.1', port=PortNumberGenerator.next(), request='/')
+                self.fail()
+            except IOError, e:
+                self.assertEquals(ECONNREFUSED, e.args[0])  # errno: 111.
+
+        asProcess(test())
+
     def testHttpGet(self):
         # Implementation-test
         get_request = []
@@ -912,71 +944,6 @@ class PersistentHttpRequestTest(WeightlessTestCase):
     ###                                  ###
     ### Old (Unported) Tests Demarkation ###
     ###                                  ###
-    @stderr_replaced
-    def testConnectFails(self):
-        self.fail('rewrite')
-        return
-
-        self.startWeightlessHttpServer()
-        def failingserver(*args, **kwarg):
-            response = yield httprequest1_1(**target)
-
-        self.handler = failingserver
-
-        clientget('localhost', self.port, '/')
-        target = {'host': 'localhost', 'port': 'port', 'request': '/'} # non-numeric port
-        self._loopReactorUntilDone()
-
-        expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
-  File "%(__file__)s", line 0, in handle
-      yield self.handler(*args, **kwargs)
-  File "%(__file__)s", line 85, in failingserver
-    response = yield httprequest1_1(**target)
-  File "%(httprequest.py)s", line 78, in httprequest1_1
-    result = s.getResult()
-  File "%(suspend.py)s", line 34, in __call__
-    self._doNext(self)
-  File "%(httprequest.py)s", line 35, in _do
-    sok.connect((host, port))
-  File "<string>", line 1, in connect
-TypeError: an integer is required
-       """ % fileDict)
-        if PYVERSION == "2.7":
-            expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
-  File "%(__file__)s", line 0, in handle
-      yield self.handler(*args, **kwargs)
-  File "%(__file__)s", line 85, in failingserver
-    response = yield httprequest1_1(**target)
-  File "%(httprequest.py)s", line 78, in httprequest1_1
-    result = s.getResult()
-  File "%(suspend.py)s", line 34, in __call__
-    self._doNext(self)
-  File "%(httprequest.py)s", line 35, in _do
-    sok.connect((host, port))
-  File "/usr/lib/python2.7/socket.py", line [#], in meth
-    return getattr(self._sock,name)(*args)
-TypeError: an integer is required
-       """ % fileDict)
-        self.assertEquals(TypeError, self.error[0])
-        # FIXME: re-enable traceback testing (below)!
-        #self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(''.join(format_exception(*self.error))))
-
-        target = {'host': 'localhost', 'port': 87, 'request': '/'}  # invalid port
-        clientget('localhost', self.port, '/')
-        self._loopReactorUntilDone()
-        self.assertEquals(IOError, self.error[0])
-
-        target = {'host': 'UEYR^$*FD(#>NDJ.khfd9.(*njnd', 'port': 9876, 'request': '/'}  # invalid host
-        clientget('localhost', self.port, '/')
-        self._loopReactorUntilDone()
-        self.assertEquals(SocketGaiError, self.error[0])
-
-        target = {'host': '127.0.0.1', 'port': PortNumberGenerator.next(), 'request': '/'}  # No-one listens
-        clientget('localhost', self.port, '/')
-        self._loopReactorUntilDone()
-        self.assertEquals(IOError, self.error[0])
-        self.assertEquals('111', str(self.error[1]))
-
     @stdout_replaced
     def testTracebackPreservedAcrossSuspend(self):
         self.fail('rewrite')
