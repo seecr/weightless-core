@@ -123,6 +123,288 @@ class PersistentHttpRequestTest(WeightlessTestCase):
 
         asProcess(test())
 
+    def testHttp10BodyDisallowed(self):
+        def r1(sok, log, remoteAddress, connectionNr):
+            toRead = 'HEAD /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write('HTTP/1.0 200 OK\r\n\r\n<BODY>')
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r2(sok, log, remoteAddress, connectionNr):
+            toRead = 'HEAD /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write('HTTP/1.0 200 OK\r\n\r\n')
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies([r1, r2])
+            mss.listen()
+            try:
+                try:
+                    _, _ = yield httprequest1_1(method='HEAD', host='localhost', port=mss.port, request='/first')
+                    self.fail()
+                except ValueError, e:
+                    self.assertEquals('Body not empty.', str(e))
+                statusAndHeaders, body = yield httprequest1_1(method='HEAD', host='localhost', port=mss.port, request='/second')
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEquals('', body)
+                self.assertEquals(2, mss.nrOfRequests)
+                self.assertEquals({1: (None, []), 2: (None, [])}, mss.state.connections)
+            finally:
+                mss.close()
+
+        asProcess(test())
+
+    def testHttp11BodyDisallowed(self):
+        def r1(sok, log, remoteAddress, connectionNr):
+            toRead = 'POST /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write('HTTP/1.0 204 No Content\r\n\r\n<BODY>')
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r2(sok, log, remoteAddress, connectionNr):
+            # Should be a "conditional get request"; but we don't care (yet).
+            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write('HTTP/1.0 304 Not Modified\r\n\r\n<BODY>')
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r3(sok, log, remoteAddress, connectionNr):
+            # Should be a "conditional get request"; but we don't care (yet).
+            toRead = 'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write('HTTP/1.0 304 Not Modified\r\n\r\n')
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies([r1, r2, r3])
+            mss.listen()
+            try:
+                try:
+                    _, _ = yield httprequest1_1(method='POST', host='localhost', port=mss.port, request='/first')
+                    self.fail()
+                except ValueError, e:
+                    self.assertEquals('Body not empty.', str(e))
+                try:
+                    _, _ = yield httprequest1_1(method='GET', host='localhost', port=mss.port, request='/second')
+                    self.fail()
+                except ValueError, e:
+                    self.assertEquals('Body not empty.', str(e))
+                statusAndHeaders, body = yield httprequest1_1(method='GET', host='localhost', port=mss.port, request='/third')
+                self.assertEquals('304', statusAndHeaders['StatusCode'])
+                self.assertEquals({1: (None, []), 2: (None, []), 3: (None, [])}, mss.state.connections)
+            finally:
+                mss.close()
+
+        asProcess(test())
+
+    def testHttp11OneHundredResponseDisallowed(self):
+        def r1(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET / HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write('HTTP/1.1 101 Switching Protocols\r\n\r\n')
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies([r1])
+            mss.listen()
+            try:
+                try:
+                    _, _ = yield httprequest1_1(host='localhost', port=mss.port, request='/')
+                    self.fail()
+                except ValueError, e:
+                    self.assertEquals('1XX status code recieved.', str(e))
+                self.assertEquals({1: (None, [])}, mss.state.connections)
+            finally:
+                mss.close()
+
+        asProcess(test())
+
+    def testHttp10CloseDelimitedBody(self):
+        def r1(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.0 200 Okee-Dan\r\n\r\n")
+            yield write("Hi!")
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies([r1])
+            mss.listen()
+            try:
+                statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/first')
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEquals('Hi!', body)
+                self.assertEquals({1: (None, [])}, mss.state.connections)
+            finally:
+                mss.close()
+
+        asProcess(test())
+
+    def testHttp10ContentLengthDelimitedBody(self):
+        def r1(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.0 200 Yes\r\nContent-Length: 4\r\n\r\n")
+            yield write("1234<TOO-LONG>")
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r2(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.0 200 Yes\r\nContent-Length: 4\r\n\r\n")
+            yield write("A")  # Too short.
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r3(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.0 200 Yes\r\nContent-Length: 4\r\n\r\n")
+            yield write("ABCD")
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies([r1, r2, r3])
+            mss.listen()
+            try:
+                try:
+                    statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/first')
+                    self.fail()
+                except ValueError, e:
+                    self.assertEquals('Excess bytes (> Content-Length) read.', str(e))
+
+                try:
+                    statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/second')
+                    self.fail()
+                except ValueError, e:
+                    self.assertEquals('Premature close', str(e))
+
+                statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/third')
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEquals('ABCD', body)
+                self.assertEquals({1: (None, []), 2: (None, []), 3: (None, [])}, mss.state.connections)
+            finally:
+                mss.close()
+
+        asProcess(test())
+
+    def testHttp11ContentLengthDelimited(self):
+        # Bad Things Happen, not persisted - simple OK variants too.
+        def r1(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write('HTTP/1.1 200 ok\r\nContent-Length: 4\r\n')
+            yield zleep(0.001)
+            yield write('\r\n12')
+            yield zleep(0.001)
+            yield write('34<TOO-LONG>')
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r2(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write('HTTP/1.1 200 ok\r\nContent-Length: 4\r\n\r\n')
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r3(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write('HTTP/1.1 200 ok\r\nContent-Length: 4\r\n\r\n123')
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r4(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /fourth HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            for c in 'HTTP/1.1 200 ok\r\nContent-Length: 4\r\nConnection: close\r\n\r\n1234':
+                yield write(c)
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r5(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /fifth HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            for c in 'HTTP/1.1 200 ok\r\nContent-Length: 4\r\n\r\n1234':
+                yield write(c)
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies([r1, r2, r3, r4, r5])
+            mss.listen()
+            top = be((Observable(),
+                (HttpRequest1_1(),
+                    (SocketPool(reactor=reactor()),),
+                )
+            ))
+            try:
+                try:
+                    _, _ = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first')
+                    self.fail()
+                except ValueError, e:
+                    self.assertEquals('Excess bytes (> Content-Length) read.', str(e))
+
+                try:
+                    _, _ = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/second')
+                    self.fail()
+                except ValueError, e:
+                    self.assertEquals('Premature close', str(e))
+
+                try:
+                    _, _ = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/third')
+                    self.fail()
+                except ValueError, e:
+                    self.assertEquals('Premature close', str(e))
+
+                statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/fourth')
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEquals('1234', body)
+
+                statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/fifth')
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEquals('1234', body)
+
+                yield zleep(0.001)
+                self.assertEquals(5, mss.nrOfRequests)
+                self.assertEquals([None] * 5, [c.value for c in mss.state.connections.values()])
+            finally:
+                mss.close()
+
+        asProcess(test())
+
     def testHttp11ContentLengthDelimitedReusedOnce(self):
         # Happy-Path, least complex, still persisted - /w 100 Continue
         # {http: 1.1, EOR: content-length, explicit-close: False, comms: ok}
@@ -163,8 +445,6 @@ class PersistentHttpRequestTest(WeightlessTestCase):
 
         @dieAfter(seconds=5.0)
         def test():
-            if False:
-                yield
             mss = MockSocketServer()
             mss.setReplies([r1])
             mss.listen()
@@ -205,6 +485,115 @@ class PersistentHttpRequestTest(WeightlessTestCase):
                 yield zleep(0.06)
                 self.assertEquals(1, mss.nrOfRequests)
                 self.assertEquals('Finished', mss.state.connections.get(1).value)
+            finally:
+                mss.close()
+
+        asProcess(test())
+
+    def testHttp11ChunkingDelimitedBody(self):
+        # Bad Things Happen, not persisted - simple OK variants too.
+        def r1(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n")
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r2(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r")
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r3(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nBAD_DATA")
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r4(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /fourth HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nRUBBISCH")
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r5(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /fifth HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n\r\n0\r\nNOT_A_TRAILER\r\n\r")
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r6(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /sixth HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n0\r\n\r\n")
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r7(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /seventh HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n3\r\nABC\r\n0\r\nTr: Ailer\r\n\r\n")
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies([r1, r2, r3, r4, r5, r6, r7])
+            mss.listen()
+            try:
+                try:
+                    _, _ = yield httprequest1_1(host='localhost', port=mss.port, request='/first')
+                    self.fail()
+                except ValueError, e:
+                    self.assertEquals('Premature close', str(e))
+
+                try:
+                    _, _ = yield httprequest1_1(host='localhost', port=mss.port, request='/second')
+                    self.fail()
+                except ValueError, e:
+                    self.assertEquals('Premature close', str(e))
+
+                try:
+                    _, _ = yield httprequest1_1(host='localhost', port=mss.port, request='/third')
+                    self.fail()
+                except ValueError, e:
+                    self.assertEquals('Data after last chunk', str(e))
+
+                try:
+                    _, _ = yield httprequest1_1(host='localhost', port=mss.port, request='/fourth')
+                    self.fail()
+                except ValueError, e:
+                    self.assertEquals('Premature close', str(e))
+
+                try:
+                    _, _ = yield httprequest1_1(host='localhost', port=mss.port, request='/fifth')
+                    self.fail()
+                except ValueError, e:
+                    self.assertEquals('Premature close', str(e))
+
+                statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/sixth')
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEquals('', body)
+
+                statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/seventh')
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEquals('ABC', body)
+
+                yield zleep(0.001)
+                self.assertEquals(7, mss.nrOfRequests)
+                self.assertEquals([None] * 7, [c.value for c in mss.state.connections.values()])
             finally:
                 mss.close()
 
@@ -304,6 +693,30 @@ class PersistentHttpRequestTest(WeightlessTestCase):
                 yield zleep(0.015)
                 self.assertEquals(1, mss.nrOfRequests)
                 self.assertEquals('Finished', mss.state.connections.get(1).value)
+            finally:
+                mss.close()
+
+        asProcess(test())
+
+    def testHttp11CloseDelimitedBody(self):
+        def r1(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.1 200 Okee-Dan\r\n\r\n")
+            yield write("Hi!")
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies([r1])
+            mss.listen()
+            try:
+                statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/first')
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEquals('Hi!', body)
+                self.assertEquals({1: (None, [])}, mss.state.connections)
             finally:
                 mss.close()
 

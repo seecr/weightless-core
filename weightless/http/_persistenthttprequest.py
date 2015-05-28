@@ -185,7 +185,6 @@ def _sslHandshake(sok, this, suspend, prio):
     raise StopIteration(sok)
 
 def _sendHttpHeaders(sok, method, request, headers, host):
-    # TODO: add Host header iff not given
     data = _requestLine(method, request)
     if 'host' not in [k.lower() for k in headers.keys()]:
         headers['Host'] = host
@@ -238,11 +237,8 @@ def _bodyDisallowed(method, statusCode):
     #   - 1XX:
     #       * 100 (continue) already handled.
     #       * 101 (switching protocols) not supported - just don't send the "Upgrade" request header.
-    #
-    # Methods unsupported:
-    #  - CONNECT (tunneling / proxy-stuff).
-    if method == 'CONNECT' or statusCode.startswith('1'):
-        raise ValueError('CONNECT method or 1XX status code recieved.')
+    if statusCode.startswith('1'):
+        raise ValueError('1XX status code recieved.')
     return method == 'HEAD' or statusCode in ['204', '304']
 
 def _determineDoCloseFromConnection(headers):
@@ -310,6 +306,8 @@ def _readContentLengthDelimitedBody(sok, rest, contentLength):
             raise ValueError('Premature close')
         responses += response
         bytesToRead -= len(response)
+        if bytesToRead < 0:
+            raise ValueError('Excess bytes (> Content-Length) read.')
     raise StopIteration(responses)
 
 def _readChunkedDelimitedBody(sok, rest):
@@ -400,6 +398,7 @@ def _readAssertNoBody(sok, rest):
     if rest:
         raise ValueError('Body not empty.')
     raise StopIteration('')
+    yield
 
 def _asyncSend(sok, data):
     while data != "":
