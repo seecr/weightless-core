@@ -79,20 +79,8 @@ PYVERSION = '%s.%s' % version_info[:2]
 
 
 class PersistentHttpRequestTest(WeightlessTestCase):
-    def setUp(self):
-        WeightlessTestCase.setUp(self)
-
-    def startWeightlessHttpServer(self):
-        self.reactor = Reactor()  # FXIME: Also set from WeightlessTestCase
-        self.port = PortNumberGenerator.next()  # FXIME: Also set from WeightlessTestCase
-        self.httpserver = HttpServer(self.reactor, self.port, self._dispatch)
-        self.httpserver.listen()
-
-    def tearDown(self):
-        if hasattr(self, 'httpserver'):
-            self.httpserver.shutdown()
-        WeightlessTestCase.tearDown(self)
-
+    ##
+    ## HTTP/1.1 (and backwards compatible with HTTP/1.0) Protocol
     def testHttpRequestBasics(self):
         expectedrequest = "GET /path?arg=1&arg=2 HTTP/1.1\r\nHost: localhost\r\n\r\n"
 
@@ -134,89 +122,6 @@ class PersistentHttpRequestTest(WeightlessTestCase):
                 mss.close()
 
         asProcess(test())
-
-    def testDeChunk(self):
-        # Initial size 0 - all-in-one "packet".
-        dc = _deChunk()
-        try:
-            dc.send('0\r\n\r\n')
-            self.fail()
-        except StopIteration, e:
-            self.assertEquals(0, len(e.args))
-
-        # Initial size 1; then 0 - all-in-one "packet".
-        dc = _deChunk()
-        self.assertEquals('A', dc.send('1\r\nA\r\n0\r\n\r\n'))
-        try:
-            dc.send(None)
-            self.fail()
-        except StopIteration, e:
-            self.assertEquals(0, len(e.args))
-
-        # Initial size 3; then 0 - multiple "packets".
-        dc = _deChunk()
-        self.assertEquals(None, dc.send('3\r'))
-        self.assertEquals(None, dc.send('\n'))
-        self.assertEquals(None, dc.send('A'))
-        self.assertEquals(None, dc.send('B'))
-        self.assertEquals(None, dc.send('C'))
-        self.assertEquals(None, dc.send('\r'))
-        self.assertEquals('ABC', dc.send('\n'))
-        self.assertEquals(None, dc.send(None))
-        self.assertEquals(None, dc.send('0'))
-        self.assertEquals(None, dc.send('\r'))
-        self.assertEquals(None, dc.send('\n'))
-        self.assertEquals(None, dc.send('\r'))
-        try:
-            dc.send('\n')
-            self.fail()
-        except StopIteration, e:
-            self.assertEquals(0, len(e.args))
-
-        # Initial size 2; then 3; then 0; then trailers - all-in-one "packet".
-        dc = _deChunk()
-        self.assertEquals('AB', dc.send('2\r\nAB\r\n3\r\nCDE\r\n0\r\nTrailing1: Header1\r\nTrailing2: Header2\r\n\r\n'))
-        self.assertEquals('CDE', dc.send(None))
-        try:
-            dc.send(None)
-            self.fail()
-        except StopIteration, e:
-            self.assertEquals(0, len(e.args))
-
-        # Initial size 2; then 3; then 0 - multiple "packets".
-        dc = _deChunk()
-        self.assertEquals(None, dc.send('2\r\nA'))
-        self.assertEquals('AB', dc.send('B\r\n3\r\nCDE\r'))
-        self.assertEquals(None, dc.send(None))
-        self.assertEquals('CDE', dc.send('\n0\r\nTrailing1: Header1\r'))
-        self.assertEquals(None, dc.send(None))
-        self.assertEquals(None, dc.send('\nTrailing2: Header2\r\n\r'))
-        try:
-            dc.send('\n')
-            self.fail()
-        except StopIteration, e:
-            self.assertEquals(0, len(e.args))
-
-    def testDeChunkFailsOnExcessData(self):
-        # Note: this can only reliably be detection if sok.recv(n) data
-        #       included (a bit of) excess-data.  Otherwise undetected
-        #       until socket-reuse fails horribly.
-
-        # after size 0
-        dc = _deChunk()
-        try:
-            dc.send('0\r\n\r\n<EXCESS-DATA>')
-            self.fail()
-        except ValueError, e:
-            self.assertEquals('Data after last chunk', str(e))
-
-        # after trailers
-        dc = _deChunk()
-        self.assertEquals(None, dc.send('0\r\nTrai: ler\r\n\r'))
-        try:
-            dc.send('\nX')
-        except ValueError, e:
-            self.assertEquals('Data after last chunk', str(e))
 
     def testHttp11ContentLengthDelimitedReusedOnce(self):
         # Happy-Path, least complex, still persisted - /w 100 Continue
@@ -404,8 +309,22 @@ class PersistentHttpRequestTest(WeightlessTestCase):
 
         asProcess(test())
 
+    ##
+    ## Context (preconditions, aborting, ...)
     def testConnectMethodExplicitlyForbidden(self):
-        self.fail()
+        def test():
+            mss = MockSocketServer()
+            mss.listen()
+            try:
+                try:
+                    _, _ = yield httprequest1_1(method='CONNECT', host='localhost', port=mss.port, request='/')
+                    self.fail()
+                except ValueError, e:
+                    self.assertEquals('CONNECT method unsupported.', str(e))
+            finally:
+                mss.close()
+
+        asProcess(test())
 
     def testWithTimeout(self):
         def r1(sok, log, remoteAddress, connectionNr):
@@ -477,6 +396,132 @@ class PersistentHttpRequestTest(WeightlessTestCase):
 
         asProcess(test())
 
+    def testPoolProtocol(self):
+        def r1(sok, log, remoteAddress, connectionNr):
+            s = "GET /first HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
+            data = yield read(untilExpected=s)
+            self.assertEquals(s, data)
+
+            yield write('HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n')
+            yield write('DATA')
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r2(sok, log, remoteAddress, connectionNr):
+            # second request
+            s = "GET /second HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
+            data = yield read(untilExpected=s)
+            self.assertEquals(s, data)
+
+            yield write('HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\n')
+            yield write('DATA')
+            log.append(2)
+            yield zleep(0.01)
+
+            # third request
+            s = "GET /third HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
+            data = yield read(untilExpected=s)
+            self.assertEquals(s, data)
+
+            yield write('HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\n')
+            yield write('DATA')
+            log.append(3)
+            yield zleep(0.01)  # Don't close before back-in-the-pool & tests done.
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        @dieAfter(seconds=5)
+        def test():
+            _realPool = SocketPool(reactor=reactor())
+            getLog = []
+            def getPooledSocket(*a, **kw):
+                retval = yield _realPool.getPooledSocket(*a, **kw)
+                getLog.append(retval)
+                raise StopIteration(retval)
+            putLog = []
+            def putSocketInPool(*a, **kw):
+                retval = yield _realPool.putSocketInPool(*a, **kw)
+                putLog.append(retval)
+                raise StopIteration(retval)
+            loggingPool = CallTrace('LoggingSocketPool', methods={
+                'getPooledSocket': getPooledSocket,
+                'putSocketInPool': putSocketInPool,
+            })
+            top = be((Observable(),
+                (HttpRequest1_1(),
+                    (loggingPool,),
+                )
+            ))
+            mss = MockSocketServer()
+            mss.setReplies(replies=[r1, r2])
+            mss.listen()
+            try:
+                # 1st request; no socket reuse by server request.
+                statusAndHeaders, body = yield top.any.httprequest1_1(host='127.0.0.1', port=mss.port, request='/first')
+                # Request went ok.
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEquals('DATA', body)
+
+                # mss interaction ok.
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals((None, []), mss.state.connections.get(1))
+
+                # Actual test:
+                self.assertEquals(['getPooledSocket'], loggingPool.calledMethodNames())
+                self.assertEquals(((), {'host': '127.0.0.1', 'port': mss.port}), (loggingPool.calledMethods[0].args, loggingPool.calledMethods[0].kwargs))
+                self.assertEquals([None], getLog)
+                loggingPool.calledMethods.reset()
+                del getLog[:]
+
+                # 2st request; socket reuse.
+                statusAndHeaders, body = yield top.any.httprequest1_1(host='127.0.0.1', port=mss.port, request='/second')
+                # Request went ok.
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEquals('DATA', body)
+
+                # mss interaction ok.
+                self.assertEquals(2, mss.nrOfRequests)
+                self.assertEquals((IN_PROGRESS, [2]), mss.state.connections.get(2))
+
+                # Actual test:
+                self.assertEquals(['getPooledSocket', 'putSocketInPool'], loggingPool.calledMethodNames())
+                _get, _put = loggingPool.calledMethods
+                self.assertEquals(((), {'host': '127.0.0.1', 'port': mss.port}), (_get.args, _get.kwargs))
+                self.assertEquals([None], getLog)
+                self.assertEquals(((), set(['host', 'port', 'sock'])), (_put.args, set(_put.kwargs.keys())))
+                self.assertEquals('127.0.0.1', _put.kwargs['host'])
+                self.assertEquals(mss.port, _put.kwargs['port'])
+                storedFileno = _put.kwargs['sock'].fileno()
+                self.assertTrue(bool(storedFileno), _put.kwargs['sock'])
+                self.assertEquals([None], putLog)
+                del getLog[:]
+                del putLog[:]
+                loggingPool.calledMethods.reset()
+
+                # 3st request; socket reused.
+                statusAndHeaders, body = yield top.any.httprequest1_1(host='127.0.0.1', port=mss.port, request='/third')
+                # Request went ok.
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEquals('DATA', body)
+
+                # mss interaction ok.
+                self.assertEquals(2, mss.nrOfRequests)
+                self.assertEquals((IN_PROGRESS, [2, 3]), mss.state.connections.get(2))
+
+                # Actual test:
+                self.assertEquals(['getPooledSocket', 'putSocketInPool'], loggingPool.calledMethodNames())
+                self.assertEquals(storedFileno, getLog[0].fileno())
+                self.assertEquals(storedFileno, loggingPool.calledMethods[1].kwargs['sock'].fileno())
+                pooledSocket = yield _realPool.getPooledSocket(host='127.0.0.1', port=mss.port)
+                self.assertEquals(storedFileno, pooledSocket.fileno())
+
+                # Wait for connection #2 close.
+                yield zleep(0.02)
+
+                self.assertEquals(None, mss.state.connections.get(2).value)
+            finally:
+                mss.close()
+
+        asProcess(test())
+
     def testHttpRequestWorksWhenDrivenByHttpServer(self):
         # Old name: testPassRequestThruToBackOfficeServer
         expectedrequest = "GET /path?arg=1&arg=2 HTTP/1.1\r\nHost: localhost\r\n\r\n"
@@ -519,6 +564,97 @@ class PersistentHttpRequestTest(WeightlessTestCase):
 
         asProcess(test())
 
+    def testTracebackPreservedAcrossSuspend(self):
+        # Mocking getPooledSocket, since this is the first action after being suspended (that could potentially go wrong).
+        class SocketPoolMock(object):
+            def getPooledSocket(self, host, port):
+                raise RuntimeError('Boom!')
+
+        def r1(sok, log, remoteAddress, connectionNr):
+            yield zleep(0.01)
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies(replies=[r1])
+            top = be((Observable(),
+                (HttpRequest1_1(),
+                    (SocketPoolMock(),),
+                )
+            ))
+            mss.listen()
+            try:
+                _, _ = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/')
+                self.fail()
+            except RuntimeError, e:
+                c, v, t = exc_info()
+                self.assertEquals('Boom!', str(e))
+            finally:
+                mss.close()
+
+            resultingTraceback = ''.join(format_exception(c, v, t))
+            expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+  File "%(__file__)s", line 967, in test
+    _, _ = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/')
+  File "%(_httprequest1_1.py)s", line 64, in httprequest1_1
+    result = s.getResult()
+  File "%(_httprequest1_1.py)s", line 81, in _do
+    sok = yield observable.any.getPooledSocket(host=host, port=port)
+  File "%(__file__)s", line 951, in getPooledSocket
+    raise RuntimeError('Boom!')
+RuntimeError: Boom!\n""" % fileDict)
+            self.assertEquals(expectedTraceback, ignoreLineNumbers(resultingTraceback))
+
+        asProcess(test())
+
+    def testHttpsPostOnIncorrectPort(self):
+        @dieAfter(seconds=5.0)
+        def test():
+            try:
+                _, _ = yield httprequest1_1(
+                    method='POST', host='localhost', port=PortNumberGenerator.next(), request='/path', body="body",
+                    headers={'Content-Type': 'text/plain'}, secure=True,
+                )
+                self.fail()
+            except IOError, e:
+                self.assertEquals(ECONNREFUSED, e.args[0])  # errno: 111.
+
+        asProcess(test())
+
+    def testConnectFails(self):
+        def test():
+            # Non-numeric port
+            try:
+                _, _ = yield httprequest1_1(host='localhost', port='PORT', request='/')
+                self.fail()
+            except TypeError, e:
+                self.assertEquals('an integer is required', str(e))
+
+            #"Invalid" port (no-one listens)
+            try:
+                _, _ = yield httprequest1_1(host='localhost', port=87, request='/')  # 87 -> IANA: mfcobol (Micro Focus Cobol) "any private terminal link".
+                self.fail()
+            except IOError, e:
+                self.assertEquals(ECONNREFUSED, e.args[0])  # errno: 111.
+
+            # Invalid host
+            try:
+                _, _ = yield httprequest1_1(host='UEYR^$*FD(#>NDJ.khfd9.(*njnd', port=PortNumberGenerator.next(), request='/')
+                self.fail()
+            except SocketGaiError, e:
+                self.assertEquals(-2, e.args[0])
+                self.assertTrue('Name or service not known' in str(e), str(e))
+            # No-one listens
+            try:
+                _, _ = yield httprequest1_1(host='127.0.0.1', port=PortNumberGenerator.next(), request='/')
+                self.fail()
+            except IOError, e:
+                self.assertEquals(ECONNREFUSED, e.args[0])  # errno: 111.
+
+        asProcess(test())
+
+    ##
+    ## Implementation-tests
     def testHttpPost(self):
         # Implementation-test for POST.
         post_request = []
@@ -623,52 +759,6 @@ class PersistentHttpRequestTest(WeightlessTestCase):
             ], sorted(headers))
         self.assertEquals(body, post_request[0]['body'])
 
-    def testHttpsPostOnIncorrectPort(self):
-        @dieAfter(seconds=5.0)
-        def test():
-            try:
-                _, _ = yield httprequest1_1(
-                    method='POST', host='localhost', port=PortNumberGenerator.next(), request='/path', body="body",
-                    headers={'Content-Type': 'text/plain'}, secure=True,
-                )
-                self.fail()
-            except IOError, e:
-                self.assertEquals(ECONNREFUSED, e.args[0])  # errno: 111.
-
-        asProcess(test())
-
-    def testConnectFails(self):
-        def test():
-            # Non-numeric port
-            try:
-                _, _ = yield httprequest1_1(host='localhost', port='PORT', request='/')
-                self.fail()
-            except TypeError, e:
-                self.assertEquals('an integer is required', str(e))
-            
-            #"Invalid" port (no-one listens)
-            try:
-                _, _ = yield httprequest1_1(host='localhost', port=87, request='/')  # 87 -> IANA: mfcobol (Micro Focus Cobol) "any private terminal link".
-                self.fail()
-            except IOError, e:
-                self.assertEquals(ECONNREFUSED, e.args[0])  # errno: 111.
-
-            # Invalid host
-            try:
-                _, _ = yield httprequest1_1(host='UEYR^$*FD(#>NDJ.khfd9.(*njnd', port=PortNumberGenerator.next(), request='/')
-                self.fail()
-            except SocketGaiError, e:
-                self.assertEquals(-2, e.args[0])
-                self.assertTrue('Name or service not known' in str(e), str(e))
-            # No-one listens
-            try:
-                _, _ = yield httprequest1_1(host='127.0.0.1', port=PortNumberGenerator.next(), request='/')
-                self.fail()
-            except IOError, e:
-                self.assertEquals(ECONNREFUSED, e.args[0])  # errno: 111.
-
-        asProcess(test())
-
     def testHttpGet(self):
         # Implementation-test
         get_request = []
@@ -744,8 +834,91 @@ class PersistentHttpRequestTest(WeightlessTestCase):
         self.assertEquals('GET', get_request[0]['command'])
         self.assertEquals('/path', get_request[0]['path'])
 
-    #
-    # Internals
+    ##
+    ## Internals
+    def testDeChunk(self):
+        # Initial size 0 - all-in-one "packet".
+        dc = _deChunk()
+        try:
+            dc.send('0\r\n\r\n')
+            self.fail()
+        except StopIteration, e:
+            self.assertEquals(0, len(e.args))
+
+        # Initial size 1; then 0 - all-in-one "packet".
+        dc = _deChunk()
+        self.assertEquals('A', dc.send('1\r\nA\r\n0\r\n\r\n'))
+        try:
+            dc.send(None)
+            self.fail()
+        except StopIteration, e:
+            self.assertEquals(0, len(e.args))
+
+        # Initial size 3; then 0 - multiple "packets".
+        dc = _deChunk()
+        self.assertEquals(None, dc.send('3\r'))
+        self.assertEquals(None, dc.send('\n'))
+        self.assertEquals(None, dc.send('A'))
+        self.assertEquals(None, dc.send('B'))
+        self.assertEquals(None, dc.send('C'))
+        self.assertEquals(None, dc.send('\r'))
+        self.assertEquals('ABC', dc.send('\n'))
+        self.assertEquals(None, dc.send(None))
+        self.assertEquals(None, dc.send('0'))
+        self.assertEquals(None, dc.send('\r'))
+        self.assertEquals(None, dc.send('\n'))
+        self.assertEquals(None, dc.send('\r'))
+        try:
+            dc.send('\n')
+            self.fail()
+        except StopIteration, e:
+            self.assertEquals(0, len(e.args))
+
+        # Initial size 2; then 3; then 0; then trailers - all-in-one "packet".
+        dc = _deChunk()
+        self.assertEquals('AB', dc.send('2\r\nAB\r\n3\r\nCDE\r\n0\r\nTrailing1: Header1\r\nTrailing2: Header2\r\n\r\n'))
+        self.assertEquals('CDE', dc.send(None))
+        try:
+            dc.send(None)
+            self.fail()
+        except StopIteration, e:
+            self.assertEquals(0, len(e.args))
+
+        # Initial size 2; then 3; then 0 - multiple "packets".
+        dc = _deChunk()
+        self.assertEquals(None, dc.send('2\r\nA'))
+        self.assertEquals('AB', dc.send('B\r\n3\r\nCDE\r'))
+        self.assertEquals(None, dc.send(None))
+        self.assertEquals('CDE', dc.send('\n0\r\nTrailing1: Header1\r'))
+        self.assertEquals(None, dc.send(None))
+        self.assertEquals(None, dc.send('\nTrailing2: Header2\r\n\r'))
+        try:
+            dc.send('\n')
+            self.fail()
+        except StopIteration, e:
+            self.assertEquals(0, len(e.args))
+
+    def testDeChunkFailsOnExcessData(self):
+        # Note: this can only reliably be detection if sok.recv(n) data
+        #       included (a bit of) excess-data.  Otherwise undetected
+        #       until socket-reuse fails horribly.
+
+        # after size 0
+        dc = _deChunk()
+        try:
+            dc.send('0\r\n\r\n<EXCESS-DATA>')
+            self.fail()
+        except ValueError, e:
+            self.assertEquals('Data after last chunk', str(e))
+
+        # after trailers
+        dc = _deChunk()
+        self.assertEquals(None, dc.send('0\r\nTrai: ler\r\n\r'))
+        try:
+            dc.send('\nX')
+        except ValueError, e:
+            self.assertEquals('Data after last chunk', str(e))
+
     def testShutdownAndCloseOnce_OnlyOnce(self):
         sok = CallTrace()
         cb = _shutAndCloseOnce(sok)
@@ -940,56 +1113,6 @@ class PersistentHttpRequestTest(WeightlessTestCase):
 
         result = asProcess(run())
         self.assertEquals(42, result)
-
-    ###                                  ###
-    ### Old (Unported) Tests Demarkation ###
-    ###                                  ###
-    def testTracebackPreservedAcrossSuspend(self):
-        def requestLine(self, *args, **kwargs):
-            raise RuntimeError("Boom!")
-
-        def r1(sok, log, remoteAddress, connectionNr):
-            yield zleep(0.01)
-            sok.shutdown(SHUT_RDWR); sok.close()
-
-        def test():
-            mss = MockSocketServer()
-            mss.setReplies(replies=[r1])
-            mss.listen()
-            try:
-                _, _ = yield httprequest1_1(host='localhost', port=mss.port, request='/')
-            except RuntimeError, e:
-                c, v, t = exc_info()
-                resultingTraceback = ''.join(format_exception(c, v, t))
-                print '>>>', repr(resultingTraceback)
-                self.assertEquals('Boom!', str(e))
-            finally:
-                mss.close()
-
-            #@@
-            self.fail('Hier verder (TB testing)')
-            expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
-  File "/data/home/zp/zp-story-persistent-connections/deps.d/weightless-core/test/http/persistenthttprequesttest.py", line 960, in test
-    _, _ = yield httprequest1_1(host='localhost', port=mss.port, request='/')
-  File "../weightless/http/_persistenthttprequest.py", line 64, in httprequest1_1
-    result = s.getResult()
-  File "../weightless/http/_persistenthttprequest.py", line 101, in _do
-    yield _sendHttpHeaders(sok, method, request, headers, host)
-  File "../weightless/http/_persistenthttprequest.py", line 188, in _sendHttpHeaders
-    data = _requestLine(method, request)
-  File "/data/home/zp/zp-story-persistent-connections/deps.d/weightless-core/test/http/persistenthttprequesttest.py", line 949, in requestLine
-    raise RuntimeError("Boom!")
-RuntimeError: Boom!""" % fileDict)
-            # FIXME: re-enable traceback testing (below)!
-            print '>>>', resultingTraceback; sys.stdout.flush()
-            #self.assertEquals(expectedTraceback, ignoreLineNumbers(resultingTraceback))
-
-        try:
-            originalRequestLine = persistentHttpRequestModule._requestLine
-            persistentHttpRequestModule._requestLine = requestLine
-            asProcess(test())
-        finally:
-            persistentHttpRequestModule._requestLine = originalRequestLine
 
 
 class MockSocketServer(object):
@@ -1290,14 +1413,16 @@ class AbortException(Exception):
 
 _Connection = namedtuple('Connection', ['value', 'log'])
 
-# FIXME: De-uglify this one...
 def dieAfter(seconds=5.0):
+    """
+    Decorator for generator-function passed to asProcess to execute; for setting deadline.
+    """
     def dieAfter(generatorFunction):
         @wraps(generatorFunction)
         @identify
         def helper(*args, **kwargs):
             this = yield
-            yield
+            yield  # Works within an asProcess-passed generatorFunction only (needs contextual addProcess driving this generator and a reactor).
             tokenList = []
             def cb():
                 tokenList.pop()
@@ -1313,18 +1438,12 @@ def dieAfter(seconds=5.0):
         return helper
     return dieAfter
 
-def clientget(host, port, path):
-    client = socket()
-    client.connect((host,  port))
-    client.send('GET %s HTTP/1.1\r\n\r\n' % path)
-    return client
-
-fileDict = {
-    '__file__': clientget.func_code.co_filename,
-    'suspend.py': Suspend.__call__.func_code.co_filename,
-    'httprequest.py': _requestLine.func_code.co_filename,
-}
-
 def ignoreLineNumbers(s):
     return sub("line \d+,", "line [#],", s)
+
+fileDict = {
+    '__file__': ignoreLineNumbers.func_code.co_filename,
+    '_suspend.py': Suspend.__call__.func_code.co_filename,
+    '_httprequest1_1.py': _requestLine.func_code.co_filename,
+}
 

@@ -68,6 +68,7 @@ class HttpRequest1_1(Observable):
 @identify
 @compose
 def _do(observable, method, host, port, request, body=None, headers=None, secure=False, prio=None):
+    _assertSupportedMethod(method)
     headers = headers or {}
     retryOnce = False
     this = yield # this generator, from @identify
@@ -438,5 +439,9 @@ def _shutAndCloseOnce(sok):
             state.append('c')
             sok.close()
     return shutAndCloseOnce
+
+def _assertSupportedMethod(method):
+    if method == 'CONNECT':
+        raise ValueError('CONNECT method unsupported.')
 
 _CLOSED = type('CLOSED', (object,), {})()
