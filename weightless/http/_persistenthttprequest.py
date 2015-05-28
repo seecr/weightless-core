@@ -134,6 +134,10 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
     yield  # wait for GC
 
 
+def _assertSupportedMethod(method):
+    if method == 'CONNECT':
+        raise ValueError('CONNECT method unsupported.')
+
 def _createSocket(host, port, secure, this, suspend, prio):
     # No "yield", so add*/remove* not needed.
     sok = socket()
@@ -161,28 +165,24 @@ def _createSocket(host, port, secure, this, suspend, prio):
         sok = yield _sslHandshake(sok, this, suspend, prio)
     raise StopIteration(sok)
 
-def _sslHandshake(sok, this, suspend, prio):
-    sok = wrap_socket(sok, do_handshake_on_connect=False)
-    count = 0
-    while count < 254:
-        count += 1
-        try:
-            sok.do_handshake()
-            break
-        except SSLError as err:
-            if err.args[0] == SSL_ERROR_WANT_READ:
-                suspend._reactor.addReader(sok, this.next, prio=prio)
-                yield
-                suspend._reactor.removeReader(sok)
-            elif err.args[0] == SSL_ERROR_WANT_WRITE:
-                suspend._reactor.addWriter(sok, this.next, prio=prio)
-                yield
-                suspend._reactor.removeWriter(sok)
+def _shutAndCloseOnce(sok):
+    state = []
+    def shutAndCloseOnce(ignoreExceptions=False):
+        if 's' not in state:
+            state.append('s')
+            if ignoreExceptions:
+                try:
+                    sok.shutdown(SHUT_RDWR)
+                except (AssertionError, KeyboardInterrupt, SystemExit):
+                    raise
+                except Exception:
+                    pass
             else:
-                raise
-    if count == 254:
-        raise ValueError("SSL handshake failed.")
-    raise StopIteration(sok)
+                sok.shutdown(SHUT_RDWR)
+        if 'c' not in state:
+            state.append('c')
+            sok.close()
+    return shutAndCloseOnce
 
 def _sendHttpHeaders(sok, method, request, headers, host):
     data = _requestLine(method, request)
@@ -192,14 +192,45 @@ def _sendHttpHeaders(sok, method, request, headers, host):
     data += '\r\n'
     yield _asyncSend(sok, data)
 
-def _requestLine(method, request):
-    return "%s %s HTTP/1.1\r\n" % (method, request)
+def _asyncSend(sok, data):
+    while data != "":
+        size = sok.send(data)
+        data = data[size:]
+        yield
 
 def _readHeaderAndBody(sok, method, requestHeaders):
     statusAndHeaders, rest = yield _readHeader(sok)
     readStrategy, doClose = _determineBodyReadStrategy(statusAndHeaders=statusAndHeaders, method=method, requestHeaders=requestHeaders)
     body = yield readStrategy(sok, rest)
     raise StopIteration((statusAndHeaders, body, doClose))
+
+def _readHeader(sok, rest=''):
+    responses = rest
+    rest = ''
+    while True:
+        response = yield _asyncRead(sok)
+        if response is _CLOSED:
+            raise ValueError('Premature close')
+        responses += response
+
+        match = REGEXP.RESPONSE.match(responses)
+        if match:
+            # TODO: check some max. statusline + header size (or bail).
+            break
+
+    if match.end() < len(responses):
+        rest = responses[match.end():]
+
+    statusAndHeaders = match.groupdict()
+    headers = parseHeaders(statusAndHeaders['_headers'])
+    del statusAndHeaders['_headers']
+    statusAndHeaders['Headers'] = headers
+
+    if statusAndHeaders['StatusCode'] == '100':
+        # 100 Continue response, eaten it - and then read the real response.
+        statusAndHeaders, rest = yield _readHeader(sok, rest=rest)
+
+    raise StopIteration((statusAndHeaders, rest))
 
 def _determineBodyReadStrategy(statusAndHeaders, method, requestHeaders):
     doClose = False
@@ -241,49 +272,11 @@ def _bodyDisallowed(method, statusCode):
         raise ValueError('1XX status code recieved.')
     return method == 'HEAD' or statusCode in ['204', '304']
 
-def _determineDoCloseFromConnection(headers):
-    connectionHeaderValue = headers.get('Connection')
-    if connectionHeaderValue:
-        connection = [v.strip() for v in connectionHeaderValue.lower().strip().split(',')]
-        if 'close' in connection:
-            return True
-
-    return False
-
-def _parseTransferEncoding(responseHeaders):
-    transferEncoding = responseHeaders.get('Transfer-Encoding')
-    if transferEncoding:
-        # transfer-extension's should be parsed differently (see: https://tools.ietf.org/html/rfc7230#section-4 ) - but not important here.
-        transferEncoding = [v.strip() for v in transferEncoding.lower().strip().split(',')]
-        return transferEncoding
-
-def _readHeader(sok, rest=''):
-    responses = rest
-    rest = ''
-    while True:
-        response = yield _asyncRead(sok)
-        if response is _CLOSED:
-            raise ValueError('Premature close')
-        responses += response
-
-        match = REGEXP.RESPONSE.match(responses)
-        if match:
-            # TODO: check some max. statusline + header size (or bail).
-            break
-
-    if match.end() < len(responses):
-        rest = responses[match.end():]
-
-    statusAndHeaders = match.groupdict()
-    headers = parseHeaders(statusAndHeaders['_headers'])
-    del statusAndHeaders['_headers']
-    statusAndHeaders['Headers'] = headers
-
-    if statusAndHeaders['StatusCode'] == '100':
-        # 100 Continue response, eaten it - and then read the real response.
-        statusAndHeaders, rest = yield _readHeader(sok, rest=rest)
-
-    raise StopIteration((statusAndHeaders, rest))
+def _readAssertNoBody(sok, rest):
+    if rest:
+        raise ValueError('Body not empty.')
+    raise StopIteration('')
+    yield
 
 def _readCloseDelimitedBody(sok, rest):
     responses = rest  # Must be empty-string at least
@@ -335,6 +328,48 @@ def _readChunkedDelimitedBody(sok, rest):
 
     raise StopIteration(responses)
 
+def _sslHandshake(sok, this, suspend, prio):
+    sok = wrap_socket(sok, do_handshake_on_connect=False)
+    count = 0
+    while count < 254:
+        count += 1
+        try:
+            sok.do_handshake()
+            break
+        except SSLError as err:
+            if err.args[0] == SSL_ERROR_WANT_READ:
+                suspend._reactor.addReader(sok, this.next, prio=prio)
+                yield
+                suspend._reactor.removeReader(sok)
+            elif err.args[0] == SSL_ERROR_WANT_WRITE:
+                suspend._reactor.addWriter(sok, this.next, prio=prio)
+                yield
+                suspend._reactor.removeWriter(sok)
+            else:
+                raise
+    if count == 254:
+        raise ValueError("SSL handshake failed.")
+    raise StopIteration(sok)
+
+def _requestLine(method, request):
+    return "%s %s HTTP/1.1\r\n" % (method, request)
+
+def _determineDoCloseFromConnection(headers):
+    connectionHeaderValue = headers.get('Connection')
+    if connectionHeaderValue:
+        connection = [v.strip() for v in connectionHeaderValue.lower().strip().split(',')]
+        if 'close' in connection:
+            return True
+
+    return False
+
+def _parseTransferEncoding(responseHeaders):
+    transferEncoding = responseHeaders.get('Transfer-Encoding')
+    if transferEncoding:
+        # transfer-extension's should be parsed differently (see: https://tools.ietf.org/html/rfc7230#section-4 ) - but not important here.
+        transferEncoding = [v.strip() for v in transferEncoding.lower().strip().split(',')]
+        return transferEncoding
+
 @autostart
 @compose
 def _deChunk():
@@ -349,8 +384,6 @@ def _deChunk():
 
     if rest:
         raise ValueError('Data after last chunk')
-
-_TRAILERS_RE = re.compile("(?:(?P<_trailers>(?:" + HTTP.message_header + ')+)' + CRLF + '|' + CRLF + ')')
 
 def _trailers():
     data = ''
@@ -391,21 +424,6 @@ def _oneChunk():
     pushback = (data,) if data else ()
     raise StopIteration(chunk, *pushback)
 
-_CRLF_LEN = len(CRLF)
-_CHUNK_RE = re.compile(r'([0-9a-fA-F]+)(?:;[^\r\n]+|)\r\n')  # Ignores chunk-extensions
-
-def _readAssertNoBody(sok, rest):
-    if rest:
-        raise ValueError('Body not empty.')
-    raise StopIteration('')
-    yield
-
-def _asyncSend(sok, data):
-    while data != "":
-        size = sok.send(data)
-        data = data[size:]
-        yield
-
 def _asyncRead(sok):
     while True:
         yield
@@ -420,27 +438,7 @@ def _asyncRead(sok):
             raise StopIteration(_CLOSED)
         raise StopIteration(response)
 
-def _shutAndCloseOnce(sok):
-    state = []
-    def shutAndCloseOnce(ignoreExceptions=False):
-        if 's' not in state:
-            state.append('s')
-            if ignoreExceptions:
-                try:
-                    sok.shutdown(SHUT_RDWR)
-                except (AssertionError, KeyboardInterrupt, SystemExit):
-                    raise
-                except Exception:
-                    pass
-            else:
-                sok.shutdown(SHUT_RDWR)
-        if 'c' not in state:
-            state.append('c')
-            sok.close()
-    return shutAndCloseOnce
-
-def _assertSupportedMethod(method):
-    if method == 'CONNECT':
-        raise ValueError('CONNECT method unsupported.')
-
+_CRLF_LEN = len(CRLF)
+_CHUNK_RE = re.compile(r'([0-9a-fA-F]+)(?:;[^\r\n]+|)\r\n')  # Ignores chunk-extensions
+_TRAILERS_RE = re.compile("(?:(?P<_trailers>(?:" + HTTP.message_header + ')+)' + CRLF + '|' + CRLF + ')')
 _CLOSED = type('CLOSED', (object,), {})()
