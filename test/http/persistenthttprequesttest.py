@@ -49,12 +49,12 @@ from weightless.io.utils import asProcess, sleep as zleep
 from weightless.http import HttpServer, SocketPool, parseHeaders
 from weightless.http._persistenthttprequest import HttpRequest1_1
 
-from weightless.http._persistenthttprequest import _requestLine, _shutAndCloseOnce, _CHUNK_RE, _deChunk, _TRAILERS_RE
+from weightless.http._persistenthttprequest import _requestLine, _shutAndCloseOnce, _CHUNK_RE, _deChunk, _TRAILERS_RE, SocketWrapper
 from weightless.http import _persistenthttprequest as persistentHttpRequestModule
 
 httprequest1_1 = be(
     (HttpRequest1_1(),
-        (SocketPool(reactor='WhatEver'),),
+        (SocketPool(reactor='Not-Under-Test-Here'),),
     )
 ).httprequest1_1
 
@@ -64,18 +64,13 @@ PYVERSION = '%s.%s' % version_info[:2]
 # Context:
 # - Request always HTTP/1.1
 # - Requests always have Content-Length: <n> specified (less logic / no need for request chunking - or detection if the server is capable of recieving it)
-# - Never send "Connection: close"; after processing request, determine if "back-in-Pool" or close.
-# - Server response usually HTTP/1.1, HTTP/1.0 handled via closing socket (thus not being persistent [FIXME: should we warn in that situation?]!)
-# - Pool semantics extremly simple, more complex / tested behaviour only when extracted (DNA/Dependency Injection) and in a separate testcase covered!
 # - Variables are:
 #   {
 #       http: <1.1/1.0>  # Server response HTTP version
-#       EOR: chunking / content-length / close  # End-Of-Response, signaled by: "Transfer-Encoding: chunked", "Content-Length: <n>" or "Connection: close".
+#       EOR: chunking / content-length / close / noBodyAllowed # End-Of-Response, signaled by: "Transfer-Encoding: chunked", "Content-Length: <n>", "Connection: close" or type of request (method) or response (status code) does not allow a body.
 #       explicit-close: <True/(False|Missing)>  # Wether, irrespective of EOR-signaling, the server wants to close the connection at EOR.
 #       comms: <ok/retry/double-fail/pooled-unusable>  # Comms goes awry somehow.
 #   }
-
-# TODO: save raw-bytes-recieved for errors (and give it back then)
 
 
 class PersistentHttpRequestTest(WeightlessTestCase):
@@ -1066,6 +1061,273 @@ RuntimeError: Boom!\n""" % fileDict)
 
         asProcess(test())
 
+    def testUnconditionalRetryOnPooledSocketSendtoFailing(self):
+        def r1(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+            # One OK -> into pool
+            yield zleep(0.001)
+
+            # And server closed socket for some reason (timeout, # parallel connections, ...).
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r2(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nDone")
+            # In pool (cleanup here).
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies(replies=[r1, r2])
+            socketPool = SocketPool(reactor=reactor())
+            top = be((Observable(),
+                (HttpRequest1_1(),
+                    (socketPool,),
+                )
+            ))
+            mss.listen()
+            try:
+                # new socket & into pool.
+                statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first')
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals(IN_PROGRESS, mss.state.connections.get(1).value)
+
+                # wait for socket to go "bad".
+                yield zleep(0.002)
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals(None, mss.state.connections.get(1).value)
+
+                # reuse -> send #fail -> new socket & retry.
+                statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/second')
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEquals('Done', body)
+
+                self.assertEquals(2, mss.nrOfRequests)
+                self.assertEquals(None, mss.state.connections.get(2).value)
+                pooledSocket = yield socketPool.getPooledSocket(host='localhost', port=mss.port)
+                self.assertTrue(bool(pooledSocket.fileno()))
+            finally:
+                mss.close()
+
+        asProcess(test())
+
+    def testUnconditionalRetryOnlyOnce(self):
+        def r1(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+            # One OK -> into pool
+            yield zleep(0.001)
+
+            # And server closed socket for some reason (timeout, # parallel connections, ...).
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r2(sok, log, remoteAddress, connectionNr):
+            yield zleep(0.001)
+            # And again
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies(replies=[r1, r2])
+            socketPool = SocketPool(reactor=reactor())
+            top = be((Observable(),
+                (HttpRequest1_1(),
+                    (socketPool,),
+                )
+            ))
+            mss.listen()
+            try:
+                # new socket & into pool.
+                statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first')
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals(IN_PROGRESS, mss.state.connections.get(1).value)
+
+                # wait for socket to go "bad".
+                yield zleep(0.002)
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals(None, mss.state.connections.get(1).value)
+
+                # reuse -> send #fail -> new socket & retry -> #fails again
+                try:
+                    statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/second')
+                    self.fail()
+                except ValueError, e:
+                    self.assertEquals('Premature close', str(e))
+
+                self.assertEquals(2, mss.nrOfRequests)
+                self.assertEquals(None, mss.state.connections.get(2).value)
+                pooledSocket = yield socketPool.getPooledSocket(host='localhost', port=mss.port)
+                self.assertEquals(None, pooledSocket)
+            finally:
+                mss.close()
+
+        asProcess(test())
+
+    def testUnconditionalRetryOnPooledSocketFirstRecvNoDataOnlyFailing(self):
+        def r1(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+            # One OK -> into pool
+            yield zleep(0.001)
+
+            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            # Get the hopes up ...
+            yield zleep(0.001)
+
+            # ... and #fail.
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r2(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nDone")
+            # In pool (cleanup here).
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies(replies=[r1, r2])
+            socketPool = SocketPool(reactor=reactor())
+            top = be((Observable(),
+                (HttpRequest1_1(),
+                    (socketPool,),
+                )
+            ))
+            mss.listen()
+            try:
+                # new socket & into pool.
+                statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first')
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+
+                yield zleep(0.002)
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals(IN_PROGRESS, mss.state.connections.get(1).value)
+
+                # reuse -> first recv #fail -> new socket & retry.
+                statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/second')
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEquals('Done', body)
+
+                self.assertEquals(2, mss.nrOfRequests)
+                self.assertEquals(None, mss.state.connections.get(1).value)
+                self.assertEquals(None, mss.state.connections.get(2).value)
+                pooledSocket = yield socketPool.getPooledSocket(host='localhost', port=mss.port)
+                self.assertTrue(bool(pooledSocket.fileno()))
+            finally:
+                mss.close()
+
+        asProcess(test())
+
+    def testUnconditionalRetryOnPooledSocketEBADFFailing(self):
+        def r1(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nDone")
+            # In pool (cleanup here).
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies(replies=[r1])
+            socketPool = SocketPool(reactor=reactor())
+            top = be((Observable(),
+                (HttpRequest1_1(),
+                    (socketPool,),
+                )
+            ))
+            mss.listen()
+            try:
+                # create new "bad" socket
+                sok = socket(); sok.close()
+                yield socketPool.putSocketInPool(host='localhost', port=mss.port, sock=sok)
+
+                # new socket & into pool.
+                with stderr_replaced() as err:
+                    statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first')
+                    self.assertTrue('EBADF' in err.getvalue(), err.getvalue())
+                    self.assertTrue('Bad file descriptor' in err.getvalue(), err.getvalue())
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEquals('Done', body)
+
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals(None, mss.state.connections.get(1).value)
+                pooledSocket = yield socketPool.getPooledSocket(host='localhost', port=mss.port)
+                self.assertTrue(bool(pooledSocket.fileno()))
+            finally:
+                mss.close()
+
+        asProcess(test())
+
+    def testNoUnconditionalRetryOnPooledSocketWhenDataAlreadyRecved(self):
+        # ... in the context of the current connection.
+        def r1(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+            log.append(1)
+
+            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write("HTTP/1.1 Oh No!...")
+            yield zleep(0.001)
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies(replies=[r1])
+            socketPool = SocketPool(reactor=reactor())
+            top = be((Observable(),
+                (HttpRequest1_1(),
+                    (socketPool,),
+                )
+            ))
+            mss.listen()
+            try:
+                statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first')
+                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                yield zleep(0.001)
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals((IN_PROGRESS, [1]), mss.state.connections.get(1))
+
+                try:
+                    statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/second')
+                    self.fail()
+                except ValueError, e:
+                    self.assertEquals('Premature close', str(e))
+            finally:
+                mss.close()
+
+        asProcess(test())
+
+    def testHttpRequestAdapter(self):
+        self.fail()
+
     ##
     ## Implementation-tests
     def testHttpPost(self):
@@ -1249,6 +1511,38 @@ RuntimeError: Boom!\n""" % fileDict)
 
     ##
     ## Internals
+    def testSocketWrapper(self):
+        trace = CallTrace(methods={'recv': lambda *a, **kw: '12'})
+        trace.a = 'b'
+        sw = SocketWrapper(sok=trace)
+
+        # Wrapper used once per connection-request; recievedData initially False.
+        self.assertEquals(False, sw.recievedData)
+
+        # Any method / property passed on and memoized.
+        self.assertTrue(callable(sw.whatever))
+        self.assertEquals('b', sw.a)
+        trace.a = 'c'
+        self.assertEquals('b', sw.a)  # still a; properties on a socket obj. don't change - so not a problem.
+
+        # Other method calls don't change recievedData state.
+        sw.send('daataaa')
+        self.assertEquals(False, sw.recievedData)
+
+        # recv does
+        result = sw.recv(44)
+        self.assertEquals('12', result)
+        self.assertEquals(True, sw.recievedData)
+        self.assertTrue(trace is sw.unwrap_recievedData())
+
+        # recv with no data does not
+        trace = CallTrace(methods={'recv': lambda *a, **kw: ''})
+        sw = SocketWrapper(sok=trace)
+        self.assertEquals(False, sw.recievedData)
+        result = sw.recv(bufsize=33, flags='No Idea')
+        self.assertEquals('', result)
+        self.assertEquals(False, sw.recievedData)
+
     def testDeChunk(self):
         # Initial size 0 - all-in-one "packet".
         dc = _deChunk()

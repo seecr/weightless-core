@@ -84,33 +84,55 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
             suspend._reactor.removeProcess(process=this.next)
 
         if sok:
+            sok = SocketWrapper(sok)
             retryOnce = True
-        else:
-            sok = yield _createSocket(host, port, secure, this, suspend, prio)
-        shutAndCloseOnce = _shutAndCloseOnce(sok)
-        try:
-            ## Send Request-Line and Headers.
-            suspend._reactor.addWriter(sok, this.next, prio=prio)
-            try:
-                yield
-                # error checking
-                if body:
-                    data = body
-                    if type(data) is unicode:
-                        data = data.encode(getdefaultencoding())
-                    headers.update({'Content-Length': len(data)})
-                yield _sendHttpHeaders(sok, method, request, headers, host)
-                if body:
-                    yield _asyncSend(sok, data)
-            finally:
-                suspend._reactor.removeWriter(sok)
 
-            ## Read response (& handle 100 Continue #fail)
-            suspend._reactor.addReader(sok, this.next, prio=prio)
-            try:
-                statusAndHeaders, body, doClose = yield _readHeaderAndBody(sok, method, requestHeaders=headers)
-            finally:
-                suspend._reactor.removeReader(sok)
+        try:
+            while True:  # do ... while (retyOnce) "loop"
+                if retryOnce is False:
+                    shutAndCloseOnce = _noop
+                    sok = yield _createSocket(host, port, secure, this, suspend, prio)
+                shutAndCloseOnce = _shutAndCloseOnce(sok)
+
+                try:
+                    ## Send Request-Line and Headers.
+                    suspend._reactor.addWriter(sok, this.next, prio=prio)
+                    try:
+                        yield
+                        # error checking
+                        if body:
+                            data = body
+                            if type(data) is unicode:
+                                data = data.encode(getdefaultencoding())
+                            headers.update({'Content-Length': len(data)})
+                        yield _sendHttpHeaders(sok, method, request, headers, host)
+                        if body:
+                            yield _asyncSend(sok, data)
+                    finally:
+                        suspend._reactor.removeWriter(sok)
+
+                    ## Read response (& handle 100 Continue #fail)
+                    suspend._reactor.addReader(sok, this.next, prio=prio)
+                    try:
+                        statusAndHeaders, body, doClose = yield _readHeaderAndBody(sok, method, requestHeaders=headers)
+                    finally:
+                        suspend._reactor.removeReader(sok)
+                except (AssertionError, KeyboardInterrupt, SystemExit):
+                    raise
+                except (IOError, ValueError, KeyError):
+                    # Expected errors:
+                    # - IOError (and subclasses socket.error and it's subclasses - incl. SSLError)
+                    # - ValueError raised when all kinds of expectations about behaviour or data fail.
+                    # - KeyError:
+                    #   * suspend._reactor.remove(Reader|Writer) after a "bad file descriptor" removal;
+                    #     (reactor oddness).
+                    if (not retryOnce) or sok.recievedData:
+                        raise
+
+                    retryOnce = False
+                    continue
+
+                break
 
             ## Either put socket in a pool or close when we must.
             if doClose:
@@ -118,7 +140,7 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
             else:
                 suspend._reactor.addProcess(process=this.next, prio=prio)
                 try:
-                    yield observable.any.putSocketInPool(host=host, port=port, sock=sok)
+                    yield observable.any.putSocketInPool(host=host, port=port, sock=sok.unwrap_recievedData())
                 finally:
                     suspend._reactor.removeProcess(process=this.next)
             suspend.resume((statusAndHeaders, body))
@@ -163,6 +185,7 @@ def _createSocket(host, port, secure, this, suspend, prio):
 
     if secure:
         sok = yield _sslHandshake(sok, this, suspend, prio)
+    sok = SocketWrapper(sok)
     raise StopIteration(sok)
 
 def _shutAndCloseOnce(sok):
@@ -438,6 +461,28 @@ def _asyncRead(sok):
             raise StopIteration(_CLOSED)
         raise StopIteration(response)
 
+class SocketWrapper(object):
+    def __init__(self, sok):
+        self.recievedData = False
+        self.__sok_wrapped__ = sok
+
+    def recv(self, *args, **kwargs):
+        data = self.__sok_wrapped__.recv(*args, **kwargs)
+        if data:
+            self.recievedData = True
+            self.recv = self.__sok_wrapped__.recv  # Unwrap this method.
+        return data
+
+    def unwrap_recievedData(self):
+        return self.__sok_wrapped__
+
+    def __getattr__(self, attr):
+        value = getattr(self.__sok_wrapped__, attr)
+        setattr(self, attr, value)  # Only methods and read-only properties exist on a socket-obj.
+        return value
+
+
+_noop = lambda *a, **kw: None
 _CRLF_LEN = len(CRLF)
 _CHUNK_RE = re.compile(r'([0-9a-fA-F]+)(?:;[^\r\n]+|)\r\n')  # Ignores chunk-extensions
 _TRAILERS_RE = re.compile("(?:(?P<_trailers>(?:" + HTTP.message_header + ')+)' + CRLF + '|' + CRLF + ')')
