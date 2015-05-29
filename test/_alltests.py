@@ -60,7 +60,7 @@ from http.httpreadertest import HttpReaderTest
 from http.httpservertest import HttpServerTest
 from http.httpspectest import HttpSpecTest
 from http.httpsservertest import HttpsServerTest
-from http.persistenthttprequesttest import PersistentHttpRequestTest
+from http.httprequest1_1test import HttpRequest1_1Test
 from http.socketpooltest import SocketPoolTest
 from http.suspendtest import SuspendTest
 

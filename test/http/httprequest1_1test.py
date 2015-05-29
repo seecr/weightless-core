@@ -47,10 +47,9 @@ from weightless.core import compose, identify, is_generator, Yield, local, be, O
 from weightless.io import Reactor, Suspend, TimeoutException, reactor
 from weightless.io.utils import asProcess, sleep as zleep
 from weightless.http import HttpServer, SocketPool, parseHeaders
-from weightless.http._persistenthttprequest import HttpRequest1_1
+from weightless.http import HttpRequest1_1
 
-from weightless.http._persistenthttprequest import _requestLine, _shutAndCloseOnce, _CHUNK_RE, _deChunk, _TRAILERS_RE, SocketWrapper
-from weightless.http import _persistenthttprequest as persistentHttpRequestModule
+from weightless.http._httprequest1_1 import _requestLine, _shutAndCloseOnce, _CHUNK_RE, _deChunk, _TRAILERS_RE, SocketWrapper
 
 httprequest1_1 = be(
     (HttpRequest1_1(),
@@ -73,7 +72,7 @@ PYVERSION = '%s.%s' % version_info[:2]
 #   }
 
 
-class PersistentHttpRequestTest(WeightlessTestCase):
+class HttpRequest1_1Test(WeightlessTestCase):
     ##
     ## HTTP/1.1 (and backwards compatible with HTTP/1.0) Protocol
     def testHttpRequestBasics(self):
