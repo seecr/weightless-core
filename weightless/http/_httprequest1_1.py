@@ -34,12 +34,9 @@ from urlparse import urlsplit
 
 from weightless.core import compose, identify, Observable, autostart
 from weightless.io import Suspend, TimeoutException
-from weightless.http import REGEXP, HTTP, parseHeaders
+from weightless.http import REGEXP, HTTP, FORMAT, parseHeaders
 
 CRLF = HTTP.CRLF
-
-# TODO:
-# - should retry failed requests on pooled sockets
 
 
 class HttpRequest1_1(Observable):
@@ -63,6 +60,33 @@ class HttpRequest1_1(Observable):
         yield s
         result = s.getResult()
         raise StopIteration(result)
+
+
+class HttpRequestAdapter(Observable):
+    def httprequest(self, host, port, request, **kwargs):
+        kwargKeys = set(kwargs.keys())
+        if ('proxyServer' in kwargKeys) or ('handlePartialResponse' in kwargKeys):
+            raise TypeError('proxyServer and handlePartialResponse arguments not supported in HttpRequest1_1 - so cannot adapt.')
+        if not kwargKeys.issubset(_ALLOWED_OPTIONAL_ADAPTER_ARGUMENTS):
+            raise TypeError('Unexpected argument(s): ' + ', '.join(kwargKeys.difference(_ALLOWED_OPTIONAL_ADAPTER_ARGUMENTS)))
+
+        translated = {}
+        if 'ssl' in kwargKeys:
+            translated['secure'] = kwargs.pop('ssl')
+
+        adapteeKwargs = dict(kwargs, **translated)
+
+        statusAndHeaders, body = yield self.any.httprequest1_1(host=host, port=port, request=request, **adapteeKwargs)
+        _statusAndHeaders = (FORMAT.StatusLine % {
+                'version': statusAndHeaders['HTTPVersion'],
+                'status': statusAndHeaders['StatusCode'],
+                'reason': statusAndHeaders['ReasonPhrase'],
+            }) + ''.join(
+                FORMAT.Header % (h, v)
+                for h, v in
+                sorted(statusAndHeaders['Headers'].items())
+            )
+        raise StopIteration(_statusAndHeaders + CRLF + body)
 
 
 @identify
@@ -482,6 +506,7 @@ class SocketWrapper(object):
         return value
 
 
+_ALLOWED_OPTIONAL_ADAPTER_ARGUMENTS = set(['body', 'headers', 'method', 'prio', 'ssl', 'timeout'])
 _noop = lambda *a, **kw: None
 _CRLF_LEN = len(CRLF)
 _CHUNK_RE = re.compile(r'([0-9a-fA-F]+)(?:;[^\r\n]+|)\r\n')  # Ignores chunk-extensions

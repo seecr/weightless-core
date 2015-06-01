@@ -24,7 +24,7 @@
 #
 ## end license ##
 
-from weightlesstestcase import WeightlessTestCase, StreamingData
+from weightlesstestcase import WeightlessTestCase
 
 from seecr.test import CallTrace
 from seecr.test.io import stderr_replaced, stdout_replaced
@@ -43,11 +43,11 @@ from sys import exc_info, version_info
 from time import sleep, time
 from traceback import format_exception, print_exc
 
-from weightless.core import compose, identify, is_generator, Yield, local, be, Observable
+from weightless.core import compose, identify, is_generator, Yield, local, be, Observable, retval
 from weightless.io import Reactor, Suspend, TimeoutException, reactor
 from weightless.io.utils import asProcess, sleep as zleep
 from weightless.http import HttpServer, SocketPool, parseHeaders
-from weightless.http import HttpRequest1_1
+from weightless.http import HttpRequest1_1, HttpRequestAdapter
 
 from weightless.http._httprequest1_1 import _requestLine, _shutAndCloseOnce, _CHUNK_RE, _deChunk, _TRAILERS_RE, SocketWrapper
 
@@ -1324,8 +1324,120 @@ RuntimeError: Boom!\n""" % fileDict)
 
         asProcess(test())
 
-    def testHttpRequestAdapter(self):
-        self.fail()
+    def testHttpRequestAdapterWithMock(self):
+        def httprequestMessageMock(**kwargs):
+            raise StopIteration((
+                {
+                    'HTTPVersion': '1.7',  # Ofcouse.., but fun.
+                    'StatusCode': '200',
+                    'ReasonPhrase': 'Okee',
+                    'Headers': {
+                        'Host': 'farfaraway.com',
+                        'Transfer-Encoding': 'chunked',
+                        'Hdr': 'Vl',
+                    },
+                },
+                'Body'
+            ))
+            yield
+        trace = CallTrace('HttpRequest1_1Mock', methods={'httprequest1_1': httprequestMessageMock})
+        top = be((Observable(),
+            (HttpRequestAdapter(),
+                (trace,),
+            )
+        ))
+
+        # Minimal
+        result = retval(top.any.httprequest(host='h', port=12, request='/'))
+        self.assertEquals(['httprequest1_1'], trace.calledMethodNames())
+        call, = trace.calledMethods
+        self.assertEquals(((), {'host': 'h', 'request': '/', 'port': 12}), (call.args, call.kwargs))
+        self.assertEquals('HTTP/1.7 200 Okee\r\nHdr: Vl\r\nHost: farfaraway.com\r\nTransfer-Encoding: chunked\r\n\r\nBody', result)
+        trace.calledMethods.reset()
+
+        # ssl=True
+        result = retval(top.any.httprequest(host='h', port=12, request='/', ssl=True))
+        self.assertEquals(['httprequest1_1'], trace.calledMethodNames())
+        call, = trace.calledMethods
+        self.assertEquals(((), {'host': 'h', 'request': '/', 'port': 12, 'secure': True}), (call.args, call.kwargs))
+        self.assertTrue(result.startswith('HTTP/1.7 200'), result)
+        trace.calledMethods.reset()
+
+        # ssl=False
+        result = retval(top.any.httprequest(host='h', port=12, request='/', ssl=False))
+        call, = trace.calledMethods
+        self.assertEquals(((), {'host': 'h', 'request': '/', 'port': 12, 'secure': False}), (call.args, call.kwargs))
+        trace.calledMethods.reset()
+
+        # All arguments
+        result = retval(top.any.httprequest(host='h', port=12, request='/', ssl=True, body='sendme', headers={'h': 'v'}, method='SOME', prio=7, timeout=22.0))
+        call, = trace.calledMethods
+        self.assertEquals(((), {'host': 'h', 'request': '/', 'port': 12, 'secure': True, 'body': 'sendme', 'headers': {'h': 'v'}, 'method': 'SOME', 'prio': 7, 'timeout': 22.0}), (call.args, call.kwargs))
+        trace.calledMethods.reset()
+
+        # Unsupported features of HttpRequest.
+        try:
+            retval(top.any.httprequest(host='example.org', port=80, request='/', proxyServer='proxy.example.org'))
+            self.fail()
+        except TypeError, e:
+            self.assertEquals('proxyServer and handlePartialResponse arguments not supported in HttpRequest1_1 - so cannot adapt.', str(e))
+        self.assertRaises(TypeError, lambda: retval(top.any.httprequest(host='example.org', port=80, request='/', proxyServer='proxy.example.org')))
+
+        # Too much
+        try:
+            retval(top.any.httprequest(host='example.org', port=80, request='/', unknown='argument', illogical='yes!'))
+            self.fail()
+        except TypeError, e:
+            self.assertEquals('Unexpected argument(s): unknown, illogical', str(e))
+        # Too few
+        try:
+            retval(top.any.httprequest(host='example.org', port=80))
+            self.fail()
+        except TypeError, e:
+            self.assertTrue('httprequest() takes exactly' in str(e), str(e))
+
+    def testHttpRequestAdapterWithImplementation(self):
+        def r1(sok, log, remoteAddress, connectionNr):
+            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write('HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 0\r\n\r\n')
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def r2(sok, log, remoteAddress, connectionNr):
+            toRead = 'POST /second HTTP/1.1\r\nH: V\r\nContent-Length: 12\r\nHost: localhost\r\n\r\nrequest-body'
+            data = yield read(untilExpected=toRead)
+            self.assertEquals(toRead, data)
+
+            yield write('HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 4\r\n\r\nDone')
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies(replies=[r1, r2])
+            top = be((Observable(),
+                (HttpRequestAdapter(),
+                    (HttpRequest1_1(),
+                        (SocketPool(reactor=reactor()),),
+                    )
+                )
+            ))
+            mss.listen()
+            try:
+                # minimal
+                result = yield top.any.httprequest(host='localhost', port=mss.port, request='/first')
+                expected = 'HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'
+                self.assertEquals(expected, result)
+
+                # all (valid) arguments
+                result = yield top.any.httprequest(method='POST', host='localhost', port=mss.port, request='/second', body='request-body', headers={'H': 'V'}, ssl=False, prio=2, timeout=5.0)
+                expected = 'HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 4\r\n\r\nDone'
+                self.assertEquals(expected, result)
+            finally:
+                mss.close()
+
+        asProcess(test())
 
     ##
     ## Implementation-tests
