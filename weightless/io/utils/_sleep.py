@@ -2,6 +2,7 @@
 #
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
+# Copyright (C) 2015 Koninklijke Bibliotheek (KB) http://www.kb.nl
 # Copyright (C) 2015 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
