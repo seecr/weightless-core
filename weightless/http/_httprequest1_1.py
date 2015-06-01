@@ -112,7 +112,7 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
             retryOnce = True
 
         try:
-            while True:  # do ... while (retyOnce) "loop"
+            while True:  # do ... while (retryOnce) "loop"
                 if retryOnce is False:
                     shutAndCloseOnce = _noop
                     sok = yield _createSocket(host, port, secure, this, suspend, prio)
