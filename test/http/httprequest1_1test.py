@@ -1048,9 +1048,8 @@ RuntimeError: Boom!\n""" % fileDict)
             try:
                 _, _ = yield httprequest1_1(host='UEYR^$*FD(#>NDJ.khfd9.(*njnd', port=PortNumberGenerator.next(), request='/')
                 self.fail()
-            except SocketGaiError, e:
-                self.assertEquals(-2, e.args[0])
-                self.assertTrue('Name or service not known' in str(e), str(e))
+            except SocketGaiError:
+                pass
             # No-one listens
             try:
                 _, _ = yield httprequest1_1(host='127.0.0.1', port=PortNumberGenerator.next(), request='/')
