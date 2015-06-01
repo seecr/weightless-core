@@ -4,7 +4,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2013, 2015 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -24,7 +24,7 @@
 #
 ## end license ##
 
-from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_CORK, TCP_NODELAY
+from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_CORK
 from struct import pack
 
 def createSocket(port, bindAddress=None):

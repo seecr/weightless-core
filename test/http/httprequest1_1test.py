@@ -31,21 +31,19 @@ from seecr.test import CallTrace
 from seecr.test.io import stderr_replaced, stdout_replaced
 from seecr.test.portnumbergenerator import PortNumberGenerator
 
-from httpreadertest import server as testserver
-
 import sys
 from collections import namedtuple
 from errno import ECONNREFUSED
 from functools import wraps
 from re import sub
-from socket import socket, error as SocketError, gaierror as SocketGaiError, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_NODELAY, SHUT_RDWR, SHUT_RD
+from socket import socket, error as SocketError, gaierror as SocketGaiError, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_NODELAY, SHUT_RDWR
 from struct import pack
 from sys import exc_info, version_info
-from time import sleep, time
+from time import time
 from traceback import format_exception, print_exc
 
-from weightless.core import compose, identify, is_generator, Yield, local, be, Observable, retval
-from weightless.io import Reactor, Suspend, TimeoutException, reactor
+from weightless.core import compose, identify, Yield, local, be, Observable, retval
+from weightless.io import Suspend, TimeoutException, reactor
 from weightless.io.utils import asProcess, sleep as zleep
 from weightless.http import HttpServer, SocketPool, parseHeaders
 from weightless.http import HttpRequest1_1, HttpRequestAdapter

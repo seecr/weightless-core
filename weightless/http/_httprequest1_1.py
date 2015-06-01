@@ -25,13 +25,11 @@
 ## end license ##
 
 import re
-import sys
 from errno import EINPROGRESS
 from functools import partial
 from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_RDWR, SOL_TCP, TCP_KEEPINTVL, TCP_KEEPIDLE, TCP_KEEPCNT, SO_KEEPALIVE
 from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
 from sys import exc_info, getdefaultencoding
-from urlparse import urlsplit
 
 from weightless.core import compose, identify, Observable, autostart
 from weightless.io import Suspend, TimeoutException
