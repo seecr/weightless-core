@@ -27,7 +27,7 @@
 import re
 from errno import EINPROGRESS
 from functools import partial
-from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_RDWR, SOL_TCP, TCP_KEEPINTVL, TCP_KEEPIDLE, TCP_KEEPCNT, SO_KEEPALIVE, TCP_QUICKACK
+from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_RDWR, SOL_TCP, TCP_KEEPINTVL, TCP_KEEPIDLE, TCP_KEEPCNT, SO_KEEPALIVE, TCP_QUICKACK, TCP_NODELAY
 from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
 from sys import exc_info, getdefaultencoding
 
@@ -191,7 +191,7 @@ def _createSocket(host, port, secure, this, suspend, prio):
     sok.setsockopt(SOL_TCP, TCP_KEEPIDLE, 60*10)
     sok.setsockopt(SOL_TCP, TCP_KEEPINTVL, 75)
     sok.setsockopt(SOL_TCP, TCP_KEEPCNT, 9)
-    sok.setsockopt(SOL_TCP, TCP_QUICKACK, 1)
+    sok.setsockopt(SOL_TCP, TCP_NODELAY, 1)
     try:
         sok.connect((host, port))
     except SocketError, (errno, msg):
@@ -382,6 +382,7 @@ def _sslHandshake(sok, this, suspend, prio):
         count += 1
         try:
             sok.do_handshake()
+            sok.setsockopt(SOL_TCP, TCP_QUICKACK, 1)  # May be read or write; set just in case it's read.
             break
         except SSLError as err:
             if err.args[0] == SSL_ERROR_WANT_READ:
@@ -480,6 +481,7 @@ def _asyncRead(sok):
         except SSLError, e:
             if e.errno != SSL_ERROR_WANT_READ:
                 raise
+            sok.setsockopt(SOL_TCP, TCP_QUICKACK, 1)
             continue
 
         if response == '':
