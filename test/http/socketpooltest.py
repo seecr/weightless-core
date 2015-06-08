@@ -26,6 +26,7 @@
 ## end license ##
 
 from seecr.test import SeecrTestCase, CallTrace
+from seecr.test.io import stderr_replaced
 
 from socket import SHUT_RDWR
 
@@ -103,6 +104,112 @@ class SocketPoolTest(SeecrTestCase):
 
         retval(sp.putSocketInPool(host='10.0.0.1', port=60000, sock=2))
         self.assertEquals(2, retval(sp.getPooledSocket(host='10.0.0.1', port=60000)))
+
+    ##
+    ## Poolsize global limit
+    def testLimitsMustBeKnown(self):
+        self.assertRaises(TypeError, lambda: SocketPool(reactor='x', limits={'unknown': 'limit'}))
+
+    def testLimitSetNotReached(self):
+        def test():
+            sp = SocketPool(reactor=CallTrace(), limits={'totalSize': 3})  # Limits enforced on put, not async.
+            def fillAndEmpty():
+                yield sp.putSocketInPool(host='h', port=1, sock='s0')
+                yield sp.putSocketInPool(host='h', port=1, sock='s1')
+                yield sp.putSocketInPool(host='h', port=1, sock='s2')
+
+                for i in xrange(3):
+                    self.assertEquals('s{0}'.format(i), (yield sp.getPooledSocket(host='h', port=1)))
+            yield fillAndEmpty()
+            yield fillAndEmpty()
+
+        asProcess(test())
+
+    def testLimitSetReached(self):
+        def test():
+            sp = SocketPool(reactor=CallTrace(), limits={'totalSize': 2})  # Limits enforced on put, not async.
+            def stillPooled():
+                wasStillPooled = []
+                while True:  # do ... while (fromPool is not None)
+                    fromPool = yield sp.getPooledSocket(host='h', port=1)
+                    if fromPool:
+                        wasStillPooled.append(fromPool)
+
+                    if fromPool is None: break
+                raise StopIteration(wasStillPooled)
+
+            yield sp.putSocketInPool(host='h', port=1, sock=MockSok('s0'))
+            yield sp.putSocketInPool(host='h', port=1, sock=MockSok('s1'))
+            with stderr_replaced() as err:
+                yield sp.putSocketInPool(host='h', port=1, sock=MockSok('s2'))
+                self.assertEquals('', err.getvalue(), err.getvalue())  #@@
+            wasStillPooled = yield stillPooled()
+            self.assertEquals(['s1', 's2'], wasStillPooled)
+
+            yield sp.putSocketInPool(host='h', port=1, sock=MockSok('s0'))
+            yield sp.putSocketInPool(host='h', port=1, sock=MockSok('s1'))
+            yield sp.putSocketInPool(host='h', port=1, sock=MockSok('s2'))
+            yield sp.putSocketInPool(host='h', port=1, sock=MockSok('s3'))
+            wasStillPooled = yield stillPooled()
+            self.assertEquals(['s2', 's3'], wasStillPooled)
+
+        asProcess(test())
+
+    def testSocketRemovedOnReachingLimitIsClosed(self):
+        self.fail()
+
+    def testLimitSetReachedWithDifferentDestinations(self):
+        def test():
+            sp = SocketPool(reactor=CallTrace(), limits={'totalSize': 2})  # Limits enforced on put, not async.
+            def stillPooled():
+                wasStillPooled = []
+                for destHost, destPort in [('h', 1), ('i', 2), ('j', 3)]:
+                    while True:  # do ... while (fromPool is not None)
+                        fromPool = yield sp.getPooledSocket(host=destHost, port=destPort)
+                        if fromPool:
+                            wasStillPooled.append(fromPool)
+
+                        if fromPool is None: break
+                raise StopIteration(wasStillPooled)
+
+            yield sp.putSocketInPool(host='h', port=1, sock=MockSok('sH'))
+            yield sp.putSocketInPool(host='i', port=2, sock=MockSok('sI'))
+            with stderr_replaced() as err:
+                yield sp.putSocketInPool(host='j', port=3, sock=MockSok('sJ'))
+                self.assertEquals('', err.getvalue(), err.getvalue())  #@@
+            wasStillPooled = yield stillPooled()
+            self.assertEquals(2, len(wasStillPooled))
+            self.assertTrue(set(wasStillPooled).issubset(set(['sH', 'sI', 'sJ'])))
+
+        asProcess(test())
+
+    def testLimitDestinationReached(self):
+        def test():
+            sp = SocketPool(reactor=CallTrace(), limits={'destinationsSize': 2})  # Limits enforced on put, not async.
+            def stillPooled():
+                wasStillPooled = []
+                for destHost, destPort in [('h', 1), ('i', 2), ('j', 3)]:
+                    while True:  # do ... while (fromPool is not None)
+                        fromPool = yield sp.getPooledSocket(host=destHost, port=destPort)
+                        if fromPool:
+                            wasStillPooled.append(fromPool)
+
+                        if fromPool is None: break
+                raise StopIteration(wasStillPooled)
+
+            yield sp.putSocketInPool(host='h', port=1, sock=MockSok('sH'))
+            yield sp.putSocketInPool(host='i', port=2, sock=MockSok('sI'))
+            yield sp.putSocketInPool(host='j', port=3, sock=MockSok('sJ'))
+            yield sp.putSocketInPool(host='j', port=3, sock=MockSok('sJ2'))
+            with stderr_replaced() as err:
+                yield sp.putSocketInPool(host='j', port=3, sock=MockSok('sJ3'))
+                self.assertEquals('', err.getvalue(), err.getvalue())
+            wasStillPooled = yield stillPooled()
+            self.assertEquals(4, len(wasStillPooled))
+            self.assertEquals(['sH', 'sI', 'sJ2', 'sJ3'], wasStillPooled)
+
+        asProcess(test())
+
 
     ##
     ## unusedTimeout (reactor interaction)
@@ -212,6 +319,9 @@ class MockSok(object):
 
     def __str__(self):
         return self._id
+
+    def __hash__(self):
+        return hash(self._id)
 
     def __repr__(self):
         return '{0}(id={1})'.format(self.__class__.__name__, self._id)

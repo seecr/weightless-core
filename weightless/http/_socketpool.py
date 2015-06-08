@@ -24,6 +24,7 @@
 ## end license ##
 
 import sys
+from random import choice
 from socket import SHUT_RDWR
 from time import time
 from traceback import print_exc
@@ -35,19 +36,21 @@ class SocketPool(object):
     """
     Minimal SocketPool implementation.
 
-    No maximum on:
-     - total poolsize
-     - per destination pooled size
-
     Further:
      - Re-uses oldest connections first (FIFO)
      - does not sanity-check sockets (socket errors, fd-errors, read-with-pushback checks)
     """
 
-    def __init__(self, reactor, unusedTimeout=None):
+    def __init__(self, reactor, unusedTimeout=None, limits=None):
         self._reactor = reactor
         self._unusedTimeout = unusedTimeout
+        self._limitTotalSize = limits.get(_TOTAL_SIZE) if limits else None
+        self._limitDestinationsSize = limits.get(_DESTINATIONS_SIZE) if limits else None
         self._pool = {}
+        self._poolSize = 0
+
+        if limits and not set(limits.keys()).issubset(_LIMITS):
+            raise TypeError('limits argument options must be one of: ' + ', '.join(_LIMITS))
 
         if unusedTimeout is not None:
             self._initUnusedTimeout()
@@ -59,7 +62,9 @@ class SocketPool(object):
             return
 
         try:
-            raise StopIteration(socks.pop(0)[0])
+            s = socks.pop(0)[0]
+            self._poolSize -= 1
+            raise StopIteration(s)
         except IndexError:
             del self._pool[key]
             return
@@ -68,9 +73,28 @@ class SocketPool(object):
     def putSocketInPool(self, host, port, sock):
         # Expects a socket *object*, not a file-descriptor!
         key = (host, port)
+        yield self._purgeSocksIfOversized(key)
         self._pool.setdefault(key, []).append((sock, time()))
+        self._poolSize += 1
         return
         yield
+
+    def _purgeSocksIfOversized(self, key):
+        if self._limitDestinationsSize is not None:
+            destinationPool = self._pool.get(key)
+            if destinationPool and len(destinationPool) + 1 > self._limitDestinationsSize:
+                sock = destinationPool.pop(0)[0]
+                self._poolSize -= 1
+                _shutAndCloseIgnorant(sock)
+
+        if (self._limitTotalSize is not None) and (self._poolSize + 1) > self._limitTotalSize:
+            # remove 1 (no bulk put, so max. 1 more than limit).
+            while True:
+                host, port = choice(self._pool.keys())
+                sock = yield self.getPooledSocket(host=host, port=port)
+                if sock:
+                    _shutAndCloseIgnorant(sock)
+                    break
 
     def _initUnusedTimeout(self):
         @identify
@@ -90,13 +114,8 @@ class SocketPool(object):
                             sock, putTime = t
                             if now > (putTime + unusedTimeout):
                                 _list.remove(t)
-                                try:
-                                    sock.shutdown(SHUT_RDWR)
-                                except (AssertionError, KeyboardInterrupt, SystemExit):
-                                    raise
-                                except Exception:
-                                    pass  # Cleanup, not interested in socket / fd errors here.
-                                sock.close()
+                                self._poolSize -= 1
+                                _shutAndCloseIgnorant(sock)
             except (AssertionError, KeyboardInterrupt, SystemExit):
                 raise
             except Exception:
@@ -106,3 +125,16 @@ class SocketPool(object):
 
         unusedTimeout()
 
+
+def _shutAndCloseIgnorant(sock):
+    try:
+        sock.shutdown(SHUT_RDWR)
+    except (AssertionError, KeyboardInterrupt, SystemExit):
+        raise
+    except Exception:
+        pass  # Cleanup, not interested in socket / fd errors here.
+    sock.close()
+
+_TOTAL_SIZE = 'totalSize'
+_DESTINATIONS_SIZE = 'destinationsSize'
+_LIMITS = set([_TOTAL_SIZE, _DESTINATIONS_SIZE])
