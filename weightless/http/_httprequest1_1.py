@@ -127,6 +127,10 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
                             data = body
                             if type(data) is unicode:
                                 data = data.encode(getdefaultencoding())
+                            # Only specify Content-Length when there is a body, because:
+                            #   - Having Content-Length or Transfer-Encoding specified on request, detemines wether a body exists;
+                            #     see: https://tools.ietf.org/html/rfc7230#section-3.3 (paragraphs 2 & 3).
+                            #   - Cannot handle Content-Length or Transfer-Encoding set in headers!
                             headers.update({'Content-Length': len(data)})
                         yield _sendHttpHeaders(sok, method, request, headers, host)
                         if body:
