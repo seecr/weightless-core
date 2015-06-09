@@ -87,7 +87,7 @@ class SocketPool(Observable):
                 sock = destinationPool.pop(0)[0]
                 self._poolSize -= 1
                 _shutAndCloseIgnorant(sock)
-                self.do.log(message="[SocketPool] destinationSize limit (%s) reached for: %s:%d" % (self._limitDestinationSize, key[0], key[1]))
+                self.do.log(message="[SocketPool] destinationSize limit (%s) reached for: %s:%d\n" % (self._limitDestinationSize, key[0], key[1]))
 
         if (self._limitTotalSize is not None) and self._poolSize >= self._limitTotalSize:
             while True:
@@ -95,7 +95,7 @@ class SocketPool(Observable):
                 sock = yield self.getPooledSocket(host=host, port=port)
                 if sock:
                     _shutAndCloseIgnorant(sock)
-                    self.do.log(message="[SocketPool] totalSize limit (%s) reached, removed socket for: %s:%d" % (self._limitTotalSize, host, port))
+                    self.do.log(message="[SocketPool] totalSize limit (%s) reached, removed socket for: %s:%d\n" % (self._limitTotalSize, host, port))
                     break
 
     def _initUnusedTimeout(self):

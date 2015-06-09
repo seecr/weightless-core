@@ -157,7 +157,7 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
                         raise
 
                     retryOnce = False
-                    observable.do.log(message="[HttpRequest1_1] Error when reusing socket for %s:%d. Trying again" % (host, port))
+                    observable.do.log(message="[HttpRequest1_1] Error when reusing socket for %s:%d. Trying again\n" % (host, port))
                     continue
 
                 break
