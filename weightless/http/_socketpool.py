@@ -45,7 +45,7 @@ class SocketPool(object):
         self._reactor = reactor
         self._unusedTimeout = unusedTimeout
         self._limitTotalSize = limits.get(_TOTAL_SIZE) if limits else None
-        self._limitDestinationsSize = limits.get(_DESTINATIONS_SIZE) if limits else None
+        self._limitDestinationsSize = limits.get(_DESTINATION_SIZE) if limits else None
         self._pool = {}
         self._poolSize = 0
 
@@ -82,13 +82,12 @@ class SocketPool(object):
     def _purgeSocksIfOversized(self, key):
         if self._limitDestinationsSize is not None:
             destinationPool = self._pool.get(key)
-            if destinationPool and len(destinationPool) + 1 > self._limitDestinationsSize:
+            if destinationPool and len(destinationPool) >= self._limitDestinationsSize:
                 sock = destinationPool.pop(0)[0]
                 self._poolSize -= 1
                 _shutAndCloseIgnorant(sock)
 
-        if (self._limitTotalSize is not None) and (self._poolSize + 1) > self._limitTotalSize:
-            # remove 1 (no bulk put, so max. 1 more than limit).
+        if (self._limitTotalSize is not None) and self._poolSize >= self._limitTotalSize:
             while True:
                 host, port = choice(self._pool.keys())
                 sock = yield self.getPooledSocket(host=host, port=port)
@@ -136,5 +135,5 @@ def _shutAndCloseIgnorant(sock):
     sock.close()
 
 _TOTAL_SIZE = 'totalSize'
-_DESTINATIONS_SIZE = 'destinationsSize'
-_LIMITS = set([_TOTAL_SIZE, _DESTINATIONS_SIZE])
+_DESTINATION_SIZE = 'destinationSize'
+_LIMITS = set([_TOTAL_SIZE, _DESTINATION_SIZE])

@@ -189,7 +189,7 @@ class SocketPoolTest(SeecrTestCase):
 
     def testLimitDestinationReached(self):
         def test():
-            sp = SocketPool(reactor=CallTrace(), limits={'destinationsSize': 2})  # Limits enforced on put, not async.
+            sp = SocketPool(reactor=CallTrace(), limits={'destinationSize': 2})  # Limits enforced on put, not async.
             def stillPooled():
                 wasStillPooled = []
                 for destHost, destPort in [('h', 1), ('i', 2), ('j', 3)]:
