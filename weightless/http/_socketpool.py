@@ -29,10 +29,10 @@ from socket import SHUT_RDWR
 from time import time
 from traceback import print_exc
 
-from weightless.core import compose, identify
+from weightless.core import Observable, compose, identify
 
 
-class SocketPool(object):
+class SocketPool(Observable):
     """
     Minimal SocketPool implementation.
 
@@ -41,11 +41,12 @@ class SocketPool(object):
      - does not sanity-check sockets (socket errors, fd-errors, read-with-pushback checks)
     """
 
-    def __init__(self, reactor, unusedTimeout=None, limits=None):
+    def __init__(self, reactor, unusedTimeout=None, limits=None, **kwargs):
+        Observable.__init__(self, **kwargs)
         self._reactor = reactor
         self._unusedTimeout = unusedTimeout
         self._limitTotalSize = limits.get(_TOTAL_SIZE) if limits else None
-        self._limitDestinationsSize = limits.get(_DESTINATION_SIZE) if limits else None
+        self._limitDestinationSize = limits.get(_DESTINATION_SIZE) if limits else None
         self._pool = {}
         self._poolSize = 0
 
@@ -80,12 +81,13 @@ class SocketPool(object):
         yield
 
     def _purgeSocksIfOversized(self, key):
-        if self._limitDestinationsSize is not None:
+        if self._limitDestinationSize is not None:
             destinationPool = self._pool.get(key)
-            if destinationPool and len(destinationPool) >= self._limitDestinationsSize:
+            if destinationPool and len(destinationPool) >= self._limitDestinationSize:
                 sock = destinationPool.pop(0)[0]
                 self._poolSize -= 1
                 _shutAndCloseIgnorant(sock)
+                self.do.log(message="[SocketPool] destinationSize limit (%s) reached for: %s:%d" % (self._limitDestinationSize, key[0], key[1]))
 
         if (self._limitTotalSize is not None) and self._poolSize >= self._limitTotalSize:
             while True:
@@ -93,6 +95,7 @@ class SocketPool(object):
                 sock = yield self.getPooledSocket(host=host, port=port)
                 if sock:
                     _shutAndCloseIgnorant(sock)
+                    self.do.log(message="[SocketPool] totalSize limit (%s) reached, removed socket for: %s:%d" % (self._limitTotalSize, host, port))
                     break
 
     def _initUnusedTimeout(self):

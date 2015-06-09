@@ -112,7 +112,7 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
 
         try:
             while True:  # do ... while (retryOnce) "loop"
-                if retryOnce is False:
+                if not retryOnce:
                     shutAndCloseOnce = _noop
                     sok = yield _createSocket(host, port, secure, this, suspend, prio)
                 shutAndCloseOnce = _shutAndCloseOnce(sok)
@@ -157,6 +157,7 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
                         raise
 
                     retryOnce = False
+                    observable.do.log(message="[HttpRequest1_1] Error when reusing socket for %s:%d. Trying again" % (host, port))
                     continue
 
                 break
