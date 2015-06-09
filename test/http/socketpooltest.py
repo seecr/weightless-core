@@ -138,13 +138,20 @@ class SocketPoolTest(SeecrTestCase):
                     if fromPool is None: break
                 raise StopIteration(wasStillPooled)
 
-            yield sp.putSocketInPool(host='h', port=1, sock=MockSok('s0'))
-            yield sp.putSocketInPool(host='h', port=1, sock=MockSok('s1'))
+            s0 = MockSok('s0')
+            s1 = MockSok('s1')
+            yield sp.putSocketInPool(host='h', port=1, sock=s0)
+            yield sp.putSocketInPool(host='h', port=1, sock=s1)
             with stderr_replaced() as err:
                 yield sp.putSocketInPool(host='h', port=1, sock=MockSok('s2'))
                 self.assertEquals('', err.getvalue(), err.getvalue())  #@@
             wasStillPooled = yield stillPooled()
             self.assertEquals(['s1', 's2'], wasStillPooled)
+            self.assertEquals(['shutdown', 'close'], s0.log.calledMethodNames())
+            shutCall, closeCall = s0.log.calledMethods
+            self.assertEquals(((SHUT_RDWR,), {}), (shutCall.args, shutCall.kwargs))
+            self.assertEquals(((), {}), (closeCall.args, closeCall.kwargs))
+            self.assertEquals([], s1.log.calledMethodNames())
 
             yield sp.putSocketInPool(host='h', port=1, sock=MockSok('s0'))
             yield sp.putSocketInPool(host='h', port=1, sock=MockSok('s1'))
@@ -154,9 +161,6 @@ class SocketPoolTest(SeecrTestCase):
             self.assertEquals(['s2', 's3'], wasStillPooled)
 
         asProcess(test())
-
-    def testSocketRemovedOnReachingLimitIsClosed(self):
-        self.fail()
 
     def testLimitSetReachedWithDifferentDestinations(self):
         def test():
@@ -197,19 +201,21 @@ class SocketPoolTest(SeecrTestCase):
                         if fromPool is None: break
                 raise StopIteration(wasStillPooled)
 
+            sJ = MockSok('sJ')
+            sJ2 = MockSok('sJ2')
             yield sp.putSocketInPool(host='h', port=1, sock=MockSok('sH'))
             yield sp.putSocketInPool(host='i', port=2, sock=MockSok('sI'))
-            yield sp.putSocketInPool(host='j', port=3, sock=MockSok('sJ'))
-            yield sp.putSocketInPool(host='j', port=3, sock=MockSok('sJ2'))
+            yield sp.putSocketInPool(host='j', port=3, sock=sJ)
+            yield sp.putSocketInPool(host='j', port=3, sock=sJ2)
             with stderr_replaced() as err:
                 yield sp.putSocketInPool(host='j', port=3, sock=MockSok('sJ3'))
                 self.assertEquals('', err.getvalue(), err.getvalue())
             wasStillPooled = yield stillPooled()
             self.assertEquals(4, len(wasStillPooled))
             self.assertEquals(['sH', 'sI', 'sJ2', 'sJ3'], wasStillPooled)
+            self.assertEquals(['shutdown', 'close'], sJ.log.calledMethodNames())
 
         asProcess(test())
-
 
     ##
     ## unusedTimeout (reactor interaction)
