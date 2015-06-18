@@ -28,6 +28,7 @@
 from __future__ import with_statement
 
 from weightlesstestcase import WeightlessTestCase
+from testutils import nrOfOpenFds
 
 import os, sys
 from StringIO import StringIO
@@ -437,14 +438,16 @@ class ReactorTest(WeightlessTestCase):
 
     def testGetRidOfBadFileDescriptors(self):
         reactor = Reactor()
+        FD_HIGHER_THAN_ANY_EXISTING = 250  # TRICKY: select internals leak; use value representable in 1 byte!
+        self.assertTrue(FD_HIGHER_THAN_ANY_EXISTING > nrOfOpenFds() + 5, nrOfOpenFds())  # Some margin; can give false positives (nr_of_fds != (highest_fd_number - 1))
         class BadSocket(object):
-            def fileno(self): return 188
+            def fileno(self): return FD_HIGHER_THAN_ANY_EXISTING
             def close(self): raise Exception('hell breaks loose')
         self.timeout = False
         def timeout():
             self.timeout = True
-        reactor.addReader(199, lambda: None) # broken
-        reactor.addWriter(199, lambda: None) # broken
+        reactor.addReader(FD_HIGHER_THAN_ANY_EXISTING + 1, lambda: None) # broken
+        reactor.addWriter(FD_HIGHER_THAN_ANY_EXISTING + 1, lambda: None) # broken
         reactor.addReader(BadSocket(), lambda: None) # even more broken
         reactor.addTimer(0.01, timeout)
         with self.stderr_replaced() as s:
@@ -452,7 +455,7 @@ class ReactorTest(WeightlessTestCase):
                 if self.timeout:
                     break
                 reactor.step()
-            self.assertTrue("Bad file descriptor" in s.getvalue(), s.getvalue())
+            self.assertTrue("Bad file descriptor" in s.getvalue(), repr(s.getvalue()))
         self.assertTrue(self.timeout)
         self.assertEquals({}, reactor._readers)
         self.assertEquals({}, reactor._writers)
