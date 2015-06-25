@@ -69,9 +69,6 @@ class Reactor(object):
         self._prio = -1
         self._processReadPipe, self._processWritePipe = pipe()
 
-    def __del__(self):
-        self._closeProcessPipe()
-
     def addReader(self, sok, sink, prio=None):
         """Adds a socket and calls sink() when the socket becomes readable. It remains at the readers list."""
         if sok in self._suspended:
