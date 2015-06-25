@@ -28,7 +28,8 @@
 from __future__ import with_statement
 
 from weightlesstestcase import WeightlessTestCase
-from testutils import nrOfOpenFds
+from seecr.test.io import stderr_replaced
+from testutils import readAndWritable, nrOfOpenFds
 
 import os, sys
 from StringIO import StringIO
@@ -184,8 +185,6 @@ class ReactorTest(WeightlessTestCase):
         self.assertEquals([], reactor._timers)
 
     def testRemoveEffectiveImmediately(self):
-        readAndWritable = lambda: os.tmpfile()
-
         log = []
         processDone = []
         @identify
@@ -243,6 +242,7 @@ class ReactorTest(WeightlessTestCase):
                 self.assertEquals('Stop Please', str(e))
                 log.append('abort')
             _reactor.removeReader(sok=rw)
+            rw.close()
             processDone.append(True)
             yield  # wait for GC
             self.fail('Called Twice!')
@@ -267,6 +267,7 @@ class ReactorTest(WeightlessTestCase):
                 self.assertEquals('Stop Please', str(e))
                 log.append('abort')
             _reactor.removeWriter(sok=rw)
+            rw.close()
             processDone.append(True)
             yield  # wait for GC
             self.fail('Called Twice!')
@@ -336,84 +337,88 @@ class ReactorTest(WeightlessTestCase):
         self.assertEquals([], reactor._timers)
 
     def testAssertionErrorInReadCallback(self):
-        sys.stderr = StringIO()
-        try:
+        rwFd = readAndWritable()
+        with stderr_replaced():
             def callback(): raise AssertionError('here is the assertion')
-            reactor = Reactor(lambda r, w, o, t: (r,w,o))
-            reactor.addReader(9, callback)
+            reactor = Reactor()
+            reactor.addReader(rwFd, callback)
             try:
                 reactor.step()
                 self.fail('must raise exception')
             except AssertionError, e:
                 self.assertEquals('here is the assertion', str(e))
-        finally:
-            sys.stderr = sys.__stderr__
 
     def testAssertionErrorInWRITECallback(self):
-        sys.stderr = StringIO()
-        try:
+        rwFd = readAndWritable()
+        with stderr_replaced():
             def callback(): raise AssertionError('here is the assertion')
-            reactor = Reactor(lambda r, w, o, t: (r,w,o))
-            reactor.addWriter(9, callback)
+            reactor = Reactor()
+            reactor.addWriter(rwFd, callback)
             try:
                 reactor.step()
                 self.fail('must raise exception')
             except AssertionError, e:
                 self.assertEquals('here is the assertion', str(e))
-        finally:
-            sys.stderr = sys.__stderr__
 
     def testWriteFollowsRead(self):
-        reactor = Reactor(lambda r,w,o,t: (r,w,o))
+        reactor = Reactor()
+        rwFd = readAndWritable()
         t = []
         def read():
             t.append('t1')
         def write():
             t.append('t2')
-        reactor.addWriter('sok1', write)
-        reactor.addReader('sok1', read)
+        reactor.addWriter(rwFd, write)
+        reactor.addReader(rwFd, read)
         reactor.step()
         self.assertEquals(['t1', 't2'], t)
+        rwFd.close()
 
     def testReadDeletesWrite(self):
-        reactor = Reactor(lambda r,w,o,t: (r,w,o))
+        reactor = Reactor()
+        rwFd = readAndWritable()
         self.read = self.write = False
         def read():
             self.read = True
-            reactor.removeWriter('sok1')
+            reactor.removeWriter(rwFd)
         def write():
             self.write = True
-        reactor.addWriter('sok1', write)
-        reactor.addReader('sok1', read)
+        reactor.addWriter(rwFd, write)
+        reactor.addReader(rwFd, read)
         reactor.step()
         self.assertTrue(self.read)
         self.assertFalse(self.write)
+        rwFd.close()
 
     def testReadFollowsTimer(self):
-        reactor = Reactor(lambda r,w,o,t: (r,w,o))
+        reactor = Reactor()
+        rwFd = readAndWritable()
         t = []
         def timer():
             t.append('t1')
         def read():
             t.append('t2')
         reactor.addTimer(0, timer)
-        reactor.addReader('sok1', read)
+        reactor.addReader(rwFd, read)
         reactor.step()
         self.assertEquals(['t1', 't2'], t)
+        rwFd.close()
 
     def testTimerDeletesRead(self):
-        reactor = Reactor(lambda r,w,o,t: (r,w,o))
+        reactor = Reactor()
+        rwFd = readAndWritable()
         self.read = self.timer = False
         def read():
             self.read = True
         def timer():
             self.timer = True
-            reactor.removeReader('sok1')
+            reactor.removeReader(rwFd)
         reactor.addTimer(0, timer)
-        reactor.addReader('sok1', read)
+        reactor.addReader(rwFd, read)
         reactor.step()
         self.assertTrue(self.timer)
         self.assertFalse(self.read)
+        rwFd.close()
 
     def testInterruptedSelectDoesNotDisturbTimer(self):
         reactor = Reactor()
@@ -490,6 +495,8 @@ class ReactorTest(WeightlessTestCase):
             self.fail('must not fail')
 
     def testDoNotMaskOtherErrors(self):
+        # TS: TODO: rewrite!
+        self.fail('rewrite for epoll white-box')
         def raiser(*args): raise Exception('oops')
         reactor = Reactor(raiser)
         try:

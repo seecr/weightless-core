@@ -60,13 +60,12 @@ class Reactor(object):
     MAXPRIO = 10
     DEFAULTPRIO = 0
 
-    def __init__(self, select_func = select):
+    def __init__(self):
         self._readers = {}
         self._writers = {}
         self._suspended = {}
         self._processes = {}
         self._timers = []
-        self._select = select_func
         self._prio = -1
         self._processReadPipe, self._processWritePipe = pipe()
 
@@ -172,7 +171,7 @@ class Reactor(object):
 
         try:
             readers = self._readers.keys() + [self._processReadPipe]
-            rReady, wReady, ignored = self._select(readers, self._writers.keys(), [], timeout)
+            rReady, wReady, ignored = select(readers, self._writers.keys(), [], timeout)
         except TypeError:
             print_exc()
             self._findAndRemoveBadFd()

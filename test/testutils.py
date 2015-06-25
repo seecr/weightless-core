@@ -22,9 +22,13 @@
 #
 ## end license ##
 
-from os import getpid, listdir
+from os import getpid, listdir, tmpfile
+
 
 def nrOfOpenFds():
     pid = getpid()
     return len(listdir('/proc/%d/fd' % pid))
+
+def readAndWritable():
+    return tmpfile()
 

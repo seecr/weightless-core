@@ -61,7 +61,6 @@ class WeightlessTestCase(TestCase):
         fd, self.tempfile = mkstemp()
         os.close(fd)
         self.reactor = Reactor()
-        self.mockreactor = Reactor(lambda r, w, o, t: (r, w, o))
         self.port = PortNumberGenerator.next()
 
     def tearDown(self):
@@ -79,7 +78,6 @@ class WeightlessTestCase(TestCase):
                 % (t.time-t0, cb.func_name, code.co_filename, code.co_firstlineno)
         self.assertEquals([], self.reactor._timers)
         self.reactor.shutdown()
-        self.mockreactor.shutdown()
         rmtree(self.tempdir)
         os.remove(self.tempfile)
         TestCase.tearDown(self)

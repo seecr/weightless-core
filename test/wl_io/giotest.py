@@ -33,7 +33,8 @@ from socket import socketpair, socket
 from struct import pack
 from time import sleep
 
-from weightless.io import Reactor, Gio, giopen
+from weightless.io import Reactor, reactor, Gio, giopen
+from weightless.io.utils import asProcess
 from weightless.io._gio import Context, SocketContext, Timer, TimeoutException
 
 class GioTest(WeightlessTestCase):
@@ -44,16 +45,22 @@ class GioTest(WeightlessTestCase):
         self.assertTrue(hasattr(result, '__exit__'))
 
     def testYieldWithoutContext(self):
-        done = []
-        def handler():
+        def test():
+            done = []
+            def handler():
+                yield
+                yield 'a'
+                done.append(True)
+            try:
+                g = Gio(reactor(), handler())
+                self.fail('must not come here')
+            except AssertionError, e:
+                self.assertEquals('Gio: No context available.', str(e))
+
+            return
             yield
-            yield 'a'
-            done.append(True)
-        try:
-            g = Gio(self.mockreactor, handler())
-            self.fail('must not come here')
-        except AssertionError, e:
-            self.assertEquals('Gio: No context available.', str(e))
+
+        asProcess(test())
 
     def testNeverExittedContextIsForcedToExitByGeneratorExitWhileWriting(self):
         context =  giopen(self.tempfile, 'rw')
@@ -222,51 +229,62 @@ class GioTest(WeightlessTestCase):
         server.stop()
 
     def testTimerDoesNotFire(self):
-        done = []
-        def handler():
-            with giopen(self.tempfile, 'rw'):
-                with Timer(0.1):
-                    yield 'a'
-                yield 'b'
-            done.append(True)
-        g = Gio(self.mockreactor, handler())
-        self.mockreactor.step().step()
-        self.assertEquals([True], done)
-        self.assertEquals([], self.mockreactor._timers)
-        self.assertEquals([], g._contextstack)
+        def test():
+            done = []
+            def handler():
+                with giopen(self.tempfile, 'rw'):
+                    with Timer(0.01):
+                        yield 'a'
+                    yield 'b'
+                done.append(True)
+            g = Gio(reactor(), handler())
+            for _ in range(42):
+                yield
+            self.assertEquals([True], done)
+            self.assertEquals([], reactor()._timers)
+            self.assertEquals([], g._contextstack)
+
+        asProcess(test())
 
     def testTimerTimesOutOutsideBlock(self):
-        done = []
-        def handler():
-            try:
-                with giopen(self.tempfile, 'rw'):
-                    with Timer(0.1):
-                        for i in xrange(999999):
-                            yield 'a'
-            except TimeoutException:
-                done.append(False)
-            yield
-        g = Gio(self.mockreactor, handler())
-        while not done:
-            self.mockreactor.step()
-        self.assertEquals([False], done)
-        self.assertEquals([], self.mockreactor._timers)
-        self.assertEquals([], g._contextstack)
+        def test():
+            done = []
+            def handler():
+                try:
+                    with giopen(self.tempfile, 'rw'):
+                        with Timer(0.01):
+                            for i in xrange(999999):
+                                yield 'a'
+                except TimeoutException:
+                    done.append(False)
+                yield
+            g = Gio(reactor(), handler())
+            while not done:
+                yield
+            self.assertEquals([False], done)
+            self.assertEquals([], reactor()._timers)
+            self.assertEquals([], g._contextstack)
+
+        asProcess(test())
 
     def testTimerTimesOutWithinBlock(self):
-        done = []
-        def handler():
-            with giopen(self.tempfile, 'rw'):
-                with Timer(0.1):
-                    try:
-                        for i in xrange(999999):
-                            yield 'a'
-                    except TimeoutException:
-                        done.append(False)
-            yield
-        g = Gio(self.reactor, handler())
-        while done != [False]:
-            self.reactor.step()
-        self.assertEquals([False], done)
-        self.assertEquals([], self.mockreactor._timers)
-        self.assertEquals([], g._contextstack)
+        def test():
+            done = []
+            def handler():
+                with giopen(self.tempfile, 'rw'):
+                    with Timer(0.01):
+                        try:
+                            for i in xrange(999999):
+                                yield 'a'
+                        except TimeoutException:
+                            done.append(False)
+                yield
+            g = Gio(reactor(), handler())
+            while done != [False]:
+                yield
+            self.assertEquals([False], done)
+            self.assertEquals([], reactor()._timers)
+            self.assertEquals([], g._contextstack)
+
+        asProcess(test())
+

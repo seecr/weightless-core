@@ -28,6 +28,7 @@ from __future__ import with_statement
 
 import sys
 from StringIO import StringIO
+from os import tmpfile
 from re import sub
 from sys import exc_info
 from time import sleep
@@ -46,16 +47,21 @@ from weightless.http import HttpServer
 
 
 class MockSocket(object):
+    def __init__(self):
+        self._readAndWritable = tmpfile()
+
+    def fileno(self):
+        return self._readAndWritable.fileno()
+
     def close(self):
         self.closed = True
-
-def mockselect(readers, writers, x, timeout):
-    return readers, writers, x
+        self._readAndWritable.close()
 
 fileDict = {
-    '__file__': mockselect.func_code.co_filename, # Hacky, but sys.modules[aModuleName].__file__ is inconsistent with traceback-filenames
+    '__file__': MockSocket.fileno.im_func.func_code.co_filename, # Hacky, but sys.modules[aModuleName].__file__ is inconsistent with traceback-filenames
     'suspend.py': Suspend.__call__.func_code.co_filename,
 }
+
 
 class SuspendTest(WeightlessTestCase):
     def testResumeOrThrowOnlyOnce(self):
@@ -104,26 +110,29 @@ class SuspendTest(WeightlessTestCase):
 
     def testReactorSuspend(self):
         handle = ['initial value']
-        reactor = Reactor(select_func=mockselect)
+        reactor = Reactor()
         def callback():
             handle[0] = reactor.suspend()
-        sok = MockSocket()
-        reactor.addReader(sok, callback)
-        self.assertTrue(sok in reactor._readers)
+        sok1 = MockSocket()
+        reactor.addReader(sok1, callback)
+        self.assertTrue(sok1 in reactor._readers)
         reactor.step()
-        self.assertTrue(sok not in reactor._readers)
+        self.assertTrue(sok1 not in reactor._readers)
 
-        sok = MockSocket()
-        reactor.addWriter(sok, callback)
-        self.assertTrue(sok in reactor._writers)
+        sok2 = MockSocket()
+        reactor.addWriter(sok2, callback)
+        self.assertTrue(sok2 in reactor._writers)
         reactor.step()
-        self.assertTrue(sok not in reactor._writers)
+        self.assertTrue(sok2 not in reactor._writers)
         self.assertTrue(handle[0] != None)
         self.assertTrue(handle[0] != 'initial value')
 
+        # cleanup fd's
+        sok1.close(); sok2.close()
+
     def testReactorResumeWriter(self):
         handle = ['initial value']
-        reactor = Reactor(select_func=mockselect)
+        reactor = Reactor()
         def callback():
             handle[0] = reactor.suspend()
             yield
@@ -137,9 +146,12 @@ class SuspendTest(WeightlessTestCase):
         self.assertTrue(sok not in reactor._readers)
         self.assertRaises(KeyError, reactor.resumeWriter, handle[0])
 
+        # cleanup fd's
+        sok.close()
+
     def testReactorResumeReader(self):
         handle = ['initial value']
-        reactor = Reactor(select_func=mockselect)
+        reactor = Reactor()
         def callback():
             handle[0] = reactor.suspend()
             yield
@@ -153,8 +165,11 @@ class SuspendTest(WeightlessTestCase):
         self.assertTrue(sok in reactor._readers)
         self.assertRaises(KeyError, reactor.resumeReader, handle[0])
 
+        # cleanup fd's
+        sok.close()
+
     def testReactorResumeProcess(self):
-        reactor = Reactor(select_func=mockselect)
+        reactor = Reactor()
         def callback():
             handle[0] = reactor.suspend()
             yield
@@ -170,8 +185,11 @@ class SuspendTest(WeightlessTestCase):
         self.assertTrue(handle[0] in reactor._processes)
         self.assertRaises(KeyError, reactor.resumeProcess, handle[0])
 
+        # cleanup fd's
+        sok.close()
+
     def testWrongUseAfterSuspending(self):
-        reactor = Reactor(select_func=mockselect)
+        reactor = Reactor()
         handle = ['initial value']
         def callback():
             handle[0] = reactor.suspend()
@@ -190,8 +208,11 @@ class SuspendTest(WeightlessTestCase):
         except ValueError, e:
             self.assertEquals('Socket is suspended', str(e))
 
+        # cleanup fd's
+        sok.close()
+
     def testShutdownReactor(self):
-        reactor = Reactor(select_func=mockselect)
+        reactor = Reactor()
         sok1 = MockSocket()
         sok2 = MockSocket()
         sok3 = MockSocket()
@@ -213,7 +234,7 @@ class SuspendTest(WeightlessTestCase):
         self.assertTrue(sok3.closed)
 
     def testSuspendProtocol(self):
-        reactor = Reactor(select_func=mockselect)
+        reactor = Reactor()
         suspend = Suspend()
         def handler(**httpvars):
             yield 'before suspend'
@@ -238,8 +259,11 @@ class SuspendTest(WeightlessTestCase):
         reactor.step()
         self.assertEquals(['before suspend', 'result = RESPONSE', 'after suspend'], listener.data)
 
+        # cleanup (most) fd's
+        listener.close()
+
     def testSuspendProtocolWithThrow(self):
-        reactor = Reactor(select_func=mockselect)
+        reactor = Reactor()
         suspend = Suspend()
         def handler(**httpvars):
             yield 'before suspend'
@@ -286,6 +310,9 @@ ValueError: BAD VALUE
         self.assertEquals('before suspend', listener.data[0])
         self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
         self.assertEquals('after suspend', listener.data[2])
+
+        # cleanup (most) fd's
+        listener.close()
 
     def testSuspendTimingOut(self):
         # with calltrace; happy path
@@ -593,7 +620,7 @@ ZeroDivisionError: integer division or modulo by zero
         self.assertRaises(AssertionError, lambda: suspendWithDoNextException(AssertionError('err')))
 
     def testSuspendThrowBackwardsCompatibleWithInstanceOnlyThrow_YouWillMissTracebackHistory(self):
-        reactor = Reactor(select_func=mockselect)
+        reactor = Reactor()
         suspend = Suspend()
         def handler(**httpvars):
             yield 'before suspend'
@@ -639,6 +666,9 @@ ValueError: BAD VALUE
         self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
         self.assertEquals('after suspend', listener.data[2])
 
+        # cleanup (most) fd's
+        listener.close()
+
     def testGetResult(self):
         reactor = CallTrace('reactor')
         s = Suspend()
@@ -661,40 +691,54 @@ ValueError: BAD VALUE
         self.assertRaises(ValueError, s.getResult)
 
     def testCleanUp(self):
-        reactor = Reactor(select_func=mockselect)
+        reactor = Reactor()
         def handler():
             reactor.suspend()
             yield
-        reactor.addWriter(1, lambda: None)
-        reactor.addReader(2, lambda: None)
-        reactor.addReader(3, handler().next)
+        one = MockSocket()
+        two = MockSocket()
+        three = MockSocket()
+        reactor.addWriter(one, lambda: None)
+        reactor.addReader(two, lambda: None)
+        reactor.addReader(three, handler().next)
         reactor.step()
-        self.assertTrue(1 in reactor._writers)
-        reactor.cleanup(1)
-        self.assertFalse(1 in reactor._writers)
-        self.assertTrue(2 in reactor._readers)
-        reactor.cleanup(2)
-        self.assertFalse(2 in reactor._readers)
-        self.assertTrue(3 in reactor._suspended)
-        reactor.cleanup(3)
-        self.assertFalse(3 in reactor._suspended)
+        self.assertTrue(one in reactor._writers)
+        reactor.cleanup(one)
+        self.assertFalse(one in reactor._writers)
+        self.assertTrue(two in reactor._readers)
+        reactor.cleanup(two)
+        self.assertFalse(two in reactor._readers)
+        self.assertTrue(three in reactor._suspended)
+        reactor.cleanup(three)
+        self.assertFalse(three in reactor._suspended)
 
 
 class MyMockSocket(object):
     def __init__(self, data=None):
+        self._readAndWritable = tmpfile()
         self.data = [] if data is None else data
+
+    def fileno(self):
+        return self._readAndWritable.fileno()
+
     def accept(self):
         return MyMockSocket(self.data), None
+
     def setsockopt(self, *args):
         pass
+
     def recv(self, *args):
         return 'GET / HTTP/1.0\r\n\r\n'
+
     def getpeername(self):
         return 'itsme'
+
     def shutdown(self, *args):
         pass
+
     def close(self):
-        pass
+        self._readAndWritable.close()
+
     def send(self, chunk, options):
         self.data.append(chunk)
         return len(chunk)
