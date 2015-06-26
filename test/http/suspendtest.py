@@ -35,7 +35,7 @@ from time import sleep
 from traceback import format_exc
 
 from seecr.test import CallTrace
-from seecr.test.io import stderr_replaced
+from seecr.test.io import stderr_replaced, stdout_replaced
 from seecr.test.portnumbergenerator import PortNumberGenerator
 
 from weightlesstestcase import WeightlessTestCase
@@ -110,106 +110,112 @@ class SuspendTest(WeightlessTestCase):
 
     def testReactorSuspend(self):
         handle = ['initial value']
-        reactor = Reactor()
-        def callback():
-            handle[0] = reactor.suspend()
-        sok1 = MockSocket()
-        reactor.addReader(sok1, callback)
-        self.assertTrue(sok1 in reactor._readers)
-        reactor.step()
-        self.assertTrue(sok1 not in reactor._readers)
+        with stdout_replaced() as out:
+            with Reactor() as reactor:
+                def callback():
+                    handle[0] = reactor.suspend()
+                sok1 = MockSocket()
+                reactor.addReader(sok1, callback)
+                self.assertTrue(sok1 in reactor._readers)
+                reactor.step()
+                self.assertTrue(sok1 not in reactor._readers)
 
-        sok2 = MockSocket()
-        reactor.addWriter(sok2, callback)
-        self.assertTrue(sok2 in reactor._writers)
-        reactor.step()
-        self.assertTrue(sok2 not in reactor._writers)
-        self.assertTrue(handle[0] != None)
-        self.assertTrue(handle[0] != 'initial value')
+                sok2 = MockSocket()
+                reactor.addWriter(sok2, callback)
+                self.assertTrue(sok2 in reactor._writers)
+                reactor.step()
+                self.assertTrue(sok2 not in reactor._writers)
+                self.assertTrue(handle[0] != None)
+                self.assertTrue(handle[0] != 'initial value')
 
-        # cleanup fd's
-        sok1.close(); sok2.close()
+                # cleanup fd's
+                sok1.close(); sok2.close()
+            self.assertEquals(2, out.getvalue().count('closing'), out.getvalue())
 
     def testReactorResumeWriter(self):
-        handle = ['initial value']
-        reactor = Reactor()
-        def callback():
-            handle[0] = reactor.suspend()
-            yield
-            yield
-        sok = MockSocket()
-        reactor.addWriter(sok, callback().next)
-        reactor.step()
-        reactor.resumeWriter(handle[0])
-        reactor.step()
-        self.assertTrue(sok in reactor._writers)
-        self.assertTrue(sok not in reactor._readers)
-        self.assertRaises(KeyError, reactor.resumeWriter, handle[0])
+        with Reactor() as reactor:
+            handle = ['initial value']
+            def callback():
+                handle[0] = reactor.suspend()
+                yield
+                yield
+            sok = MockSocket()
+            reactor.addWriter(sok, callback().next)
+            reactor.step()
+            reactor.resumeWriter(handle[0])
+            reactor.step()
+            self.assertTrue(sok in reactor._writers)
+            self.assertTrue(sok not in reactor._readers)
+            self.assertRaises(KeyError, reactor.resumeWriter, handle[0])
 
-        # cleanup fd's
-        sok.close()
+            # cleanup
+            reactor.removeWriter(sok)
+            sok.close()
 
     def testReactorResumeReader(self):
         handle = ['initial value']
-        reactor = Reactor()
-        def callback():
-            handle[0] = reactor.suspend()
-            yield
-            yield
-        sok = MockSocket()
-        reactor.addReader(sok, callback().next)
-        reactor.step()
-        reactor.resumeReader(handle[0])
-        reactor.step()
-        self.assertFalse(sok in reactor._writers)
-        self.assertTrue(sok in reactor._readers)
-        self.assertRaises(KeyError, reactor.resumeReader, handle[0])
+        with Reactor() as reactor:
+            def callback():
+                handle[0] = reactor.suspend()
+                yield
+                yield
+            sok = MockSocket()
+            reactor.addReader(sok, callback().next)
+            reactor.step()
+            reactor.resumeReader(handle[0])
+            reactor.step()
+            self.assertFalse(sok in reactor._writers)
+            self.assertTrue(sok in reactor._readers)
+            self.assertRaises(KeyError, reactor.resumeReader, handle[0])
 
-        # cleanup fd's
-        sok.close()
+            # cleanup
+            reactor.removeReader(sok)
+            sok.close()
 
     def testReactorResumeProcess(self):
-        reactor = Reactor()
-        def callback():
-            handle[0] = reactor.suspend()
-            yield
-            yield
-        handle = [callback().next]
-        sok = MockSocket()
-        reactor.addProcess(handle[0])
-        reactor.step()
-        reactor.resumeProcess(handle[0])
-        reactor.step()
-        self.assertFalse(handle[0] in reactor._writers)
-        self.assertFalse(handle[0] in reactor._readers)
-        self.assertTrue(handle[0] in reactor._processes)
-        self.assertRaises(KeyError, reactor.resumeProcess, handle[0])
+        with stdout_replaced() as out:
+            with Reactor() as reactor:
+                def callback():
+                    handle[0] = reactor.suspend()
+                    yield
+                    yield
+                handle = [callback().next]
+                sok = MockSocket()
+                reactor.addProcess(handle[0])
+                reactor.step()
+                reactor.resumeProcess(handle[0])
+                reactor.step()
+                self.assertFalse(handle[0] in reactor._writers)
+                self.assertFalse(handle[0] in reactor._readers)
+                self.assertTrue(handle[0] in reactor._processes)
+                self.assertRaises(KeyError, reactor.resumeProcess, handle[0])
 
-        # cleanup fd's
-        sok.close()
+                # cleanup
+                sok.close()
 
     def testWrongUseAfterSuspending(self):
-        reactor = Reactor()
-        handle = ['initial value']
-        def callback():
-            handle[0] = reactor.suspend()
-        sok = MockSocket()
-        reactor.addWriter(sok, callback)
-        reactor.step()
-        self.assertEquals(sok, handle[0])
-        try:
-            reactor.addWriter(sok, callback)
-            self.fail("Exception not raised")
-        except ValueError, e:
-            self.assertEquals('Socket is suspended', str(e))
-        try:
-            reactor.addReader(sok, callback)
-            self.fail("Exception not raised")
-        except ValueError, e:
-            self.assertEquals('Socket is suspended', str(e))
+        with stdout_replaced():
+            with Reactor() as reactor:
+                handle = ['initial value']
+                def callback():
+                    handle[0] = reactor.suspend()
+                sok = MockSocket()
+                reactor.addWriter(sok, callback)
+                reactor.step()
+                self.assertEquals(sok, handle[0])
+                try:
+                    reactor.addWriter(sok, callback)
+                    self.fail("Exception not raised")
+                except ValueError, e:
+                    self.assertEquals('Socket is suspended', str(e))
+                try:
+                    reactor.addReader(sok, callback)
+                    self.fail("Exception not raised")
+                except ValueError, e:
+                    self.assertEquals('Socket is suspended', str(e))
 
-        # cleanup fd's
-        sok.close()
+                # cleanup fd's
+                sok.close()
 
     def testShutdownReactor(self):
         reactor = Reactor()
@@ -234,70 +240,70 @@ class SuspendTest(WeightlessTestCase):
         self.assertTrue(sok3.closed)
 
     def testSuspendProtocol(self):
-        reactor = Reactor()
-        suspend = Suspend()
-        def handler(**httpvars):
-            yield 'before suspend'
-            yield suspend
-            yield "result = %s" % suspend.getResult()
-            yield 'after suspend'
-        listener = MyMockSocket()
-        port = PortNumberGenerator.next()
-        httpserver = HttpServer(reactor, port, handler, sok=listener)
-        httpserver.listen()
-        reactor.removeReader(listener) # avoid new connections
-        httpserver._acceptor._accept()
-        reactor.step()
-        reactor.step()
-        self.assertEquals(1, len(reactor._writers))
-        reactor.step()
-        self.assertEquals(reactor, suspend._reactor)
-        self.assertEquals(0, len(reactor._writers))
-        suspend.resume('RESPONSE')
-        reactor.step()
-        reactor.step()
-        reactor.step()
-        self.assertEquals(['before suspend', 'result = RESPONSE', 'after suspend'], listener.data)
+        with Reactor() as reactor:
+            suspend = Suspend()
+            def handler(**httpvars):
+                yield 'before suspend'
+                yield suspend
+                yield "result = %s" % suspend.getResult()
+                yield 'after suspend'
+            listener = MyMockSocket()
+            port = PortNumberGenerator.next()
+            httpserver = HttpServer(reactor, port, handler, sok=listener)
+            httpserver.listen()
+            reactor.removeReader(listener) # avoid new connections
+            httpserver._acceptor._accept()
+            reactor.step()
+            reactor.step()
+            self.assertEquals(1, len(reactor._writers))
+            reactor.step()
+            self.assertEquals(reactor, suspend._reactor)
+            self.assertEquals(0, len(reactor._writers))
+            suspend.resume('RESPONSE')
+            reactor.step()
+            reactor.step()
+            reactor.step()
+            self.assertEquals(['before suspend', 'result = RESPONSE', 'after suspend'], listener.data)
 
-        # cleanup (most) fd's
-        listener.close()
+            # cleanup (most) fd's
+            listener.close()
 
     def testSuspendProtocolWithThrow(self):
-        reactor = Reactor()
-        suspend = Suspend()
-        def handler(**httpvars):
-            yield 'before suspend'
-            yield suspend
+        with Reactor() as reactor:
+            suspend = Suspend()
+            def handler(**httpvars):
+                yield 'before suspend'
+                yield suspend
+                try:
+                    suspend.getResult()
+                    self.fail()
+                except ValueError, e:
+                    tbstring = format_exc()
+                    yield "result = %s" % tbstring
+                yield 'after suspend'
+            listener = MyMockSocket()
+            port = PortNumberGenerator.next()
+            httpserver = HttpServer(reactor, port, handler, sok=listener)
+            httpserver.listen()
+            reactor.removeReader(listener) # avoid new connections
+            httpserver._acceptor._accept()
+            reactor.step()
+            reactor.step()
+            self.assertEquals(1, len(reactor._writers))
+            reactor.step()
+            self.assertEquals(reactor, suspend._reactor)
+            self.assertEquals(0, len(reactor._writers))
+            def raiser():
+                raise ValueError("BAD VALUE")
             try:
-                suspend.getResult()
-                self.fail()
+                raiser()
             except ValueError, e:
-                tbstring = format_exc()
-                yield "result = %s" % tbstring
-            yield 'after suspend'
-        listener = MyMockSocket()
-        port = PortNumberGenerator.next()
-        httpserver = HttpServer(reactor, port, handler, sok=listener)
-        httpserver.listen()
-        reactor.removeReader(listener) # avoid new connections
-        httpserver._acceptor._accept()
-        reactor.step()
-        reactor.step()
-        self.assertEquals(1, len(reactor._writers))
-        reactor.step()
-        self.assertEquals(reactor, suspend._reactor)
-        self.assertEquals(0, len(reactor._writers))
-        def raiser():
-            raise ValueError("BAD VALUE")
-        try:
-            raiser()
-        except ValueError, e:
-            exc_type, exc_value, exc_traceback = exc_info()
-            suspend.throw(exc_type, exc_value, exc_traceback)
-        reactor.step()
-        reactor.step()
-        reactor.step()
-        expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+                exc_type, exc_value, exc_traceback = exc_info()
+                suspend.throw(exc_type, exc_value, exc_traceback)
+            reactor.step()
+            reactor.step()
+            reactor.step()
+            expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
   File "%(__file__)s", line 152, in handler
     suspend.getResult()
   File "%(__file__)s", line 172, in testSuspendProtocolWithThrow
@@ -305,14 +311,14 @@ class SuspendTest(WeightlessTestCase):
   File "%(__file__)s", line 170, in raiser
     raise ValueError("BAD VALUE")
 ValueError: BAD VALUE
-        """ % fileDict)
-        self.assertEquals(3, len(listener.data))
-        self.assertEquals('before suspend', listener.data[0])
-        self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
-        self.assertEquals('after suspend', listener.data[2])
+            """ % fileDict)
+            self.assertEquals(3, len(listener.data))
+            self.assertEquals('before suspend', listener.data[0])
+            self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
+            self.assertEquals('after suspend', listener.data[2])
 
-        # cleanup (most) fd's
-        listener.close()
+            # cleanup (most) fd's
+            listener.close()
 
     def testSuspendTimingOut(self):
         # with calltrace; happy path
@@ -537,7 +543,8 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
         self.assertEquals(True, bool(testRun))
 
         # http server - timing out
-        self.reactor = Reactor()
+        reactor0 = self.reactor
+        self.reactor = reactor1 = Reactor()
         del testRun[:]
         port = PortNumberGenerator.next()
         def reqHandler(**whatever):
@@ -559,7 +566,7 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
         self.assertEquals(True, bool(testRun))
 
         # http server - not timing out
-        self.reactor = Reactor()
+        self.reactor = reactor2 = Reactor()
         del testRun[:]
         port = PortNumberGenerator.next()
         def reqHandler(**whatever):
@@ -579,6 +586,11 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
             finally:
                 servert.shutdown()
         self.assertEquals(True, bool(testRun))
+
+        # cleanup (most) stuff
+        reactor0.shutdown()
+        reactor1.shutdown()
+        reactor2.shutdown()
 
     def testDoNextErrorReRaisedOnGetResult(self):
         def razor(ignored):
@@ -620,54 +632,54 @@ ZeroDivisionError: integer division or modulo by zero
         self.assertRaises(AssertionError, lambda: suspendWithDoNextException(AssertionError('err')))
 
     def testSuspendThrowBackwardsCompatibleWithInstanceOnlyThrow_YouWillMissTracebackHistory(self):
-        reactor = Reactor()
-        suspend = Suspend()
-        def handler(**httpvars):
-            yield 'before suspend'
-            yield suspend
+        with Reactor() as reactor:
+            suspend = Suspend()
+            def handler(**httpvars):
+                yield 'before suspend'
+                yield suspend
+                try:
+                    suspend.getResult()
+                    self.fail()
+                except ValueError, e:
+                    tbstring = format_exc()
+                    yield "result = %s" % tbstring
+                yield 'after suspend'
+            listener = MyMockSocket()
+            port = PortNumberGenerator.next()
+            httpserver = HttpServer(reactor, port, handler, sok=listener)
+            httpserver.listen()
+            reactor.removeReader(listener) # avoid new connections
+            httpserver._acceptor._accept()
+            reactor.step()
+            reactor.step()
+            self.assertEquals(1, len(reactor._writers))
+            reactor.step()
+            self.assertEquals(reactor, suspend._reactor)
+            self.assertEquals(0, len(reactor._writers))
+            def raiser():
+                raise ValueError("BAD VALUE")
             try:
-                suspend.getResult()
-                self.fail()
-            except ValueError, e:
-                tbstring = format_exc()
-                yield "result = %s" % tbstring
-            yield 'after suspend'
-        listener = MyMockSocket()
-        port = PortNumberGenerator.next()
-        httpserver = HttpServer(reactor, port, handler, sok=listener)
-        httpserver.listen()
-        reactor.removeReader(listener) # avoid new connections
-        httpserver._acceptor._accept()
-        reactor.step()
-        reactor.step()
-        self.assertEquals(1, len(reactor._writers))
-        reactor.step()
-        self.assertEquals(reactor, suspend._reactor)
-        self.assertEquals(0, len(reactor._writers))
-        def raiser():
-            raise ValueError("BAD VALUE")
-        try:
-            raiser()
-        except:
-            exc_value = exc_info()[1]
-            suspend.throw(exc_value)
-        reactor.step()
-        reactor.step()
-        reactor.step()
-        expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
-  File "%(__file__)s", line 201, in handler
-    suspend.getResult()
-  File "%(suspend.py)s", line 62, in getResult
-    raise self._exception[0], self._exception[1], self._exception[2] 
-ValueError: BAD VALUE
-        """ % fileDict)
-        self.assertEquals(3, len(listener.data))
-        self.assertEquals('before suspend', listener.data[0])
-        self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
-        self.assertEquals('after suspend', listener.data[2])
+                raiser()
+            except:
+                exc_value = exc_info()[1]
+                suspend.throw(exc_value)
+            reactor.step()
+            reactor.step()
+            reactor.step()
+            expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
+      File "%(__file__)s", line 201, in handler
+        suspend.getResult()
+      File "%(suspend.py)s", line 62, in getResult
+        raise self._exception[0], self._exception[1], self._exception[2] 
+    ValueError: BAD VALUE
+            """ % fileDict)
+            self.assertEquals(3, len(listener.data))
+            self.assertEquals('before suspend', listener.data[0])
+            self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
+            self.assertEquals('after suspend', listener.data[2])
 
-        # cleanup (most) fd's
-        listener.close()
+            # cleanup (most) fd's
+            listener.close()
 
     def testGetResult(self):
         reactor = CallTrace('reactor')
@@ -691,26 +703,26 @@ ValueError: BAD VALUE
         self.assertRaises(ValueError, s.getResult)
 
     def testCleanUp(self):
-        reactor = Reactor()
-        def handler():
-            reactor.suspend()
-            yield
-        one = MockSocket()
-        two = MockSocket()
-        three = MockSocket()
-        reactor.addWriter(one, lambda: None)
-        reactor.addReader(two, lambda: None)
-        reactor.addReader(three, handler().next)
-        reactor.step()
-        self.assertTrue(one in reactor._writers)
-        reactor.cleanup(one)
-        self.assertFalse(one in reactor._writers)
-        self.assertTrue(two in reactor._readers)
-        reactor.cleanup(two)
-        self.assertFalse(two in reactor._readers)
-        self.assertTrue(three in reactor._suspended)
-        reactor.cleanup(three)
-        self.assertFalse(three in reactor._suspended)
+        with Reactor() as reactor:
+            def handler():
+                reactor.suspend()
+                yield
+            one = MockSocket()
+            two = MockSocket()
+            three = MockSocket()
+            reactor.addWriter(one, lambda: None)
+            reactor.addReader(two, lambda: None)
+            reactor.addReader(three, handler().next)
+            reactor.step()
+            self.assertTrue(one in reactor._writers)
+            reactor.cleanup(one)
+            self.assertFalse(one in reactor._writers)
+            self.assertTrue(two in reactor._readers)
+            reactor.cleanup(two)
+            self.assertFalse(two in reactor._readers)
+            self.assertTrue(three in reactor._suspended)
+            reactor.cleanup(three)
+            self.assertFalse(three in reactor._suspended)
 
 
 class MyMockSocket(object):

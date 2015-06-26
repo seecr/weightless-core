@@ -56,26 +56,29 @@ class HttpsServerTest(TestCase):
             self.req = True
 
         port = PortNumberGenerator.next()
-        reactor = Reactor()
-        try:
-            server = HttpsServer(reactor, port, onRequest, keyfile='ssl/server.pkey', certfile='ssl/server.cert')
-            server.listen()
+        with Reactor() as reactor:
+            try:
+                server = HttpsServer(reactor, port, onRequest, keyfile='ssl/server.pkey', certfile='ssl/server.cert')
+                server.listen()
 
-            p = Popen('wget -O - --no-check-certificate --quiet https://localhost:%s' % port, shell=True, stdout=PIPE)
+                p = Popen('wget -O - --no-check-certificate --quiet https://localhost:%s' % port, shell=True, stdout=PIPE)
 
-            popenStdout = []
-            def readPopenStdout():
-                popenStdout.append(p.stdout.read())
-            reactor.addReader(p.stdout, readPopenStdout)
+                popenStdout = []
+                def readPopenStdout():
+                    popenStdout.append(p.stdout.read())
+                reactor.addReader(p.stdout, readPopenStdout)
 
-            while not self.req:
-               reactor.step()
+                while not self.req:
+                   reactor.step()
 
-            reactor.step()
-            self.assertEquals(1, len(popenStdout))
-            self.assertEquals(serverResponse, popenStdout[0])
-        finally:
-            server.shutdown()
+                reactor.step()
+                self.assertEquals(1, len(popenStdout))
+                self.assertEquals(serverResponse, popenStdout[0])
+            finally:
+                server.shutdown()
+
+            # cleanup
+            reactor.removeReader(p.stdout)
 
     def testConnectBindAddress(self):
         reactor = CallTrace()

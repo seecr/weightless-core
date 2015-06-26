@@ -25,6 +25,7 @@
 ## end license ##
 
 from seecr.test import CallTrace
+from seecr.test.io import stdout_replaced
 from seecr.test.portnumbergenerator import PortNumberGenerator
 from weightlesstestcase import MATCHALL
 
@@ -99,14 +100,16 @@ class HttpReaderTest(TestCase):
                 self.next = None
             def send(self, data):
                 dataReceived.append(data)
-        reactor = Reactor()
-        connection = Connector(reactor, 'localhost', self.port)
-        reader = HttpReader(reactor, connection, Generator(), 'GET', 'localhost', '/aap/noot/mies', recvSize=7)
-        reactor.addTimer(0.1, lambda: self.fail("Test Stuck"))
-        while 'Hello World!' != "".join((x for x in dataReceived[1:] if x)):
-            reactor.step()
-        serverThread.join()
-        self.assertEquals({'HTTPVersion': '1.1', 'StatusCode': '200', 'ReasonPhrase': 'OK', 'Headers': {'Content-Type': 'text/html'}, 'Client': ('127.0.0.1', MATCHALL)}, dataReceived[0])
+
+        with stdout_replaced():
+            with Reactor() as reactor:
+                connection = Connector(reactor, 'localhost', self.port)
+                reader = HttpReader(reactor, connection, Generator(), 'GET', 'localhost', '/aap/noot/mies', recvSize=7)
+                reactor.addTimer(0.1, lambda: self.fail("Test Stuck"))
+                while 'Hello World!' != "".join((x for x in dataReceived[1:] if x)):
+                    reactor.step()
+                serverThread.join()
+                self.assertEquals({'HTTPVersion': '1.1', 'StatusCode': '200', 'ReasonPhrase': 'OK', 'Headers': {'Content-Type': 'text/html'}, 'Client': ('127.0.0.1', MATCHALL)}, dataReceived[0])
 
     def testHttpUrlParse(self):
         host, port, path = _httpParseUrl('http://www.cq2.org')
@@ -125,108 +128,109 @@ class HttpReaderTest(TestCase):
         self.assertEquals('/page?x=1', path)
 
     def testEmptyPath(self):
-        reactor = Reactor()
-        request = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
-        serverThread = server(self.port, "HTTP/1.1 200 OK\r\n\r\n", request)
-        reader = HttpReaderFacade(reactor, "http://localhost:%s" % self.port, lambda data: 'a')
-        reactor.step()
-        reactor.step()
-        serverThread.join()
-        #self.assertTrue(request[0].startswith('GET / HTTP/1.1\r\n'), request[0])
+        with stdout_replaced():
+            with Reactor() as reactor:
+                request = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
+                serverThread = server(self.port, "HTTP/1.1 200 OK\r\n\r\n", request)
+                reader = HttpReaderFacade(reactor, "http://localhost:%s" % self.port, lambda data: 'a')
+                reactor.step()
+                reactor.step()
+                serverThread.join()
+                #self.assertTrue(request[0].startswith('GET / HTTP/1.1\r\n'), request[0])
 
     def testTimeoutOnInvalidRequest(self):
-        reactor = Reactor()
-        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
-        serverThread = server(self.port, "HTTP/1.1 *invalid reponse* 200 OK\r\n\r\n", expectedrequest)
-        errorArgs = []
-        def error(exception):
-            errorArgs.append(exception)
-        reader = HttpReaderFacade(reactor, "http://localhost:%s" % self.port, None, error, timeout=0.01)
-        while not errorArgs:
-            reactor.step()
-        serverThread.join()
-        self.assertEquals('timeout while receiving data', str(errorArgs[0]))
+        with Reactor() as reactor:
+            expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
+            serverThread = server(self.port, "HTTP/1.1 *invalid reponse* 200 OK\r\n\r\n", expectedrequest)
+            errorArgs = []
+            def error(exception):
+                errorArgs.append(exception)
+            reader = HttpReaderFacade(reactor, "http://localhost:%s" % self.port, None, error, timeout=0.01)
+            while not errorArgs:
+                reactor.step()
+            serverThread.join()
+            self.assertEquals('timeout while receiving data', str(errorArgs[0]))
 
     def testTimeoutOnSilentServer(self):
-        reactor = Reactor()
-        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
-        serverThread = server(self.port, "", expectedrequest)
-        errorArgs = []
-        class Handler:
-            def throw(self, exception):
+        with Reactor() as reactor:
+            expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
+            serverThread = server(self.port, "", expectedrequest)
+            errorArgs = []
+            class Handler:
+                def throw(self, exception):
+                    errorArgs.append(exception)
+            def error(exception):
                 errorArgs.append(exception)
-        def error(exception):
-            errorArgs.append(exception)
-        reader = HttpReader(reactor, Connector(reactor, 'localhost', self.port), Handler(), "GET", "localhost", "/", timeout=0.01)
-        reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
-        while not errorArgs:
-            reactor.step()
-        serverThread.join()
-        self.assertEquals('timeout while receiving data', str(errorArgs[0]))
+            reader = HttpReader(reactor, Connector(reactor, 'localhost', self.port), Handler(), "GET", "localhost", "/", timeout=0.01)
+            reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
+            while not errorArgs:
+                reactor.step()
+            serverThread.join()
+            self.assertEquals('timeout while receiving data', str(errorArgs[0]))
 
     def testTimeoutOnServerGoingSilentAfterHeaders(self):
-        reactor = Reactor()
-        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
-        serverThread = server(self.port, "HTTP/1.1 200 OK\r\n\r\n", expectedrequest, delay=1)
-        errorArgs = []
-        class Handler:
-            def send(self, data):
-                pass
-            def throw(self, exception):
+        with Reactor() as reactor:
+            expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
+            serverThread = server(self.port, "HTTP/1.1 200 OK\r\n\r\n", expectedrequest, delay=1)
+            errorArgs = []
+            class Handler:
+                def send(self, data):
+                    pass
+                def throw(self, exception):
+                    errorArgs.append(exception)
+            def error(exception):
                 errorArgs.append(exception)
-        def error(exception):
-            errorArgs.append(exception)
-        reader = HttpReader(reactor, Connector(reactor, 'localhost', self.port), Handler(), "GET", "localhost", "/", timeout=0.01)
-        reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
-        while not errorArgs:
-            reactor.step()
-        serverThread.join()
-        self.assertEquals('timeout while receiving data', str(errorArgs[0]))
+            reader = HttpReader(reactor, Connector(reactor, 'localhost', self.port), Handler(), "GET", "localhost", "/", timeout=0.01)
+            reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
+            while not errorArgs:
+                reactor.step()
+            serverThread.join()
+            self.assertEquals('timeout while receiving data', str(errorArgs[0]))
 
     def testClearTimer(self):
-        reactor = Reactor()
-        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
-        serverThread = server(self.port, "HTTP/1.1 200 OK\r\n\r\nresponse", expectedrequest)
-        self.exception = None
-        sentData = []
-        def send(data):
-            sentData.append(data)
-        def throw(exception):
-            self.exception = exception
-        reader = HttpReaderFacade(reactor, "http://localhost:%s" % self.port, send, throw, timeout=0.01, recvSize=3)
-        while not self.exception:
-            reactor.step()
-        sleep(0.02) # 2 * timeout, just to be sure
+        with Reactor() as reactor:
+            expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
+            serverThread = server(self.port, "HTTP/1.1 200 OK\r\n\r\nresponse", expectedrequest)
+            self.exception = None
+            sentData = []
+            def send(data):
+                sentData.append(data)
+            def throw(exception):
+                self.exception = exception
+            reader = HttpReaderFacade(reactor, "http://localhost:%s" % self.port, send, throw, timeout=0.01, recvSize=3)
+            while not self.exception:
+                reactor.step()
+            sleep(0.02) # 2 * timeout, just to be sure
 
-        self.assertTrue(isinstance(self.exception, StopIteration))
+            self.assertTrue(isinstance(self.exception, StopIteration))
 
     def testPost(self):
-        reactor = Reactor()
-        request = "POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nSOAPAction: blah\r\nUser-Agent: Weightless/v%s\r\n\r\n1\r\nA\r\n1\r\nB\r\n1\r\nC\r\n0\r\n\r\n" % WlVersion
-        serverThread = server(self.port, "HTTP/1.1 200 OK\r\n\r\nresponse", request, loop=9)
-        sentData = []
-        done = []
-        def send(data):
-            sentData.append(data)
-        def throw(exception):
-            if isinstance(exception, StopIteration):
-                done.append(True)
-        def next():
-            yield "A"
-            yield "B"
-            yield "C"
-            yield None
+        with Reactor() as reactor:
+            request = "POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nSOAPAction: blah\r\nUser-Agent: Weightless/v%s\r\n\r\n1\r\nA\r\n1\r\nB\r\n1\r\nC\r\n0\r\n\r\n" % WlVersion
+            serverThread = server(self.port, "HTTP/1.1 200 OK\r\n\r\nresponse", request, loop=9)
+            sentData = []
+            done = []
+            def send(data):
+                sentData.append(data)
+            def throw(exception):
+                if isinstance(exception, StopIteration):
+                    done.append(True)
+            def next():
+                yield "A"
+                yield "B"
+                yield "C"
+                yield None
 
-        reader = HttpReaderFacade(reactor, "http://localhost:%s" % self.port, send, errorHandler=throw, timeout=0.5, headers={'SOAPAction': 'blah'}, bodyHandler=next)
+            reader = HttpReaderFacade(reactor, "http://localhost:%s" % self.port, send, errorHandler=throw, timeout=0.5, headers={'SOAPAction': 'blah'}, bodyHandler=next)
 
-        reactor.addTimer(3.0, lambda: self.fail("Test Stuck"))
-        while not done:
-            reactor.step()
+            reactor.addTimer(3.0, lambda: self.fail("Test Stuck"))
+            while not done:
+                reactor.step()
 
-        self.assertEquals(['response'], sentData[1:])
-        self.assertEquals('200', sentData[0]['StatusCode'])
-        expected = 'POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nSOAPAction: blah\r\nUser-Agent: Weightless/v%s\r\n\r\n' % WlVersion + '1\r\nA\r\n' + '1\r\nB\r\n' + '1\r\nC\r\n' + '0\r\n\r\n'
-        self.assertEquals(expected, "".join(request))
+            self.assertEquals(['response'], sentData[1:])
+            self.assertEquals('200', sentData[0]['StatusCode'])
+            expected = 'POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nSOAPAction: blah\r\nUser-Agent: Weightless/v%s\r\n\r\n' % WlVersion + '1\r\nA\r\n' + '1\r\nB\r\n' + '1\r\nC\r\n' + '0\r\n\r\n'
+            self.assertEquals(expected, "".join(request))
 
     def testWriteChunks(self):
         reader  = HttpReader(CallTrace("reactor"), CallTrace("socket"), HandlerFacade(None, None, None), '', '', '')
@@ -234,11 +238,11 @@ class HttpReaderTest(TestCase):
         self.assertEquals('A\r\n' + 10*'B' + '\r\n', reader._createChunk(10*'B'))
 
     def testDealWithChunkedResponse(self):
-        reactor = Reactor()
-        sentData = []
-        done = []
-        expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
-        serverThread = server(self.port, "\r\n".join("""HTTP/1.1 302 Found
+        with Reactor() as reactor:
+            sentData = []
+            done = []
+            expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
+            serverThread = server(self.port, "\r\n".join("""HTTP/1.1 302 Found
 Date: Fri, 26 Oct 2007 07:23:26 GMT
 Server: Apache/2.2.3 (Debian) mod_python/3.2.10 Python/2.4.4 mod_ssl/2.2.3 OpenSSL/0.9.8c
 Location: /page/softwarestudio.page/show
@@ -252,18 +256,19 @@ Content-Type: text/html; charset=utf-8
 
 
 """.split("\n")), expectedrequest)
-        class Handler:
-            def send(self, data):
-                sentData.append(data)
-            def throw(self, exception):
-                if isinstance(exception, StopIteration):
-                    done.append(True)
-        reader = HttpReader(reactor, Connector(reactor, 'localhost', int(self.port)), Handler(), 'GET', 'localhost', '/', recvSize=5)
+            class Handler:
+                def send(self, data):
+                    sentData.append(data)
+                def throw(self, exception):
+                    if isinstance(exception, StopIteration):
+                        done.append(True)
 
-        reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
-        while not done:
-            reactor.step()
-        self.assertEquals("""<p>The document has moved <a href="/page/softwarestudio.page/show">here</a></p>""", "".join(sentData[1:]))
+            reader = HttpReader(reactor, Connector(reactor, 'localhost', int(self.port)), Handler(), 'GET', 'localhost', '/', recvSize=5)
+
+            reactor.addTimer(0.2, lambda: self.fail("Test Stuck"))
+            while not done:
+                reactor.step()
+            self.assertEquals("""<p>The document has moved <a href="/page/softwarestudio.page/show">here</a></p>""", "".join(sentData[1:]))
 
     def testChunkedAllTheWay(self):
         reactor = CallTrace('Reactor')

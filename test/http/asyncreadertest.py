@@ -51,7 +51,6 @@ PYVERSION = '%s.%s' % version_info[:2]
 class AsyncReaderTest(WeightlessTestCase):
     def setUp(self):
         WeightlessTestCase.setUp(self)
-        self.reactor = Reactor()
         self.port = PortNumberGenerator.next()
         self.httpserver = HttpServer(self.reactor, self.port, self._dispatch)
         self.httpserver.listen()

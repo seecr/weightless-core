@@ -26,6 +26,7 @@ from __future__ import with_statement
 ## end license ##
 
 from weightlesstestcase import WeightlessTestCase
+from seecr.test.io import stdout_replaced
 from seecr.test.portnumbergenerator import PortNumberGenerator
 
 from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_CORK, TCP_NODELAY
@@ -152,40 +153,41 @@ class GioTest(WeightlessTestCase):
         self.assertEquals('abcd1234', open(self.tempdir+'/2').read())
 
     def testSocketHandshake(self):
-        reactor = Reactor()
-        lhs, rhs = socketpair()
-        def peter(channel):
-            with channel:
-                message = yield
-                yield 'Hello ' + message[-4:]
-        def jack(channel):
-            with channel:
-                x = yield 'My name is Jack'
-                self.assertEquals(None, x)
-                self.response = yield
-        Gio(reactor, jack(SocketContext(lhs)))
-        Gio(reactor, peter(SocketContext(rhs)))
-        reactor.step().step().step().step()
-        self.assertEquals('Hello Jack', self.response)
+        with Reactor() as reactor:
+            lhs, rhs = socketpair()
+            def peter(channel):
+                with channel:
+                    message = yield
+                    yield 'Hello ' + message[-4:]
+            def jack(channel):
+                with channel:
+                    x = yield 'My name is Jack'
+                    self.assertEquals(None, x)
+                    self.response = yield
+            Gio(reactor, jack(SocketContext(lhs)))
+            Gio(reactor, peter(SocketContext(rhs)))
+            reactor.step().step().step().step()
+            self.assertEquals('Hello Jack', self.response)
 
     def testLargeBuffers(self):
-        reactor = Reactor()
-        lhs, rhs = socketpair()
-        messages = []
-        messageSize = 1024*128
-        def peter(channel):
-            with channel:
-                while True:
-                    messages.append((yield))
-        def jack(channel):
-            with channel:
-                yield 'X' * messageSize
-        Gio(reactor, jack(SocketContext(lhs)))
-        Gio(reactor, peter(SocketContext(rhs)))
-        while sum(len(message) for message in messages) < messageSize:
-            reactor.step()
-        self.assertTrue(len(messages) > 1) # test is only sensible when multiple parts are sent
-        self.assertEquals(messageSize, len(''.join(messages)))
+        with stdout_replaced():
+            with Reactor() as reactor:
+                lhs, rhs = socketpair()
+                messages = []
+                messageSize = 1024*128
+                def peter(channel):
+                    with channel:
+                        while True:
+                            messages.append((yield))
+                def jack(channel):
+                    with channel:
+                        yield 'X' * messageSize
+                Gio(reactor, jack(SocketContext(lhs)))
+                Gio(reactor, peter(SocketContext(rhs)))
+                while sum(len(message) for message in messages) < messageSize:
+                    reactor.step()
+                self.assertTrue(len(messages) > 1) # test is only sensible when multiple parts are sent
+                self.assertEquals(messageSize, len(''.join(messages)))
 
     def testHowToCreateAHttpServer(self):
         port = PortNumberGenerator.next()
