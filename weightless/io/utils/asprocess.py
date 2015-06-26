@@ -35,13 +35,12 @@ def asProcess(g):
 
     Accepts a generator, composes and runs is using a Reactor's addProcess and loop, quits loop and returns the async return-value at end-of-generator.
     """
-    reactor = Reactor()
-
     def _asProcess(g):
         if not is_generator(g):
             raise TypeError("asProcess() expects a generator, got %s" % repr(g))
 
-        wrapper(g)
+        reactor = Reactor()  # Between creating and reactor.loop() there should be no statements that can raise exceptions (otherwise (epoll) fd-leaking occurs).
+        wrapper(g, reactor)
         try:
             reactor.loop()
         except StopIteration, e:
@@ -49,7 +48,7 @@ def asProcess(g):
                 return e.args[0]
 
     @identify
-    def wrapper(generator):
+    def wrapper(generator, reactor):
         this = yield
         reactor.addProcess(process=this.next)
         try:

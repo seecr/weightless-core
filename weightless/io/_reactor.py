@@ -135,6 +135,7 @@ class Reactor(object):
         self._writeProcessPipe()
 
     def shutdown(self):
+        # Will be called exactly once; in testing situations 1..n times.
         for contextDict in [
             self._readers,
             self._writers,
@@ -183,7 +184,7 @@ class Reactor(object):
                 raise
             return self
         except KeyboardInterrupt:
-            self.shutdown()
+            self.shutdown()  # For testing purposes; normally loop's finally does this.
             raise
 
         self._timerCallbacks(self._timers)
@@ -255,6 +256,7 @@ class Reactor(object):
                 return
 
     def _closeProcessPipe(self):
+        # Will be called exactly once; in testing situations 1..n times.
         try:
             close(self._processReadPipe)
         except Exception:
@@ -271,4 +273,16 @@ class Reactor(object):
 
     def _writeProcessPipe(self):
         write(self._processWritePipe, 'x')
+
+    def __enter__(self):
+        "Usable as a context-manager for testing purposes"
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """
+        Assumes .step() is used to drive the reactor;
+        so having an exception here does not mean shutdown has been called.
+        """
+        self.shutdown()
+        return False
 

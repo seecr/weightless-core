@@ -28,7 +28,7 @@
 from __future__ import with_statement
 
 from weightlesstestcase import WeightlessTestCase
-from seecr.test.io import stderr_replaced
+from seecr.test.io import stderr_replaced, stdout_replaced
 from testutils import readAndWritable, nrOfOpenFds
 
 import os, sys
@@ -46,6 +46,41 @@ from weightless.io.utils import asProcess
 
 
 class ReactorTest(WeightlessTestCase):
+    def testAsContextManagerForTesting_onExitShutdownCalled(self):
+        with Reactor() as reactor:
+            loggedShutdowns = instrumentShutdown(reactor)
+
+        self.assertEquals(1, len(loggedShutdowns))
+        self.assertEquals(((), {}), loggedShutdowns[0])
+
+    def testAsContextManagerForTesting_Stepping(self):
+        log = []
+        with Reactor() as reactor:
+            p = lambda: log.append(True)
+            loggedShutdowns = instrumentShutdown(reactor)
+            reactor.addProcess(process=p)
+            reactor.step()
+            reactor.step()
+            reactor.removeProcess(process=p)
+
+        self.assertEquals(2, len(log))
+        self.assertEquals(1, len(loggedShutdowns))
+
+    def testAsContextManagerForTesting_LoopBreak(self):
+        # Reactor context-manager & .loop is overkill; 1x shutdown is enough;
+        # just don't want things to break because of this.
+        with Reactor() as reactor:
+            def raiser():
+                reactor.removeProcess()
+                raise Exception(42)
+            loggedShutdowns = instrumentShutdown(reactor)
+            reactor.addProcess(process=raiser)
+            try:
+                reactor.loop()
+            except Exception, e:
+                self.assertEquals(42, e.args[0])
+
+        self.assertEquals(2, len(loggedShutdowns))
 
     def testAddSocketReading(self):
         class Sok:
@@ -897,4 +932,14 @@ class ReactorTest(WeightlessTestCase):
             if not expectedOutput is None:
                 self.assertEquals(expectedOutput, value)
         return value
+
+
+def instrumentShutdown(reactor):
+    loggedShutdowns = []
+    shutdown = reactor.shutdown
+    def mockedShutdown(*args, **kwargs):
+        loggedShutdowns.append((args, kwargs))
+        return shutdown(*args, **kwargs)
+    reactor.shutdown = mockedShutdown
+    return loggedShutdowns
 
