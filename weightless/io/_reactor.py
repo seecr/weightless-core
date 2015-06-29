@@ -93,7 +93,7 @@ class Reactor(object):
         """Add a timer that calls callback() after the specified number of seconds. Afterwards, the timer is deleted.  It returns a token for removeTimer()."""
         timer = Timer(seconds, callback)
         self._timers.append(timer)
-        self._timers.sort(cmp=lambda lhs, rhs: 1 if not rhs else cmp(lhs.time, rhs.time))
+        self._timers.sort(key=_timeKey)
         return timer
 
     def removeReader(self, sok):
@@ -286,3 +286,5 @@ class Reactor(object):
         self.shutdown()
         return False
 
+
+_timeKey = lambda t: t.time
