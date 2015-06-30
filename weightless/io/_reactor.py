@@ -25,10 +25,11 @@
 ## end license ##
 
 from traceback import print_exc
-from select import select, error as select_error
+from select import epoll, error as select_error
+from select import EPOLLIN, EPOLLOUT, EPOLLPRI, EPOLLERR, EPOLLHUP, EPOLLET, EPOLLONESHOT, EPOLLRDNORM, EPOLLRDBAND, EPOLLWRNORM, EPOLLWRBAND, EPOLLMSG
 from socket import error as socket_error
 from time import time
-from errno import EBADF, EINTR
+from errno import EBADF, EINTR, EEXIST
 from weightless.core import local
 from os import pipe, close, write, read
 
@@ -36,7 +37,19 @@ def reactor():
     return local('__reactor__')
 
 
-class Context(object):
+class _FDContext(object):  # TS: TODO: Document Interface.
+    def __init__(self, callback, fileOrFd, prio):
+        if prio is None:
+            prio = Reactor.DEFAULTPRIO
+        if not 0 <= prio < Reactor.MAXPRIO:
+            raise ValueError('Invalid priority: %s' % prio)
+
+        self.callback = callback
+        self.prio = prio
+        self.fileOrFd = fileOrFd
+
+
+class _ProcessContext(object):  # TS: TODO: Document Interface.
     def __init__(self, callback, prio):
         if prio is None:
             prio = Reactor.DEFAULTPRIO
@@ -47,10 +60,10 @@ class Context(object):
         self.prio = prio
 
 
-class Timer(Context):
+class Timer(object):  # TS: TODO: Document Interface.
     def __init__(self, seconds, callback):
-        Context.__init__(self, callback, Reactor.DEFAULTPRIO)
         assert seconds >= 0, 'Timeout must be >= 0. It was %s.' % seconds
+        self.callback = callback
         self.time = time() + seconds
 
 
@@ -61,32 +74,34 @@ class Reactor(object):
     DEFAULTPRIO = 0
 
     def __init__(self):
-        self._readers = {}
-        self._writers = {}
+        self._epoll = epoll()
+        self._fds = {}  # TS: TODO: Document Interface.
         self._suspended = {}
         self._processes = {}
         self._timers = []
         self._prio = -1
         self._processReadPipe, self._processWritePipe = pipe()
+        self._epoll.register(fd=self._processReadPipe, eventmask=EPOLLIN)
 
     def addReader(self, sok, sink, prio=None):
         """Adds a socket and calls sink() when the socket becomes readable. It remains at the readers list."""
         if sok in self._suspended:
             raise ValueError('Socket is suspended')
-        self._readers[sok] = Context(sink, prio)
+        self._addFD(fileOrFd=sok, callback=sink, eventmask=EPOLLIN, prio=prio)
 
     def addWriter(self, sok, source, prio=None):
         """Adds a socket and calls source() whenever the socket is writable. It remains at the writers list."""
         if sok in self._suspended:
             raise ValueError('Socket is suspended')
-        self._writers[sok] = Context(source, prio)
+        self._addFD(fileOrFd=sok, callback=source, eventmask=EPOLLOUT, prio=prio)
 
     def addProcess(self, process, prio=None):
+        # TS: TODO: Fix addProcess threading & pipebuffer issue...
         if process in self._suspended:
             raise ValueError('Process is suspended')
         if process in self._processes:
             raise ValueError('Process is already in processes')
-        self._processes[process] = Context(process, prio)
+        self._processes[process] = _ProcessContext(process, prio)
         self._writeProcessPipe()
 
     def addTimer(self, seconds, callback):
@@ -96,39 +111,58 @@ class Reactor(object):
         self._timers.sort(key=_timeKey)
         return timer
 
+    def _addFD(self, fileOrFd, callback, eventmask, prio):
+        fd = _fdNormalize(fileOrFd)
+        if fd in self._fds:
+            # Otherwise epoll would give an IOError, Errno 17 / EEXIST.
+            raise ValueError('fd already registered')  # TS: TODO: Document Interface.
+        self._fds[fd] = _FDContext(callback, fileOrFd, prio)
+        self._epoll.register(fd=fd, eventmask=eventmask)
+
+    def _removeFD(self, fileOrFd):
+        fd = _fdNormalize(fileOrFd)
+        del self._fds[fd]
+        self._epoll.unregister(fd)
+
     def removeReader(self, sok):
-        del self._readers[sok]
+        self._removeFD(fileOrFd=sok)
 
     def removeWriter(self, sok):
-        del self._writers[sok]
+        self._removeFD(fileOrFd=sok)
 
     def removeProcess(self, process=None):
+        # TS: TODO: Fix addProcess threading & pipebuffer issue...
         if process is None:
             process = self.currentcontext.callback
+        del self._processes[process]  # TS: TODO: flipped del .. and _readProcessPipe lines around.
         self._readProcessPipe()
-        del self._processes[process]
 
     def removeTimer(self, token):
         self._timers.remove(token)
 
     def cleanup(self, sok):
-        self._writers.pop(sok, None)
-        self._readers.pop(sok, None)
-        self._suspended.pop(sok, None)
+        fd = _fdNormalize(sok)
+        self._fds.pop(fd, None)
+        self._suspended.pop(fd, None)
 
     def suspend(self):
-        self._readers.pop(self.currenthandle, None)
-        self._writers.pop(self.currenthandle, None)
-        if self._processes.pop(self.currenthandle, None):
+        if self._fds.pop(self.currenthandle, None) is not None:
+            # FIXME: testme.
+            self._removeFD(fileOrFd=self.currenthandle)
+        if self._processes.pop(self.currenthandle, None) is not None:  # TS: FIXME: fd "0" would not have worken (stdin); does work now.
             self._readProcessPipe()
         self._suspended[self.currenthandle] = self.currentcontext
         return self.currenthandle
 
     def resumeReader(self, handle):
-        self._readers[handle] = self._suspended.pop(handle)
+        context = self._suspended.pop(handle)
+        # TS: FIXME: re-use old context-obj (don't harass the GC!) & don't re-find the handle (fd; with _fdNormalize) trust the previous assesment.
+        self._addFD(fileOrFd=context.fileOrFd, callback=context.callback, eventmask=EPOLLIN, prio=context.prio)
 
     def resumeWriter(self, handle):
-        self._writers[handle] = self._suspended.pop(handle)
+        context = self._suspended.pop(handle)
+        # TS: FIXME: re-use old context-obj (don't harass the GC!) & don't re-find the handle (fd; with _fdNormalize) trust the previous assesment.
+        self._addFD(fileOrFd=context.fileOrFd, callback=context.callback, eventmask=EPOLLOUT, prio=context.prio)
 
     def resumeProcess(self, handle):
         self._processes[handle] = self._suspended.pop(handle)
@@ -137,19 +171,27 @@ class Reactor(object):
     def shutdown(self):
         # Will be called exactly once; in testing situations 1..n times.
         for contextDict in [
-            self._readers,
-            self._writers,
-            self._processes,
+            self._fds,
             self._suspended
         ]:
-            for handle in contextDict.keys():
+            for handle, context in contextDict.items():
                 contextDict.pop(handle)
-                if hasattr(handle, 'close'):
-                    print 'Reactor shutdown: closing', handle
-                    handle.close()
-                else:
+                obj = context.fileOrFd if hasattr(context, 'fileOrFd') else context.callback
+                if hasattr(obj, 'close'):
+                    print 'Reactor shutdown: closing', obj
+                    obj.close()
+                else:  # TS: TODO: elif isinstance(handle, int): os.close(handle) ... something.
                     print 'Reactor shutdown: terminating %s' % handle
+
+        for handle in self._processes.keys():
+            self._processes.pop(handle)
+            if hasattr(handle, 'close'):
+                print 'Reactor shutdown: closing', handle
+                handle.close()
+            else:  # TS: TODO: elif isinstance(handle, int): os.close(handle) ... something.
+                print 'Reactor shutdown: terminating %s' % handle
         self._closeProcessPipe()
+        self._epoll.close()
 
     def loop(self):
         try:
@@ -165,20 +207,20 @@ class Reactor(object):
         if self._timers:
             timeout = max(0, self._timers[0].time - time())
         else:
-            timeout = None
+            timeout = -1
 
         try:
-            readers = self._readers.keys() + [self._processReadPipe]
-            rReady, wReady, ignored = select(readers, self._writers.keys(), [], timeout)
-        except TypeError:
+            fdEvents = self._epoll.poll(timeout=timeout)
+        #except TypeError:
+        #    print_exc()
+        #    self._findAndRemoveBadFd()
+        #    return self
+        except (IOError, socket_error), (errno, description):  # Removed select_error (source: select module - only IOError can occur).
+            # TS: FIXME: can socket_error be removed also???
             print_exc()
-            self._findAndRemoveBadFd()
-            return self
-        except (select_error, socket_error), (errno, description):
-            print_exc()
-            if errno == EBADF:
-                self._findAndRemoveBadFd()
-            elif errno == EINTR:
+            #if errno == EBADF:            <-------+
+            #    self._findAndRemoveBadFd()        |
+            if errno == EINTR:  # was: "elif:" of -+
                 pass
             else:
                 raise
@@ -188,31 +230,39 @@ class Reactor(object):
             raise
 
         self._timerCallbacks(self._timers)
-        self._callbacks(rReady, self._readers)
-        self._callbacks(wReady, self._writers)
+        self._callbacks(fdEvents, self._fds, EPOLLIN)
+        self._callbacks(fdEvents, self._fds, EPOLLOUT)
         self._processCallbacks(self._processes)
 
         return self
 
     def getOpenConnections(self):
-        return len(self._readers) + len(self._writers)
+        return len(self._fds)
 
-    def _callbacks(self, ready, soks):
-        for self.currenthandle in ready:
-            if self.currenthandle in soks:
-                context = soks[self.currenthandle]
-                if context.prio <= self._prio:
-                    self.currentcontext = context
-                    try:
-                        context.callback()
-                    except (AssertionError, SystemExit, KeyboardInterrupt):
-                        if self.currenthandle in soks:
-                            del soks[self.currenthandle]
-                        raise
-                    except:
-                        print_exc()
-                        if self.currenthandle in soks:
-                            del soks[self.currenthandle]
+    def _callbacks(self, fdEvents, fds, maskBitsSet):
+        for fd, eventmask in fdEvents:
+            if (eventmask & maskBitsSet != maskBitsSet) or \
+                    (fd == self._readProcessPipe):
+                continue
+
+            self.currenthandle = fd
+            try:
+                context = fds[self.currenthandle]
+            except KeyError:
+                continue
+
+            if context.prio <= self._prio:
+                self.currentcontext = context
+                try:
+                    context.callback()
+                except (AssertionError, SystemExit, KeyboardInterrupt):
+                    if self.currenthandle in fds:
+                        del fds[self.currenthandle]
+                    raise
+                except:
+                    print_exc()
+                    if self.currenthandle in fds:
+                        del fds[self.currenthandle]
 
     def _timerCallbacks(self, timers):
         currentTime = time()
@@ -241,19 +291,19 @@ class Reactor(object):
                         del processes[self.currenthandle]
                     raise
 
-    def _findAndRemoveBadFd(self):
-        for sok in self._readers:
-            try:
-                select([sok], [], [], 0)
-            except Exception:
-                self._readers.pop(sok).callback()
-                return
-        for sok in self._writers:
-            try:
-                select([], [sok], 0)
-            except Exception:
-                self._writers.pop(sok).callback()
-                return
+    #def _findAndRemoveBadFd(self):
+    #    for sok in self._readers:
+    #        try:
+    #            select([sok], [], [], 0)
+    #        except Exception:
+    #            self._readers.pop(sok).callback()
+    #            return
+    #    for sok in self._writers:
+    #        try:
+    #            select([], [sok], 0)
+    #        except Exception:
+    #            self._writers.pop(sok).callback()
+    #            return
 
     def _closeProcessPipe(self):
         # Will be called exactly once; in testing situations 1..n times.
@@ -287,4 +337,38 @@ class Reactor(object):
         return False
 
 
+def _fdNormalize(fd):
+    return fd if not hasattr(fd, 'fileno') else fd.fileno()
+
 _timeKey = lambda t: t.time
+
+EPOLLRDHUP = int('0x2000', 16)
+_EPOLL_CONSTANT_MAPPING = {  # Python epoll constants (missing EPOLLRDHUP - exists since Linux 2.6.17))
+    EPOLLIN: 'EPOLLIN',            # Available for read
+    EPOLLOUT: 'EPOLLOUT',          # Available for write
+    EPOLLRDHUP: 'EPOLLRDHUP',  # (Exists since Linux 2.6.17, see Linux's: man epoll_ctl; and glibc / libc6-dev: sys/epoll.h)
+                                      # Stream socket peer closed connection, or shut down writing half
+                                      # of connection.  (This flag  is especially useful for writing
+                                      # simple code to detect peer shutdown when using Edge Triggered
+                                      # monitoring.)
+    EPOLLPRI: 'EPOLLPRI',          # Urgent data for read
+    # Note: just don't send socket data with the MSG_OOB flag specified and this will never happen. - TCP Out-of-Band communication is a bit of a protocol relic (though TELNET and FTP might use it (allowed by spec), decent people don't :-).
+    EPOLLERR: 'EPOLLERR',          # Error condition happened on the assoc. fd
+                                   # EPOLLERR and EPOLLHUP: will always be waited for, does not need to be specified in the eventmask (see Linux's: man epoll_ctl).
+    EPOLLHUP: 'EPOLLHUP',          # Hang up happened on the assoc. fd
+    EPOLLET: 'EPOLLET',            # Set Edge Trigger behavior, the default is Level Trigger behavior
+    EPOLLONESHOT: 'EPOLLONESHOT',  # Set one-shot behavior. After one event is pulled out, the fd is internally disabled
+
+    #
+    # Don't use below here, please.
+
+    # ...When compiling with _XOPEN_SOURCE defined... which convey no further information beyond the bits listed above ...  (see Linux's: man poll)
+    EPOLLRDNORM: 'EPOLLRDNORM',    # Equivalent to EPOLLIN
+    EPOLLRDBAND: 'EPOLLRDBAND',    # Priority data band can be read.
+    EPOLLWRNORM: 'EPOLLWRNORM',    # Equivalent to EPOLLOUT
+    EPOLLWRBAND: 'EPOLLWRBAND',    # Priority data may be written.
+
+    # Linux ignores 'POLLMSG' (see Linux's: man poll)
+    EPOLLMSG: 'EPOLLMSG',          # Ignored.
+}
+

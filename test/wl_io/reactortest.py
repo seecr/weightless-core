@@ -488,7 +488,7 @@ class ReactorTest(WeightlessTestCase):
                 with self.stderr_replaced() as s:
                     while not self.time:
                         reactor.step()
-                    self.assertTrue("4, 'Interrupted system call'" in s.getvalue(), s.getvalue())
+                    self.assertTrue("[Errno 4] Interrupted system call" in s.getvalue(), s.getvalue())
                 self.assertTrue(self.alarm)
                 self.assertTrue(targetTime - 0.01 < self.time, targetTime + 0.01)
             except ioerror:

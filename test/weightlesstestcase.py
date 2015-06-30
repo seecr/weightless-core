@@ -67,8 +67,7 @@ class WeightlessTestCase(TestCase):
         t0 = time()
         if hasattr(self, 'httpd') and hasattr(self.httpd, 'shutdown'):
             self.httpd.shutdown()
-        self.assertEquals({}, self.reactor._readers)
-        self.assertEquals({}, self.reactor._writers)
+        self.assertEquals({}, self.reactor._fds)
         self.assertEquals({}, self.reactor._suspended)
         self.assertEquals({}, self.reactor._processes)
         for t in self.reactor._timers:
