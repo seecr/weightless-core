@@ -116,8 +116,8 @@ class Reactor(object):
         if fd in self._fds:
             # Otherwise epoll would give an IOError, Errno 17 / EEXIST.
             raise ValueError('fd already registered')  # TS: TODO: Document Interface.
+        self._epoll.register(fd=fd, eventmask=eventmask)   # TS: FIXME: TESTME (iff register(..) OK; then added to self._fds (**NOT** otherwise))
         self._fds[fd] = _FDContext(callback, fileOrFd, prio)
-        self._epoll.register(fd=fd, eventmask=eventmask)
 
     def _removeFD(self, fileOrFd):
         fd = _fdNormalize(fileOrFd)
@@ -211,12 +211,8 @@ class Reactor(object):
 
         try:
             fdEvents = self._epoll.poll(timeout=timeout)
-        #except TypeError:
-        #    print_exc()
-        #    self._findAndRemoveBadFd()
-        #    return self
         except (IOError, socket_error), (errno, description):  # Removed select_error (source: select module - only IOError can occur).
-            # TS: FIXME: can socket_error be removed also???
+            # TS: FIXME: can socket_error be removed also???  (THINK SO: sok.fileno() can give socket_error (EBADF); .poll() does not call that).
             print_exc()
             #if errno == EBADF:            <-------+
             #    self._findAndRemoveBadFd()        |
