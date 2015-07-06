@@ -33,6 +33,7 @@ from testutils import readAndWritable, nrOfOpenFds
 
 import os, sys
 from StringIO import StringIO
+from errno import EPERM
 from select import error as ioerror, select
 from signal import signal, SIGALRM, alarm
 from socket import socketpair, error, socket
@@ -83,28 +84,23 @@ class ReactorTest(WeightlessTestCase):
         self.assertEquals(2, len(loggedShutdowns))
 
     def testAddSocketReading(self):
-        class Sok:
-            def __hash__(self): return 1
-
         with Reactor() as reactor:
-            mockSok = Sok()
-            self.assertTrue(mockSok not in reactor._readers)
-            reactor.addReader(mockSok, lambda: None)
-            self.assertTrue(mockSok in reactor._readers)
-            reactor.removeReader(mockSok)
-            self.assertFalse(mockSok in reactor._readers)
+            rw = readAndWritable()
+            self.assertTrue(rw.fileno() not in reactor._fds)
+            reactor.addReader(rw, lambda: None)
+            self.assertTrue(rw.fileno() in reactor._fds)
+            reactor.removeReader(rw)
+            self.assertFalse(rw.fileno() in reactor._fds)
 
     def testAddSocketWriting(self):
-        class Sok:
-            def __hash__(self): return 1
+        rw = readAndWritable()
 
         with Reactor() as reactor:
-            mockSok = Sok()
-            self.assertTrue(mockSok not in reactor._writers)
-            reactor.addWriter(mockSok, None)
-            self.assertTrue(mockSok in reactor._writers)
-            reactor.removeWriter(mockSok)
-            self.assertFalse(mockSok in reactor._writers)
+            self.assertTrue(rw.fileno() not in reactor._fds)
+            reactor.addWriter(rw, None)
+            self.assertTrue(rw.fileno() in reactor._fds)
+            reactor.removeWriter(rw)
+            self.assertFalse(rw.fileno() in reactor._fds)
 
     def testAddSocketRaisesException(self):
         class Sok: # raise exception when put into set
@@ -117,24 +113,19 @@ class ReactorTest(WeightlessTestCase):
             except Exception, e:
                 self.assertEquals('aap', str(e))
 
-    def testReadFile(self):
+    def testReadable(self):
         with Reactor() as reactor:
-            fd, path = mkstemp()
-            os.write(fd, 'some data')
-            os.close(fd)
-            try:
-                f = open(path)
-                def readable():
-                    self.readable = True
-                reactor.addReader(f, readable)
-                reactor.step()
-                self.assertTrue(self.readable)
-            finally:
-                f.close()
-                os.remove(path)
+            r, w = os.pipe()
+            os.write(w, 'x')
+            def readable():
+                self.readable = True
+            reactor.addReader(r, readable)
+            reactor.step()
+            self.assertTrue(self.readable)
 
             # cleanup
-            reactor.removeReader(f)
+            reactor.removeReader(r)
+            os.close(r); os.close(w)
 
     def testTimer(self):
         with Reactor() as reactor:
@@ -403,40 +394,43 @@ class ReactorTest(WeightlessTestCase):
 
     def testWriteFollowsRead(self):
         with Reactor() as reactor:
-            rwFd = readAndWritable()
+            rw1 = readAndWritable()
+            rw2 = readAndWritable()
             t = []
             def read():
                 t.append('t1')
             def write():
                 t.append('t2')
-            reactor.addWriter(rwFd, write)
-            reactor.addReader(rwFd, read)
+            reactor.addWriter(rw1, write)
+            reactor.addReader(rw2, read)
             reactor.step()
             self.assertEquals(['t1', 't2'], t)
 
             # cleanup
-            reactor.removeWriter(rwFd)
-            reactor.removeReader(rwFd)
-            rwFd.close()
+            reactor.removeWriter(rw1)
+            reactor.removeReader(rw2)
+            rw1.close()
+            rw2.close()
 
     def testReadDeletesWrite(self):
         with Reactor() as reactor:
-            rwFd = readAndWritable()
+            rw1 = readAndWritable()
+            rw2 = readAndWritable()
             self.read = self.write = False
             def read():
                 self.read = True
-                reactor.removeWriter(rwFd)
+                reactor.removeWriter(rw1)
             def write():
                 self.write = True
-            reactor.addWriter(rwFd, write)
-            reactor.addReader(rwFd, read)
+            reactor.addWriter(rw1, write)
+            reactor.addReader(rw2, read)
             reactor.step()
             self.assertTrue(self.read)
             self.assertFalse(self.write)
 
             # cleanup
-            reactor.removeReader(rwFd)
-            rwFd.close()
+            reactor.removeReader(rw2)
+            rw1.close(); rw2.close()
 
     def testReadFollowsTimer(self):
         with Reactor() as reactor:
@@ -504,20 +498,19 @@ class ReactorTest(WeightlessTestCase):
             self.timeout = False
             def timeout():
                 self.timeout = True
-            reactor.addReader(FD_HIGHER_THAN_ANY_EXISTING + 1, lambda: None) # broken
-            reactor.addWriter(FD_HIGHER_THAN_ANY_EXISTING + 1, lambda: None) # broken
-            reactor.addReader(BadSocket(), lambda: None) # even more broken
-            reactor.addTimer(0.01, timeout)
             with self.stderr_replaced() as s:
-                for i in range(10):
-                    if self.timeout:
-                        break
-                    reactor.step()
+                reactor.addReader(FD_HIGHER_THAN_ANY_EXISTING + 1, lambda: None) # broken
+                reactor.addWriter(FD_HIGHER_THAN_ANY_EXISTING + 1, lambda: None) # broken
+                reactor.addReader(BadSocket(), lambda: None) # even more broken
                 self.assertTrue("Bad file descriptor" in s.getvalue(), repr(s.getvalue()))
-            self.assertTrue(self.timeout)
-            self.assertEquals({}, reactor._readers)
-            self.assertEquals({}, reactor._writers)
+            reactor.addTimer(0.01, timeout)
+            for i in range(10):
+                if self.timeout:
+                    break
+                reactor.step()
+            self.assertEquals({}, reactor._fds)
             self.assertEquals([], reactor._timers)
+            self.assertTrue(self.timeout)
 
     def testGetRidOfClosedSocket(self):
         with Reactor() as reactor:
@@ -526,35 +519,41 @@ class ReactorTest(WeightlessTestCase):
             callbacks = []
             def callback():
                 callbacks.append(True)
-            reactor.addReader(sok, callback)
-            reactor.addWriter(sok, callback)
             with self.stderr_replaced() as s:
-                reactor.step()
-                reactor.step()
+                reactor.addReader(sok, callback)
+                reactor.addWriter(sok, callback)
                 self.assertTrue("Bad file descriptor" in s.getvalue(), s.getvalue())
-            self.assertEquals({}, reactor._readers)
+            self.assertEquals({}, reactor._fds)
+            self.assertEquals([], callbacks)
+            reactor.step()
             self.assertEquals([True, True], callbacks)
 
     def testDoNotDieButLogOnProgrammingErrors(self):
+        called = []
+        cb = lambda: called.append(True)
         with Reactor() as reactor:
-            reactor.addReader('not a sok', lambda: None)
             with stderr_replaced() as err:
                 try:
-                    reactor.step()
+                    reactor.addReader('not a sok', cb)
                 except TypeError:
                     self.fail('must not fail')
                 self.assertTrue('TypeError: argument must be an int' in err.getvalue())
 
+            self.assertEquals([], called)
+            self.assertEquals([cb], [c.callback for c in reactor._badFdsLastCallback])
+            reactor.step()
+            self.assertEquals([True], called)
+            self.assertEquals([], [c.callback for c in reactor._badFdsLastCallback])
+
     def testDoNotMaskOtherErrors(self):
         # TS: TODO: rewrite!
-        self.fail('rewrite for epoll white-box')
-        def raiser(*args): raise Exception('oops')
-        reactor = Reactor(raiser)
+        reactor = Reactor()
+        reactor._epoll.close()  # Simples wat to get an "unexpected" error from epoll.poll()
         try:
             reactor.step()
-            self.fail('must raise oops')
+            self.fail()
         except Exception, e:
-            self.assertEquals('oops', str(e))
+            self.assertEquals('I/O operation on closed epoll fd', str(e))
 
     def testTimerDoesNotMaskAssertionErrors(self):
         with Reactor() as reactor:
@@ -588,64 +587,60 @@ class ReactorTest(WeightlessTestCase):
                 self.assertEquals([], reactor._timers)
 
     def testReaderOrWriterDoesNotMaskKeyboardInterrupt(self):
-        fd, path = mkstemp()
+        rw = readAndWritable()
         try:
             with Reactor() as reactor:
                 def raiser():
                     raise KeyboardInterrupt('Ctrl-C')
-                reactor.addReader(sok=fd, sink=raiser)
-                self.assertEquals([raiser], [c.callback for c in reactor._readers.values()])
+                reactor.addReader(sok=rw, sink=raiser)
+                self.assertEquals([raiser], [c.callback for c in reactor._fds.values()])
                 try:
                     reactor.step()
                     self.fail('step() must raise KeyboardInterrupt')
                 except KeyboardInterrupt:
-                    self.assertEquals([], [c.callback for c in reactor._readers.values()])
+                    self.assertEquals([], [c.callback for c in reactor._fds.values()])
         finally:
-            os.close(fd)
-            os.remove(path)
+            rw.close()
 
-        fd, path = mkstemp()
+        rw = readAndWritable()
         try:
             with Reactor() as reactor:
-                reactor.addWriter(sok=fd, source=raiser)
+                reactor.addWriter(sok=rw, source=raiser)
                 try:
                     reactor.step()
                     self.fail('step() must raise KeyboardInterrupt')
                 except KeyboardInterrupt:
-                    self.assertEquals([], [c.callback for c in reactor._readers.values()])
+                    self.assertEquals([], [c.callback for c in reactor._fds.values()])
         finally:
-            os.close(fd)
-            os.remove(path)
+            rw.close()
 
     def testReaderOrWriterDoesNotMaskSystemExit(self):
-        fd, path = mkstemp()
+        rw = readAndWritable()
         try:
             with Reactor() as reactor:
                 def raiser():
                     raise SystemExit('shutdown...')
-                reactor.addReader(sok=fd, sink=raiser)
-                self.assertEquals([raiser], [c.callback for c in reactor._readers.values()])
+                reactor.addReader(sok=rw, sink=raiser)
+                self.assertEquals([raiser], [c.callback for c in reactor._fds.values()])
                 try:
                     reactor.step()
                     self.fail('step() must raise SystemExit')
                 except SystemExit:
-                    self.assertEquals([], [c.callback for c in reactor._readers.values()])
+                    self.assertEquals([], [c.callback for c in reactor._fds.values()])
         finally:
-            os.close(fd)
-            os.remove(path)
+            rw.close()
 
-        fd, path = mkstemp()
+        rw = readAndWritable()
         try:
             with Reactor() as reactor:
-                reactor.addWriter(sok=fd, source=raiser)
+                reactor.addWriter(sok=rw, source=raiser)
                 try:
                     reactor.step()
                     self.fail('step() must raise SystemExit')
                 except SystemExit:
-                    self.assertEquals([], [c.callback for c in reactor._readers.values()])
+                    self.assertEquals([], [c.callback for c in reactor._fds.values()])
         finally:
-            os.close(fd)
-            os.remove(path)
+            rw.close()
 
     def testGlobalReactor(self):
         with Reactor() as thereactor:
@@ -707,14 +702,16 @@ class ReactorTest(WeightlessTestCase):
 
     def testDefaultPrio(self):
         with Reactor() as reactor:
-            reactor.addReader('', '')
-            self.assertEquals(Reactor.DEFAULTPRIO, reactor._readers[''].prio)
-            reactor.addWriter('', '')
-            self.assertEquals(Reactor.DEFAULTPRIO, reactor._writers[''].prio)
+            rw1 = readAndWritable()
+            reactor.addReader(rw1, '')
+            self.assertEquals(Reactor.DEFAULTPRIO, reactor._fds[rw1.fileno()].prio)
+            rw2 = readAndWritable()
+            reactor.addWriter(rw2, '')
+            self.assertEquals(Reactor.DEFAULTPRIO, reactor._fds[rw2.fileno()].prio)
 
             # cleanup
-            reactor.removeReader('')
-            reactor.removeWriter('')
+            reactor.removeReader(rw1)
+            reactor.removeWriter(rw2)
 
     def testWritePrio(self):
         with Reactor() as reactor:
@@ -750,16 +747,18 @@ class ReactorTest(WeightlessTestCase):
             local1.close(); remote1.close()
 
     def testGetOpenConnections(self):
+        rw1 = readAndWritable()
+        rw2 = readAndWritable()
         with Reactor() as reactor:
             self.assertEquals(0, reactor.getOpenConnections())
-            reactor.addReader('', '')
+            reactor.addReader(rw1, '')
             self.assertEquals(1, reactor.getOpenConnections())
-            reactor.addWriter('', '')
+            reactor.addWriter(rw2, '')
             self.assertEquals(2, reactor.getOpenConnections())
 
-            reactor.removeReader('')
+            reactor.removeReader(rw1)
             self.assertEquals(1, reactor.getOpenConnections())
-            reactor.removeWriter('')
+            reactor.removeWriter(rw2)
             self.assertEquals(0, reactor.getOpenConnections())
 
     def testAddProcessGenerator(self):
@@ -993,6 +992,22 @@ class ReactorTest(WeightlessTestCase):
             self.assertEquals([True], processCallback)
             self.assertEquals([True], timerCallback)
 
+    def testAddFileNotPossible(self):
+        # or meaningful; non-blocking file interface does not exist on Linux (use Threads) and a file-fd cannot be registered in epoll.
+        fd, path = mkstemp()
+        try:
+            with Reactor() as reactor:
+                try:
+                    with stderr_replaced() as err:
+                        reactor.addReader(sok=fd, sink=lambda: None)
+                        self.assertTrue('Operation not permitted' in err.getvalue(), err.getvalue())
+                    self.fail()
+                except IOError, (errno, description):
+                    self.assertEquals(EPERM, errno)
+                    self.assertEquals('Operation not permitted', description)
+        finally:
+            os.close(fd)
+            os.remove(path)
 
 def instrumentShutdown(reactor):
     loggedShutdowns = []

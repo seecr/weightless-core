@@ -28,7 +28,6 @@ from __future__ import with_statement
 
 import sys
 from StringIO import StringIO
-from os import tmpfile
 from re import sub
 from sys import exc_info
 from time import sleep
@@ -38,6 +37,7 @@ from seecr.test import CallTrace
 from seecr.test.io import stderr_replaced, stdout_replaced
 from seecr.test.portnumbergenerator import PortNumberGenerator
 
+from testutils import readAndWritable
 from weightlesstestcase import WeightlessTestCase
 
 from weightless.core import identify, compose, Yield
@@ -48,7 +48,7 @@ from weightless.http import HttpServer
 
 class MockSocket(object):
     def __init__(self):
-        self._readAndWritable = tmpfile()
+        self._readAndWritable = readAndWritable()
 
     def fileno(self):
         return self._readAndWritable.fileno()
@@ -714,20 +714,20 @@ ZeroDivisionError: integer division or modulo by zero
             reactor.addReader(two, lambda: None)
             reactor.addReader(three, handler().next)
             reactor.step()
-            self.assertTrue(one in reactor._writers)
+            self.assertTrue(one.fileno() in reactor._fds)
             reactor.cleanup(one)
-            self.assertFalse(one in reactor._writers)
-            self.assertTrue(two in reactor._readers)
+            self.assertFalse(one.fileno() in reactor._fds)
+            self.assertTrue(two.fileno() in reactor._fds)
             reactor.cleanup(two)
-            self.assertFalse(two in reactor._readers)
-            self.assertTrue(three in reactor._suspended)
+            self.assertFalse(two.fileno() in reactor._fds)
+            self.assertTrue(three.fileno() in reactor._suspended)
             reactor.cleanup(three)
-            self.assertFalse(three in reactor._suspended)
+            self.assertFalse(three.fileno() in reactor._suspended)
 
 
 class MyMockSocket(object):
     def __init__(self, data=None):
-        self._readAndWritable = tmpfile()
+        self._readAndWritable = readAndWritable()
         self.data = [] if data is None else data
 
     def fileno(self):

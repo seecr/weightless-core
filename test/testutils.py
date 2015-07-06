@@ -22,7 +22,8 @@
 #
 ## end license ##
 
-from os import getpid, listdir, tmpfile
+from os import getpid, listdir
+from socket import socket
 
 
 def nrOfOpenFds():
@@ -30,5 +31,5 @@ def nrOfOpenFds():
     return len(listdir('/proc/%d/fd' % pid))
 
 def readAndWritable():
-    return tmpfile()
+    return socket()
 
