@@ -49,6 +49,7 @@ from weightless.core import Yield, compose
 from weightless.http import HttpServer, _httpserver, REGEXP
 
 from weightless.http._httpserver import updateResponseHeaders, parseContentEncoding, parseAcceptEncoding
+from weightless.io._reactor import WRITE_INTENT, READ_INTENT
 
 def inmydir(p):
     return join(dirname(abspath(__file__)), p)
@@ -354,8 +355,7 @@ class HttpServerTest(WeightlessTestCase):
     def testCloseConnection(self):
         response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
         self.assertEquals('The Response', response)
-        self.assertEquals({}, self.reactor._readers)
-        self.assertEquals({}, self.reactor._writers)
+        self.assertEquals({}, self.reactor._fds)
 
     def testSmallFragments(self):
         response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n', recvSize=3)
@@ -372,9 +372,10 @@ class HttpServerTest(WeightlessTestCase):
             sok = socket()
             sok.connect(('localhost', self.port))
             sok.send('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
-            while not reactor._writers:
+            writerFile = lambda: [context.fileOrFd for context in reactor._fds.values() if context.intent == WRITE_INTENT]
+            while not writerFile():
                 reactor.step()
-            serverSok, handler = reactor._writers.items()[0]
+            serverSok = writerFile()[0]
             originalSend = serverSok.send
             def sendOnlyManagesToActuallySendThreeBytesPerSendCall(data, *options):
                 originalSend(data[:3], *options)
@@ -402,12 +403,11 @@ class HttpServerTest(WeightlessTestCase):
             sok = socket()
             sok.connect(('localhost', self.port))
             sok.send('GET /path/here HTTP/1.0\r\nConnection: close\r\nApe-Nut: Mies\r\n\r\n')
-            while not reactor._writers:
+            writers = lambda: [c for c in reactor._fds.values() if c.intent == WRITE_INTENT]
+            while not writers():
                 reactor.step()
             reactor.step()
             fragment = sok.recv(100000) # will read about 49152 chars
-            reactor.step()
-            fragment += sok.recv(100000)
             self.assertEquals(oneStringLength * 6000, len(fragment))
             self.assertTrue("some t\xc3\xa9xt" in fragment, fragment)
 
@@ -483,7 +483,7 @@ class HttpServerTest(WeightlessTestCase):
             with self.stderr_replaced() as s:
                 for i in range(4):
                     reactor.step()
-                self.assertEquals(1, len(reactor._readers))
+                self.assertEquals(1, len([c for c in reactor._fds.values() if c.intent == READ_INTENT]))
 
             # cleanup
             sok.close()
@@ -497,7 +497,7 @@ class HttpServerTest(WeightlessTestCase):
             sok.connect(('localhost', self.port))
             sok.send('GET / HTTP/1.0\r\n\r\n')
             sleep(0.02)
-            for i in range(11):
+            for i in range(10):
                 reactor.step()
             response = sok.recv(4096)
             self.assertEquals('aaa', response)
@@ -510,6 +510,8 @@ class HttpServerTest(WeightlessTestCase):
         self.requestData = None
         def handler(**kwargs):
             self.requestData = kwargs
+            return
+            yield
 
         with stdout_replaced():
             with Reactor() as reactor:
@@ -539,6 +541,8 @@ class HttpServerTest(WeightlessTestCase):
         self.requestData = None
         def handler(**kwargs):
             self.requestData = kwargs
+            return
+            yield
 
         with stdout_replaced():
             with Reactor() as reactor:
@@ -568,6 +572,8 @@ class HttpServerTest(WeightlessTestCase):
         self.requestData = None
         def handler(**kwargs):
             self.requestData = kwargs
+            return
+            yield
 
         with stdout_replaced():
             with Reactor() as reactor:
@@ -600,6 +606,8 @@ class HttpServerTest(WeightlessTestCase):
         self.requestData = None
         def handler(**kwargs):
             self.requestData = kwargs
+            return
+            yield
 
         with stdout_replaced():
             with Reactor() as reactor:
@@ -690,6 +698,8 @@ class HttpServerTest(WeightlessTestCase):
         self.requestData = None
         def handler(**kwargs):
             self.requestData = kwargs
+            return
+            yield
 
         done = []
         def onDone():
@@ -716,6 +726,8 @@ class HttpServerTest(WeightlessTestCase):
         self.requestData = {}
         def handler(**kwargs):
             self.requestData = kwargs
+            return
+            yield
 
         with stdout_replaced():
             with Reactor() as reactor:
@@ -743,6 +755,8 @@ class HttpServerTest(WeightlessTestCase):
         self.requestData = {}
         def handler(**kwargs):
             self.requestData = kwargs
+            return
+            yield
 
         with stdout_replaced():
             with Reactor() as reactor:
@@ -766,6 +780,8 @@ class HttpServerTest(WeightlessTestCase):
         self.requestData = {}
         def handler(**kwargs):
             self.requestData = kwargs
+            return
+            yield
 
         with stdout_replaced():
             with Reactor() as reactor:
@@ -792,6 +808,8 @@ class HttpServerTest(WeightlessTestCase):
         self.requestData = {}
         def handler(**kwargs):
             self.requestData = kwargs
+            return
+            yield
 
         with Reactor() as reactor:
             server = HttpServer(reactor, self.port, handler)
@@ -816,6 +834,8 @@ class HttpServerTest(WeightlessTestCase):
         self.requestData = {}
         def handler(**kwargs):
             self.requestData = kwargs
+            return
+            yield
 
         with stdout_replaced():
             with Reactor() as reactor:
@@ -845,6 +865,8 @@ class HttpServerTest(WeightlessTestCase):
         self.requestData = {}
         def handler(**kwargs):
             self.requestData = kwargs
+            return
+            yield
 
         with stdout_replaced():
             with Reactor() as reactor:
@@ -874,6 +896,8 @@ class HttpServerTest(WeightlessTestCase):
         self.requestData = {}
         def handler(**kwargs):
             self.requestData = kwargs
+            return
+            yield
 
         with stdout_replaced():
             with Reactor() as reactor:
@@ -912,7 +936,7 @@ class HttpServerTest(WeightlessTestCase):
         sock.connect(('localhost', self.port))
         self.reactor.step()
         sock.send("GET / HTTP/1.0\r\n\r\n")
-        self.reactor.step().step().step()
+        self.reactor.step().step()
         server.shutdown()
 
         self.assertEquals('FAIL', sock.recv(1024))
@@ -937,7 +961,7 @@ class HttpServerTest(WeightlessTestCase):
         sock.connect(('localhost', self.port))
         self.reactor.step()
         sock.send("GET / HTTP/1.0\r\n\r\n")
-        self.reactor.step().step().step()
+        self.reactor.step().step()
         server.shutdown()
 
         self.assertEquals('OK', sock.recv(1024))
@@ -958,7 +982,7 @@ class HttpServerTest(WeightlessTestCase):
         sock.connect(('localhost', self.port))
         self.reactor.step()
         sock.send("GET / HTTP/1.0\r\n\r\n")
-        self.reactor.step().step().step()
+        self.reactor.step().step()
 
         self.assertEquals('HTTP/1.0 503 Service Unavailable\r\n\r\n<html><head></head><body><h1>Service Unavailable</h1></body></html>', sock.recv(1024))
         server.shutdown()
@@ -1100,7 +1124,7 @@ class StepWatcher(object):
 
     @staticmethod
     def _extractWriteResponsesHttpHandlerObj(reactor):
-        result = [ctx.callback.__self__.gi_frame.f_locals['self'] for ctx in reactor._writers.values() if ctx.callback.__self__.gi_frame.f_code.co_name == '_writeResponse']
+        result = [ctx.callback.__self__.gi_frame.f_locals['self'] for ctx in reactor._fds.values() if ctx.intent == WRITE_INTENT and ctx.callback.__self__.gi_frame.f_code.co_name == '_writeResponse']
         if result:
             return result[0]
         return None

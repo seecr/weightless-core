@@ -64,20 +64,24 @@ class GioTest(WeightlessTestCase):
         asProcess(test())
 
     def testNeverExittedContextIsForcedToExitByGeneratorExitWhileWriting(self):
-        context =  giopen(self.tempfile, 'rw')
-        def neverExit():
-            with context:
-                while True: # never exit context, unless with exception
-                    yield 'ape'
-        proc = neverExit()
-        g = Gio(self.reactor, proc)
-        self.reactor.step()
+        lhs, rhs = socketpair()
         try:
-            proc.throw(GeneratorExit()) # force exit outside Gio()
-            self.fail('Must not come here')
-        except StopIteration:
-            pass
-        self.assertEquals([], g._contextstack)
+            context = SocketContext(lhs)  # quick hack, can block.
+            def neverExit():
+                with context:
+                    while True: # never exit context, unless with exception
+                        yield 'ape'
+            proc = neverExit()
+            g = Gio(self.reactor, proc)
+            self.reactor.step()
+            try:
+                proc.throw(GeneratorExit()) # force exit outside Gio()
+                self.fail('Must not come here')
+            except StopIteration:
+                pass
+            self.assertEquals([], g._contextstack)
+        finally:
+            lhs.close(); rhs.close()
 
     def XXXXXXXXXXXXXtestNeverExittedContextIsForcedToExitByGeneratorExitWhileReading(self):
         context =  giopen(self.tempfile, 'rw')
@@ -95,7 +99,8 @@ class GioTest(WeightlessTestCase):
             pass
         self.assertEquals([], g._contextstack)
 
-    def testGioAsContext(self):
+    def XXXtestGioAsContext(self):
+        # TS: Disabled: file-contexts don't work with epoll' Reactor since a file-fd is *always* readable and writable.
         open(self.tempfile, 'w').write('read this!')
         def myProcessor():
             with giopen(self.tempfile, 'rw') as datastream:
@@ -110,7 +115,8 @@ class GioTest(WeightlessTestCase):
         self.assertEquals({}, self.reactor._readers)
         self.assertEquals({}, self.reactor._writers)
 
-    def testAlternate(self):
+    def XXXtestAlternate(self):
+        # TS: Disabled: file-contexts don't work with epoll' Reactor since a file-fd is *always* readable and writable.
         done = []
         open(self.tempdir+'/1', 'w').write('1234')
         open(self.tempdir+'/2', 'w').write('abcd')
@@ -132,7 +138,8 @@ class GioTest(WeightlessTestCase):
         self.assertEquals('1234abcd', open(self.tempdir+'/1').read())
         self.assertEquals('abcd1234', open(self.tempdir+'/2').read())
 
-    def testNesting(self):
+    def XXXtestNesting(self):
+        # TS: Disabled: file-contexts don't work with epoll' Reactor since a file-fd is *always* readable and writable.
         done = []
         open(self.tempdir+'/1', 'w').write('1234')
         open(self.tempdir+'/2', 'w').write('abcd')
@@ -166,7 +173,7 @@ class GioTest(WeightlessTestCase):
                     self.response = yield
             Gio(reactor, jack(SocketContext(lhs)))
             Gio(reactor, peter(SocketContext(rhs)))
-            reactor.step().step().step().step()
+            reactor.step().step().step()
             self.assertEquals('Hello Jack', self.response)
 
     def testLargeBuffers(self):
@@ -234,10 +241,14 @@ class GioTest(WeightlessTestCase):
         def test():
             done = []
             def handler():
-                with giopen(self.tempfile, 'rw'):
-                    with Timer(0.01):
-                        yield 'a'
-                    yield 'b'
+                lhs, rhs = socketpair()
+                try:
+                    with SocketContext(lhs):  # quick hack, can block.
+                        with Timer(0.01):
+                            yield 'a'
+                        yield 'b'
+                finally:
+                    lhs.close(); rhs.close()
                 done.append(True)
             g = Gio(reactor(), handler())
             for _ in range(42):
@@ -252,13 +263,16 @@ class GioTest(WeightlessTestCase):
         def test():
             done = []
             def handler():
+                lhs, rhs = socketpair()
                 try:
-                    with giopen(self.tempfile, 'rw'):
+                    with SocketContext(lhs):  # quick hack, can block.
                         with Timer(0.01):
                             for i in xrange(999999):
                                 yield 'a'
                 except TimeoutException:
                     done.append(False)
+                finally:
+                    lhs.close; rhs.close()
                 yield
             g = Gio(reactor(), handler())
             while not done:
@@ -273,13 +287,17 @@ class GioTest(WeightlessTestCase):
         def test():
             done = []
             def handler():
-                with giopen(self.tempfile, 'rw'):
-                    with Timer(0.01):
-                        try:
-                            for i in xrange(999999):
-                                yield 'a'
-                        except TimeoutException:
-                            done.append(False)
+                lhs, rhs = socketpair()
+                try:
+                    with SocketContext(lhs):  # quick hack, can block.
+                        with Timer(0.01):
+                            try:
+                                for i in xrange(999999):
+                                    yield 'a'
+                            except TimeoutException:
+                                done.append(False)
+                finally:
+                    lhs.close(); rhs.close()
                 yield
             g = Gio(reactor(), handler())
             while done != [False]:

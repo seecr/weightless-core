@@ -45,6 +45,8 @@ from weightless.io import Reactor, Suspend, TimeoutException
 from weightless.io.utils import asProcess
 from weightless.http import HttpServer
 
+from weightless.io._reactor import READ_INTENT, WRITE_INTENT
+
 
 class MockSocket(object):
     def __init__(self):
@@ -116,15 +118,15 @@ class SuspendTest(WeightlessTestCase):
                     handle[0] = reactor.suspend()
                 sok1 = MockSocket()
                 reactor.addReader(sok1, callback)
-                self.assertTrue(sok1 in reactor._readers)
+                self.assertTrue(sok1.fileno() in reactor._fds)
                 reactor.step()
-                self.assertTrue(sok1 not in reactor._readers)
+                self.assertTrue(sok1.fileno() not in reactor._fds)
 
                 sok2 = MockSocket()
                 reactor.addWriter(sok2, callback)
-                self.assertTrue(sok2 in reactor._writers)
+                self.assertTrue(sok2.fileno() in reactor._fds)
                 reactor.step()
-                self.assertTrue(sok2 not in reactor._writers)
+                self.assertTrue(sok2.fileno() not in reactor._fds)
                 self.assertTrue(handle[0] != None)
                 self.assertTrue(handle[0] != 'initial value')
 
@@ -144,8 +146,7 @@ class SuspendTest(WeightlessTestCase):
             reactor.step()
             reactor.resumeWriter(handle[0])
             reactor.step()
-            self.assertTrue(sok in reactor._writers)
-            self.assertTrue(sok not in reactor._readers)
+            self.assertTrue(sok.fileno() in reactor._fds)
             self.assertRaises(KeyError, reactor.resumeWriter, handle[0])
 
             # cleanup
@@ -164,8 +165,7 @@ class SuspendTest(WeightlessTestCase):
             reactor.step()
             reactor.resumeReader(handle[0])
             reactor.step()
-            self.assertFalse(sok in reactor._writers)
-            self.assertTrue(sok in reactor._readers)
+            self.assertTrue(sok.fileno() in reactor._fds)
             self.assertRaises(KeyError, reactor.resumeReader, handle[0])
 
             # cleanup
@@ -185,8 +185,7 @@ class SuspendTest(WeightlessTestCase):
                 reactor.step()
                 reactor.resumeProcess(handle[0])
                 reactor.step()
-                self.assertFalse(handle[0] in reactor._writers)
-                self.assertFalse(handle[0] in reactor._readers)
+                self.assertFalse(handle[0] in reactor._fds)
                 self.assertTrue(handle[0] in reactor._processes)
                 self.assertRaises(KeyError, reactor.resumeProcess, handle[0])
 
@@ -202,7 +201,7 @@ class SuspendTest(WeightlessTestCase):
                 sok = MockSocket()
                 reactor.addWriter(sok, callback)
                 reactor.step()
-                self.assertEquals(sok, handle[0])
+                self.assertEquals(sok.fileno(), handle[0])
                 try:
                     reactor.addWriter(sok, callback)
                     self.fail("Exception not raised")
@@ -228,8 +227,8 @@ class SuspendTest(WeightlessTestCase):
         reactor.addWriter(sok2, lambda: None)
         reactor.addWriter(sok3, callback)
         reactor.step()
-        self.assertFalse(sok3 in reactor._readers)
-        self.assertFalse(sok3 in reactor._writers)
+        self.assertFalse(sok3.fileno() in reactor._fds)
+        self.assertFalse(sok3.fileno() in reactor._fds)
         with self.stdout_replaced() as s:
             reactor.shutdown() 
             self.assertTrue(str(sok1) in s.getvalue(), s.getvalue())
@@ -253,17 +252,22 @@ class SuspendTest(WeightlessTestCase):
             httpserver.listen()
             reactor.removeReader(listener) # avoid new connections
             httpserver._acceptor._accept()
+            self.assertEquals(1, len(reactor._fds))
+            self.assertEquals([READ_INTENT], [v.intent for v in reactor._fds.values()])
             reactor.step()
-            reactor.step()
-            self.assertEquals(1, len(reactor._writers))
+            self.assertEquals(1, len(reactor._fds))
+            self.assertEquals([WRITE_INTENT], [v.intent for v in reactor._fds.values()])
             reactor.step()
             self.assertEquals(reactor, suspend._reactor)
-            self.assertEquals(0, len(reactor._writers))
+            self.assertEquals(0, len(reactor._fds))
             suspend.resume('RESPONSE')
+            self.assertEquals(1, len(reactor._fds))
+            self.assertEquals([WRITE_INTENT], [v.intent for v in reactor._fds.values()])
             reactor.step()
             reactor.step()
             reactor.step()
             self.assertEquals(['before suspend', 'result = RESPONSE', 'after suspend'], listener.data)
+            self.assertEquals(0, len(reactor._fds))
 
             # cleanup (most) fd's
             listener.close()
@@ -289,10 +293,8 @@ class SuspendTest(WeightlessTestCase):
             httpserver._acceptor._accept()
             reactor.step()
             reactor.step()
-            self.assertEquals(1, len(reactor._writers))
-            reactor.step()
             self.assertEquals(reactor, suspend._reactor)
-            self.assertEquals(0, len(reactor._writers))
+            self.assertEquals(0, len(reactor._fds))
             def raiser():
                 raise ValueError("BAD VALUE")
             try:
@@ -316,6 +318,7 @@ ValueError: BAD VALUE
             self.assertEquals('before suspend', listener.data[0])
             self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
             self.assertEquals('after suspend', listener.data[2])
+            self.assertEquals(0, len(reactor._fds))
 
             # cleanup (most) fd's
             listener.close()
@@ -650,12 +653,11 @@ ZeroDivisionError: integer division or modulo by zero
             httpserver.listen()
             reactor.removeReader(listener) # avoid new connections
             httpserver._acceptor._accept()
+            self.assertEquals(1, len(reactor._fds))
             reactor.step()
-            reactor.step()
-            self.assertEquals(1, len(reactor._writers))
             reactor.step()
             self.assertEquals(reactor, suspend._reactor)
-            self.assertEquals(0, len(reactor._writers))
+            self.assertEquals(0, len(reactor._fds))
             def raiser():
                 raise ValueError("BAD VALUE")
             try:
@@ -663,6 +665,7 @@ ZeroDivisionError: integer division or modulo by zero
             except:
                 exc_value = exc_info()[1]
                 suspend.throw(exc_value)
+            self.assertEquals(1, len(reactor._fds))
             reactor.step()
             reactor.step()
             reactor.step()
@@ -677,6 +680,7 @@ ZeroDivisionError: integer division or modulo by zero
             self.assertEquals('before suspend', listener.data[0])
             self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
             self.assertEquals('after suspend', listener.data[2])
+            self.assertEquals(0, len(reactor._fds))
 
             # cleanup (most) fd's
             listener.close()

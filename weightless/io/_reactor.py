@@ -90,14 +90,10 @@ class Reactor(object):
 
     def addReader(self, sok, sink, prio=None):
         """Adds a socket and calls sink() when the socket becomes readable. It remains at the readers list."""
-        if sok in self._suspended:
-            raise ValueError('Socket is suspended')
         self._addFD(fileOrFd=sok, callback=sink, intent=READ_INTENT, prio=prio)
 
     def addWriter(self, sok, source, prio=None):
         """Adds a socket and calls source() whenever the socket is writable. It remains at the writers list."""
-        if sok in self._suspended:
-            raise ValueError('Socket is suspended')
         self._addFD(fileOrFd=sok, callback=source, intent=WRITE_INTENT, prio=prio)
 
     def addProcess(self, process, prio=None):
@@ -116,27 +112,30 @@ class Reactor(object):
         return timer
 
     def _addFD(self, fileOrFd, callback, intent, prio, fdContext=None):
-        print '_addFD'
         context = fdContext or _FDContext(callback, fileOrFd, intent, prio)
         try:
             fd = _fdNormalize(fileOrFd)
             if fd in self._fds:
                 # Otherwise epoll would give an IOError, Errno 17 / EEXIST.
                 raise ValueError('fd already registered')  # TS: TODO: Document Interface.
+            if fd in self._suspended:
+                raise ValueError('Socket is suspended')
+
             if intent is READ_INTENT:  # TODO: Refactor if..elif..else+assert to 1x inline if..else for speed!
                 eventmask = EPOLLIN
             elif intent is WRITE_INTENT:
                 eventmask = EPOLLOUT
             else:
                 raise AssertionError('Unknown intent %s' % (repr(intent)))
+
             self._epollRegister(fd=fd, eventmask=eventmask)
         except _HandleEBADFError:
+            self._raiseIfFileObjSuspended(obj=fileOrFd)
             self._badFdsLastCallback.append(context)
         except TypeError:
             print_exc()  # Roughly same "whatever" behaviour of 'old.
             self._badFdsLastCallback.append(context)
         else:
-            print '_addFD :: ok; fd:', fd
             self._fds[fd] = context
 
     def _removeFD(self, fileOrFd):
@@ -167,6 +166,11 @@ class Reactor(object):
         for handle, context in self._suspended.items():
             if hasattr(context, 'fileOrFd') and context.fileOrFd == obj:
                 del self._suspended[handle]
+
+    def _raiseIfFileObjSuspended(self, obj):
+        for handle, context in self._suspended.items():
+            if hasattr(context, 'fileOrFd') and context.fileOrFd == obj:
+                raise ValueError('Socket is suspended')
 
     def _epollRegister(self, fd, eventmask):
         try:
@@ -208,12 +212,11 @@ class Reactor(object):
             raise RuntimeError('suspend called from a timer or when running a last-call callback for a bad file-descriptor.')  # TS: TODO: Document Interface.
 
         if self.currenthandle in self._fds:
-            # FIXME: testme.
             self._removeFD(fileOrFd=self.currenthandle)
-        elif self._processes.pop(self.currenthandle, None) is not None:  # TS: FIXME: fd "0" would not have worken (stdin); does work now.
+        elif self._processes.pop(self.currenthandle, None) is not None:
             self._readProcessPipe()
         else:
-            # TS: TODO: Document Interface & Can give error i.s.o. b"ad action."
+            # TS: TODO: Document Interface & Can give error i.s.o. "bad action."
             raise RuntimeError('Current context not found!')
         self._suspended[self.currenthandle] = self.currentcontext
         return self.currenthandle
@@ -267,7 +270,6 @@ class Reactor(object):
         __reactor__ = self
 
         if self._badFdsLastCallback:
-            print ">>> PROCESSING _lastCallbacks()"; sys.stdout.flush()  # HCK
             self._lastCallbacks()
             return self
 
@@ -279,13 +281,10 @@ class Reactor(object):
 
         try:
             fdEvents = self._epoll.poll(timeout=timeout)
-            print '>>> afet poll; step:', fdEvents, timeout
-        except (IOError, socket_error), (errno, description):  # Removed select_error (source: select module - only IOError can occur).
+        except (IOError, socket_error), (errno, description):
             # TS: FIXME: can socket_error be removed also???  (THINK SO: sok.fileno() can give socket_error (EBADF); .poll() does not call that).
             print_exc()
-            #if errno == EBADF:            <-------+
-            #    self._findAndRemoveBadFd()        |
-            if errno == EINTR:  # was: "elif:" of -+
+            if errno == EINTR:
                 pass
             else:
                 raise
@@ -317,31 +316,23 @@ class Reactor(object):
                 print_exc()
 
     def _callbacks(self, fdEvents, fds, intent):
-        print '>>> _callbacks'
-        # @@ TODO: Fix multiple handling of one event !!!!!
         for fd, eventmask in fdEvents:
-            print '>>> _callbacks :: (fd, intent)', (fd, intent)
             if fd == self._readProcessPipe:
-                print '>>> _callbacks :: Nah 1...'
                 continue
 
             try:
                 context = fds[fd]
             except KeyError:
-                print '>>> _callbacks :: Nah 2...'
                 continue
 
             if context.intent is not intent:
-                print '>>> _callbacks :: Nah 3...'
                 continue
 
             if context.prio <= self._prio:
                 self.currenthandle = fd
                 self.currentcontext = context
                 try:
-                    print '>>> _callbacks :: context.callback() PRE'
                     context.callback()
-                    print '>>> _callbacks :: context.callback() POST'
                 except (AssertionError, SystemExit, KeyboardInterrupt):
                     if self.currenthandle in fds:
                         del fds[self.currenthandle]
@@ -378,20 +369,6 @@ class Reactor(object):
                     if self.currenthandle in processes:
                         del processes[self.currenthandle]
                     raise
-
-    #def _findAndRemoveBadFd(self):
-    #    for sok in self._readers:
-    #        try:
-    #            select([sok], [], [], 0)
-    #        except Exception:
-    #            self._readers.pop(sok).callback()
-    #            return
-    #    for sok in self._writers:
-    #        try:
-    #            select([], [sok], 0)
-    #        except Exception:
-    #            self._writers.pop(sok).callback()
-    #            return
 
     def _closeProcessPipe(self):
         # Will be called exactly once; in testing situations 1..n times.
@@ -444,8 +421,8 @@ class _HandleEBADFError(Exception):
 
 _timeKey = lambda t: t.time
 
-READ_INTENT = type('READ', (object,), {})()
-WRITE_INTENT = type('READ', (object,), {})()
+READ_INTENT = type('READ_INTENT', (object,), {})()
+WRITE_INTENT = type('WRITE_INTENT', (object,), {})()
 
 # In Python 2.7 - anything lower than 0.001 will become 0(.0); epoll.poll() may (and will IRL) return early - see: https://bugs.python.org/issue20311 (Python 3.x differs in behaviour :-s).
 # TS: If this granularity (& related logic) is unwanted - start using timerfd_* system-calls.
@@ -480,6 +457,4 @@ _EPOLL_CONSTANT_MAPPING = {  # Python epoll constants (missing EPOLLRDHUP - exis
     # Linux ignores 'POLLMSG' (see Linux's: man poll)
     EPOLLMSG: 'EPOLLMSG',          # Ignored.
 }
-
-EPOLL_IN_ERR_HUP_COMBINED = EPOLLIN | EPOLLERR | EPOLLHUP
 
