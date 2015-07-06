@@ -146,7 +146,7 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
                         suspend._reactor.removeReader(sok)
                 except (AssertionError, KeyboardInterrupt, SystemExit):
                     raise
-                except (IOError, ValueError, KeyError):
+                except (IOError, ValueError, KeyError), e:
                     # Expected errors:
                     # - IOError (and subclasses socket.error and it's subclasses - incl. SSLError)
                     # - ValueError raised when all kinds of expectations about behaviour or data fail.
@@ -157,7 +157,7 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
                         raise
 
                     retryOnce = False
-                    observable.do.log(message="[HttpRequest1_1] Error when reusing socket for %s:%d. Trying again\n" % (host, port))
+                    observable.do.log(message="[HttpRequest1_1] Error when reusing socket for %s:%d. Trying again. Error was: %s\n" % (host, port, str(e)))
                     continue
 
                 break
