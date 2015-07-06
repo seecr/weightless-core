@@ -158,6 +158,7 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
 
                     retryOnce = False
                     observable.do.log(message="[HttpRequest1_1] Error when reusing socket for %s:%d. Trying again. Error was: %s\n" % (host, port, str(e)))
+                    shutAndCloseOnce(ignoreExceptions=True)
                     continue
 
                 break
