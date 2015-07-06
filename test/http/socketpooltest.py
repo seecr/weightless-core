@@ -69,28 +69,28 @@ class SocketPoolTest(SeecrTestCase):
         # Retrieved once
         self.assertEquals('A', retval(sp.getPooledSocket(host='x', port=1)))
 
-    def testPutNGetFIFO(self):
+    def testPutNGetLIFO(self):
         sp = SocketPool(reactor=CallTrace())
         retval(sp.putSocketInPool(host='x', port=1, sock='A'))
         retval(sp.putSocketInPool(host='x', port=1, sock='B'))
         retval(sp.putSocketInPool(host='x', port=1, sock='C'))
 
-        self.assertEquals('A', retval(sp.getPooledSocket(host='x', port=1)))
-        self.assertEquals('B', retval(sp.getPooledSocket(host='x', port=1)))
         self.assertEquals('C', retval(sp.getPooledSocket(host='x', port=1)))
+        self.assertEquals('B', retval(sp.getPooledSocket(host='x', port=1)))
+        self.assertEquals('A', retval(sp.getPooledSocket(host='x', port=1)))
         self.assertEquals(None, retval(sp.getPooledSocket(host='x', port=1)))
 
-    def testPutNGet1Put1StillFIFO(self):
+    def testPutNGet1Put1StillLIFO(self):
         sp = SocketPool(reactor=CallTrace())
         retval(sp.putSocketInPool(host='example.org', port=80, sock='A'))
         retval(sp.putSocketInPool(host='example.org', port=80, sock='B'))
 
-        self.assertEquals('A', retval(sp.getPooledSocket(host='example.org', port=80)))
+        self.assertEquals('B', retval(sp.getPooledSocket(host='example.org', port=80)))
 
         retval(sp.putSocketInPool(host='example.org', port=80, sock='C'))
 
-        self.assertEquals('B', retval(sp.getPooledSocket(host='example.org', port=80)))
         self.assertEquals('C', retval(sp.getPooledSocket(host='example.org', port=80)))
+        self.assertEquals('A', retval(sp.getPooledSocket(host='example.org', port=80)))
         self.assertEquals(None, retval(sp.getPooledSocket(host='example.org', port=80)))
 
     def testPutEmptyPut(self):
@@ -98,7 +98,7 @@ class SocketPoolTest(SeecrTestCase):
         retval(sp.putSocketInPool(host='10.0.0.1', port=60000, sock=0))
         retval(sp.putSocketInPool(host='10.0.0.1', port=60000, sock=1))
 
-        for i in range(2):
+        for i in reversed(range(2)):
             self.assertEquals(i, retval(sp.getPooledSocket(host='10.0.0.1', port=60000)))
         self.assertEquals(None, retval(sp.getPooledSocket(host='10.0.0.1', port=60000)))
 
@@ -114,9 +114,9 @@ class SocketPoolTest(SeecrTestCase):
         def test():
             sp = SocketPool(reactor=CallTrace(), limits={'totalSize': 3})  # Limits enforced on put, not async.
             def fillAndEmpty():
-                yield sp.putSocketInPool(host='h', port=1, sock='s0')
-                yield sp.putSocketInPool(host='h', port=1, sock='s1')
                 yield sp.putSocketInPool(host='h', port=1, sock='s2')
+                yield sp.putSocketInPool(host='h', port=1, sock='s1')
+                yield sp.putSocketInPool(host='h', port=1, sock='s0')
 
                 for i in xrange(3):
                     self.assertEquals('s{0}'.format(i), (yield sp.getPooledSocket(host='h', port=1)))
@@ -146,19 +146,19 @@ class SocketPoolTest(SeecrTestCase):
                 yield sp.putSocketInPool(host='h', port=1, sock=MockSok('s2'))
                 self.assertEquals('', err.getvalue(), err.getvalue())  #@@
             wasStillPooled = yield stillPooled()
-            self.assertEquals(['s1', 's2'], wasStillPooled)
-            self.assertEquals(['shutdown', 'close'], s0.log.calledMethodNames())
-            shutCall, closeCall = s0.log.calledMethods
+            self.assertEquals(['s2', 's0'], wasStillPooled)
+            self.assertEquals(['shutdown', 'close'], s1.log.calledMethodNames())
+            shutCall, closeCall = s1.log.calledMethods
             self.assertEquals(((SHUT_RDWR,), {}), (shutCall.args, shutCall.kwargs))
             self.assertEquals(((), {}), (closeCall.args, closeCall.kwargs))
-            self.assertEquals([], s1.log.calledMethodNames())
+            self.assertEquals([], s0.log.calledMethodNames())
 
             yield sp.putSocketInPool(host='h', port=1, sock=MockSok('s0'))
             yield sp.putSocketInPool(host='h', port=1, sock=MockSok('s1'))
             yield sp.putSocketInPool(host='h', port=1, sock=MockSok('s2'))
             yield sp.putSocketInPool(host='h', port=1, sock=MockSok('s3'))
             wasStillPooled = yield stillPooled()
-            self.assertEquals(['s2', 's3'], wasStillPooled)
+            self.assertEquals(['s3', 's0'], wasStillPooled)
 
         asProcess(test())
 
@@ -212,7 +212,7 @@ class SocketPoolTest(SeecrTestCase):
                 self.assertEquals('', err.getvalue(), err.getvalue())
             wasStillPooled = yield stillPooled()
             self.assertEquals(4, len(wasStillPooled))
-            self.assertEquals(['sH', 'sI', 'sJ2', 'sJ3'], wasStillPooled)
+            self.assertEquals(['sH', 'sI', 'sJ3', 'sJ2'], wasStillPooled)
             self.assertEquals(['shutdown', 'close'], sJ.log.calledMethodNames())
 
         asProcess(test())
@@ -222,7 +222,7 @@ class SocketPoolTest(SeecrTestCase):
     def testUnusedTimeoutSetInitialisesTimer(self):
         # Whitebox (unusedTimeout -> addTimer)
         mockReactor = CallTrace()
-        sp = SocketPool(reactor=mockReactor, unusedTimeout=0.02)
+        SocketPool(reactor=mockReactor, unusedTimeout=0.02)
         self.assertEquals(['addTimer'], mockReactor.calledMethodNames())
         self.assertEquals(['seconds', 'callback'], mockReactor.calledMethods[0].kwargs.keys())
         self.assertEquals(0.02, mockReactor.calledMethods[0].kwargs['seconds'])
@@ -237,7 +237,7 @@ class SocketPoolTest(SeecrTestCase):
             yield sleep(seconds=0.001)
 
             result = yield top.any.getPooledSocket(host='x', port=80)
-            self.assertEquals('A', result)
+            self.assertEquals('B', result)
 
             yield sleep(seconds=0.04)
 
@@ -273,16 +273,16 @@ class SocketPoolTest(SeecrTestCase):
             self.assertEquals([], s2.log.calledMethodNames())  # sample
 
             # Use some, put some back
-            _sockA = yield top.any.getPooledSocket(host='x', port=80)
+            _sockC = yield top.any.getPooledSocket(host='x', port=80)
             _sockB = yield top.any.getPooledSocket(host='x', port=80)
-            _sock1 = yield top.any.getPooledSocket(host='example.org', port=8080)
-            self.assertEquals([sA, sB, s1], [_sockA, _sockB, _sock1])
-            self.assertEquals([], sA.log.calledMethodNames())
+            _sock3 = yield top.any.getPooledSocket(host='example.org', port=8080)
+            self.assertEquals([sC, sB, s3], [_sockC, _sockB, _sock3])
+            self.assertEquals([], sC.log.calledMethodNames())
             self.assertEquals([], sB.log.calledMethodNames())
-            self.assertEquals([], s1.log.calledMethodNames())
+            self.assertEquals([], s3.log.calledMethodNames())
 
-            yield top.any.putSocketInPool(host='x', port=80, sock=sA)
-            yield top.any.putSocketInPool(host='example.org', port=8080, sock=s1)
+            yield top.any.putSocketInPool(host='x', port=80, sock=sC)
+            yield top.any.putSocketInPool(host='example.org', port=8080, sock=s3)
 
             yield sleep(seconds=0.015)  # 0.025 - (0.015 - 0.003) = 0.013 until all-fatal check
 
@@ -299,11 +299,11 @@ class SocketPoolTest(SeecrTestCase):
                     break
                 inPool.append(result)
 
-            self.assertEquals([sA, s1], inPool)
-            self.assertEquals([], sA.log.calledMethodNames())
-            self.assertEquals([], s1.log.calledMethodNames())
-            self.assertEquals(['shutdown', 'close'], s2.log.calledMethodNames())  # sample
-            shutdown, close = s2.log.calledMethods
+            self.assertEquals([sC, s3], inPool)
+            self.assertEquals([], sC.log.calledMethodNames())
+            self.assertEquals([], s3.log.calledMethodNames())
+            self.assertEquals(['shutdown', 'close'], s1.log.calledMethodNames())  # sample
+            shutdown, close = s1.log.calledMethods
             self.assertEquals(((SHUT_RDWR,), {}), (shutdown.args, shutdown.kwargs))
             self.assertEquals(((), {}), (close.args, close.kwargs))
 
