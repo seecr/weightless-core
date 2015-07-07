@@ -45,6 +45,8 @@ from weightless.core.utils import identify
 from weightless.io import Reactor, reactor
 from weightless.io.utils import asProcess
 
+from weightless.io._reactor import EPOLL_TIMEOUT_GRANULARITY
+
 
 class ReactorTest(WeightlessTestCase):
     def testAsContextManagerForTesting_onExitShutdownCalled(self):
@@ -467,7 +469,7 @@ class ReactorTest(WeightlessTestCase):
             # cleanup
             rwFd.close()
 
-    def testInterruptedSelectDoesNotDisturbTimer(self):
+    def testInterruptedEpollWaitDoesNotDisturbTimer(self):
         with Reactor() as reactor:
             self.time = False
             def signalHandler(signum, frame):
@@ -527,6 +529,69 @@ class ReactorTest(WeightlessTestCase):
             self.assertEquals([], callbacks)
             reactor.step()
             self.assertEquals([True, True], callbacks)
+
+    def testClosedOrOtherwiseBadFDNotAddedButCallbackCalledOnce(self):
+        rw = readAndWritable()
+        rw.close()
+        log = []
+        with Reactor() as reactor:
+            with stderr_replaced() as err:
+                reactor.addReader(sok=rw, sink=lambda: log.append(True))
+                self.assertTrue('Bad file descriptor' in err.getvalue(), err.getvalue())
+            self.assertEquals(0, len(log))
+            self.assertEquals(1, len(reactor._badFdsLastCallback))
+
+            reactor.step()
+
+            self.assertEquals(1, len(log))
+            self.assertEquals(0, len(reactor._badFdsLastCallback))
+
+    def testRemoveReaderOrWriterWithEBADFDoesNotLeak(self):
+        rw1 = readAndWritable()  # add; step; EBADF; remove
+        rw2 = readAndWritable()  # add; EBADF; remove
+        rw3 = readAndWritable()  # added; EBADF; step; remove
+        log = []
+        with Reactor() as reactor:
+            reactor.addReader(sok=rw1, sink=lambda: log.append("rw1"))
+
+            reactor.step()
+            self.assertEquals(1, len(log))
+
+            reactor.addWriter(sok=rw2, source=lambda: log.append("rw2"))
+            reactor.addWriter(sok=rw3, source=lambda: log.append("rw3"))
+
+            # EBADF Them!
+            rw1.close(); rw2.close(); rw3.close()
+
+            with stderr_replaced() as err:
+                reactor.removeReader(sok=rw1)
+                reactor.removeWriter(sok=rw2)
+                self.assertEquals(2, err.getvalue().count('Errno 9'), err.getvalue())
+
+            reactor.addTimer(seconds=0.001, callback=lambda: log.append("t1"))
+            reactor.step()
+
+            with stderr_replaced() as err:
+                reactor.removeWriter(sok=rw3)
+                self.assertEquals(1, err.getvalue().count('Errno 9'), err.getvalue())
+
+            self.assertEquals(["rw1", "t1"], log)
+            self.assertEquals(0, len(reactor._fds))
+
+    def testAddNotAFileOrFdNotAddedButCallbackCalledOnce(self):
+        notAFile = "I'm not a file."
+        log = []
+        with Reactor() as reactor:
+            with stderr_replaced() as err:
+                reactor.addReader(sok=notAFile, sink=lambda: log.append(True))
+                self.assertTrue('argument must be an int, or have a fileno() method.' in err.getvalue(), err.getvalue())
+            self.assertEquals(0, len(log))
+            self.assertEquals(1, len(reactor._badFdsLastCallback))
+
+            reactor.step()
+
+            self.assertEquals(1, len(log))
+            self.assertEquals(0, len(reactor._badFdsLastCallback))
 
     def testDoNotDieButLogOnProgrammingErrors(self):
         called = []
@@ -974,6 +1039,89 @@ class ReactorTest(WeightlessTestCase):
                 self.assertEquals('The Error', str(e))
                 self.assertEquals([], reactor._processes.keys())
 
+    def testSuspendCalledFromTimerNotAllowed(self):
+        def callback():
+            try:
+                reactor.suspend()
+                self.fail()
+            except RuntimeError, e:
+                self.assertTrue(str(e).startswith('suspend called from a timer'), str(e))
+        with Reactor() as reactor:
+            reactor.addTimer(seconds=0, callback=callback)
+            reactor.step()
+
+    def testSuspendCalledFromLastCallCallbackNotAllowed(self):
+        def callback():
+            try:
+                reactor.suspend()
+                self.fail()
+            except RuntimeError, e:
+                self.assertTrue(str(e).startswith('suspend called from a timer'), str(e))
+        rw = readAndWritable()
+        with Reactor() as reactor:
+            rw.close()
+            with stderr_replaced() as err:
+                reactor.addWriter(sok=rw, source=callback)
+                self.assertTrue('Bad file descriptor' in err.getvalue(), err.getvalue())
+            reactor.step()
+
+    def testSuspendCalledWhenCurrentcontextRemovedNotAllowed(self):
+        # In 'old select-based Reactor; silently suspended something already removed.
+        def process():
+            _reactor = reactor()
+            _reactor.removeProcess()
+            try:
+                _reactor.suspend()
+                self.fail()
+            except RuntimeError, e:
+                self.assertEquals('Current context not found!', str(e))
+        with Reactor() as thereactor:
+            thereactor.addProcess(process=process)
+            thereactor.step()
+
+    def testCleanupOfReaderOrWriterFd(self):
+        rw1 = readAndWritable()
+        rw2 = readAndWritable()
+        rw3 = readAndWritable()
+        rw4 = readAndWritable()
+        with Reactor() as reactor:
+            reactor.addReader(sok=rw1, sink=lambda: reactor.suspend())
+            reactor.addReader(sok=rw2, sink=lambda: reactor.suspend())
+            reactor.step()
+
+            rw2fileno = rw2.fileno()
+            rw2.close()
+            reactor.addReader(sok=rw3, sink=lambda: None)
+            reactor.addReader(sok=rw4, sink=lambda: None)
+            rw4.close()
+
+            self.assertEquals(2, len(reactor._suspended))
+            self.assertEquals(2, len(reactor._fds))
+
+            reactor.cleanup(rw1)
+            self.assertEquals(1, len(reactor._suspended))
+            self.assertEquals([rw2fileno], reactor._suspended.keys())
+
+            with stderr_replaced() as err:
+                reactor.cleanup(rw2)
+                self.assertTrue('Bad file descriptor' in err.getvalue(), err.getvalue())
+
+            self.assertEquals(2, len(reactor._fds))
+            self.assertEquals(0, len(reactor._suspended))
+
+            with stderr_replaced() as err:
+                reactor.cleanup(rw4)
+                self.assertTrue('Bad file descriptor' in err.getvalue(), err.getvalue())
+            self.assertEquals(1, len(reactor._fds))
+            self.assertEquals([rw3.fileno()], reactor._fds.keys())
+            reactor.cleanup(rw3)
+
+            self.assertEquals(0, len(reactor._fds))
+            self.assertEquals(0, len(reactor._suspended))
+
+            # cleanup is like remove; no _badFdsLastCallback's
+            self.assertEquals(0, len(reactor._badFdsLastCallback))
+
     def testAddProcessFromThread(self):
         with Reactor() as reactor:
             processCallback = []
@@ -991,6 +1139,182 @@ class ReactorTest(WeightlessTestCase):
             reactor.step()
             self.assertEquals([True], processCallback)
             self.assertEquals([True], timerCallback)
+
+    def testTimerWithSecondsSmallerThanGranularityNotExecutedImmediately(self):
+        noop = lambda: None
+        with Reactor() as reactor:
+            seconds = 0.00099
+            self.assertTrue(seconds < EPOLL_TIMEOUT_GRANULARITY)
+            steps = 0
+            called = []
+            reactor.addProcess(process=noop)
+            reactor.addTimer(seconds=0.00099, callback=lambda: called.append(True))
+            while not called:
+                steps += 1
+                reactor.step()
+
+            self.assertTrue(steps > 1)
+
+            # cleanup
+            reactor.removeProcess(process=noop)
+
+    def testTimerWakesUpReactorOnce(self):
+        # Not "too soon"; and then have 1..n steps in which there is nothing to do (busy-wait).
+        noop = lambda: None
+        with Reactor() as reactor:
+            seconds = 0.002
+            steps = 0
+            called = []
+            reactor.addTimer(seconds=seconds, callback=lambda: called.append(True))
+            while not called:
+                steps += 1
+                reactor.step()
+
+            self.assertEquals(1, steps)
+
+    def testShutdownClosesRemainingFilesAndClosableProcesses(self):
+        log = []
+        class MySocket(socket):
+            def close(self):
+                log.append(True)
+                return socket.close(self)
+
+        class P(object):
+            def __call__(self):
+                pass
+            def close(self):
+                log.append(True)
+
+        class T(object):
+            def __call__(self):
+                raise AssertionError('Should not happen')
+            def close(self):
+                raise AssertionError('Should not happen')
+
+        def notCalled():
+            raise AssertionError('Should not happen')
+
+        noop = lambda: None
+        rw1 = MySocket()
+        rw2 = MySocket()
+        rwS = MySocket()
+        BAD_FD = 1022  # Higher than any fd
+
+        with Reactor() as reactor:
+            reactor.addReader(sok=rwS, sink=lambda: reactor.suspend())
+            reactor.step()  # suspend
+            self.assertEquals(1, len(reactor._suspended))
+
+            reactor.addTimer(seconds=0.01, callback=T())
+            reactor.addReader(sok=rw1, sink=noop)
+            with stderr_replaced() as err:
+                reactor.addReader(sok=BAD_FD, sink=notCalled)
+                self.assertTrue('Bad file descriptor' in err.getvalue(), err.getvalue())
+                self.assertEquals(1, len(reactor._badFdsLastCallback))
+            reactor.addWriter(sok=rw2, source=noop)
+            reactor.addProcess(process=P())
+
+            with stdout_replaced() as out:
+                reactor.shutdown()
+                self.assertEquals(4, out.getvalue().count('Reactor shutdown: closing'), out.getvalue())
+
+            self.assertEquals(0, len(reactor._badFdsLastCallback))
+            self.assertEquals(0, len(reactor._fds))
+            self.assertEquals(0, len(reactor._processes))
+            self.assertEquals(0, len(reactor._suspended))
+            self.assertEquals(4, len(log))
+
+    def testShutdownClosesInternalFds(self):
+        nfds = nrOfOpenFds()
+        with Reactor() as reactor:
+            pass
+        self.assertEquals(nfds, nrOfOpenFds())
+
+        nfds = nrOfOpenFds()
+        with Reactor() as reactor:
+            # 3 extra; because:
+            #   - epoll(_create) fd
+            #   - (process) pipe read end
+            #   - (process) pipe write end
+            self.assertEquals(nfds + 3, nrOfOpenFds())
+            reactor.shutdown()
+            self.assertEquals(nfds, nrOfOpenFds())
+        self.assertEquals(nfds, nrOfOpenFds())  # 2nd shutdown; no change.
+
+    def testAddDifferentFileObjWithSameFD(self):
+        # Typically won't happen normally - but iff it ever happens, give a readable error.
+        class MockRW(object):
+            def __init__(self, rw):
+                self._rw = rw
+            def __getattr__(self, attr):
+                return getattr(self._rw, attr)
+
+        noop = lambda: None
+        rw = readAndWritable()
+        rwFile1 = MockRW(rw)
+        rwFile2 = MockRW(rw)
+        try:
+            with Reactor() as reactor:
+                reactor.addReader(sok=rwFile1, sink=noop)
+                try:
+                    reactor.addReader(sok=rwFile2, sink=noop)
+                    self.fail()
+                except ValueError, e:
+                    self.assertEquals('fd already registered', str(e))
+
+                # cleanup
+                reactor.removeReader(sok=rwFile1)
+        finally:
+            rw.close()
+
+    def testAddFileObjWhichIsEBADFAndSuspended(self):
+        noop = lambda: None
+        rw = readAndWritable()
+        handle = []
+        lastcall = []
+        def sink():
+            handle.append(reactor.suspend())
+            yield
+            lastcall.append(True)
+            yield  # wait for GC
+            raise AssertionError('Should not happen')
+        try:
+            with Reactor() as reactor:
+                reactor.addReader(sok=rw, sink=sink().next)
+                reactor.step()
+                self.assertEquals(0, len(reactor._fds))
+                self.assertEquals(1, len(reactor._suspended))
+
+                # Going EBADF
+                rw.close()
+
+                with stderr_replaced() as err:
+                    try:
+                        reactor.addReader(sok=rw, sink=noop)
+                        self.fail()
+                    except ValueError, e:
+                        self.assertEquals('Socket is suspended', str(e))
+                    self.assertTrue('Bad file descriptor' in err.getvalue(), err.getvalue())
+                    self.assertEquals(1, len(handle))
+                    self.assertEquals(0, len(lastcall))
+                    self.assertEquals(0, len(reactor._fds))
+                    self.assertEquals(1, len(reactor._suspended))
+                    self.assertEquals(0, len(reactor._badFdsLastCallback))
+
+                with stderr_replaced() as err:
+                    reactor.resumeReader(handle=handle[0])
+                    self.assertTrue('Bad file descriptor' in err.getvalue(), err.getvalue())
+
+                self.assertEquals(0, len(reactor._suspended))
+                self.assertEquals(1, len(reactor._badFdsLastCallback))
+                self.assertEquals(0, len(lastcall))
+
+                reactor.step()
+
+                self.assertEquals(0, len(reactor._badFdsLastCallback))
+                self.assertEquals(1, len(lastcall))
+        finally:
+            rw.close()
 
     def testAddFileNotPossible(self):
         # or meaningful; non-blocking file interface does not exist on Linux (use Threads) and a file-fd cannot be registered in epoll.

@@ -89,14 +89,15 @@ class Reactor(object):
         self._epoll.register(fd=self._processReadPipe, eventmask=EPOLLIN)
 
     def addReader(self, sok, sink, prio=None):
-        """Adds a socket and calls sink() when the socket becomes readable. It remains at the readers list."""
+        """Adds a socket and calls sink() when the socket becomes readable."""
         self._addFD(fileOrFd=sok, callback=sink, intent=READ_INTENT, prio=prio)
 
     def addWriter(self, sok, source, prio=None):
-        """Adds a socket and calls source() whenever the socket is writable. It remains at the writers list."""
+        """Adds a socket and calls source() whenever the socket is writable."""
         self._addFD(fileOrFd=sok, callback=source, intent=WRITE_INTENT, prio=prio)
 
     def addProcess(self, process, prio=None):
+        """Adds a process and calls it repeatedly."""
         if process in self._suspended:
             raise ValueError('Process is suspended')
         if process in self._processes:
@@ -121,13 +122,7 @@ class Reactor(object):
             if fd in self._suspended:
                 raise ValueError('Socket is suspended')
 
-            if intent is READ_INTENT:  # TODO: Refactor if..elif..else+assert to 1x inline if..else for speed!
-                eventmask = EPOLLIN
-            elif intent is WRITE_INTENT:
-                eventmask = EPOLLOUT
-            else:
-                raise AssertionError('Unknown intent %s' % (repr(intent)))
-
+            eventmask = EPOLLIN if intent is READ_INTENT else EPOLLOUT  # Change iff >2 intents exist.
             self._epollRegister(fd=fd, eventmask=eventmask)
         except _HandleEBADFError:
             self._raiseIfFileObjSuspended(obj=fileOrFd)
@@ -142,18 +137,16 @@ class Reactor(object):
         try:
             fd = _fdNormalize(fileOrFd)
         except _HandleEBADFError:
-            self._cleanFdsByFileObj(fileOrFd)  # TODO: TESTME
+            self._cleanFdsByFileObj(fileOrFd)
             return
 
         del self._fds[fd]
         try:
             self._epoll.unregister(fd)
-        except TypeError:
-            print_exc()  # Roughly same "whatever" behaviour of 'old.
         except IOError, (errno, description):
             print_exc()
-            if errno == ENOENT or errno == EBADF:  # Already gone (epoll's EBADF automagical cleanup).
-                pass  # TODO: TESTME
+            if errno == ENOENT or errno == EBADF:  # Already gone (epoll's EBADF automagical cleanup); not reproducable in Python's epoll binding - but staying on the safe side.
+                pass
             else:
                 raise
 
@@ -201,8 +194,8 @@ class Reactor(object):
         try:
             fd = _fdNormalize(sok)
         except _HandleEBADFError:
-            self._cleanFdsByFileObj(fileOrFd)  # TODO: TESTME
-            self._cleanSuspendedByFileObj(fileOrFd)  # TODO: TESTME
+            self._cleanFdsByFileObj(sok)
+            self._cleanSuspendedByFileObj(sok)
         else:
             self._fds.pop(fd, None)
             self._suspended.pop(fd, None)
@@ -216,7 +209,7 @@ class Reactor(object):
         elif self._processes.pop(self.currenthandle, None) is not None:
             self._readProcessPipe()
         else:
-            # TS: TODO: Document Interface & Can give error i.s.o. "bad action."
+            # TS: TODO: Document Interface
             raise RuntimeError('Current context not found!')
         self._suspended[self.currenthandle] = self.currentcontext
         return self.currenthandle
@@ -245,7 +238,7 @@ class Reactor(object):
                 if hasattr(obj, 'close'):
                     print 'Reactor shutdown: closing', obj
                     obj.close()
-                else:  # TS: TODO: elif isinstance(handle, int): os.close(handle) ... something.
+                else:
                     print 'Reactor shutdown: terminating %s' % handle
 
         for handle in self._processes.keys():
@@ -253,7 +246,7 @@ class Reactor(object):
             if hasattr(handle, 'close'):
                 print 'Reactor shutdown: closing', handle
                 handle.close()
-            else:  # TS: TODO: elif isinstance(handle, int): os.close(handle) ... something.
+            else:
                 print 'Reactor shutdown: terminating %s' % handle
         del self._badFdsLastCallback[:]
         self._closeProcessPipe()
@@ -281,8 +274,7 @@ class Reactor(object):
 
         try:
             fdEvents = self._epoll.poll(timeout=timeout)
-        except (IOError, socket_error), (errno, description):
-            # TS: FIXME: can socket_error be removed also???  (THINK SO: sok.fileno() can give socket_error (EBADF); .poll() does not call that).
+        except IOError, (errno, description):
             print_exc()
             if errno == EINTR:
                 pass
