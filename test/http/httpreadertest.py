@@ -202,7 +202,7 @@ class HttpReaderTest(TestCase):
                 reactor.step()
             sleep(0.02) # 2 * timeout, just to be sure
 
-            self.assertTrue(isinstance(self.exception, StopIteration))
+            self.assertTrue(isinstance(self.exception, StopIteration), self.exception)
 
     def testPost(self):
         with Reactor() as reactor:
