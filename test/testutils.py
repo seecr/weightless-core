@@ -23,6 +23,7 @@
 ## end license ##
 
 from os import getpid, listdir
+from signal import setitimer, ITIMER_REAL, signal, SIGALRM
 from socket import socket
 
 
@@ -32,4 +33,31 @@ def nrOfOpenFds():
 
 def readAndWritable():
     return socket()
+
+def installTimeoutSignalHandler():
+    previousHandler = signal(SIGALRM, _signalHandler)
+    def revertTimeoutSignalHandler():
+        signal(SIGALRM, previousHandler)
+    return revertTimeoutSignalHandler
+
+def setTimeout(seconds=0.002, callback=None):
+    if callback is None:
+        callback = _default_handler
+    _current_handler[0] = callback
+    setitimer(ITIMER_REAL, seconds)
+
+def abortTimeout():
+    setitimer(ITIMER_REAL, 0)
+
+def _signalHandler(signum, frame):
+    _current_handler[0]()
+
+def _default_handler():
+    raise BlockedCallTimedOut()
+
+
+class BlockedCallTimedOut(Exception):
+    pass
+
+_current_handler = [_default_handler]
 

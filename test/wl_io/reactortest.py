@@ -29,13 +29,12 @@ from __future__ import with_statement
 
 from weightlesstestcase import WeightlessTestCase
 from seecr.test.io import stderr_replaced, stdout_replaced
-from testutils import readAndWritable, nrOfOpenFds
+from testutils import readAndWritable, nrOfOpenFds, setTimeout, abortTimeout, BlockedCallTimedOut, installTimeoutSignalHandler
 
 import os, sys
 from StringIO import StringIO
 from errno import EPERM
 from select import error as ioerror, select
-from signal import signal, SIGALRM, alarm
 from socket import socketpair, error, socket
 from tempfile import mkstemp
 from threading import Thread
@@ -49,6 +48,14 @@ from weightless.io._reactor import EPOLL_TIMEOUT_GRANULARITY
 
 
 class ReactorTest(WeightlessTestCase):
+    def setUp(self):
+        WeightlessTestCase.setUp(self)
+        self._revertTimeoutSignalHandler = installTimeoutSignalHandler()
+
+    def tearDown(self):
+        self._revertTimeoutSignalHandler()
+        WeightlessTestCase.tearDown(self)
+
     def testAsContextManagerForTesting_onExitShutdownCalled(self):
         with Reactor() as reactor:
             loggedShutdowns = instrumentShutdown(reactor)
@@ -472,14 +479,13 @@ class ReactorTest(WeightlessTestCase):
     def testInterruptedEpollWaitDoesNotDisturbTimer(self):
         with Reactor() as reactor:
             self.time = False
-            def signalHandler(signum, frame):
-                self.alarm = True
             def timeout():
                 self.time = time()
-            signal(SIGALRM, signalHandler)
-            targetTime = time() + 1.1
-            reactor.addTimer(1.1, timeout)
-            alarm(1) # alarm only accept ints....
+            def signalTimeout():
+                self.alarm = True
+            targetTime = time() + 0.04
+            reactor.addTimer(0.04, timeout)
+            setTimeout(0.01, callback=signalTimeout)
             try:
                 with self.stderr_replaced() as s:
                     while not self.time:
