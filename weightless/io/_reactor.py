@@ -32,13 +32,12 @@ from time import time
 from errno import EBADF, EINTR, EEXIST, ENOENT
 from weightless.core import local
 from os import pipe, close, write, read
-import sys   # HCK
 
 def reactor():
     return local('__reactor__')
 
 
-class _FDContext(object):  # TS: TODO: Document Interface.
+class _FDContext(object):
     def __init__(self, callback, fileOrFd, intent, prio):
         if prio is None:
             prio = Reactor.DEFAULTPRIO
@@ -51,7 +50,7 @@ class _FDContext(object):  # TS: TODO: Document Interface.
         self.prio = prio
 
 
-class _ProcessContext(object):  # TS: TODO: Document Interface.
+class _ProcessContext(object):
     def __init__(self, callback, prio):
         if prio is None:
             prio = Reactor.DEFAULTPRIO
@@ -62,7 +61,7 @@ class _ProcessContext(object):  # TS: TODO: Document Interface.
         self.prio = prio
 
 
-class Timer(object):  # TS: TODO: Document Interface.
+class Timer(object):
     def __init__(self, seconds, callback):
         assert seconds >= 0, 'Timeout must be >= 0. It was %s.' % seconds
         self.callback = callback
@@ -79,8 +78,8 @@ class Reactor(object):
 
     def __init__(self):
         self._epoll = epoll()
-        self._fds = {}  # TS: TODO: Document Interface.
-        self._badFdsLastCallback = []  # TS: TODO: Document Interface.
+        self._fds = {}
+        self._badFdsLastCallback = []
         self._suspended = {}
         self._processes = {}
         self._timers = []
@@ -118,7 +117,7 @@ class Reactor(object):
             fd = _fdNormalize(fileOrFd)
             if fd in self._fds:
                 # Otherwise epoll would give an IOError, Errno 17 / EEXIST.
-                raise ValueError('fd already registered')  # TS: TODO: Document Interface.
+                raise ValueError('fd already registered')
             if fd in self._suspended:
                 raise ValueError('Socket is suspended')
 
@@ -190,7 +189,7 @@ class Reactor(object):
         self._timers.remove(token)
 
     def cleanup(self, sok):
-        # Only use for Reader/Writer's!  TS: TODO: Document Interface.
+        # Only use for Reader/Writer's!
         try:
             fd = _fdNormalize(sok)
         except _HandleEBADFError:
@@ -202,14 +201,13 @@ class Reactor(object):
 
     def suspend(self):
         if self.currenthandle is None:
-            raise RuntimeError('suspend called from a timer or when running a last-call callback for a bad file-descriptor.')  # TS: TODO: Document Interface.
+            raise RuntimeError('suspend called from a timer or when running a last-call callback for a bad file-descriptor.')
 
         if self.currenthandle in self._fds:
             self._removeFD(fileOrFd=self.currenthandle)
         elif self._processes.pop(self.currenthandle, None) is not None:
             self._readProcessPipe()
         else:
-            # TS: TODO: Document Interface
             raise RuntimeError('Current context not found!')
         self._suspended[self.currenthandle] = self.currentcontext
         return self.currenthandle
