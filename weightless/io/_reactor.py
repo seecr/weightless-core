@@ -237,7 +237,7 @@ class Reactor(object):
                 obj = context.fileOrFd if hasattr(context, 'fileOrFd') else context.callback
                 if hasattr(obj, 'close'):
                     print 'Reactor shutdown: closing', obj
-                    obj.close()
+                    _closeAndIgnoreFdErrors(obj)
                 else:
                     print 'Reactor shutdown: terminating %s' % handle
 
@@ -245,12 +245,12 @@ class Reactor(object):
             self._processes.pop(handle)
             if hasattr(handle, 'close'):
                 print 'Reactor shutdown: closing', handle
-                handle.close()
+                _closeAndIgnoreFdErrors(handle)
             else:
                 print 'Reactor shutdown: terminating %s' % handle
         del self._badFdsLastCallback[:]
         self._closeProcessPipe()
-        self._epoll.close()
+        _closeAndIgnoreFdErrors(self._epoll)
 
     def loop(self):
         try:
@@ -376,10 +376,26 @@ class Reactor(object):
         self._processWritePipe = None
 
     def _readProcessPipe(self):
-        read(self._processReadPipe, 1)
+        while True:
+            try:
+                read(self._processReadPipe, 1)
+                break
+            except (IOError, OSError), (errno, description):
+                if errno == EINTR:
+                    print_exc()
+                else:
+                    raise
 
     def _writeProcessPipe(self):
-        write(self._processWritePipe, 'x')
+        while True:
+            try:
+                write(self._processWritePipe, 'x')
+                break
+            except (IOError, OSError), (errno, description):
+                if errno == EINTR:
+                    print_exc()
+                else:
+                    raise
 
     def __enter__(self):
         "Usable as a context-manager for testing purposes"
@@ -405,6 +421,15 @@ def _fdNormalize(fd):
             raise
 
     return fd
+
+def _closeAndIgnoreFdErrors(obj):
+    try:
+        obj.close()
+    except (IOError, OSError, socket_error), (errno, description):
+        # EBADF, EIO or EINTR -- non of which are really relevant in our shutdown.
+        # For why re-trying after EINTR is not a good idea for close(), see:
+        #   http://lwn.net/Articles/576478/
+        print_exc()
 
 
 class _HandleEBADFError(Exception):

@@ -33,7 +33,7 @@ from testutils import readAndWritable, nrOfOpenFds, setTimeout, abortTimeout, Bl
 
 import os, sys
 from StringIO import StringIO
-from errno import EPERM
+from errno import EPERM, EBADF, EINTR, EIO
 from select import error as ioerror, select
 from socket import socketpair, error, socket
 from tempfile import mkstemp
@@ -1229,6 +1229,43 @@ class ReactorTest(WeightlessTestCase):
             self.assertEquals(0, len(reactor._processes))
             self.assertEquals(0, len(reactor._suspended))
             self.assertEquals(4, len(log))
+
+    def testShutdownKeepsClosingOnFdLikeCloseErrors(self):
+        log = []
+        class MySocket1(socket):
+            def close(self):
+                log.append(True)
+                socket.close(self)
+                raise IOError(EBADF, 'Meh.')
+        class MySocket2(socket):
+            def close(self):
+                log.append(True)
+                socket.close(self)
+                raise OSError(EINTR, 'Meh.')
+        class MySocket3(socket):
+            def close(self):
+                log.append(True)
+                socket.close(self)
+                raise OSError(EIO, 'Meh.')
+
+        noop = lambda: None
+        rw1 = MySocket1()
+        rw2 = MySocket2()
+        rw3 = MySocket3()
+
+        with Reactor() as reactor:
+            reactor.addReader(sok=rw1, sink=noop)
+            reactor.addReader(sok=rw2, sink=noop)
+            reactor.addReader(sok=rw3, sink=noop)
+
+            with stdout_replaced() as out:
+                with stderr_replaced() as err:
+                    reactor.shutdown()
+                    self.assertEquals(3, err.getvalue().count('[Errno'), err.getvalue())
+                self.assertEquals(3, out.getvalue().count('Reactor shutdown: closing'), out.getvalue())
+
+            self.assertEquals(0, len(reactor._fds))
+            self.assertEquals(3, len(log))
 
     def testShutdownClosesInternalFds(self):
         nfds = nrOfOpenFds()
