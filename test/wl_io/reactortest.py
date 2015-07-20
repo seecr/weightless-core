@@ -1376,6 +1376,16 @@ class ReactorTest(WeightlessTestCase):
             os.close(fd)
             os.remove(path)
 
+    def testAddTimeoutLargerThanMaxInt(self):
+        # maxIntEPoll = 2**31 -1
+        # This test asserts that huge timers will not crash the epoll.poll function
+        p = lambda: None
+        with Reactor() as reactor:
+            reactor.addTimer(2**50, lambda:None)
+            reactor.addProcess(p)
+            reactor.step()
+            reactor.removeProcess(p)
+
 def instrumentShutdown(reactor):
     loggedShutdowns = []
     shutdown = reactor.shutdown

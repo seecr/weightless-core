@@ -168,7 +168,7 @@ class Reactor(object):
 
         self._prio = (self._prio + 1) % Reactor.MAXPRIO
         if self._timers:
-            timeout = max(0, self._timers[0].time - time())
+            timeout = min(max(0, self._timers[0].time - time()), MAX_TIMEOUT_EPOLL)
         else:
             timeout = -1
 
@@ -442,6 +442,8 @@ WRITE_INTENT = type('WRITE_INTENT', (object,), {})()
 # In Python 2.7 - anything lower than 0.001 will become 0(.0); epoll.poll() may (and will IRL) return early - see: https://bugs.python.org/issue20311 (Python 3.x differs in behaviour :-s).
 # TS: If this granularity (& related logic) is unwanted - start using timerfd_* system-calls.
 EPOLL_TIMEOUT_GRANULARITY = 0.001
+MAX_INT_EPOLL = 2**31 -1
+MAX_TIMEOUT_EPOLL = MAX_INT_EPOLL / 1000 - 1
 
 EPOLLRDHUP = int('0x2000', 16)
 _EPOLL_CONSTANT_MAPPING = {  # Python epoll constants (missing EPOLLRDHUP - exists since Linux 2.6.17))
