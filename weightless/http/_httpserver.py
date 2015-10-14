@@ -532,7 +532,7 @@ class HttpHandler(object):
                 yield
             except:
                 if data:
-                    print 'Error sending data "{}" to "{}"'.format(data[:100], self._sok.getpeername())
+                    print 'Error sending data "{}"'.format(data[:100])
                     from sys import stdout; stdout.flush()
                 self._closeConnection()
                 raise
