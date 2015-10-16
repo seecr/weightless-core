@@ -472,6 +472,7 @@ class HttpHandler(object):
         endHeader = False
         headers = ''
         encodeResponseBody = SUPPORTED_CONTENT_ENCODINGS[encoding]['encode']() if encoding is not None else None
+        data = None
         while True:
             yield
             try:
