@@ -134,9 +134,16 @@ class Reactor(object):
         ]:
             for handle, context in contextDict.items():
                 contextDict.pop(handle)
-                obj = context.fileOrFd if hasattr(context, 'fileOrFd') else context.callback
+                obj = context.callback
+                fd = None
+                if hasattr(context, 'fileOrFd'):
+                    obj = context.fileOrFd
+                    fd = _fdOrNone(obj)
+                # obj = context.fileOrFd if hasattr(context, 'fileOrFd') else context.callback
                 if hasattr(obj, 'close'):
-                    print 'Reactor shutdown: closing', obj
+                    print 'Reactor shutdown: closing:', obj,
+                    if fd:
+                        print 'with fd:', fd
                     _closeAndIgnoreFdErrors(obj)
                 else:
                     print 'Reactor shutdown: terminating %s' % handle
@@ -420,6 +427,15 @@ def _fdNormalize(fd):
 
     return fd
 
+def _fdOrNone(fd):
+    "Only use for info/debugging - supresses errors without logging."
+    if hasattr(fd, 'fileno'):
+        try:
+            return fd.fileno()
+        except (IOError, OSError, socket_error):
+            pass
+    return fd
+
 def _closeAndIgnoreFdErrors(obj):
     try:
         obj.close()
@@ -474,4 +490,3 @@ _EPOLL_CONSTANT_MAPPING = {  # Python epoll constants (missing EPOLLRDHUP - exis
     # Linux ignores 'POLLMSG' (see Linux's: man poll)
     EPOLLMSG: 'EPOLLMSG',          # Ignored.
 }
-
