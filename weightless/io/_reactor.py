@@ -130,33 +130,25 @@ class Reactor(object):
     def shutdown(self):
         # Will be called exactly once; in testing situations 1..n times.
         for contextDict, info in [
-            (self._fds, 'fd-like'),
+            (self._fds, 'active'),
             (self._suspended, 'suspended')
         ]:
             for handle, context in contextDict.items():
                 contextDict.pop(handle)
-                obj = callback = context.callback
-                fd = None
-                if hasattr(context, 'fileOrFd'):
-                    obj = context.fileOrFd
-                    fd = _fdOrNone(obj)
-
+                obj = context.fileOrFd if hasattr(context, 'fileOrFd') else context.callback
                 if hasattr(obj, 'close'):
-                    _shutdownPrintMessage(message='closing (%s)' % info, thing=obj, callback=callback, fd=fd)
+                    print _shutdownMessage(message='closing - %s' % info, thing=obj, context=context)
                     _closeAndIgnoreFdErrors(obj)
                 else:
-                    _shutdownPrintMessage(message='terminating (%s)' % info, thing=handle, callback=callback, fd=fd)
+                    print _shutdownMessage(message='terminating - %s' % info, thing=handle, context=context)
 
-        info = 'process'
-        for handle in self._processes.keys():
+        for handle, context in self._processes.items():
             self._processes.pop(handle)
             if hasattr(handle, 'close'):
-                #print 'Reactor shutdown: closing', handle
-                _shutdownPrintMessage(message='closing (%s)' % info, thing=handle, callback=handle)
+                print _shutdownMessage(message='closing - active', thing=handle, context=context)
                 _closeAndIgnoreFdErrors(handle)
             else:
-                #print 'Reactor shutdown: terminating %s' % handle
-                _shutdownPrintMessage(message='terminating (%s)' % info, thing=handle, callback=handle)
+                print _shutdownMessage(message='terminating - active', thing=handle, context=context)
         del self._badFdsLastCallback[:]
         self._closeProcessPipe()
         _closeAndIgnoreFdErrors(self._epoll)
@@ -447,11 +439,17 @@ def _closeAndIgnoreFdErrors(obj):
         #   http://lwn.net/Articles/576478/
         print_exc()
 
-def _shutdownPrintMessage(message, thing, callback, fd=None):
+def _shutdownMessage(message, thing, context):
     details = [str(thing)]
-    if fd is not None:
-        details.append('with fd: %s' % fd)
+    if isinstance(context, _FDContext):
+        details.append('(fd)')
+        fd = _fdOrNone(context.fileOrFd)
+        if fd is not None:
+            details.append('with fd: %s' % fd)
+    else:  # _ProcessContext
+        details.append('(process)')
 
+    callback = context.callback
     details.append('with callback: %s' % callback)
 
     try:
@@ -472,7 +470,7 @@ def _shutdownPrintMessage(message, thing, callback, fd=None):
         # AttributeError: guesstimated __call__ would be there; and being wrong.
         pass
 
-    print ('Reactor shutdown: %s: ' %  message) + ' '.join(details)
+    return ('Reactor shutdown: %s: ' %  message) + ' '.join(details)
 
 
 class _HandleEBADFError(Exception):
