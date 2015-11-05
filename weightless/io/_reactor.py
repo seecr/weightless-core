@@ -456,18 +456,24 @@ def _shutdownMessage(message, thing, context):
         try:
             sourceLines = getsourcelines(callback)
         except TypeError:
-            callback = callback.__call__  # Callable instances not supported by getsourcelines/-file.
-            sourceLines = getsourcelines(callback)
+            try:
+                # generator-method?
+                _cb = getattr(getattr(callback, '__self__', None), 'gi_code', None)
+                sourceLines = getsourcelines(_cb)
+                callback = _cb
+            except TypeError:
+                # Callable instance?
+                callback = getattr(callback, '__call__', None)
+                sourceLines = getsourcelines(callback)
 
         details.append('at: %s: %d: %s' % (
             getsourcefile(callback),
             sourceLines[1],     # Line number
             sourceLines[0][0].strip(),  # Source of the first relevant line
         ))
-    except (IndexError, IOError, TypeError, AttributeError):
+    except (IndexError, IOError, TypeError):
         # IOError / TypeError: inspect getsourcefile / sourcelines
         # IndexError: unexpected sourcelines datastructure
-        # AttributeError: guesstimated __call__ would be there; and being wrong.
         pass
 
     return ('Reactor shutdown: %s: ' %  message) + ' '.join(details)

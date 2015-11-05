@@ -1423,6 +1423,16 @@ class ReactorTest(WeightlessTestCase):
         expected = "Reactor shutdown: m: %(cb)s (process) with callback: %(cb)s at: %(TESTFILE)s: %(line)s: cb = lambda: None" % dict(locals(), **globals())
         self.assertEquals(expected, result)
 
+        # _ProcessContext - with <generator>.next
+        line = __NEXTLINE__()
+        def g():
+            return
+            yield
+        cb = g().next
+        result = _shutdownMessage(message='m', thing=cb, context=_ProcessContext(callback=cb, prio=1))
+        expected = "Reactor shutdown: m: %(cb)s (process) with callback: %(cb)s at: %(TESTFILE)s: %(line)s: def g():" % dict(locals(), **globals())
+        self.assertEquals(expected, result)
+
     def testShutdownMessageUnsourceable(self):
         # Verify odd / not getsourcelines- or getsourcefile-able callback gives no errors (just less info).
         # _ProcessContext - with uncallable
