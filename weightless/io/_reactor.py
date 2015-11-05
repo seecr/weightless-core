@@ -32,6 +32,7 @@ from time import time
 from errno import EBADF, EINTR, EEXIST, ENOENT
 from weightless.core import local
 from os import pipe, close, write, read
+from inspect import getsourcelines, getsourcefile
 
 
 class Reactor(object):
@@ -128,33 +129,34 @@ class Reactor(object):
 
     def shutdown(self):
         # Will be called exactly once; in testing situations 1..n times.
-        for contextDict in [
-            self._fds,
-            self._suspended
+        for contextDict, info in [
+            (self._fds, 'fd-like'),
+            (self._suspended, 'suspended')
         ]:
             for handle, context in contextDict.items():
                 contextDict.pop(handle)
-                obj = context.callback
+                obj = callback = context.callback
                 fd = None
                 if hasattr(context, 'fileOrFd'):
                     obj = context.fileOrFd
                     fd = _fdOrNone(obj)
-                # obj = context.fileOrFd if hasattr(context, 'fileOrFd') else context.callback
+
                 if hasattr(obj, 'close'):
-                    print 'Reactor shutdown: closing:', obj,
-                    if fd:
-                        print 'with fd:', fd
+                    _shutdownPrintMessage(message='closing (%s)' % info, thing=obj, callback=callback, fd=fd)
                     _closeAndIgnoreFdErrors(obj)
                 else:
-                    print 'Reactor shutdown: terminating %s' % handle
+                    _shutdownPrintMessage(message='terminating (%s)' % info, thing=handle, callback=callback, fd=fd)
 
+        info = 'process'
         for handle in self._processes.keys():
             self._processes.pop(handle)
             if hasattr(handle, 'close'):
-                print 'Reactor shutdown: closing', handle
+                #print 'Reactor shutdown: closing', handle
+                _shutdownPrintMessage(message='closing (%s)' % info, thing=handle, callback=handle)
                 _closeAndIgnoreFdErrors(handle)
             else:
-                print 'Reactor shutdown: terminating %s' % handle
+                #print 'Reactor shutdown: terminating %s' % handle
+                _shutdownPrintMessage(message='terminating (%s)' % info, thing=handle, callback=handle)
         del self._badFdsLastCallback[:]
         self._closeProcessPipe()
         _closeAndIgnoreFdErrors(self._epoll)
@@ -444,6 +446,33 @@ def _closeAndIgnoreFdErrors(obj):
         # For why re-trying after EINTR is not a good idea for close(), see:
         #   http://lwn.net/Articles/576478/
         print_exc()
+
+def _shutdownPrintMessage(message, thing, callback, fd=None):
+    details = [str(thing)]
+    if fd is not None:
+        details.append('with fd: %s' % fd)
+
+    details.append('with callback: %s' % callback)
+
+    try:
+        try:
+            sourceLines = getsourcelines(callback)
+        except TypeError:
+            callback = callback.__call__  # Callable instances not supported by getsourcelines/-file.
+            sourceLines = getsourcelines(callback)
+
+        details.append('at: %s: %d: %s' % (
+            getsourcefile(callback),
+            sourceLines[1],     # Line number
+            sourceLines[0][0],  # Source of the first relevant line
+        ))
+    except (IndexError, IOError, TypeError, AttributeError):
+        # IOError / TypeError: inspect getsourcefile / sourcelines
+        # IndexError: unexpected sourcelines datastructure
+        # AttributeError: guesstimated __call__ would be there; and being wrong.
+        pass
+
+    print ('Reactor shutdown: %s: ' %  message) + ' '.join(details)
 
 
 class _HandleEBADFError(Exception):
