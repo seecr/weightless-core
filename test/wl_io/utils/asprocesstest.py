@@ -266,7 +266,7 @@ class AsProcessTest(SeecrTestCase):
         with stdout_replaced() as out:
             result = asProcess(timeAfterFinished())
             self.assertEquals(42, result)
-            self.assertTrue('Reactor shutdown: terminating <function' in out.getvalue(), out.getvalue())
+            self.assertEquals(1, out.getvalue().count('Reactor shutdown:'), out.getvalue())
 
     def testSuspendProtocolForCallables(self):
         @identify
@@ -287,4 +287,3 @@ class AsProcessTest(SeecrTestCase):
             that = yield suspending()
             raise StopIteration((this, that))
         self.assertEquals(('42', 'whileSuspended'), asProcess(thisAndThat()))
-

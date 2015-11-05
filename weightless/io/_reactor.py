@@ -427,7 +427,7 @@ def _fdOrNone(fd):
         try:
             return fd.fileno()
         except (IOError, OSError, socket_error):
-            pass
+            return None
     return fd
 
 def _closeAndIgnoreFdErrors(obj):
@@ -462,7 +462,7 @@ def _shutdownMessage(message, thing, context):
         details.append('at: %s: %d: %s' % (
             getsourcefile(callback),
             sourceLines[1],     # Line number
-            sourceLines[0][0],  # Source of the first relevant line
+            sourceLines[0][0].strip(),  # Source of the first relevant line
         ))
     except (IndexError, IOError, TypeError, AttributeError):
         # IOError / TypeError: inspect getsourcefile / sourcelines

@@ -32,8 +32,10 @@ from seecr.test.io import stderr_replaced, stdout_replaced
 from testutils import readAndWritable, nrOfOpenFds, setTimeout, abortTimeout, BlockedCallTimedOut, installTimeoutSignalHandler
 
 import os, sys
+
 from StringIO import StringIO
 from errno import EPERM, EBADF, EINTR, EIO
+from inspect import currentframe
 from select import error as ioerror, select
 from socket import socketpair, error, socket
 from tempfile import mkstemp
@@ -44,7 +46,7 @@ from weightless.core.utils import identify
 from weightless.io import Reactor, reactor
 from weightless.io.utils import asProcess
 
-from weightless.io._reactor import EPOLL_TIMEOUT_GRANULARITY
+from weightless.io._reactor import EPOLL_TIMEOUT_GRANULARITY, _FDContext, _ProcessContext, _shutdownMessage
 
 
 class ReactorTest(WeightlessTestCase):
@@ -1017,7 +1019,7 @@ class ReactorTest(WeightlessTestCase):
         self.assertEquals([lambdaFunc], reactor._processes.keys())
         with stdout_replaced() as out:
             reactor.shutdown()
-            self.assertEquals('Reactor shutdown: terminating %s\n' % lambdaFunc, out.getvalue())
+            self.assertEquals(1, out.getvalue().count('Reactor shutdown: terminating - active: %s (process) with callback: %s at: ' % (lambdaFunc, lambdaFunc)), out.getvalue())
         self.assertEquals([], reactor._processes.keys())
 
         reactor = Reactor()
@@ -1028,7 +1030,7 @@ class ReactorTest(WeightlessTestCase):
         self.assertEquals([lambdaFunc], reactor._suspended.keys())
         with stdout_replaced() as out:
             reactor.shutdown()
-            self.assertEquals('Reactor shutdown: terminating %s\n' % lambdaFunc, out.getvalue())
+            self.assertEquals(1, out.getvalue().count('Reactor shutdown: terminating - suspended: %s (process)' % lambdaFunc), out.getvalue())
         self.assertEquals([], reactor._suspended.keys())
 
     def testExceptionsInProcessNotSuppressed(self):
@@ -1223,6 +1225,10 @@ class ReactorTest(WeightlessTestCase):
             with stdout_replaced() as out:
                 reactor.shutdown()
                 self.assertEquals(4, out.getvalue().count('Reactor shutdown: closing'), out.getvalue())
+                self.assertEquals(3, out.getvalue().count('(fd) with fd:'))
+                self.assertEquals(2, out.getvalue().count(': noop = lambda: None'))
+                self.assertEquals(1, out.getvalue().count('(process) with callback:'))
+                self.assertEquals(1, out.getvalue().count(': def __call__(self):'))
 
             self.assertEquals(0, len(reactor._badFdsLastCallback))
             self.assertEquals(0, len(reactor._fds))
@@ -1386,6 +1392,68 @@ class ReactorTest(WeightlessTestCase):
             reactor.step()
             reactor.removeProcess(p)
 
+    def testShutdownMessageMessage(self):
+        # _FDContext - with fd-number
+        fd = 7
+        line = __NEXTLINE__()
+        cb = lambda: 'cb'
+        result = _shutdownMessage(message='message', thing=fd, context=_FDContext(callback=cb, fileOrFd=fd, intent='ignored-here', prio=9))
+        expected = "Reactor shutdown: message: %(fd)s (fd) with fd: %(fd)s with callback: %(cb)s at: %(TESTFILE)s: %(line)s: cb = lambda: 'cb'" % dict(locals(), **globals())
+        self.assertEquals(expected, result)
+
+        # _FDContext - with fd-obj and callable-obj
+        fd = 7
+        line = __NEXTLINE__(offset=1)
+        class O(object):
+            def __call__(self):
+                pass
+        class F(object):
+            def fileno(self):
+                return fd
+        thing = F()
+        cb = O()
+        result = _shutdownMessage(message='M !', thing=thing, context=_FDContext(callback=cb, fileOrFd=thing, intent='ignored-here', prio=9))
+        expected = "Reactor shutdown: M !: %(thing)s (fd) with fd: %(fd)s with callback: %(cb)s at: %(TESTFILE)s: %(line)s: def __call__(self):" % dict(locals(), **globals())
+        self.assertEquals(expected, result)
+
+        # _ProcessContext - with callable
+        line = __NEXTLINE__()
+        cb = lambda: None
+        result = _shutdownMessage(message='m', thing=cb, context=_ProcessContext(callback=cb, prio=1))
+        expected = "Reactor shutdown: m: %(cb)s (process) with callback: %(cb)s at: %(TESTFILE)s: %(line)s: cb = lambda: None" % dict(locals(), **globals())
+        self.assertEquals(expected, result)
+
+    def testShutdownMessageUnsourceable(self):
+        # Verify odd / not getsourcelines- or getsourcefile-able callback gives no errors (just less info).
+        # _ProcessContext - with uncallable
+        cb = object()
+        result = _shutdownMessage(message='m', thing=cb, context=_ProcessContext(callback=cb, prio=1))
+        expected = "Reactor shutdown: m: %(cb)s (process) with callback: %(cb)s" % dict(locals(), **globals())
+        self.assertEquals(expected, result)
+
+        # _ProcessContext - with uncallable
+        cb = "not-a-function"
+        result = _shutdownMessage(message='m', thing=cb, context=_ProcessContext(callback=cb, prio=1))
+        expected = "Reactor shutdown: m: %(cb)s (process) with callback: %(cb)s" % dict(locals(), **globals())
+        self.assertEquals(expected, result)
+
+        # _ProcessContext - with built-in
+        cb = str  # built-in - *source* don't like that.
+        result = _shutdownMessage(message='m', thing=cb, context=_ProcessContext(callback=cb, prio=1))
+        expected = "Reactor shutdown: m: %(cb)s (process) with callback: %(cb)s" % dict(locals(), **globals())
+        self.assertEquals(expected, result)
+
+        # _FDContext - fd-object /w issues (IOError / OSError or socket_error) and an unlucky callback.
+        class F(object):
+            def fileno(self):
+                raise IOError("Whoops!")  # errno & message stuff usually - not important here.
+        f = F()
+        cb = str  # built-in
+        result = _shutdownMessage(message='m', thing=f, context=_FDContext(callback=cb, fileOrFd=f, intent='ignored-here', prio=9))
+        expected = "Reactor shutdown: m: %(f)s (fd) with callback: %(cb)s" % dict(locals(), **globals())
+        self.assertEquals(expected, result)
+
+
 def instrumentShutdown(reactor):
     loggedShutdowns = []
     shutdown = reactor.shutdown
@@ -1395,3 +1463,7 @@ def instrumentShutdown(reactor):
     reactor.shutdown = mockedShutdown
     return loggedShutdowns
 
+def __NEXTLINE__(offset=0):
+    return currentframe().f_back.f_lineno + offset + 1
+
+TESTFILE = __file__.replace(".pyc", ".py")
