@@ -533,7 +533,7 @@ class HttpHandler(object):
                 yield
             except:
                 if data and type(data) is str:
-                    print 'Error sending data "{}"'.format(data[:100])
+                    print 'Error sending data "{0} ..."'.format(data[:120])
                     from sys import stdout; stdout.flush()
                 self._closeConnection()
                 raise
