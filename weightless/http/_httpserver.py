@@ -254,7 +254,7 @@ class GzipDeCompress(object):
         return self._decompressObj.flush()
 
 # (De)compression-objects must support: compress / decompress and argumentless flush
-SUPPORTED_CONTENT_ENCODINGS = {
+SUPPORTED_COMPRESSION_CONTENT_ENCODINGS = {
     'deflate': {
         'encode': deflateCompress,
         'decode': deflateDeCompress,
@@ -383,12 +383,12 @@ class HttpHandler(object):
         # Determine Content-Encoding in request, if any.
         if self._decodeRequestBody is None and 'Content-Encoding' in self.request['Headers']:
             contentEncoding = parseContentEncoding(self.request['Headers']['Content-Encoding'])
-            if len(contentEncoding) != 1 or contentEncoding[0] not in SUPPORTED_CONTENT_ENCODINGS:
+            if len(contentEncoding) != 1 or contentEncoding[0] not in SUPPORTED_COMPRESSION_CONTENT_ENCODINGS:
                 self._badRequest()
                 return
             contentEncoding = contentEncoding[0]
 
-            self._decodeRequestBody = SUPPORTED_CONTENT_ENCODINGS[contentEncoding]['decode']()
+            self._decodeRequestBody = SUPPORTED_COMPRESSION_CONTENT_ENCODINGS[contentEncoding]['decode']()
 
         # Chunked - means HTTP/1.1
         if 'Transfer-Encoding' in self.request['Headers'] and self.request['Headers']['Transfer-Encoding'] == 'chunked':
@@ -439,7 +439,7 @@ class HttpHandler(object):
             return None
         acceptEncodings = parseAcceptEncoding(self.request['Headers']['Accept-Encoding'])
         for encoding in acceptEncodings:
-            if encoding in SUPPORTED_CONTENT_ENCODINGS:
+            if encoding in SUPPORTED_COMPRESSION_CONTENT_ENCODINGS:
                 return encoding
         return None
 
@@ -471,7 +471,7 @@ class HttpHandler(object):
         this = yield
         endHeader = False
         headers = ''
-        encodeResponseBody = SUPPORTED_CONTENT_ENCODINGS[encoding]['encode']() if encoding is not None else None
+        encodeResponseBody = SUPPORTED_COMPRESSION_CONTENT_ENCODINGS[encoding]['encode']() if encoding is not None else None
         data = None
         while True:
             yield
@@ -580,4 +580,3 @@ class HttpsHandler(HttpHandler):
             else:
                 raise
         self._sok.close()
-
