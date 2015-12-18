@@ -406,6 +406,8 @@ def _sslHandshake(sok, this, suspend, prio):
     raise StopIteration(sok)
 
 def _requestLine(method, request):
+    if request == '':
+        request = '/'
     return "%s %s HTTP/1.1\r\n" % (method, request)
 
 def _determineDoCloseFromConnection(headers):

@@ -34,7 +34,7 @@ from traceback import format_exception
 
 from weightless.core import compose
 from weightless.http import HttpServer, httprequest, httpget, httppost, httpspost, httpsget, HttpRequest
-from weightless.io import Reactor, Suspend, TimeoutException
+from weightless.io import Suspend, TimeoutException
 
 from weightless.http._httprequest import _requestLine
 from weightless.http import _httprequest as httpRequestModule
@@ -46,7 +46,6 @@ from httpreadertest import server as testserver
 
 
 PYVERSION = '%s.%s' % version_info[:2]
-
 
 class AsyncReaderTest(WeightlessTestCase):
     def setUp(self):
@@ -62,6 +61,10 @@ class AsyncReaderTest(WeightlessTestCase):
     def testRequestLine(self):
         self.assertEquals('GET / HTTP/1.0\r\n', _requestLine('GET', '/'))
         self.assertEquals('POST / HTTP/1.0\r\n', _requestLine('POST', '/'))
+
+    def testEmptyRequestConvenientlyTranslatedToSlash(self):
+        self.assertEquals('GET / HTTP/1.0\r\n', _requestLine('GET', ''))
+        self.assertEquals('POST / HTTP/1.0\r\n', _requestLine('POST', ''))
 
     def testPassRequestThruToBackOfficeServer(self):
         backofficeport = PortNumberGenerator.next()

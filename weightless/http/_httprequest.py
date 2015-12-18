@@ -179,9 +179,6 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
     # Uber finally: sok.close() from line 108
     yield
 
-def _requestLine(method, request):
-    return "%s %s HTTP/1.0\r\n" % (method, request)
-
 def _sslHandshake(sok, this, suspend, prio):
     sok = wrap_socket(sok, do_handshake_on_connect=False)
     count = 0
@@ -218,5 +215,7 @@ def _sendHttpHeaders(sok, method, request, headers):
     data += '\r\n'
     yield _asyncSend(sok, data)
 
-
-
+def _requestLine(method, request):
+    if request == '':
+        request = '/'
+    return "%s %s HTTP/1.0\r\n" % (method, request)

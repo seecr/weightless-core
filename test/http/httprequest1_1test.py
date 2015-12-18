@@ -1791,6 +1791,10 @@ RuntimeError: Boom!\n""" % fileDict)
         self.assertEquals('GET / HTTP/1.1\r\n', _requestLine('GET', '/'))
         self.assertEquals('POST / HTTP/1.1\r\n', _requestLine('POST', '/'))
 
+    def testEmptyRequestConvenientlyTranslatedToSlash(self):
+        self.assertEquals('GET / HTTP/1.1\r\n', _requestLine('GET', ''))
+        self.assertEquals('POST / HTTP/1.1\r\n', _requestLine('POST', ''))
+
     def testChunkRe(self):
         def m(s):
             return _CHUNK_RE.match(s)
@@ -2223,6 +2227,7 @@ def _writeOnceGF(sok, data):
     except Exception:
         suspend.throw(*exc_info())
     yield  # wait for GC
+
 
 class AbortException(Exception):
     pass
