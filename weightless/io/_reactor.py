@@ -4,7 +4,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2015 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2016 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -24,15 +24,16 @@
 #
 ## end license ##
 
-from traceback import print_exc
-from select import epoll, error as select_error
+from select import epoll
 from select import EPOLLIN, EPOLLOUT, EPOLLPRI, EPOLLERR, EPOLLHUP, EPOLLET, EPOLLONESHOT, EPOLLRDNORM, EPOLLRDBAND, EPOLLWRNORM, EPOLLWRBAND, EPOLLMSG
 from socket import error as socket_error
 from time import time
-from errno import EBADF, EINTR, EEXIST, ENOENT
+from errno import EBADF, EINTR, ENOENT
 from weightless.core import local
 from os import pipe, close, write, read
 from inspect import getsourcelines, getsourcefile
+from sys import stderr
+from traceback import print_exc
 
 
 class Reactor(object):
@@ -176,7 +177,7 @@ class Reactor(object):
         try:
             fdEvents = self._epoll.poll(timeout=timeout)
         except IOError, (errno, description):
-            print_exc()
+            _printException()
             if errno == EINTR:
                 pass
             else:
@@ -224,7 +225,7 @@ class Reactor(object):
             self._raiseIfFileObjSuspended(obj=fileOrFd)
             self._badFdsLastCallback.append(context)
         except TypeError:
-            print_exc()  # Roughly same "whatever" behaviour of 'old.
+            _printException()  # Roughly same "whatever" behaviour of 'old.
             self._badFdsLastCallback.append(context)
         else:
             self._fds[fd] = context
@@ -240,7 +241,7 @@ class Reactor(object):
         try:
             self._epoll.unregister(fd)
         except IOError, (errno, description):
-            print_exc()
+            _printException()
             if errno == ENOENT or errno == EBADF:  # Already gone (epoll's EBADF automagical cleanup); not reproducable in Python's epoll binding - but staying on the safe side.
                 pass
             else:
@@ -256,7 +257,7 @@ class Reactor(object):
             except (AssertionError, SystemExit, KeyboardInterrupt):
                 raise
             except:
-                print_exc()
+                _printException()
 
     def _timerCallbacks(self, timers):
         currentTime = time()
@@ -273,7 +274,7 @@ class Reactor(object):
             except (AssertionError, SystemExit, KeyboardInterrupt):
                 raise
             except:
-                print_exc()
+                _printException()
 
     def _callbacks(self, fdEvents, fds, intent):
         for fd, eventmask in fdEvents:
@@ -298,7 +299,7 @@ class Reactor(object):
                         del fds[self.currenthandle]
                     raise
                 except:
-                    print_exc()
+                    _printException()
                     if self.currenthandle in fds:
                         del fds[self.currenthandle]
 
@@ -317,7 +318,7 @@ class Reactor(object):
         try:
             self._epoll.register(fd=fd, eventmask=eventmask)
         except IOError, (errno, description):
-            print_exc()
+            _printException()
             if errno == EBADF:
                 raise _HandleEBADFError()
             raise
@@ -329,7 +330,7 @@ class Reactor(object):
                 break
             except (IOError, OSError), (errno, description):
                 if errno == EINTR:
-                    print_exc()
+                    _printException()
                 else:
                     raise
 
@@ -340,7 +341,7 @@ class Reactor(object):
                 break
             except (IOError, OSError), (errno, description):
                 if errno == EINTR:
-                    print_exc()
+                    _printException()
                 else:
                     raise
 
@@ -372,6 +373,9 @@ class Reactor(object):
         self._processReadPipe = None
         self._processWritePipe = None
 
+def _printException():
+    print_exc()
+    stderr.flush()
 
 def reactor():
     return local('__reactor__')
@@ -414,7 +418,7 @@ def _fdNormalize(fd):
         try:
             return fd.fileno()
         except (IOError, OSError, socket_error), (errno, description):
-            print_exc()
+            _printException()
             if errno == EBADF:
                 raise _HandleEBADFError()
             raise
@@ -437,7 +441,7 @@ def _closeAndIgnoreFdErrors(obj):
         # EBADF, EIO or EINTR -- non of which are really relevant in our shutdown.
         # For why re-trying after EINTR is not a good idea for close(), see:
         #   http://lwn.net/Articles/576478/
-        print_exc()
+        _printException()
 
 def _shutdownMessage(message, thing, context):
     details = [str(thing)]
