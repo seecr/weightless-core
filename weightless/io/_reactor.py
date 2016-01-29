@@ -4,7 +4,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2014 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2014, 2016 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -32,7 +32,7 @@ from errno import EBADF, EINTR
 from weightless.core import local
 from os import pipe, close, write, read
 from functools import cmp_to_key
-from sys import stdout
+from sys import stdout, stderr
 
 def reactor():
     return local('__reactor__')
@@ -180,12 +180,12 @@ class Reactor(object):
             readers = list(self._readers.keys()) + [self._processReadPipe]
             rReady, wReady, ignored = self._select(readers, list(self._writers.keys()), [], timeout)
         except (TypeError, ValueError):
-            print_exc()
+            _printException()
             self._findAndRemoveBadFd()
             return self
         except (select_error, socket_error) as error:
             (errno, description) = error.args
-            print_exc()
+            _printException()
             if errno == EBADF:
                 self._findAndRemoveBadFd()
             elif errno == EINTR:
@@ -220,7 +220,7 @@ class Reactor(object):
                             del soks[self.currenthandle]
                         raise
                     except:
-                        print_exc()
+                        _printException()
                         if self.currenthandle in soks:
                             del soks[self.currenthandle]
 
@@ -236,7 +236,7 @@ class Reactor(object):
             except (AssertionError, SystemExit, KeyboardInterrupt):
                 raise
             except:
-                print_exc()
+                _printException()
 
     def _processCallbacks(self, processes):
         for self.currenthandle, context in list(processes.items()):
@@ -281,3 +281,6 @@ class Reactor(object):
     def _writeProcessPipe(self):
         write(self._processWritePipe, b'x')
 
+def _printException():
+    print_exc()
+    stderr.flush()
