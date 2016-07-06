@@ -3,7 +3,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2010-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2015 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2016 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -29,13 +29,13 @@ from errno import EINPROGRESS
 from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
 from functools import partial
 
-from weightless.io import Suspend, TimeoutException
+from weightless.io import Suspend, TimeoutException, TooBigResponseException
 from weightless.core import compose, identify
 from urlparse import urlsplit
 
 
-def httprequest(host, port, request, body=None, headers=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None, method='GET', timeout=None):
-    g = _do(method, host=host, port=port, request=request, headers=headers, proxyServer=proxyServer, body=body, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse)
+def httprequest(host, port, request, body=None, headers=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None, method='GET', timeout=None, maxResponseSize=None):
+    g = _do(method, host=host, port=port, request=request, headers=headers, proxyServer=proxyServer, body=body, ssl=ssl, prio=prio, handlePartialResponse=handlePartialResponse, maxResponseSize=maxResponseSize)
     kw = {}
     if timeout is not None:
         def onTimeout():
@@ -78,7 +78,7 @@ def _createSocket():
 
 @identify
 @compose
-def _do(method, host, port, request, body=None, headers=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None):
+def _do(method, host, port, request, body=None, headers=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None, maxResponseSize=None):
     headers = headers or {}
     this = yield # this generator, from @identify
     suspend = yield # suspend object, from Suspend.__call__
@@ -149,6 +149,7 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
             suspend._reactor.removeWriter(sok)
         suspend._reactor.addReader(sok, this.next, prio=prio)
         responses = []
+        size = 0
         try:
             while True:
                 yield
@@ -160,6 +161,9 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
                     continue
                 if response == '':
                     break
+                size += len(response)
+                if not maxResponseSize is None and size > maxResponseSize:
+                    raise TooBigResponseException(maxResponseSize)
 
                 if handlePartialResponse:
                     handlePartialResponse(response)
@@ -167,8 +171,8 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
                     responses.append(response)
         finally:
             suspend._reactor.removeReader(sok)
-        sok.shutdown(SHUT_RDWR)
-        sok.close()
+            sok.shutdown(SHUT_RDWR)
+            sok.close()
         suspend.resume(None if handlePartialResponse else ''.join(responses))
     except (AssertionError, KeyboardInterrupt, SystemExit):
         raise

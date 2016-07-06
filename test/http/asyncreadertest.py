@@ -4,7 +4,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2010-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2015 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2016 Seecr (Seek You Too B.V.) http://seecr.nl
 # Copyright (C) 2015 Koninklijke Bibliotheek (KB) http://www.kb.nl
 #
 # This file is part of "Weightless"
@@ -34,7 +34,7 @@ from traceback import format_exception
 
 from weightless.core import compose
 from weightless.http import HttpServer, httprequest, httpget, httppost, httpspost, httpsget, HttpRequest
-from weightless.io import Suspend, TimeoutException
+from weightless.io import Suspend, TimeoutException, TooBigResponseException
 
 from weightless.http._httprequest import _requestLine
 from weightless.http import _httprequest as httpRequestModule
@@ -406,6 +406,29 @@ RuntimeError: Boom!""" % fileDict)
         self.assertTrue("GET RESPONSE" in responses[0], responses[0])
         self.assertEquals('GET', get_request[0]['command'])
         self.assertEquals('/path', get_request[0]['path'])
+
+    def testHttpGetWithMaxSize(self):
+        get_requests = []
+        port = PortNumberGenerator.next()
+        self.referenceHttpServer(port, get_requests, streamingData="response"*1024)
+
+        responses = []
+        def gethandler(*args, **kwargs):
+            try:
+                response = yield httpget('localhost', port, '/path', maxResponseSize=1024)
+                responses.append(response)
+            except Exception, e:
+                responses.append(e)
+        self.handler = gethandler
+        clientget('localhost', self.port, '/')
+        with stderr_replaced():
+            with stdout_replaced():
+                self._loopReactorUntilDone()
+
+        self.assertEquals([TooBigResponseException], [type(r) for r in responses])
+        self.assertEquals(1024, responses[0].args[0])
+        self.assertEquals(1, len(get_requests))
+        self.assertEquals('GET', get_requests[0]['command'])
 
     def testHttpAndHttpsGetStreaming(self):
         for useSsl in [False, True]:
