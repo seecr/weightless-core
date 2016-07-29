@@ -25,7 +25,7 @@
 ## end license ##
 
 from _acceptor import Acceptor
-from weightless.core import identify, Yield
+from weightless.core import identify, Yield, compose
 from weightless.http import REGEXP, FORMAT, parseHeaders, parseHeader
 
 import re
@@ -467,6 +467,25 @@ class HttpHandler(object):
         self._sok.shutdown(SHUT_RDWR)
         self._sok.close()
 
+    def _send(self, data):
+        try:
+            sent = self._sok.send(data, MSG_DONTWAIT)
+            if sent < len(data):
+                self._rest = data[sent:]
+            else:
+                self._rest = None
+        except Exception:
+            original_exc = exc_info()
+            if data and type(data) is str:
+                print >> sys.stderr, 'Error while sending data "{0} ..."'.format(data[:120])
+                sys.stderr.flush()
+            try:
+                self._handler.throw(*original_exc)
+            except StopIteration:
+                pass
+            self._closeConnection()
+            raise original_exc[0], original_exc[1], original_exc[2]
+
     @identify
     def _writeResponse(self, encoding=None):
         this = yield
@@ -476,73 +495,54 @@ class HttpHandler(object):
         data = None
         while True:
             yield
-            try:
-                if self._rest:
-                    data = self._rest
-                else:
-                    data = self._handler.next()
-                    if data is Yield:
-                        continue
-                    if callable(data):
-                        data(self._reactor, this.next)
-                        yield
-                        data.resumeWriter()
-                        continue
-                    if type(data) is unicode:
-                        data = data.encode(self._defaultEncoding)
-                if encodeResponseBody is not None:
-                    if endHeader is False:
-                        headers += data
-                        match = REGEXP.RESPONSE.match(headers)
-                        if match:
-                            endHeader = True
-                            try:
-                                _statusLineAndHeaders, _bodyStart = updateResponseHeaders(
-                                        headers, match,
-                                        addHeaders={'Content-Encoding': encoding},
-                                        removeHeaders=['Content-Length'],
-                                        requireAbsent=['Content-Encoding'])
-                            except ValueError:
-                                # Don't interfere with an existing content-encoding
-                                encodeResponseBody = None
-                                data = headers
-                            else:
-                                data = _statusLineAndHeaders + encodeResponseBody.compress(_bodyStart)
-                        else:
-                            continue
-                    elif not self._rest:
-                        data = encodeResponseBody.compress(data)
-
-                if data:
-                    sent = self._sok.send(data, MSG_DONTWAIT)
-                    if sent < len(data):
-                        self._rest = data[sent:]
-                    else:
-                        self._rest = None
-            except StopIteration:
-                if encodeResponseBody:
-                    self._rest = encodeResponseBody.flush()
-                    while self._rest:
-                        yield
-                        data = self._rest
-                        sent = self._sok.send(data, MSG_DONTWAIT)
-                        if sent < len(data):
-                            self._rest = data[sent:]
-                        else:
-                            self._rest = None
-                self._closeConnection()
-                yield
-            except Exception:
-                original_exc = exc_info()
-                if data and type(data) is str:
-                    print >> sys.stderr, 'Error while sending data "{0} ..."'.format(data[:120])
-                    sys.stderr.flush()
+            if self._rest:
+                data = self._rest
+            else:
                 try:
-                    self._handler.throw(*original_exc)
+                    data = self._handler.next()
                 except StopIteration:
-                    pass
-                self._closeConnection()
-                raise original_exc[0], original_exc[1], original_exc[2]
+                    if encodeResponseBody:
+                        self._rest = encodeResponseBody.flush()
+                        while self._rest:
+                            yield
+                            data = self._rest
+                            self._send(data)
+                    self._closeConnection()
+                    yield
+                if data is Yield:
+                    continue
+                if callable(data):
+                    data(self._reactor, this.next)
+                    yield
+                    data.resumeWriter()
+                    continue
+                if type(data) is unicode:
+                    data = data.encode(self._defaultEncoding)
+            if encodeResponseBody is not None:
+                if endHeader is False:
+                    headers += data
+                    match = REGEXP.RESPONSE.match(headers)
+                    if match:
+                        endHeader = True
+                        try:
+                            _statusLineAndHeaders, _bodyStart = updateResponseHeaders(
+                                    headers, match,
+                                    addHeaders={'Content-Encoding': encoding},
+                                    removeHeaders=['Content-Length'],
+                                    requireAbsent=['Content-Encoding'])
+                        except ValueError:
+                            # Don't interfere with an existing content-encoding
+                            encodeResponseBody = None
+                            data = headers
+                        else:
+                            data = _statusLineAndHeaders + encodeResponseBody.compress(_bodyStart)
+                    else:
+                        continue
+                elif not self._rest:
+                    data = encodeResponseBody.compress(data)
+
+            if data:
+                self._send(data)
 
     def _closeConnection(self):
         self._handler.close()

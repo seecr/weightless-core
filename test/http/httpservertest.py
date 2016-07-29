@@ -1106,6 +1106,26 @@ class HttpServerTest(WeightlessTestCase):
         server.shutdown()
         sock.close()
 
+    def testHandlerExitsWithException(self):
+        exceptions = []
+        def handler(**kwargs):
+            yield "a bit of data"
+            raise Exception("this is not an I/O exception, but an application exception")
+            yield
+        server = HttpServer(self.reactor, self.port, handler, maxConnections=5)
+        server.listen()
+        sock = socket()
+        sock.connect(('localhost', self.port))
+        self.reactor.step()
+        sock.send("GET / HTTP/1.0\r\n\r\n")
+        self.reactor.step()
+        with stderr_replaced() as f:
+            self.reactor.step()
+            self.assertFalse("a bit of data" in f.getvalue())
+        
+        server.shutdown()
+        sock.close()
+
 class SendLoggingMockSock(object):
     def __init__(self, bucket, origSock):
         self._bucket = bucket
