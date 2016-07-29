@@ -28,7 +28,7 @@
 from __future__ import with_statement
 
 from weightlesstestcase import WeightlessTestCase, MATCHALL
-from seecr.test.io import stdout_replaced
+from seecr.test.io import stdout_replaced, stderr_replaced
 
 from StringIO import StringIO
 from errno import EAGAIN
@@ -37,7 +37,7 @@ from os.path import join, abspath, dirname
 from random import random
 from seecr.test import CallTrace
 from select import select
-from socket import socket, error as SocketError
+from socket import socket, error as SocketError, SHUT_RDWR
 from sys import getdefaultencoding
 from time import sleep
 from weightless.io import Reactor
@@ -1083,6 +1083,28 @@ class HttpServerTest(WeightlessTestCase):
                 # cleanup
                 server.shutdown()
 
+
+    def testHandleBrokenPipe(self):
+        exceptions = []
+        def handler(**kwargs):
+            try:
+                while True:
+                    yield "OK" * 1000
+            except Exception, e:
+                exceptions.append(e)
+        server = HttpServer(self.reactor, self.port, handler, maxConnections=5)
+        server.listen()
+        sock = socket()
+        sock.connect(('localhost', self.port))
+        self.reactor.step()
+        sock.send("GET / HTTP/1.0\r\n\r\n")
+        sock.shutdown(SHUT_RDWR)
+        with stderr_replaced():
+            while not exceptions:
+                self.reactor.step()
+        self.assertEquals("[Errno 32] Broken pipe", str(exceptions[0]))
+        server.shutdown()
+        sock.close()
 
 class SendLoggingMockSock(object):
     def __init__(self, bucket, origSock):

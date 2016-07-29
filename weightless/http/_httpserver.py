@@ -42,7 +42,8 @@ from random import randint
 from time import time
 from socket import socket, ssl,  SOL_SOCKET, SO_REUSEADDR, SO_LINGER
 from struct import pack
-from sys import getdefaultencoding
+from sys import getdefaultencoding, exc_info
+import sys
 
 
 RECVSIZE = 4096
@@ -531,14 +532,20 @@ class HttpHandler(object):
                             self._rest = None
                 self._closeConnection()
                 yield
-            except:
+            except Exception:
+                original_exc = exc_info()
                 if data and type(data) is str:
-                    print 'Error sending data "{0} ..."'.format(data[:120])
-                    from sys import stdout; stdout.flush()
+                    print >> sys.stderr, 'Error while sending data "{0} ..."'.format(data[:120])
+                    sys.stderr.flush()
+                try:
+                    self._handler.throw(*original_exc)
+                except StopIteration:
+                    pass
                 self._closeConnection()
-                raise
+                raise original_exc[0], original_exc[1], original_exc[2]
 
     def _closeConnection(self):
+        self._handler.close()
         self._reactor.cleanup(self._sok)
 
         try:
