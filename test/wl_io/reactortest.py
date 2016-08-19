@@ -30,6 +30,7 @@ from __future__ import with_statement
 from weightlesstestcase import WeightlessTestCase
 from seecr.test.io import stderr_replaced, stdout_replaced
 from testutils import readAndWritable, nrOfOpenFds, setTimeout, abortTimeout, BlockedCallTimedOut, installTimeoutSignalHandler
+from wl_io.utils.testutils import dieAfter
 
 import os, sys
 
@@ -44,7 +45,7 @@ from time import time, sleep
 
 from weightless.core.utils import identify
 from weightless.io import Reactor, reactor
-from weightless.io.utils import asProcess
+from weightless.io.utils import asProcess, sleep as zleep
 
 from weightless.io._reactor import EPOLL_TIMEOUT_GRANULARITY, _FDContext, _ProcessContext, _shutdownMessage
 
@@ -378,6 +379,57 @@ class ReactorTest(WeightlessTestCase):
             reactor.step()
             self.assertEquals([1,2,3], done)
             self.assertEquals([], reactor._timers)
+
+    def testHandleReaderOrWriterWithCallbackGivingError(self):
+        # Must be unregister / removed from epoll - otherwise epoll's polling loop becomes busy-waiting.
+        log = []
+        def raiser():
+            log.append(True)
+            raise ValueError('Really Bad!')
+
+        def addWriter(reactor, sok, fn):
+            reactor.addWriter(sok=sok, source=fn)
+
+        def addReader(reactor, sok, fn):
+            reactor.addReader(sok=sok, sink=fn)
+
+        @dieAfter(seconds=5)
+        def test(addFn):
+            del log[:]
+            rwFd = readAndWritable()
+            try:
+                r = reactor()
+                addFn(r, sok=rwFd, fn=raiser)
+                self.assertEquals(1, len(r._fds))
+                # Executed once, and removed on error:
+                for i in range(2):
+                    yield zleep(0.05)
+                    self.assertEquals(1, len(log))
+
+                self.assertEquals(0, len(r._fds))
+                self.assertEquals(0, len(r._badFdsLastCallback))
+                self.assertEquals(0, len(r._suspended))
+                self.assertEquals(1, len(r._processes))
+                self.assertEquals(1, len(r._timers))
+
+                # filter asProcesses' process(pipe) from fdEvents
+                readPipeFd = r._processReadPipe
+                fdEvents = [fde for fde in r._epoll.poll(timeout=0) if fde[0] != readPipeFd]
+
+                self.assertEquals([], fdEvents)
+            finally:
+                rwFd.close()
+
+        with stderr_replaced() as err:
+            asProcess(test(addFn=addWriter))
+            asProcess(test(addFn=addReader))
+            self.assertEquals([], [l for l in err.getvalue().lower().split('\n') if all([
+                bool(l),
+                l.find('traceback') == -1,
+                l.find('file ') == -1,
+                l.find('valueerror') == -1,
+                l.find('callback()') == -1,
+            ])])
 
     def testAssertionErrorInReadCallback(self):
         rwFd = readAndWritable()

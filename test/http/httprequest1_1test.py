@@ -34,7 +34,6 @@ from seecr.test.portnumbergenerator import PortNumberGenerator
 import sys
 from collections import namedtuple
 from errno import ECONNREFUSED
-from functools import wraps
 from re import sub
 from socket import socket, error as SocketError, gaierror as SocketGaiError, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_NODELAY, SHUT_RDWR
 from struct import pack
@@ -49,6 +48,9 @@ from weightless.http import HttpServer, SocketPool, parseHeaders
 from weightless.http import HttpRequest1_1, HttpRequestAdapter
 
 from weightless.http._httprequest1_1 import _requestLine, _shutAndCloseOnce, _CHUNK_RE, _deChunk, _TRAILERS_RE, SocketWrapper
+
+from wl_io.utils.testutils import dieAfter
+
 
 httprequest1_1 = be(
     (HttpRequest1_1(),
@@ -2234,31 +2236,6 @@ class AbortException(Exception):
 
 _Connection = namedtuple('Connection', ['value', 'log'])
 
-def dieAfter(seconds=5.0):
-    """
-    Decorator for generator-function passed to asProcess to execute; for setting deadline.
-    """
-    def dieAfter(generatorFunction):
-        @wraps(generatorFunction)
-        @identify
-        def helper(*args, **kwargs):
-            this = yield
-            yield  # Works within an asProcess-passed generatorFunction only (needs contextual addProcess driving this generator and a reactor).
-            tokenList = []
-            def cb():
-                tokenList.pop()
-                this.throw(AssertionError, AssertionError('dieAfter triggered after %s seconds.' % seconds), None)
-            tokenList.append(reactor().addTimer(seconds=seconds, callback=cb))
-            try:
-                retval = yield generatorFunction(*args, **kwargs)
-            except:
-                c, v, t = exc_info()
-                if tokenList:
-                    reactor().removeTimer(token=tokenList[0])
-                raise c, v, t
-        return helper
-    return dieAfter
-
 def ignoreLineNumbers(s):
     return sub("line \d+,", "line [#],", s)
 
@@ -2267,4 +2244,3 @@ fileDict = {
     '_suspend.py': Suspend.__call__.func_code.co_filename,
     '_httprequest1_1.py': _requestLine.func_code.co_filename,
 }
-

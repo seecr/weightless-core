@@ -303,6 +303,12 @@ class Reactor(object):
                     if self.currenthandle in fds:
                         del fds[self.currenthandle]
 
+                    try:
+                        self._epoll.unregister(fd)
+                    except IOError:
+                        # If errno is either ENOENT or EBADF than the fd is already gone (epoll's EBADF automagical cleanup); not reproducable in Python's epoll binding - but staying on the safe side.
+                        _printException()
+
     def _processCallbacks(self, processes):
         for self.currenthandle, context in processes.items():
             if self.currenthandle in processes and context.prio <= self._prio:
