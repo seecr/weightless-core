@@ -58,7 +58,7 @@ def asProcess(g):
                 _response = g.next()
                 if _response is Yield:
                     continue
-                if _response is not Yield and callable(_response):
+                if callable(_response):
                     _response(reactor, this.next)
                     yield
                     _response.resumeProcess()
@@ -72,4 +72,3 @@ def asProcess(g):
             return _asProcess(g(*args, **kwargs))
         return helper
     return _asProcess(g)
-
