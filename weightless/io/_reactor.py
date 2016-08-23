@@ -24,6 +24,8 @@
 #
 ## end license ##
 
+import sys
+
 from select import epoll
 from select import EPOLLIN, EPOLLOUT, EPOLLPRI, EPOLLERR, EPOLLHUP, EPOLLET, EPOLLONESHOT, EPOLLRDNORM, EPOLLRDBAND, EPOLLWRNORM, EPOLLWRBAND, EPOLLMSG
 from socket import error as socket_error
@@ -52,6 +54,11 @@ class Reactor(object):
         self._prio = -1
         self._processReadPipe, self._processWritePipe = pipe()
         self._epoll.register(fd=self._processReadPipe, eventmask=EPOLLIN)
+
+        # per (part-of) step relevent state
+        self.currentcontext = None
+        self.currenthandle = None
+        self._removeFdsInCurrentStep = set()
 
     def addReader(self, sok, sink, prio=None):
         """Adds a socket and calls sink() when the socket becomes readable."""
@@ -102,6 +109,7 @@ class Reactor(object):
         else:
             self._fds.pop(fd, None)
             self._suspended.pop(fd, None)
+            self._epollUnregisterSafe(fd=fd)
 
     def suspend(self):
         if self.currenthandle is None:
@@ -187,6 +195,8 @@ class Reactor(object):
             self.shutdown()  # For testing purposes; normally loop's finally does this.
             raise
 
+        self._removeFdsInCurrentStep = set([self._processReadPipe])
+
         self._timerCallbacks(self._timers)
         self._callbacks(fdEvents, self._fds, READ_INTENT)
         self._callbacks(fdEvents, self._fds, WRITE_INTENT)
@@ -238,14 +248,7 @@ class Reactor(object):
             return
 
         del self._fds[fd]
-        try:
-            self._epoll.unregister(fd)
-        except IOError, (errno, description):
-            _printException()
-            if errno == ENOENT or errno == EBADF:  # Already gone (epoll's EBADF automagical cleanup); not reproducable in Python's epoll binding - but staying on the safe side.
-                pass
-            else:
-                raise
+        self._epollUnregister(fd=fd)
 
     def _lastCallbacks(self):
         while self._badFdsLastCallback:
@@ -278,12 +281,14 @@ class Reactor(object):
 
     def _callbacks(self, fdEvents, fds, intent):
         for fd, eventmask in fdEvents:
-            if fd == self._readProcessPipe:
+            if fd in self._removeFdsInCurrentStep:
                 continue
 
             try:
                 context = fds[fd]
             except KeyError:
+                sys.stderr.write('\n[Reactor]: epoll event fd %d does not exist in fds list.\n' % fd)
+                sys.stderr.flush()
                 continue
 
             if context.intent is not intent:
@@ -297,17 +302,13 @@ class Reactor(object):
                 except (AssertionError, SystemExit, KeyboardInterrupt):
                     if self.currenthandle in fds:
                         del fds[self.currenthandle]
+                        self._epollUnregisterSafe(fd=self.currenthandle)
                     raise
                 except:
                     _printException()
                     if self.currenthandle in fds:
                         del fds[self.currenthandle]
-
-                    try:
-                        self._epoll.unregister(fd)
-                    except IOError:
-                        # If errno is either ENOENT or EBADF than the fd is already gone (epoll's EBADF automagical cleanup); not reproducable in Python's epoll binding - but staying on the safe side.
-                        _printException()
+                        self._epollUnregisterSafe(fd=self.currenthandle)
 
     def _processCallbacks(self, processes):
         for self.currenthandle, context in processes.items():
@@ -318,6 +319,7 @@ class Reactor(object):
                 except:
                     if self.currenthandle in processes:
                         del processes[self.currenthandle]
+                        self._readProcessPipe() # TODO: Think!
                     raise
 
     def _epollRegister(self, fd, eventmask):
@@ -328,6 +330,29 @@ class Reactor(object):
             if errno == EBADF:
                 raise _HandleEBADFError()
             raise
+
+    def _epollUnregister(self, fd):
+        self._removeFdsInCurrentStep.add(fd)
+        try:
+            self._epoll.unregister(fd)
+        except IOError, (errno, description):
+            _printException()
+            if errno == ENOENT or errno == EBADF:  # Already gone (epoll's EBADF automagical cleanup); not reproducable in Python's epoll binding - but staying on the safe side.
+                pass
+            else:
+                raise
+
+    def _epollUnregisterSafe(self, fd):
+        "Ignores the expected (ENOENT & EBADF) and unexpected exceptions from epoll_ctl / unregister"
+        self._removeFdsInCurrentStep.add(fd)
+        try:
+            self._epoll.unregister(fd)
+        except IOError, (errno, description):
+            # If errno is either ENOENT or EBADF than the fd is already gone (epoll's EBADF automagical cleanup); not reproducable in Python's epoll binding - but staying on the safe side.
+            if errno == ENOENT or errno == EBADF:
+                pass
+            else:
+                _printException()
 
     def _readProcessPipe(self):
         while True:
@@ -357,9 +382,10 @@ class Reactor(object):
                 raise ValueError('Socket is suspended')
 
     def _cleanFdsByFileObj(self, obj):
-        for handle, context in self._fds.items():
+        for fd, context in self._fds.items():
             if context.fileOrFd == obj:
-                del self._fds[handle]
+                del self._fds[fd]
+                self._epollUnregisterSafe(fd=fd)
 
     def _cleanSuspendedByFileObj(self, obj):
         for handle, context in self._suspended.items():

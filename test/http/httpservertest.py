@@ -363,6 +363,7 @@ class HttpServerTest(WeightlessTestCase):
 
     def testSmallFragmentsWhileSendingResponse(self):
         def response(**kwargs):
+            yield ''            # Socket poking here - then try to really send stuff
             yield 'some text that is longer than '
             yield 'the lenght of fragments sent'
 
@@ -381,7 +382,7 @@ class HttpServerTest(WeightlessTestCase):
                 originalSend(data[:3], *options)
                 return 3
             serverSok.send = sendOnlyManagesToActuallySendThreeBytesPerSendCall
-            for i in range(21):
+            for i in range(22):
                 reactor.step()
             fragment = sok.recv(4096)
             self.assertEquals('some text that is longer than the lenght of fragments sent', fragment)
@@ -406,6 +407,7 @@ class HttpServerTest(WeightlessTestCase):
             writers = lambda: [c for c in reactor._fds.values() if c.intent == WRITE_INTENT]
             while not writers():
                 reactor.step()
+            reactor.step()
             reactor.step()
             fragment = sok.recv(100000) # will read about 49152 chars
             self.assertEquals(oneStringLength * 6000, len(fragment))
@@ -497,7 +499,7 @@ class HttpServerTest(WeightlessTestCase):
             sok.connect(('localhost', self.port))
             sok.send('GET / HTTP/1.0\r\n\r\n')
             sleep(0.02)
-            for i in range(10):
+            for i in range(11):
                 reactor.step()
             response = sok.recv(4096)
             self.assertEquals('aaa', response)
@@ -936,7 +938,7 @@ class HttpServerTest(WeightlessTestCase):
         sock.connect(('localhost', self.port))
         self.reactor.step()
         sock.send("GET / HTTP/1.0\r\n\r\n")
-        self.reactor.step().step()
+        self.reactor.step().step().step()
         server.shutdown()
 
         self.assertEquals('FAIL', sock.recv(1024))
@@ -961,7 +963,7 @@ class HttpServerTest(WeightlessTestCase):
         sock.connect(('localhost', self.port))
         self.reactor.step()
         sock.send("GET / HTTP/1.0\r\n\r\n")
-        self.reactor.step().step()
+        self.reactor.step().step().step()
         server.shutdown()
 
         self.assertEquals('OK', sock.recv(1024))
@@ -982,7 +984,7 @@ class HttpServerTest(WeightlessTestCase):
         sock.connect(('localhost', self.port))
         self.reactor.step()
         sock.send("GET / HTTP/1.0\r\n\r\n")
-        self.reactor.step().step()
+        self.reactor.step().step().step()
 
         self.assertEquals('HTTP/1.0 503 Service Unavailable\r\n\r\n<html><head></head><body><h1>Service Unavailable</h1></body></html>', sock.recv(1024))
         server.shutdown()
@@ -1083,13 +1085,17 @@ class HttpServerTest(WeightlessTestCase):
                 # cleanup
                 server.shutdown()
 
-
     def testHandleBrokenPipe(self):
+        def abort():
+            raise AssertionError('Test timed out.')
+        token = self.reactor.addTimer(seconds=1, callback=abort)
+
         exceptions = []
+        yielded_data = "OK" * 1000
         def handler(**kwargs):
             try:
                 while True:
-                    yield "OK" * 1000
+                    yield yielded_data
             except Exception, e:
                 exceptions.append(e)
         server = HttpServer(self.reactor, self.port, handler, maxConnections=5)
@@ -1099,18 +1105,27 @@ class HttpServerTest(WeightlessTestCase):
         self.reactor.step()
         sock.send("GET / HTTP/1.0\r\n\r\n")
         sock.shutdown(SHUT_RDWR)
-        with stderr_replaced():
+        with stderr_replaced() as f:
             while not exceptions:
                 self.reactor.step()
+
+            self.assertTrue("Error while sending data \"%s" % yielded_data[:10] in f.getvalue())
+            self.assertTrue("Traceback" in f.getvalue())
+            self.assertTrue("[Errno 32] Broken pipe" in f.getvalue())
+
         self.assertEquals("[Errno 32] Broken pipe", str(exceptions[0]))
         server.shutdown()
         sock.close()
 
+        self.reactor.removeTimer(token=token)
+
     def testHandlerExitsWithException(self):
         exceptions = []
+        exc_message = "this is not an I/O exception, but an application exception"
+        yielded_data = "a bit of data"
         def handler(**kwargs):
-            yield "a bit of data"
-            raise Exception("this is not an I/O exception, but an application exception")
+            yield yielded_data
+            raise Exception(exc_message)
             yield
         server = HttpServer(self.reactor, self.port, handler, maxConnections=5)
         server.listen()
@@ -1120,9 +1135,10 @@ class HttpServerTest(WeightlessTestCase):
         sock.send("GET / HTTP/1.0\r\n\r\n")
         self.reactor.step()
         with stderr_replaced() as f:
-            self.reactor.step()
-            self.assertFalse("a bit of data" in f.getvalue())
-        
+            self.reactor.step().step()
+            self.assertFalse(yielded_data in f.getvalue())
+            self.assertTrue("Exception: %s" % exc_message in f.getvalue())
+
         server.shutdown()
         sock.close()
 
@@ -1170,4 +1186,3 @@ class StepWatcher(object):
         if result:
             return result[0]
         return None
-

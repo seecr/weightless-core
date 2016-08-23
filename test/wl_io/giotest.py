@@ -173,7 +173,7 @@ class GioTest(WeightlessTestCase):
                     self.response = yield
             Gio(reactor, jack(SocketContext(lhs)))
             Gio(reactor, peter(SocketContext(rhs)))
-            reactor.step().step().step()
+            reactor.step().step().step().step()
             self.assertEquals('Hello Jack', self.response)
 
     def testLargeBuffers(self):
@@ -307,4 +307,3 @@ class GioTest(WeightlessTestCase):
             self.assertEquals([], g._contextstack)
 
         asProcess(test())
-

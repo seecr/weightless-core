@@ -230,7 +230,7 @@ class SuspendTest(WeightlessTestCase):
         self.assertFalse(sok3.fileno() in reactor._fds)
         self.assertFalse(sok3.fileno() in reactor._fds)
         with self.stdout_replaced() as s:
-            reactor.shutdown() 
+            reactor.shutdown()
             self.assertTrue(str(sok1) in s.getvalue(), s.getvalue())
             self.assertTrue(str(sok2) in s.getvalue(), s.getvalue())
         self.assertTrue(str(sok3) in s.getvalue())
@@ -257,6 +257,7 @@ class SuspendTest(WeightlessTestCase):
             reactor.step()
             self.assertEquals(1, len(reactor._fds))
             self.assertEquals([WRITE_INTENT], [v.intent for v in reactor._fds.values()])
+            reactor.step()
             reactor.step()
             self.assertEquals(reactor, suspend._reactor)
             self.assertEquals(0, len(reactor._fds))
@@ -291,6 +292,7 @@ class SuspendTest(WeightlessTestCase):
             httpserver.listen()
             reactor.removeReader(listener) # avoid new connections
             httpserver._acceptor._accept()
+            reactor.step()
             reactor.step()
             reactor.step()
             self.assertEquals(reactor, suspend._reactor)
@@ -656,6 +658,7 @@ ZeroDivisionError: integer division or modulo by zero
             self.assertEquals(1, len(reactor._fds))
             reactor.step()
             reactor.step()
+            reactor.step()
             self.assertEquals(reactor, suspend._reactor)
             self.assertEquals(0, len(reactor._fds))
             def raiser():
@@ -673,7 +676,7 @@ ZeroDivisionError: integer division or modulo by zero
       File "%(__file__)s", line 201, in handler
         suspend.getResult()
       File "%(suspend.py)s", line 62, in getResult
-        raise self._exception[0], self._exception[1], self._exception[2] 
+        raise self._exception[0], self._exception[1], self._exception[2]
     ValueError: BAD VALUE
             """ % fileDict)
             self.assertEquals(3, len(listener.data))
@@ -762,4 +765,3 @@ class MyMockSocket(object):
 
 def ignoreLineNumbers(s):
     return sub("line \d+,", "line [#],", s)
-

@@ -380,6 +380,29 @@ class ReactorTest(WeightlessTestCase):
             self.assertEquals([1,2,3], done)
             self.assertEquals([], reactor._timers)
 
+    def testWriteAfterReadMustHappenInTheNextStep(self):
+        # Since readyness-event interested in changes for the fd - the fd must visit epoll_wait and be ready before being executed
+        rwFd = readAndWritable()
+        log = []
+        with Reactor() as reactor:
+            def writeCb():
+                log.append('write')
+            def readCb():
+                log.append('read')
+                reactor.removeReader(sok=rwFd)
+                reactor.addWriter(sok=rwFd, source=writeCb)
+            reactor.addReader(sok=rwFd, sink=readCb)
+
+            self.assertEquals([], log)
+            reactor.step()
+            self.assertEquals(['read'], log)
+            reactor.step()
+            self.assertEquals(['read', 'write'], log)
+
+            # cleanup
+            reactor.removeWriter(sok=rwFd)
+            rwFd.close()
+
     def testHandleReaderOrWriterWithCallbackGivingError(self):
         # Must be unregister / removed from epoll - otherwise epoll's polling loop becomes busy-waiting.
         log = []
@@ -429,7 +452,7 @@ class ReactorTest(WeightlessTestCase):
                 l.find('file ') == -1,
                 l.find('valueerror') == -1,
                 l.find('callback()') == -1,
-            ])])
+            ])], err.getvalue())
 
     def testAssertionErrorInReadCallback(self):
         rwFd = readAndWritable()
