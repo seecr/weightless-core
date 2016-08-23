@@ -319,7 +319,7 @@ class Reactor(object):
                 except:
                     if self.currenthandle in processes:
                         del processes[self.currenthandle]
-                        self._readProcessPipe() # TODO: Think!
+                        self._readProcessPipe()
                     raise
 
     def _epollRegister(self, fd, eventmask):

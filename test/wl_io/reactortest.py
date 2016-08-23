@@ -435,11 +435,8 @@ class ReactorTest(WeightlessTestCase):
                 self.assertEquals(1, len(r._processes))
                 self.assertEquals(1, len(r._timers))
 
-                # filter asProcesses' process(pipe) from fdEvents
-                readPipeFd = r._processReadPipe
-                fdEvents = [fde for fde in r._epoll.poll(timeout=0) if fde[0] != readPipeFd]
-
-                self.assertEquals([], fdEvents)
+                # asProcesses' process(pipe) is expected
+                self.assertEquals(set([r._processReadPipe]), fdsReadyFromReactorEpoll(r))
             finally:
                 rwFd.close()
 
@@ -466,6 +463,10 @@ class ReactorTest(WeightlessTestCase):
                 except AssertionError, e:
                     self.assertEquals('here is the assertion', str(e))
 
+                # cleanup your administration on the way out
+                self.assertEquals(0, fdsLenFromReactor(reactor))
+                self.assertEquals(set(), fdsReadyFromReactorEpoll(reactor))
+
     def testAssertionErrorInWRITECallback(self):
         rwFd = readAndWritable()
         with stderr_replaced():
@@ -477,6 +478,10 @@ class ReactorTest(WeightlessTestCase):
                     self.fail('must raise exception')
                 except AssertionError, e:
                     self.assertEquals('here is the assertion', str(e))
+
+                # cleanup your administration on the way out
+                self.assertEquals(0, fdsLenFromReactor(reactor))
+                self.assertEquals(set(), fdsReadyFromReactorEpoll(reactor))
 
     def testWriteFollowsRead(self):
         with Reactor() as reactor:
@@ -1115,12 +1120,18 @@ class ReactorTest(WeightlessTestCase):
 
             reactor.addProcess(p)
             self.assertEquals([p], reactor._processes.keys())
+            self.assertEquals(0, fdsLenFromReactor(reactor))
+            self.assertEquals(set([reactor._processReadPipe]), fdsReadyFromReactorEpoll(reactor))
             try:
                 reactor.step()
                 self.fail('Should not come here.')
             except RuntimeError, e:
                 self.assertEquals('The Error', str(e))
-                self.assertEquals([], reactor._processes.keys())
+
+            # cleanup your administration on the way out
+            self.assertEquals([], reactor._processes.keys())
+            self.assertEquals(0, fdsLenFromReactor(reactor))
+            self.assertEquals(set(), fdsReadyFromReactorEpoll(reactor))
 
     def testSuspendCalledFromTimerNotAllowed(self):
         def callback():
@@ -1161,6 +1172,85 @@ class ReactorTest(WeightlessTestCase):
         with Reactor() as thereactor:
             thereactor.addProcess(process=process)
             thereactor.step()
+
+    def testRemoveFDAlsoEpollUnregisters(self):
+        cb = lambda: None
+        with Reactor() as reactor:
+            # removeReader
+            rwFD = readAndWritable()
+            reactor.addReader(sok=rwFD, sink=cb)
+            self.assertEquals(1, fdsLenFromReactor(reactor))
+            self.assertEquals(set([rwFD.fileno()]), fdsReadyFromReactorEpoll(reactor))
+
+            reactor.removeReader(rwFD)
+            self.assertEquals(0, fdsLenFromReactor(reactor))
+            self.assertEquals(set(), fdsReadyFromReactorEpoll(reactor))
+
+            # removeReader (or any other thing calling _removeFD) -  with bad-fd
+            rwFD = readAndWritable()
+            reactor.addReader(sok=rwFD, sink=cb)
+            rwFD.close()
+            self.assertRaises(IOError, lambda: rwFD.fileno())
+
+            with stderr_replaced() as err:
+                reactor.removeReader(rwFD)
+                self.assertTrue('error: [Errno 9]' in err.getvalue(), err.getvalue())
+            self.assertEquals(0, fdsLenFromReactor(reactor))
+            self.assertEquals(set(), fdsReadyFromReactorEpoll(reactor))
+
+            # removeWriter
+            rwFD = readAndWritable()
+            reactor.addWriter(sok=rwFD, source=cb)
+            self.assertEquals(1, fdsLenFromReactor(reactor))
+            self.assertEquals(set([rwFD.fileno()]), fdsReadyFromReactorEpoll(reactor))
+
+            reactor.removeWriter(rwFD)
+            self.assertEquals(0, fdsLenFromReactor(reactor))
+            self.assertEquals(set(), fdsReadyFromReactorEpoll(reactor))
+
+            # suspend
+            rwFD = readAndWritable()
+            def suspendCb():
+                reactor.suspend()
+            reactor.addWriter(sok=rwFD, source=suspendCb)
+            self.assertEquals(1, fdsLenFromReactor(reactor))
+            self.assertEquals(set([rwFD.fileno()]), fdsReadyFromReactorEpoll(reactor))
+
+            reactor.step()      # suspends
+            self.assertEquals(0, fdsLenFromReactor(reactor))
+            self.assertEquals(set(), fdsReadyFromReactorEpoll(reactor))
+            self.assertEquals(1, len(reactor._suspended))
+
+            # cleanup
+            reactor.cleanup(rwFD)
+
+    def testCleanupAlsoEpollUnregistersWhenPresent(self):
+        cb = lambda: None
+        with Reactor() as reactor:
+            # normal
+            rwFD = readAndWritable()
+            reactor.addReader(sok=rwFD, sink=cb)
+            self.assertEquals(1, fdsLenFromReactor(reactor))
+            self.assertEquals(set([rwFD.fileno()]), fdsReadyFromReactorEpoll(reactor))
+
+            reactor.cleanup(rwFD)
+            self.assertEquals(0, fdsLenFromReactor(reactor))
+            self.assertEquals(set(), fdsReadyFromReactorEpoll(reactor))
+
+            # as a file-obj with a bad-file-descriptor
+            rwFD = readAndWritable()
+            reactor.addReader(sok=rwFD, sink=cb)
+            self.assertEquals(1, fdsLenFromReactor(reactor))
+            self.assertEquals(set([rwFD.fileno()]), fdsReadyFromReactorEpoll(reactor))
+
+            rwFD.close()
+            self.assertRaises(IOError, lambda: rwFD.fileno())
+            with stderr_replaced() as err:
+                reactor.cleanup(rwFD)
+                self.assertTrue("[Errno 9] Bad file descriptor" in err.getvalue())
+            self.assertEquals(0, fdsLenFromReactor(reactor))
+            self.assertEquals(set(), fdsReadyFromReactorEpoll(reactor))
+
 
     def testCleanupOfReaderOrWriterFd(self):
         rw1 = readAndWritable()
@@ -1547,6 +1637,12 @@ def instrumentShutdown(reactor):
         return shutdown(*args, **kwargs)
     reactor.shutdown = mockedShutdown
     return loggedShutdowns
+
+def fdsReadyFromReactorEpoll(reactor):
+    return set([fd for (fd, _) in reactor._epoll.poll(timeout=0)])
+
+def fdsLenFromReactor(reactor):
+    return len(reactor._fds)
 
 def __NEXTLINE__(offset=0):
     return currentframe().f_back.f_lineno + offset + 1
