@@ -287,7 +287,8 @@ class Reactor(object):
             try:
                 context = fds[fd]
             except KeyError:
-                sys.stderr.write('\n[Reactor]: epoll event fd %d does not exist in fds list.\n' % fd)
+                self._removeFdsInCurrentStep.add(fd)
+                sys.stderr.write('[Reactor]: epoll event fd %d does not exist in fds list.\n' % fd)
                 sys.stderr.flush()
                 continue
 

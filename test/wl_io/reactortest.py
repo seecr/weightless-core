@@ -47,7 +47,7 @@ from weightless.core.utils import identify
 from weightless.io import Reactor, reactor
 from weightless.io.utils import asProcess, sleep as zleep
 
-from weightless.io._reactor import EPOLL_TIMEOUT_GRANULARITY, _FDContext, _ProcessContext, _shutdownMessage
+from weightless.io._reactor import EPOLLIN, EPOLL_TIMEOUT_GRANULARITY, _FDContext, _ProcessContext, _shutdownMessage
 
 
 class ReactorTest(WeightlessTestCase):
@@ -1172,6 +1172,24 @@ class ReactorTest(WeightlessTestCase):
         with Reactor() as thereactor:
             thereactor.addProcess(process=process)
             thereactor.step()
+
+    def testUnexpectedFdInEpollFdEventsLoggedAndIgnored(self):
+        # TS: Should *not* happen anymore - report to your commanding officer if it does!
+        with Reactor() as reactor:
+            rwFD = readAndWritable()
+            rwFD_unexpected = readAndWritable()
+            reactor.addReader(sok=rwFD, sink=lambda: None)
+
+            # whitebox adding - since this should not be possible ...
+            reactor._epoll.register(fd=rwFD_unexpected, eventmask=EPOLLIN)
+            with stderr_replaced() as err:
+                reactor.step()
+                self.assertEquals('[Reactor]: epoll event fd %d does not exist in fds list.\n' % rwFD_unexpected.fileno(), err.getvalue(), err.getvalue())
+
+            # cleanup
+            reactor.removeReader(sok=rwFD)
+            reactor.cleanup(rwFD_unexpected)
+
 
     def testRemoveFDAlsoEpollUnregisters(self):
         cb = lambda: None
