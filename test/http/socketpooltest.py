@@ -34,7 +34,7 @@ from weightless.core import retval, be, Observable
 from weightless.io import reactor
 from weightless.io.utils import asProcess, sleep
 
-from weightless.http import SocketPool
+from weightless.http import SocketPool, EmptySocketPool
 
 
 class SocketPoolTest(SeecrTestCase):
@@ -104,6 +104,57 @@ class SocketPoolTest(SeecrTestCase):
 
         retval(sp.putSocketInPool(host='10.0.0.1', port=60000, sock=2))
         self.assertEquals(2, retval(sp.getPooledSocket(host='10.0.0.1', port=60000)))
+
+    def testEmptySocketPool_put_noErrors(self):
+        sok = MockSok('s')
+        sp = EmptySocketPool()
+        result = retval(sp.putSocketInPool(host='whatever', port=-1, sock=sok))
+        self.assertEquals(None, result)
+        self.assertEquals(['shutdown', 'close'], sok.log.calledMethodNames())
+        self.assertEquals(((SHUT_RDWR,), {}), (sok.log.calledMethods[0].args, sok.log.calledMethods[0].kwargs))
+        self.assertEquals(((), {}), (sok.log.calledMethods[1].args, sok.log.calledMethods[1].kwargs))
+
+    def testEmptySocketPool_put_nonfatalErrors(self):
+        sok = MockSok('s')
+        def shutdown(*a, **kw):
+            raise Exception('xcptn')
+        sok.log.methods['shutdown'] = shutdown
+        sp = EmptySocketPool()
+        result = retval(sp.putSocketInPool(host='secure.example.org', port=9999, sock=sok))
+        self.assertEquals(None, result)
+        self.assertEquals(['shutdown', 'close'], sok.log.calledMethodNames())
+        self.assertEquals(((SHUT_RDWR,), {}), (sok.log.calledMethods[0].args, sok.log.calledMethods[0].kwargs))
+        self.assertEquals(((), {}), (sok.log.calledMethods[1].args, sok.log.calledMethods[1].kwargs))
+
+    def testEmptySocketPool_put_fatalErrors(self):
+        exceptions = [AssertionError('x'), KeyboardInterrupt('x'), SystemExit('x')]
+        def t():
+            sok = MockSok('s')
+            current_exc = []
+            def shutdown(*a, **kw):
+                e = exceptions.pop(0)
+                current_exc.append(e)
+                raise e
+            sok.log.methods['shutdown'] = shutdown
+            sp = EmptySocketPool()
+            try:
+                retval(sp.putSocketInPool(host='secure.example.org', port=9999, sock=sok))
+            except type(current_exc[0]):
+                pass
+            else:
+                self.fail()
+            self.assertEquals(['shutdown'], sok.log.calledMethodNames())
+            self.assertEquals(((SHUT_RDWR,), {}), (sok.log.calledMethods[0].args, sok.log.calledMethods[0].kwargs))
+
+        for i in range(3):
+            t()
+
+        self.assertEquals(0, len(exceptions))
+
+    def testEmptySocketPool_get(self):
+        sp = EmptySocketPool()
+        self.assertEquals(None, retval(sp.getPooledSocket(host='whatever', port=-1)))
+        self.assertEquals(None, retval(sp.getPooledSocket(host='secure.example.org', port=1010)))
 
     ##
     ## Poolsize global limit
@@ -180,7 +231,7 @@ class SocketPoolTest(SeecrTestCase):
             yield sp.putSocketInPool(host='i', port=2, sock=MockSok('sI'))
             with stderr_replaced() as err:
                 yield sp.putSocketInPool(host='j', port=3, sock=MockSok('sJ'))
-                self.assertEquals('', err.getvalue(), err.getvalue())  #@@
+                self.assertEquals('', err.getvalue(), err.getvalue())
             wasStillPooled = yield stillPooled()
             self.assertEquals(2, len(wasStillPooled))
             self.assertTrue(set(wasStillPooled).issubset(set(['sH', 'sI', 'sJ'])))
@@ -331,4 +382,3 @@ class MockSok(object):
 
     def __repr__(self):
         return '{0}(id={1})'.format(self.__class__.__name__, self._id)
-

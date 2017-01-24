@@ -32,6 +32,23 @@ from traceback import print_exc
 from weightless.core import Observable, compose, identify
 
 
+class EmptySocketPool(object):
+    """
+    No-op implementation:
+     - Always empty
+     - putSocketInPool immediately shutdown & closes socket.
+    """
+    def getPooledSocket(self, host, port):
+        return
+        yield
+
+    def putSocketInPool(self, host, port, sock):
+        # Expects a socket *object*, not a file-descriptor!
+        _shutAndCloseIgnorant(sock)
+        return
+        yield
+
+
 class SocketPool(Observable):
     """
     Minimal SocketPool implementation.

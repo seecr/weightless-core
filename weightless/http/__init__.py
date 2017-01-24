@@ -29,6 +29,6 @@ from httpspec import parseHeaders, parseHeader, HTTP, REGEXP, FORMAT
 from _httpreader import HttpReader
 from _httpserver import HttpServer, HttpsServer, SUPPORTED_COMPRESSION_CONTENT_ENCODINGS, parseContentEncoding
 from _acceptor import Acceptor
-from _socketpool import SocketPool
+from _socketpool import SocketPool, EmptySocketPool
 from _httprequest import httprequest, httpget, httppost, httpsget, httpspost, httpput, httpdelete, httpsput, httpsdelete, HttpRequest
 from _httprequest1_1 import HttpRequest1_1, HttpRequestAdapter
