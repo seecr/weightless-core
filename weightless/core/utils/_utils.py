@@ -36,6 +36,9 @@ except ImportError:
         except AttributeError:
             return False
 
+def return_(*args):
+    raise StopIteration(*args)
+
 def retval(generator):
     g = compose(generator)
     try:
