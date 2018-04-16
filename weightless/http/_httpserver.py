@@ -490,6 +490,7 @@ class HttpHandler(object):
     def _writeResponse(self, encoding=None):
         this = yield
         endHeader = False
+        responseStarted = False
         headers = ''
         encodeResponseBody = SUPPORTED_COMPRESSION_CONTENT_ENCODINGS[encoding]['encode']() if encoding is not None else None
         data = None
@@ -500,6 +501,8 @@ class HttpHandler(object):
             else:
                 try:
                     data = self._handler.next()
+                except (AssertionError, SystemExit, KeyboardInterrupt):
+                    raise
                 except StopIteration:
                     if encodeResponseBody:
                         self._rest = encodeResponseBody.flush()
@@ -509,6 +512,9 @@ class HttpHandler(object):
                             self._send(data)
                     self._closeConnection()
                     yield
+                except Exception:
+                    raise
+
                 if data is Yield:
                     continue
                 if callable(data):
@@ -542,6 +548,7 @@ class HttpHandler(object):
                     data = encodeResponseBody.compress(data)
 
             if data:
+                responseStarted = True
                 self._send(data)
 
     def _closeConnection(self):

@@ -28,6 +28,7 @@
 from __future__ import with_statement
 
 from weightlesstestcase import WeightlessTestCase, MATCHALL
+from seecr.test.portnumbergenerator import PortNumberGenerator
 from seecr.test.io import stdout_replaced, stderr_replaced
 
 from StringIO import StringIO
@@ -40,19 +41,27 @@ from select import select
 from socket import socket, error as SocketError, SHUT_RDWR
 from sys import getdefaultencoding
 from time import sleep
-from weightless.io import Reactor
 from zlib import compress
 
 import sys
 
-from weightless.core import Yield, compose
-from weightless.http import HttpServer, _httpserver, REGEXP
+from weightless.core import be, Yield, compose
+from weightless.io import Reactor, reactor
+from weightless.io.utils import asProcess
+from weightless.http import HttpServer, _httpserver, REGEXP, HttpRequest1_1, EmptySocketPool
 
 from weightless.http._httpserver import updateResponseHeaders, parseContentEncoding, parseAcceptEncoding
 from weightless.io._reactor import WRITE_INTENT, READ_INTENT
 
 def inmydir(p):
     return join(dirname(abspath(__file__)), p)
+
+httprequest1_1 = be(
+    (HttpRequest1_1(),
+        (EmptySocketPool(),),
+    )
+).httprequest1_1
+
 
 class HttpServerTest(WeightlessTestCase):
 
@@ -1084,6 +1093,72 @@ class HttpServerTest(WeightlessTestCase):
 
                 # cleanup
                 server.shutdown()
+
+    def testExceptionBeforeResponseGives500(self):
+        port = PortNumberGenerator.next()
+
+        called = []
+        def handler(**kwargs):
+            called.append(True)
+            raise KeyError(22)
+            yield
+
+        def test():
+            h = HttpServer(reactor=reactor(), port=port, generatorFactory=handler)
+            h.listen()
+
+            statusAndHeaders, body = yield httprequest1_1(host='127.0.0.1', port=port, request='/ignored', timeout=5)
+            print statusAndHeaders.keys()
+            self.assertEquals('500', statusAndHeaders['StatusCode'])
+            self.assertEquals([True], called)
+
+            h.shutdown()
+
+        asProcess(test())
+
+    def testEmptyResponseGives500(self):
+        port = PortNumberGenerator.next()
+
+        called = []
+        def handler_empty(**kwargs):
+            yield ''
+            called.append(True)
+            yield ''
+            called.append(True)
+
+        def handler_noYields(**kwargs):
+            called.append(True)
+            return
+            yield
+
+        def test_empty():
+            del called[:]
+
+            h = HttpServer(reactor=reactor(), port=port, generatorFactory=handler_empty)
+            h.listen()
+
+            statusAndHeaders, body = yield httprequest1_1(host='127.0.0.1', port=port, request='/ignored', timeout=5)
+            print statusAndHeaders.keys()
+            self.assertEquals('500', statusAndHeaders['StatusCode'])
+            self.assertEquals([True, True], called)
+
+            h.shutdown()
+
+        def test_noYields():
+            del called[:]
+
+            h = HttpServer(reactor=reactor(), port=port, generatorFactory=handler_noYields)
+            h.listen()
+
+            statusAndHeaders, body = yield httprequest1_1(host='127.0.0.1', port=port, request='/ignored', timeout=5)
+            print statusAndHeaders.keys()
+            self.assertEquals('500', statusAndHeaders['StatusCode'])
+            self.assertEquals([True, True], called)
+
+            h.shutdown()
+
+        asProcess(test_empty())
+        asProcess(test_noYields())
 
     def testHandleBrokenPipe(self):
         def abort():
