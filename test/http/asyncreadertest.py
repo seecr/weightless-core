@@ -297,6 +297,7 @@ RuntimeError: Boom!""" % fileDict)
                 )
             finally:
                 responses.append(response)
+            yield 'HTTP/1.0 200 OK\r\n\r\n'
         self.handler = gethandler
         clientget('localhost', self.port, '/')
         self._loopReactorUntilDone()
@@ -322,6 +323,7 @@ RuntimeError: Boom!""" % fileDict)
                 )
             finally:
                 responses.append(response)
+            yield 'HTTP/1.0 200 OK\r\n\r\n'
         self.handler = gethandler
         clientget('localhost', self.port, '/')
         self._loopReactorUntilDone()
@@ -350,6 +352,8 @@ RuntimeError: Boom!""" % fileDict)
                     responses.append(e)
                 finally:
                     assert responses, 'Either a timeout or response should have occurred.'
+
+                yield 'HTTP/1.0 200 OK\r\n\r\n'
             return gethandler
 
         # Not timing out
@@ -394,6 +398,8 @@ RuntimeError: Boom!""" % fileDict)
                 )
             finally:
                 responses.append(response)
+
+            yield 'HTTP/1.0 200 OK\r\n\r\n'
         self.handler = gethandler
         clientget('localhost', self.port, '/')
         self._loopReactorUntilDone()
@@ -454,6 +460,7 @@ RuntimeError: Boom!""" % fileDict)
                     )
                 finally:
                     responses.append(response)
+                yield 'HTTP/1.0 200 OK\r\n\r\n'
             self.handler = gethandler
             clientget('localhost', self.port, '/')
             self._loopReactorUntilDone()
@@ -516,6 +523,7 @@ RuntimeError: Boom!""" % fileDict)
         self.assertEquals('/path', get_request[1]['path'])
 
     def _dispatch(self, *args, **kwargs):
+        @compose
         def handle():
             try:
                 yield self.handler(*args, **kwargs)
@@ -548,4 +556,3 @@ fileDict = {
 
 def ignoreLineNumbers(s):
     return sub("line \d+,", "line [#],", s)
-

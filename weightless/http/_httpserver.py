@@ -32,6 +32,7 @@ import re
 from StringIO import StringIO
 from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
 from tempfile import TemporaryFile
+from traceback import print_exception
 from email import message_from_file as parse_mime_message
 from zlib import compressobj as deflateCompress
 from zlib import decompressobj as deflateDeCompress
@@ -477,7 +478,7 @@ class HttpHandler(object):
         except Exception:
             original_exc = exc_info()
             if data and type(data) is str:
-                print >> sys.stderr, 'Error while sending data "{0} ..."'.format(data[:120])
+                sys.stderr.write('Error while sending data "{0} ..."\n'.format(data[:120]))
                 sys.stderr.flush()
             try:
                 self._handler.throw(*original_exc)
@@ -487,6 +488,7 @@ class HttpHandler(object):
             raise original_exc[0], original_exc[1], original_exc[2]
 
     @identify
+    @compose
     def _writeResponse(self, encoding=None):
         this = yield
         endHeader = False
@@ -494,6 +496,15 @@ class HttpHandler(object):
         headers = ''
         encodeResponseBody = SUPPORTED_COMPRESSION_CONTENT_ENCODINGS[encoding]['encode']() if encoding is not None else None
         data = None
+
+        def _no_response_500(msg):
+            self._rest = 'HTTP/1.0 500 Internal Server Error\r\n\r\n'
+            while self._rest:
+                yield
+                data = self._rest
+                self._send(data)
+                sys.stderr.write(msg)
+
         while True:
             yield
             if self._rest:
@@ -509,11 +520,25 @@ class HttpHandler(object):
                         while self._rest:
                             yield
                             data = self._rest
+                            responseStarted = True
                             self._send(data)
+
+                    if not responseStarted:
+                        yield _no_response_500(msg='Error in handler - no response sent, 500 given.\n')
+
                     self._closeConnection()
                     yield
                 except Exception:
-                    raise
+                    original_exc = exc_info()
+                    if responseStarted:
+                        sys.stderr.write('Error in handler - after response started:\n')
+                    else:
+                        yield _no_response_500(msg='Error in handler - no response sent, 500 given:\n')
+
+                    print_exception(*original_exc)
+                    sys.stderr.flush()
+                    self._closeConnection()
+                    yield
 
                 if data is Yield:
                     continue
@@ -524,6 +549,7 @@ class HttpHandler(object):
                     continue
                 if type(data) is unicode:
                     data = data.encode(self._defaultEncoding)
+
             if encodeResponseBody is not None:
                 if endHeader is False:
                     headers += data

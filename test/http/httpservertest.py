@@ -49,6 +49,7 @@ from weightless.core import be, Yield, compose
 from weightless.io import Reactor, reactor
 from weightless.io.utils import asProcess
 from weightless.http import HttpServer, _httpserver, REGEXP, HttpRequest1_1, EmptySocketPool
+from weightless.http._httpserver import HttpHandler, RECVSIZE
 
 from weightless.http._httpserver import updateResponseHeaders, parseContentEncoding, parseAcceptEncoding
 from weightless.io._reactor import WRITE_INTENT, READ_INTENT
@@ -65,49 +66,74 @@ httprequest1_1 = be(
 
 class HttpServerTest(WeightlessTestCase):
 
-    def sendRequestAndReceiveResponse(self, request, response='The Response', recvSize=4096, compressResponse=False, extraStepsAfterCompress=1, stepWatcher=None):
-        self.responseCalled = False
-        @compose
-        def responseGenFunc(**kwargs):
-            yield response
-            yield ''
-            self.responseCalled = True
-        server = HttpServer(self.reactor, self.port, responseGenFunc, recvSize=recvSize, compressResponse=compressResponse)
-        server.listen()
-        sok = socket()
-        sok.connect(('localhost', self.port))
-        sok.send(request)
-        sok.setblocking(0)
+    def sendRequestAndReceiveResponse(self, request, response='The Response', recvSize=4096, compressResponse=False, extraStepsAfterCompress=1, sokSends=None):
+        if sokSends is not None:
+            origInit = HttpHandler.__init__
 
-        clientResponse = ''
+            def newInit(inner_self, reactor, sok, generatorFactory, timeout, recvSize=RECVSIZE, prio=None, maxConnections=None, errorHandler=None, compressResponse=False):
+                logging_sok = SendLoggingMockSock(bucket=sokSends, origSock=sok)
+                origInit(inner_self,
+                         reactor=reactor,
+                         sok=logging_sok, # <-- logging here!
+                         generatorFactory=generatorFactory,
+                         timeout=timeout,
+                         recvSize=recvSize,
+                         prio=prio,
+                         maxConnections=maxConnections,
+                         errorHandler=errorHandler,
+                         compressResponse=compressResponse)
 
-        def clientRecv():
+            HttpHandler.__init__ = newInit
+
+            def cleanup():
+                HttpHandler.__init__ = origInit
+        else:
+            def cleanup():
+                pass
+
+        try:
+            self.responseCalled = False
+            @compose
+            def responseGenFunc(**kwargs):
+                yield response
+                yield ''
+                self.responseCalled = True
+            server = HttpServer(self.reactor, self.port, responseGenFunc, recvSize=recvSize, compressResponse=compressResponse)
+            server.listen()
+            sok = socket()
+            sok.connect(('localhost', self.port))
+            sok.send(request)
+            sok.setblocking(0)
+
             clientResponse = ''
-            while True:
-                try:
-                    r = sok.recv(4096)
-                except SocketError, (errno, msg):
-                    if errno == EAGAIN:
-                        break
-                    raise
-                if not r:
-                    break
-                clientResponse += r
-            return clientResponse
 
-        while not self.responseCalled:
-            self.reactor.step()
-            if stepWatcher:
-                stepWatcher(self.reactor)
-            clientResponse += clientRecv()
-        if compressResponse and extraStepsAfterCompress:
-            for _ in range(extraStepsAfterCompress):
+            def clientRecv():
+                clientResponse = ''
+                while True:
+                    try:
+                        r = sok.recv(4096)
+                    except SocketError, (errno, msg):
+                        if errno == EAGAIN:
+                            break
+                        raise
+                    if not r:
+                        break
+                    clientResponse += r
+                return clientResponse
+
+            while not self.responseCalled:
                 self.reactor.step()
                 clientResponse += clientRecv()
+            if compressResponse and extraStepsAfterCompress:
+                for _ in range(extraStepsAfterCompress):
+                    self.reactor.step()
+                    clientResponse += clientRecv()
 
-        server.shutdown()
-        clientResponse += clientRecv()
-        sok.close()
+            server.shutdown()
+            clientResponse += clientRecv()
+            sok.close()
+        finally:
+            cleanup()
         return clientResponse
 
     def testConnect(self):
@@ -245,12 +271,12 @@ class HttpServerTest(WeightlessTestCase):
         self.assertEquals(decompressed_response, rawBody)
 
         # White box, more than one sock.send(...) -> uses self._rest -> must not be compressed again.
-        stepWatcher = StepWatcher()
-        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: gzip\r\n\r\n', response=rawResponser(), compressResponse=True, stepWatcher=stepWatcher.onStep, extraStepsAfterCompress=1)
+        sokSends = []
+        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: gzip\r\n\r\n', response=rawResponser(), compressResponse=True, sokSends=sokSends, extraStepsAfterCompress=1)
         compressed_response = response.split('\r\n\r\n', 1)[1]
         decompressed_response = GzipFile(None, fileobj=StringIO(compressed_response)).read()
         self.assertEquals(decompressed_response, rawBody)
-        self.assertTrue(6 <= len(stepWatcher.sokSends) <= 20, len(stepWatcher.sokSends))
+        self.assertTrue(6 <= len(sokSends) <= 20, len(sokSends))
 
     def testCompressLargerBuggerToTriggerCompressionBuffersToFlush(self):
         rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nAnother: Header\r\n\r\n'
@@ -259,12 +285,10 @@ class HttpServerTest(WeightlessTestCase):
             for _ in xrange(4500):
                 yield str(random()) * 3 + str(random()) * 2 + str(random())
 
-        stepWatcher = StepWatcher()
-
-        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True, stepWatcher=stepWatcher.onStep, extraStepsAfterCompress=1)
-
-        self.assertTrue(3 < len(stepWatcher.sokSends) < 100, len(stepWatcher.sokSends))  # Not sent in one bulk-response.
-        self.assertTrue(all(d for d in stepWatcher.sokSends))  # No empty strings
+        sokSends = []
+        response = self.sendRequestAndReceiveResponse('GET /path/here HTTP/1.0\r\nAccept-Encoding: deflate\r\n\r\n', response=rawResponser(), compressResponse=True, sokSends=sokSends, extraStepsAfterCompress=1)
+        self.assertTrue(3 < len(sokSends) < 100, len(sokSends))  # Not sent in one bulk-response.
+        self.assertTrue(all(sokSends))  # No empty strings
 
     def testGetCompressedResponse_uncompressedWhenContentEncodingPresent(self):
         rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nContent-Length: 12345\r\nContent-Encoding: enlightened\r\n'
@@ -654,8 +678,7 @@ class HttpServerTest(WeightlessTestCase):
         self.requestData = None
         def handler(**kwargs):
             self.requestData = kwargs
-            return
-            yield
+            yield 'HTTP/1.0 200 OK\r\n\r\n'
 
         with Reactor() as reactor:
             server = HttpServer(reactor, self.port, handler, timeout=0.01)
@@ -669,7 +692,7 @@ class HttpServerTest(WeightlessTestCase):
 
             while select([sok],[], [], 0) != ([sok], [], []):
                 reactor.step()
-            self.assertFalse(sok.recv(4096).startswith('HTTP/1.0 400 Bad Request'))
+            self.assertTrue(sok.recv(4096).startswith('HTTP/1.0 200 OK'))
 
             # TS: minimalistic assert that it works too for x-deflate
             self.assertEquals('bodydatabodydata', self.requestData['Body'])
@@ -1107,10 +1130,53 @@ class HttpServerTest(WeightlessTestCase):
             h = HttpServer(reactor=reactor(), port=port, generatorFactory=handler)
             h.listen()
 
-            statusAndHeaders, body = yield httprequest1_1(host='127.0.0.1', port=port, request='/ignored', timeout=5)
-            print statusAndHeaders.keys()
-            self.assertEquals('500', statusAndHeaders['StatusCode'])
+            with stderr_replaced() as err:
+                statusAndHeaders, body = yield httprequest1_1(host='127.0.0.1', port=port, request='/ignored', timeout=5)
+                err_val = err.getvalue()
+
+            self.assertEquals(
+                {'HTTPVersion': '1.0',
+                 'Headers': {},
+                 'ReasonPhrase': 'Internal Server Error',
+                 'StatusCode': '500'},
+                statusAndHeaders)
+            self.assertEquals('', body)
             self.assertEquals([True], called)
+            self.assertTrue('Error in handler - no response sent, 500 given:\nTraceback (most recent call last):\n' in err_val, err_val)
+            self.assertTrue(err_val.endswith('raise KeyError(22)\nKeyError: 22\n'), err_val)
+
+            h.shutdown()
+
+        asProcess(test())
+
+    def testExceptionAfterResponseStarted(self):
+        port = PortNumberGenerator.next()
+
+        called = []
+        def handler(**kwargs):
+            called.append(True)
+            yield "HTTP/1.0 418 I'm a teapot\r\n\r\nBody?"
+            raise KeyError(23)
+            yield
+
+        def test():
+            h = HttpServer(reactor=reactor(), port=port, generatorFactory=handler)
+            h.listen()
+
+            with stderr_replaced() as err:
+                statusAndHeaders, body = yield httprequest1_1(host='127.0.0.1', port=port, request='/ignored', timeout=5)
+                err_val = err.getvalue()
+
+            self.assertEquals(
+                {'HTTPVersion': '1.0',
+                 'Headers': {},
+                 'ReasonPhrase': "I'm a teapot",
+                 'StatusCode': '418'},
+                statusAndHeaders)
+            self.assertEquals('Body?', body)
+            self.assertEquals([True], called)
+            self.assertTrue('Error in handler - after response started:\nTraceback (most recent call last):\n' in err_val, err_val)
+            self.assertTrue(err_val.endswith('raise KeyError(23)\nKeyError: 23\n'), err_val)
 
             h.shutdown()
 
@@ -1137,10 +1203,18 @@ class HttpServerTest(WeightlessTestCase):
             h = HttpServer(reactor=reactor(), port=port, generatorFactory=handler_empty)
             h.listen()
 
-            statusAndHeaders, body = yield httprequest1_1(host='127.0.0.1', port=port, request='/ignored', timeout=5)
-            print statusAndHeaders.keys()
-            self.assertEquals('500', statusAndHeaders['StatusCode'])
+            with stderr_replaced() as err:
+                statusAndHeaders, body = yield httprequest1_1(host='127.0.0.1', port=port, request='/ignored', timeout=5)
+                err_val = err.getvalue()
+            self.assertEquals(
+                {'HTTPVersion': '1.0',
+                 'Headers': {},
+                 'ReasonPhrase': 'Internal Server Error',
+                 'StatusCode': '500'},
+                statusAndHeaders)
+            self.assertEquals('', body)
             self.assertEquals([True, True], called)
+            self.assertEquals('Error in handler - no response sent, 500 given.\n', err_val)
 
             h.shutdown()
 
@@ -1150,10 +1224,18 @@ class HttpServerTest(WeightlessTestCase):
             h = HttpServer(reactor=reactor(), port=port, generatorFactory=handler_noYields)
             h.listen()
 
-            statusAndHeaders, body = yield httprequest1_1(host='127.0.0.1', port=port, request='/ignored', timeout=5)
-            print statusAndHeaders.keys()
-            self.assertEquals('500', statusAndHeaders['StatusCode'])
-            self.assertEquals([True, True], called)
+            with stderr_replaced() as err:
+                statusAndHeaders, body = yield httprequest1_1(host='127.0.0.1', port=port, request='/ignored', timeout=5)
+                err_val = err.getvalue()
+            self.assertEquals(
+                {'HTTPVersion': '1.0',
+                 'Headers': {},
+                 'ReasonPhrase': 'Internal Server Error',
+                 'StatusCode': '500'},
+                statusAndHeaders)
+            self.assertEquals('', body)
+            self.assertEquals([True], called)
+            self.assertEquals('Error in handler - no response sent, 500 given.\n', err_val)
 
             h.shutdown()
 
@@ -1217,6 +1299,7 @@ class HttpServerTest(WeightlessTestCase):
         server.shutdown()
         sock.close()
 
+
 class SendLoggingMockSock(object):
     def __init__(self, bucket, origSock):
         self._bucket = bucket
@@ -1226,38 +1309,5 @@ class SendLoggingMockSock(object):
         self._bucket.append(data)
         return self._orig.send(data, *args, **kwargs)
 
-    def __getattr__(self, attr):
-        return getattr(self._orig, attr)
-
-class StepWatcher(object):
-    def __init__(self):
-        self._alreadyWrappedSocket = False
-        self.sokSends = []
-
-    def onStep(self, reactor):
-        if self._alreadyWrappedSocket:
-            return
-
-        httpHandlerObj = self._extractWriteResponsesHttpHandlerObj(reactor)
-        if not httpHandlerObj:
-            return
-
-        # Wrap it!
-        self._alreadyWrappedSocket = True
-        origSock = httpHandlerObj._sok
-        origCloseConnection = httpHandlerObj._closeConnection
-
-        def cleanupAndDelegate(*args, **kwargs):
-            httpHandlerObj._sok = origSock
-            httpHandlerObj._closeConnection = origCloseConnection
-            return httpHandlerObj._closeConnection(*args, **kwargs)
-
-        httpHandlerObj._sok = SendLoggingMockSock(bucket=self.sokSends, origSock=origSock)
-        httpHandlerObj._closeConnection = cleanupAndDelegate
-
-    @staticmethod
-    def _extractWriteResponsesHttpHandlerObj(reactor):
-        result = [ctx.callback.__self__.gi_frame.f_locals['self'] for ctx in reactor._fds.values() if ctx.intent == WRITE_INTENT and ctx.callback.__self__.gi_frame.f_code.co_name == '_writeResponse']
-        if result:
-            return result[0]
-        return None
+    def __getattr__(self, name):
+        return getattr(self._orig, name)
