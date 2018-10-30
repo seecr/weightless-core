@@ -724,7 +724,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
     def testHttpRequestResponseBodyMaxSize(self):
         expectedrequest = "GET /stuff HTTP/1.1\r\nHost: localhost\r\n\r\n"
 
-        def r1(sok, log, remoteAddress, connectionNr):
+        def r1_content_length(sok, log, remoteAddress, connectionNr):
             # Request
             data = yield read(untilExpected=expectedrequest)
             self.assertEquals(expectedrequest, data)
@@ -738,7 +738,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         @dieAfter(seconds=5.0)
         def test():
             mss = MockSocketServer()
-            mss.setReplies([r1])
+            mss.setReplies([r1_content_length])
             mss.listen()
             top = be((Observable(),
                 (HttpRequest1_1(),
@@ -755,13 +755,20 @@ class HttpRequest1_1Test(WeightlessTestCase):
                     },
                     statusAndHeaders
                 )
-                self.assertEquals('abcd...', body)
+                expected = 'abcdefghijklm'
+                self.assertEquals(expected, body)
+                self.assertEquals(13, len(body))
                 self.assertEquals(1, mss.nrOfRequests)
                 self.assertEquals({1: (None, [])}, mss.state.connections)
             finally:
                 mss.close()
 
         asProcess(test())
+
+        self.fail('''TODO: test:
+ - close & chunked delimited with bodyMaxSize=n
+ - bodyMaxSize=0
+ - bodyMaxSize=<largerThanResponseSize>''')
 
 
     ##

@@ -101,7 +101,7 @@ def _do(observable, method, host, port, request, body=None, headers=None, bodyMa
         ## Connect or re-use from pool.
         suspend._reactor.addProcess(process=this.next, prio=prio)
         try:
-            yield  # After this yield, Suspend._whenDone filled-in (by Suspend.__call__(reactor, whenDone)) and thus throwing is safe again.
+            yield Yield  # After this yield, Suspend._whenDone filled-in (by Suspend.__call__(reactor, whenDone)) and thus throwing is safe again.
             sok = yield observable.any.getPooledSocket(host=host, port=port)
         finally:
             suspend._reactor.removeProcess(process=this.next)
@@ -121,7 +121,7 @@ def _do(observable, method, host, port, request, body=None, headers=None, bodyMa
                     ## Send Request-Line and Headers.
                     suspend._reactor.addWriter(sok, this.next, prio=prio)
                     try:
-                        yield
+                        yield Yield
                         # error checking
                         if body:
                             data = body
@@ -206,7 +206,7 @@ def _createSocket(host, port, secure, this, suspend, prio):
 
     suspend._reactor.addWriter(sok, this.next, prio=prio)
     try:
-        yield
+        yield Yield
         err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
         if err != 0:    # connection created succesfully?
             raise IOError(err)
@@ -249,7 +249,7 @@ def _asyncSend(sok, data):
     while data != "":
         size = sok.send(data)
         data = data[size:]
-        yield
+        yield Yield
 
 def _readHeaderAndBody(sok, method, requestHeaders, bodyMaxSize):
     statusAndHeaders, rest = yield _readHeader(sok)
@@ -333,9 +333,8 @@ def _readAssertNoBody(sok, rest):
     raise StopIteration('')
     yield
 
-def _bodyMaxSize(fn): # TODO hier verder? misschien op nieuw beginnen...
+def _bodyMaxSize(fn):
     def _setMaxSize(bodyMaxSize):
-        @compose
         def _maxSized(*a, **kw):
             if bodyMaxSize is not None:
                 kw = dict(kw, bufsize=min(4096, bodyMaxSize))
@@ -345,14 +344,13 @@ def _bodyMaxSize(fn): # TODO hier verder? misschien op nieuw beginnen...
                 while True:
                     v = g.next()
                     if v is Yield or callable(v):
-                        print '@@@2', repr(v)
                         yield v
                         continue
 
-                    print '#### responses & v', repr(responses), repr(v)
                     responses += v
 
                     if (bodyMaxSize is not None) and len(responses) >= bodyMaxSize:
+                        g.close()
                         raise StopIteration(responses[:bodyMaxSize])
             except StopIteration:
                 raise StopIteration(responses if (bodyMaxSize is None) else responses[:bodyMaxSize])
@@ -378,26 +376,21 @@ def _readCloseDelimitedBody(sok, rest, bufsize=None):
 
 @_bodyMaxSize
 def _readContentLengthDelimitedBody(sok, rest, contentLength, bufsize=None):
-    print '>>>>> HIEROOOOOO', repr(sok), repr(rest), repr(contentLength), repr(bufsize)
     response = rest  # Must be empty-string at least
     bytesToRead = contentLength - len(rest)
     if bytesToRead < 0:
         raise ValueError('Excess bytes (> Content-Length) read.')
 
     if response:
-        print '>>>>>>>>>> first response', repr(response)
         yield response
 
     while bytesToRead:
-        print '>>>>> in bytesToRead', bytesToRead
         response = yield _asyncRead(sok, bufsize)
-        print '>>>>> after _asyncRead'
         if response is _CLOSED:
             raise ValueError('Premature close')
         bytesToRead -= len(response)
         if bytesToRead < 0:
             raise ValueError('Excess bytes (> Content-Length) read.')
-        print '>>>>>>>>>> nth response', repr(response)
         yield response
 
 @_bodyMaxSize
@@ -435,11 +428,11 @@ def _sslHandshake(sok, this, suspend, prio):
         except SSLError as err:
             if err.args[0] == SSL_ERROR_WANT_READ:
                 suspend._reactor.addReader(sok, this.next, prio=prio)
-                yield
+                yield Yield
                 suspend._reactor.removeReader(sok)
             elif err.args[0] == SSL_ERROR_WANT_WRITE:
                 suspend._reactor.addWriter(sok, this.next, prio=prio)
-                yield
+                yield Yield
                 suspend._reactor.removeWriter(sok)
             else:
                 raise
@@ -525,11 +518,9 @@ def _oneChunk():
 def _asyncRead(sok, bufsize=4096):
     bufsize = bufsize or 4096
     while True:
-        yield
+        yield Yield
         try:
-            print "&"*15, "PRE RECV"
             response = sok.recv(bufsize) # error checking
-            print "&"*15, "POST RECV"
             sok.setsockopt(SOL_TCP, TCP_QUICKACK, 1)
         except SSLError, e:
             if e.errno != SSL_ERROR_WANT_READ:
