@@ -703,6 +703,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
             yield write("Hi!")
             sok.shutdown(SHUT_RDWR); sok.close()
 
+        @dieAfter(seconds=5.0)
         def test():
             mss = MockSocketServer()
             mss.setReplies([r1])
@@ -716,6 +717,52 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 mss.close()
 
         asProcess(test())
+
+    def testHttpRequestResponseStatusAndHeadersMaxSize(self):
+        self.fail('after which to bail on parsing headers')
+
+    def testHttpRequestResponseBodyMaxSize(self):
+        expectedrequest = "GET /stuff HTTP/1.1\r\nHost: localhost\r\n\r\n"
+
+        def r1(sok, log, remoteAddress, connectionNr):
+            # Request
+            data = yield read(untilExpected=expectedrequest)
+            self.assertEquals(expectedrequest, data)
+
+            # Response
+            _headers = 'HTTP/1.1 200 OK\r\nContent-Length: 26\r\n\r\n'
+            yield write(data=_headers)
+            yield write(data='abcdefghijklmnopqrstuvwxyz')
+            sok.shutdown(SHUT_RDWR); sok.close()
+
+        @dieAfter(seconds=5.0)
+        def test():
+            mss = MockSocketServer()
+            mss.setReplies([r1])
+            mss.listen()
+            top = be((Observable(),
+                (HttpRequest1_1(),
+                    (SocketPool(reactor=reactor()),),
+                )
+            ))
+            try:
+                statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/stuff', bodyMaxSize=13)
+                self.assertEquals({
+                        'HTTPVersion': '1.1',
+                        'Headers': {'Content-Length': '26'},
+                        'ReasonPhrase': 'OK',
+                        'StatusCode': '200',
+                    },
+                    statusAndHeaders
+                )
+                self.assertEquals('abcd...', body)
+                self.assertEquals(1, mss.nrOfRequests)
+                self.assertEquals({1: (None, [])}, mss.state.connections)
+            finally:
+                mss.close()
+
+        asProcess(test())
+
 
     ##
     ## Context (preconditions, aborting, ...)

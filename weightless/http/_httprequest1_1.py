@@ -31,7 +31,7 @@ from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_RDWR
 from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
 from sys import exc_info, getdefaultencoding
 
-from weightless.core import compose, identify, Observable, autostart
+from weightless.core import compose, identify, Observable, autostart, Yield
 from weightless.io import Suspend, TimeoutException
 from weightless.http import REGEXP, HTTP, FORMAT, parseHeaders
 
@@ -43,8 +43,8 @@ class HttpRequest1_1(Observable):
     Uses minimal HTTP/1.1 implementation for Persistent Connections.
     """
 
-    def httprequest1_1(self, host, port, request, body=None, headers=None, secure=False, prio=None, method='GET', timeout=None):
-        g = _do(method=method, host=host, port=port, request=request, headers=headers, body=body, secure=secure, prio=prio, observable=self)
+    def httprequest1_1(self, host, port, request, body=None, headers=None, secure=False, prio=None, method='GET', timeout=None, bodyMaxSize=None):
+        g = _do(method=method, host=host, port=port, request=request, headers=headers, body=body, bodyMaxSize=bodyMaxSize, secure=secure, prio=prio, observable=self)
         kw = {}
         if timeout is not None:
             def onTimeout():
@@ -90,7 +90,7 @@ class HttpRequestAdapter(Observable):
 
 @identify
 @compose
-def _do(observable, method, host, port, request, body=None, headers=None, secure=False, prio=None):
+def _do(observable, method, host, port, request, body=None, headers=None, bodyMaxSize=None, secure=False, prio=None):
     _assertSupportedMethod(method)
     headers = headers or {}
     retryOnce = False
@@ -141,7 +141,7 @@ def _do(observable, method, host, port, request, body=None, headers=None, secure
                     ## Read response (& handle 100 Continue #fail)
                     suspend._reactor.addReader(sok, this.next, prio=prio)
                     try:
-                        statusAndHeaders, body, doClose = yield _readHeaderAndBody(sok, method, requestHeaders=headers)
+                        statusAndHeaders, body, doClose = yield _readHeaderAndBody(sok, method, requestHeaders=headers, bodyMaxSize=bodyMaxSize)
                     finally:
                         suspend._reactor.removeReader(sok)
                 except (AssertionError, KeyboardInterrupt, SystemExit):
@@ -251,9 +251,9 @@ def _asyncSend(sok, data):
         data = data[size:]
         yield
 
-def _readHeaderAndBody(sok, method, requestHeaders):
+def _readHeaderAndBody(sok, method, requestHeaders, bodyMaxSize):
     statusAndHeaders, rest = yield _readHeader(sok)
-    readStrategy, doClose = _determineBodyReadStrategy(statusAndHeaders=statusAndHeaders, method=method, requestHeaders=requestHeaders)
+    readStrategy, doClose = _determineBodyReadStrategy(statusAndHeaders=statusAndHeaders, method=method, requestHeaders=requestHeaders, bodyMaxSize=bodyMaxSize)
     body = yield readStrategy(sok, rest)
     raise StopIteration((statusAndHeaders, body, doClose))
 
@@ -268,8 +268,9 @@ def _readHeader(sok, rest=''):
 
         match = REGEXP.RESPONSE.match(responses)
         if match:
-            # TODO: check some max. statusline + header size (or bail).
             break
+
+        # TODO: check some max. statusline + header size (or bail).
 
     if match.end() < len(responses):
         rest = responses[match.end():]
@@ -285,14 +286,15 @@ def _readHeader(sok, rest=''):
 
     raise StopIteration((statusAndHeaders, rest))
 
-def _determineBodyReadStrategy(statusAndHeaders, method, requestHeaders):
+def _determineBodyReadStrategy(statusAndHeaders, method, requestHeaders, bodyMaxSize=None):
     doClose = False
-    if _determineDoCloseFromConnection(requestHeaders) or _determineDoCloseFromConnection(statusAndHeaders['Headers']):
+    if _determineDoCloseFromConnection(requestHeaders) or _determineDoCloseFromConnection(statusAndHeaders['Headers']) or (bodyMaxSize is not None):
         doClose = True
     statusCode = statusAndHeaders['StatusCode']
     contentLength = statusAndHeaders['Headers'].get('Content-Length')
     if contentLength:
         contentLength = int(contentLength.strip())
+
     transferEncoding = _parseTransferEncoding(statusAndHeaders['Headers'])
 
     ## HTTP/1.0
@@ -301,20 +303,20 @@ def _determineBodyReadStrategy(statusAndHeaders, method, requestHeaders):
         if _bodyDisallowed(method, statusCode):
             return _readAssertNoBody, doClose
         if contentLength is None:
-            return _readCloseDelimitedBody, doClose
-        return partial(_readContentLengthDelimitedBody, contentLength=contentLength), doClose
+            return _readCloseDelimitedBody(bodyMaxSize), doClose
+        return partial(_readContentLengthDelimitedBody(bodyMaxSize), contentLength=contentLength), doClose
 
     ## HTTP/1.1
     if _bodyDisallowed(method, statusCode):
         return _readAssertNoBody, doClose
 
     if transferEncoding and transferEncoding[-1:] == ['chunked']:
-        return _readChunkedDelimitedBody, doClose
+        return _readChunkedDelimitedBody(bodyMaxSize), doClose
     elif contentLength is not None:
-        return partial(_readContentLengthDelimitedBody, contentLength=contentLength), doClose
+        return partial(_readContentLengthDelimitedBody(bodyMaxSize), contentLength=contentLength), doClose
 
     doClose = True
-    return _readCloseDelimitedBody, doClose
+    return _readCloseDelimitedBody(bodyMaxSize), doClose
 
 def _bodyDisallowed(method, statusCode):
     # Status-codes also without body, but should never happen:
@@ -331,33 +333,75 @@ def _readAssertNoBody(sok, rest):
     raise StopIteration('')
     yield
 
-def _readCloseDelimitedBody(sok, rest):
-    responses = rest  # Must be empty-string at least
+def _bodyMaxSize(fn): # TODO hier verder? misschien op nieuw beginnen...
+    def _setMaxSize(bodyMaxSize):
+        @compose
+        def _maxSized(*a, **kw):
+            if bodyMaxSize is not None:
+                kw = dict(kw, bufsize=min(4096, bodyMaxSize))
+            g = compose(fn(*a, **kw))
+            responses = ''
+            try:
+                while True:
+                    v = g.next()
+                    if v is Yield or callable(v):
+                        print '@@@2', repr(v)
+                        yield v
+                        continue
+
+                    print '#### responses & v', repr(responses), repr(v)
+                    responses += v
+
+                    if (bodyMaxSize is not None) and len(responses) >= bodyMaxSize:
+                        raise StopIteration(responses[:bodyMaxSize])
+            except StopIteration:
+                raise StopIteration(responses if (bodyMaxSize is None) else responses[:bodyMaxSize])
+
+        return _maxSized
+
+    return _setMaxSize
+
+@_bodyMaxSize
+def _readCloseDelimitedBody(sok, rest, bufsize=None):
+    response = rest  # Must be empty-string at least
+    if response is _CLOSED:
+        return
+    elif response:
+        yield response
+
     while True:
-        response = yield _asyncRead(sok)
+        response = yield _asyncRead(sok, bufsize)
         if response is _CLOSED:
             break
-        responses += response
-    raise StopIteration(responses)
 
-def _readContentLengthDelimitedBody(sok, rest, contentLength):
-    responses = rest  # Must be empty-string at least
+        yield response
+
+@_bodyMaxSize
+def _readContentLengthDelimitedBody(sok, rest, contentLength, bufsize=None):
+    print '>>>>> HIEROOOOOO', repr(sok), repr(rest), repr(contentLength), repr(bufsize)
+    response = rest  # Must be empty-string at least
     bytesToRead = contentLength - len(rest)
     if bytesToRead < 0:
         raise ValueError('Excess bytes (> Content-Length) read.')
 
+    if response:
+        print '>>>>>>>>>> first response', repr(response)
+        yield response
+
     while bytesToRead:
-        response = yield _asyncRead(sok)
+        print '>>>>> in bytesToRead', bytesToRead
+        response = yield _asyncRead(sok, bufsize)
+        print '>>>>> after _asyncRead'
         if response is _CLOSED:
             raise ValueError('Premature close')
-        responses += response
         bytesToRead -= len(response)
         if bytesToRead < 0:
             raise ValueError('Excess bytes (> Content-Length) read.')
-    raise StopIteration(responses)
+        print '>>>>>>>>>> nth response', repr(response)
+        yield response
 
-def _readChunkedDelimitedBody(sok, rest):
-    responses = ''
+@_bodyMaxSize
+def _readChunkedDelimitedBody(sok, rest, bufsize=None):
     g = _deChunk()
     try:
         if rest:
@@ -367,19 +411,17 @@ def _readChunkedDelimitedBody(sok, rest):
 
         while True:
             if resp is None:
-                message = yield _asyncRead(sok)
+                message = yield _asyncRead(sok, bufsize)
                 if message is _CLOSED:
                     g.close()
                     raise ValueError('Premature close')
             else:
-                responses += resp
+                yield resp
                 message = None
 
             resp = g.send(message)
     except StopIteration:
         pass
-
-    raise StopIteration(responses)
 
 def _sslHandshake(sok, this, suspend, prio):
     sok = wrap_socket(sok, do_handshake_on_connect=False)
@@ -480,11 +522,14 @@ def _oneChunk():
     pushback = (data,) if data else ()
     raise StopIteration(chunk, *pushback)
 
-def _asyncRead(sok):
+def _asyncRead(sok, bufsize=4096):
+    bufsize = bufsize or 4096
     while True:
         yield
         try:
-            response = sok.recv(4096) # error checking
+            print "&"*15, "PRE RECV"
+            response = sok.recv(bufsize) # error checking
+            print "&"*15, "POST RECV"
             sok.setsockopt(SOL_TCP, TCP_QUICKACK, 1)
         except SSLError, e:
             if e.errno != SSL_ERROR_WANT_READ:
@@ -517,7 +562,7 @@ class SocketWrapper(object):
         return value
 
 
-_ALLOWED_OPTIONAL_ADAPTER_ARGUMENTS = set(['body', 'headers', 'method', 'prio', 'ssl', 'timeout'])
+_ALLOWED_OPTIONAL_ADAPTER_ARGUMENTS = set(['body', 'headers', 'method', 'prio', 'ssl', 'timeout', 'bodyMaxSize'])
 _noop = lambda *a, **kw: None
 _CRLF_LEN = len(CRLF)
 _CHUNK_RE = re.compile(r'([0-9a-fA-F]+)(?:;[^\r\n]+|)\r\n')  # Ignores chunk-extensions
