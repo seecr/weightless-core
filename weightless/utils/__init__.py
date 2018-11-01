@@ -28,11 +28,11 @@ from weightless.io.utils import asProcess
 from functools import partial
 
 
-def makeRequest(host, port, request, body=None, headers=None, secure=False, method='GET', timeout=30):
+def makeRequest(host, port, request, body=None, timeout=30, **kwargs):
     httprequest1_1 = be((HttpRequest1_1(),
             (EmptySocketPool(),),
         )).httprequest1_1
-    return asProcess(httprequest1_1(host=host, port=port, request=request, body=body, headers=headers, secure=secure, method=method, timeout=timeout))
+    return asProcess(httprequest1_1(host=host, port=port, request=request, body=body, timeout=timeout, **kwargs))
 
 getRequest=makeRequest
 postRequest=partial(makeRequest, method='POST')
