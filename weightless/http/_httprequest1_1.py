@@ -27,6 +27,7 @@
 import re
 from errno import EINPROGRESS
 from functools import partial
+from traceback import print_exc
 from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_RDWR, SOL_TCP, TCP_KEEPINTVL, TCP_KEEPIDLE, TCP_KEEPCNT, SO_KEEPALIVE, TCP_QUICKACK, TCP_NODELAY
 from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
 from sys import exc_info, getdefaultencoding
@@ -179,6 +180,7 @@ def _do(observable, method, host, port, request, body=None, headers=None, bodyMa
     except (AssertionError, KeyboardInterrupt, SystemExit):
         raise
     except TimeoutException:
+        # print_exc()   # Enable for debugging timeouts.
         pass
     except Exception:
         suspend.throw(*exc_info())
@@ -336,8 +338,6 @@ def _readAssertNoBody(sok, rest):
 def _bodyMaxSize(fn):
     def _setMaxSize(bodyMaxSize):
         def _maxSized(*a, **kw):
-            if bodyMaxSize is not None:
-                kw = dict(kw, bufsize=min(4096, bodyMaxSize))
             g = compose(fn(*a, **kw))
             responses = ''
             try:
@@ -360,7 +360,7 @@ def _bodyMaxSize(fn):
     return _setMaxSize
 
 @_bodyMaxSize
-def _readCloseDelimitedBody(sok, rest, bufsize=None):
+def _readCloseDelimitedBody(sok, rest):
     response = rest  # Must be empty-string at least
     if response is _CLOSED:
         return
@@ -368,14 +368,14 @@ def _readCloseDelimitedBody(sok, rest, bufsize=None):
         yield response
 
     while True:
-        response = yield _asyncRead(sok, bufsize)
+        response = yield _asyncRead(sok)
         if response is _CLOSED:
             break
 
         yield response
 
 @_bodyMaxSize
-def _readContentLengthDelimitedBody(sok, rest, contentLength, bufsize=None):
+def _readContentLengthDelimitedBody(sok, rest, contentLength):
     response = rest  # Must be empty-string at least
     bytesToRead = contentLength - len(rest)
     if bytesToRead < 0:
@@ -385,7 +385,7 @@ def _readContentLengthDelimitedBody(sok, rest, contentLength, bufsize=None):
         yield response
 
     while bytesToRead:
-        response = yield _asyncRead(sok, bufsize)
+        response = yield _asyncRead(sok)
         if response is _CLOSED:
             raise ValueError('Premature close')
         bytesToRead -= len(response)
@@ -394,7 +394,7 @@ def _readContentLengthDelimitedBody(sok, rest, contentLength, bufsize=None):
         yield response
 
 @_bodyMaxSize
-def _readChunkedDelimitedBody(sok, rest, bufsize=None):
+def _readChunkedDelimitedBody(sok, rest):
     g = _deChunk()
     try:
         if rest:
@@ -404,7 +404,7 @@ def _readChunkedDelimitedBody(sok, rest, bufsize=None):
 
         while True:
             if resp is None:
-                message = yield _asyncRead(sok, bufsize)
+                message = yield _asyncRead(sok)
                 if message is _CLOSED:
                     g.close()
                     raise ValueError('Premature close')
@@ -515,12 +515,11 @@ def _oneChunk():
     pushback = (data,) if data else ()
     raise StopIteration(chunk, *pushback)
 
-def _asyncRead(sok, bufsize=4096):
-    bufsize = bufsize or 4096
+def _asyncRead(sok):
     while True:
         yield Yield
         try:
-            response = sok.recv(bufsize) # error checking
+            response = sok.recv(4096)  # bufsize *must* be large enough - SSL Socket recv will hang indefinitely otherwise (until a timeout if given).
             sok.setsockopt(SOL_TCP, TCP_QUICKACK, 1)
         except SSLError, e:
             if e.errno != SSL_ERROR_WANT_READ:
