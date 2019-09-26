@@ -243,6 +243,8 @@ class MatchAll(object):
 
 class MySSLTCPServer(ThreadingMixIn, TCPServer):
     def __init__(self, server_address, RequestHandlerClass, bind_and_activate=True):
+        # Generated using: openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 36500 -nodes
+        # and renamed to match existing names.
         pem = join(sslDir, 'server.pkey')
         cert = join(sslDir, 'server.cert')
 
@@ -292,4 +294,3 @@ def logical_xor(a, b):
 
 
 MATCHALL = MatchAll()
-
