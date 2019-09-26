@@ -672,7 +672,7 @@ class ReactorTest(WeightlessTestCase):
         with Reactor() as reactor:
             with stderr_replaced() as err:
                 reactor.addReader(sok=notAFile, sink=lambda: log.append(True))
-                self.assertTrue('argument must be an int, or have a fileno() method.' in err.getvalue(), err.getvalue())
+                self.assertTrue('argument must be an int, or have a fileno() method' in err.getvalue(), err.getvalue())
             self.assertEquals(0, len(log))
             self.assertEquals(1, len(reactor._badFdsLastCallback))
 
