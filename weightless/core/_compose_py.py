@@ -3,7 +3,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012, 2015 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2012, 2015, 2019 Seecr (Seek You Too B.V.) http://seecr.nl
 # Copyright (C) 2015 Koninklijke Bibliotheek (KB) http://www.kb.nl
 #
 # This file is part of "Weightless"
@@ -24,7 +24,6 @@
 #
 ## end license ##
 
-from types import GeneratorType
 from sys import exc_info
 from weightless.core import cpython, is_generator
 
@@ -103,8 +102,8 @@ def _compose(initial, stepping):
             if is_generator(response):
                 generators.append(response)
                 frame = response.gi_frame
-                if cpython: assert frame, 'Generator is exhausted.' 
-                if cpython: assert frame.f_lineno == frame.f_code.co_firstlineno, 'Generator already used.' 
+                if cpython: assert frame, 'Generator is exhausted.'
+                if cpython: assert frame.f_lineno == frame.f_code.co_firstlineno, 'Generator already used.'
                 try:
                     if stepping:
                         _ = yield Yield
@@ -138,4 +137,3 @@ def _compose(initial, stepping):
         raise exception[0], exception[1], exception[2]
     if messages:
         raise StopIteration(*messages)
-

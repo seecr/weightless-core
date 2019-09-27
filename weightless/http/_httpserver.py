@@ -4,7 +4,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012, 2014-2015 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2012, 2014-2015, 2019 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -26,10 +26,10 @@
 
 from _acceptor import Acceptor
 from weightless.core import identify, Yield, compose
-from weightless.http import REGEXP, FORMAT, parseHeaders, parseHeader
+from weightless.http import REGEXP, parseHeaders, parseHeader
 
 import re
-from StringIO import StringIO
+from resource import getrlimit, RLIMIT_NOFILE
 from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
 from tempfile import TemporaryFile
 from traceback import print_exception
@@ -38,11 +38,6 @@ from zlib import compressobj as deflateCompress
 from zlib import decompressobj as deflateDeCompress
 from zlib import Z_DEFAULT_COMPRESSION, DEFLATED, MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY
 
-from OpenSSL import SSL
-from random import randint
-from time import time
-from socket import socket, ssl,  SOL_SOCKET, SO_REUSEADDR, SO_LINGER
-from struct import pack
 from sys import getdefaultencoding, exc_info
 import sys
 
@@ -94,73 +89,6 @@ class HttpServer(object):
         self._acceptor.shutdown()
 
 
-class HttpsServer(object):
-    """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
-
-    def __init__(self, reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, certfile='', keyfile='', maxConnections=None, errorHandler=None, compressResponse=False, bindAddress=None):
-        self._reactor = reactor
-        self._port = port
-        self._bindAddress = bindAddress
-        self._generatorFactory = generatorFactory
-        self._timeout = timeout
-        self._recvSize = recvSize
-        self._prio = prio
-        self._sok = sok
-        self._certfile = certfile
-        self._keyfile = keyfile
-        self._maxConnections = maxConnections
-        self._errorHandler = errorHandler
-        self._compressResponse = compressResponse
-
-    def listen(self):
-        # This should have been a SSLAcceptor ...
-        if self._sok == None:
-            def verify_cb(conn, cert, errnum, depth, ok):
-                # This obviously has to be updated
-                print 'Got certificate: %s' % cert.get_subject()
-                return ok
-
-            # Initialize context
-            ctx = SSL.Context(SSL.SSLv23_METHOD)
-            ctx.set_session_id('weightless:%s:%s' % (time(), randint(1024,4096)))
-            ctx.set_options(SSL.OP_NO_SSLv2)
-            ctx.set_verify(SSL.VERIFY_PEER, verify_cb) # Demand a certificate
-            ctx.use_privatekey_file(self._keyfile)
-            ctx.use_certificate_file(self._certfile)
-
-            # Set up server
-            self._sok = SSL.Connection(ctx, socket())
-            self._sok.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-            self._sok.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
-            self._sok.bind(('0.0.0.0' if self._bindAddress is None else self._bindAddress, self._port))
-            self._sok.listen(127)
-
-        self._acceptor = Acceptor(
-            reactor=self._reactor,
-            port=self._port,
-            sinkFactory=lambda sok: HttpsHandler(
-                reactor=self._reactor,
-                sok=sok,
-                generatorFactory=self._generatorFactory,
-                timeout=self._timeout,
-                recvSize=self._recvSize,
-                prio=self._prio,
-                maxConnections=self._maxConnections,
-                errorHandler=self._errorHandler,
-                compressResponse=self._compressResponse
-            ),
-            prio=self._prio,
-            sok=self._sok,
-            bindAddress=self._bindAddress)
-
-    def setMaxConnections(self, m):
-        self._maxConnections = m
-
-    def shutdown(self):
-        self._acceptor.shutdown()
-
-
-from resource import getrlimit, RLIMIT_NOFILE
 
 def maxFileDescriptors():
     softLimit, hardLimit = getrlimit(RLIMIT_NOFILE)
@@ -583,36 +511,6 @@ class HttpHandler(object):
 
         try:
             self._sok.shutdown(SHUT_RDWR)
-        except SocketError, e:
-            code, message = e.args
-            if code == 107:
-                pass # KVS: not well understood, not tested. It seems some quick (local) servers close the connection before this point is reached. It may happen more generally. In any case, it is based on a truely existing phenomenon
-            else:
-                raise
-        self._sok.close()
-
-class HttpsHandler(HttpHandler):
-    def __call__(self):
-        try:
-            part = self._sok.recv(self._recvSize)
-            if not part:
-                # SOCKET CLOSED by PEER
-                self._badRequest()
-                return
-        except (SSL.WantReadError, SSL.WantWriteError, SSL.WantX509LookupError):
-            pass
-        except Exception, e:
-            self._closeConnection()
-        else:
-            self._dataBuffer += part
-            self._resetTimer()
-            self._dealWithCall()
-
-    def _closeConnection(self):
-        self._reactor.cleanup(self._sok)
-
-        try:
-            self._sok.shutdown()  # No self._sok.shutdown(SHUT_RDWR) for some reason
         except SocketError, e:
             code, message = e.args
             if code == 107:

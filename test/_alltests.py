@@ -3,7 +3,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2013, 2015 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2013, 2015, 2019 Seecr (Seek You Too B.V.) http://seecr.nl
 # Copyright (C) 2015 Koninklijke Bibliotheek (KB) http://www.kb.nl
 #
 # This file is part of "Weightless"
@@ -60,7 +60,6 @@ from http.asyncreadertest import AsyncReaderTest
 from http.httpreadertest import HttpReaderTest
 from http.httpservertest import HttpServerTest
 from http.httpspectest import HttpSpecTest
-from http.httpsservertest import HttpsServerTest
 from http.httprequest1_1test import HttpRequest1_1Test
 from http.socketpooltest import SocketPoolTest
 from http.suspendtest import SuspendTest
