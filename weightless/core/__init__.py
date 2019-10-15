@@ -64,9 +64,9 @@ except ImportError as e:
         return type(o) is GeneratorType
     class DeclineMessage(Exception):
         pass
-    from _compose_py import compose as _compose, Yield
-    from _local_py import local
-    from _tostring_py import tostring
+    from ._compose_py import compose as _compose, Yield
+    from ._local_py import local
+    from ._tostring_py import tostring
     cextension = False
     ComposeType = GeneratorType
 
@@ -81,6 +81,6 @@ def compose(X, *args, **kwargs):
     raise TypeError("compose() expects generator, got %s" % repr(X))
 
 #from compose import compose, local, tostring, Yield
-from utils import identify, autostart, retval, consume, asList, asString, return_
-from _observable import Observable, Transparent, be, methodOrMethodPartialStr, NoneOfTheObserversRespond
+from .utils import identify, autostart, retval, consume, asList, asString, return_
+from ._observable import Observable, Transparent, be, methodOrMethodPartialStr, NoneOfTheObserversRespond
 

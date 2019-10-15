@@ -31,8 +31,8 @@ class BufferedHandler(object):
         self.allData = []
         self.sentHeaders = False
 
-    def next(self):
-        return self.nextInChain.next()
+    def __next__(self):
+        return next(self.nextInChain)
 
     def send(self, data):
         if not self.sentHeaders:

@@ -34,6 +34,6 @@ def compose(generator):
 def autostart(generator):
     def helper(*args, **kwargs):
         g = generator(*args, **kwargs)
-        g.next()
+        next(g)
         return g
     return helper

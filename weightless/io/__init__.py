@@ -29,8 +29,8 @@ class TimeoutException(Exception):
 class TooBigResponseException(Exception):
     pass
 
-from _reactor import Reactor, reactor
-from _suspend import Suspend
+from ._reactor import Reactor, reactor
+from ._suspend import Suspend
 
-from _gio import Gio, open as giopen, SocketContext, Timer
-from _server import Server
+from ._gio import Gio, open as giopen, SocketContext, Timer
+from ._server import Server

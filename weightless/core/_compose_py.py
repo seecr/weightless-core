@@ -63,6 +63,11 @@ class Yield(object):
     def __new__(self):
         raise TypeError("cannot create 'Yield' instances")
 
+class value_with_pushback:
+    def __init__(self, value, *pushback):
+        self.value = value
+        self.pushback = pushback
+
 def compose(initial, stepping=False):
     if not is_generator(initial):
         raise TypeError("compose() expects generator")
@@ -93,7 +98,7 @@ def _compose(initial, stepping):
             if exception:
                 if exception[0] == GeneratorExit:
                     generator.close()
-                    raise exception
+                    raise exception[1]
                 response = generator.throw(*exception)
                 exception = None
             else:
@@ -121,19 +126,21 @@ def _compose(initial, stepping):
                 except BaseException:
                     exType, exValue, exTraceback = exc_info()
                     exception = (exType, exValue, exTraceback.tb_next)
-        except StopIteration, returnValue:
+        except StopIteration as returnValue:
             exception = None
             generators.pop()
-            retvals = returnValue.args
-            if retvals:
-                messages[0:0] = retvals
+            retval = returnValue.value
+            if isinstance(retval, value_with_pushback):
+                messages[0:0] = tuple(retval.value, *retval.pushback)
             else:
-                generators and messages.insert(0, None)
+                messages.insert(0, retval)
         except BaseException:
             generators.pop()
             exType, exValue, exTraceback = exc_info()
             exception = (exType, exValue, exTraceback.tb_next)
     if exception:
-        raise exception[0], exception[1], exception[2]
+        raise exception[1]
     if messages:
-        raise StopIteration(*messages)
+        if len(messages) > 1:
+            return value_with_pushback(*messages)
+        return messages[0]

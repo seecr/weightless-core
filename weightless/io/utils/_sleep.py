@@ -32,8 +32,8 @@ def sleep(seconds):
         yield  # Wait for timeout
         yield  # wait for GC
 
-    g = doNext(); g.next()  # + autostart
-    s = Suspend(doNext=g.send, timeout=seconds, onTimeout=g.next)
+    g = doNext(); next(g)  # + autostart
+    s = Suspend(doNext=g.send, timeout=seconds, onTimeout=g.__next__)
     yield s
     try:
         s.getResult()

@@ -1,27 +1,27 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 import sys
@@ -57,7 +57,7 @@ ok = lambda *args, **kwargs: True
 
 def Beyond_Python_Enhanced_Generators():
     conference  = "EuroPython"
-    date        = 2011-06-23
+    date        = "2011-06-23"
     location    = "Florence, Italy"
     presenter   = "Erik J. Groeneveld"
     affiliation = "Seecr"
@@ -78,14 +78,14 @@ def Beyond_Python_Enhanced_Generators():
 def pep342():
     """Enhanced Generator"""
     msg = yield "response"
-    print msg
+    print(msg)
     yield
 
 
 def demo_driver():
     """the most profound change ever"""
     g = pep342()
-    response = g.next()   #1
+    response = next(g)   #1
     g.send("msg")         #2
 
 
@@ -108,7 +108,7 @@ def pep380():
     def g():
         yield from_f()
     for r in g():
-        print r
+        print(r)
 
 
 def demo_ala_compose():
@@ -119,7 +119,7 @@ def demo_ala_compose():
     def g():
         yield f()         #1
     for r in compose(g()):#2
-        print r
+        print(r)
 
 
 
@@ -136,7 +136,7 @@ def demo_compose_decorator():
     def g():
         yield f()         #2
     for r in g():         #3
-        print r
+        print(r)
 
 
 
@@ -162,7 +162,7 @@ def demo_propagation():
     def h():
         yield g()
     for m in compose(h()):
-        print m
+        print(m)
 
 
 
@@ -187,19 +187,19 @@ def demo_two_way():
     def g():
         yield f()
     p = compose(g())
-    print p.next()        #1
-    print p.send("hello") #3
+    print(next(p))        #1
+    print(p.send("hello")) #3
 
 
 
 
 """
-    At #3 the message returns 
+    At #3 the message returns
     immediately, as if #4 were:
 
     def f(msg):
         return msg
-"""        
+"""
 
 
 
@@ -214,8 +214,8 @@ def demo_alternative():
     def g():
         yield f()
     p = compose(g())
-    print p.send(None)     #2
-    print p.send("Hello")
+    print(p.send(None))     #2
+    print(p.send("Hello"))
 
 
 
@@ -238,11 +238,11 @@ def demo_handle_exceptions():
         yield
     @compose
     def g():
-        try:                    
+        try:
             yield f()           #1
-        except Exception, e:    #2
+        except Exception as e:    #2
             yield e
-    print g().next()
+    print(next(g()))
 
 
 
@@ -267,7 +267,7 @@ def demo_tb():
     @compose
     def h():
         yield g()
-    try: h().next()
+    try: next(h())
     except: print_exc()
 """
 Traceback (most recent call last):
@@ -287,13 +287,13 @@ def demo_return_value():
     """'call' a generator"""
     def f():
         raise StopIteration("val") #1
-        #return "retval"           #2 
+        #return "retval"           #2
         yield
     @compose
     def g():
         v = yield f()
         yield v
-    print g().next()
+    print(next(g()))
 
 
 #Jackson Structured Programming
@@ -314,14 +314,14 @@ def demo_coroutine():
     def coroutine_a(n = 0):
         while n < 10:
             n = yield b, n + 1
-            print ">", n
+            print(">", n)
     def coroutine_b(n = 0):
         while n < 10:
             n = yield a, n + 1
-            print "<", n
+            print("<", n)
     a = coroutine_a()
     b = coroutine_b()
-    a.next(); b.next()
+    next(a); next(b)
     g = (a, 0)
     while True: # trampoline
        try: g = g[0].send(g[1])
@@ -339,12 +339,12 @@ def demo_coroutine_with_inversion():
     """Limited scope/lifetime"""
     def coroutine_a(n = 0):
         yield                       #1
-        print ">", n
+        print(">", n)
         raise StopIteration(n + 1)
     def coroutine_b(n = 0):
         while n < 10:
             n = yield coroutine_a(n + 1)
-            print "<", n
+            print("<", n)
     g = compose(coroutine_b())
     list(g)
 
@@ -389,11 +389,11 @@ def socket_driver1(sok, gen):
 
 def socket_driver(sok, prot):
     """Protocol controls flow"""
-    res = prot.next()               #1
+    res = next(prot)               #1
     while True:
         if res:                     #2
             sok.send(res)
-            res = prot.next()
+            res = next(prot)
         else:
             msg = sok.recv()        #3
             res = prot.send(msg)
@@ -426,10 +426,10 @@ def http_protocol():
 def demo_http_protocol():
     """Test naive http implementation"""
     p = http_protocol()
-    p.next()
+    next(p)
     p.send("HTTP/1.0 GET /\r\n\r\n")
     for l in p:
-        print l
+        print(l)
 
 
 
@@ -478,12 +478,12 @@ def demo_read_request_line():
     """Demo Boundary Clash"""
     r = compose(read_req_line())
     try:
-      r.next()
-      print r.send("GET /docs HT")
-      print r.send("TP/1.0\r\nHost: pyt")
-      print r.send("hon.org\r\n\r\n")
-    except StopIteration, e:
-      print e.args
+      next(r)
+      print(r.send("GET /docs HT"))
+      print(r.send("TP/1.0\r\nHost: pyt"))
+      print(r.send("hon.org\r\n\r\n"))
+    except StopIteration as e:
+      print(e.args)
 
 
 
@@ -493,7 +493,7 @@ def demo_read_request_line():
 
 """
     Boundary Clashes
-    TCP packets 
+    TCP packets
         != HTTP chunks
             != XML tags
 
@@ -528,13 +528,13 @@ def read_headers():
 def demo_read_request():
     """a real world example"""
     r = compose(readRequest())
-    r.next()
+    next(r)
     try:
         r.send("GET /docs HT")
         r.send("TP/1.0\r\nHost: pytho")
         r.send("n.org\r\n\r\nFORM data")
-    except StopIteration, e:
-        print e.args # nested tuple
+    except StopIteration as e:
+        print(e.args) # nested tuple
 
 
 
@@ -549,18 +549,18 @@ def handleRequest(req, headers):
         while True:
             msg += yield
     except StopIteration:
-        print "BODY:", msg
+        print("BODY:", msg)
         yield 'HTTP/1.0 200 Ok\r\n\r\n'
 
 
 def demo_complete_protocol():
     """three levels of delegation"""
     p = http_protocol2(handleRequest)
-    p.next()
+    next(p)
     p.send("GET /docs HT")
     p.send("TP/1.0\r\nHost: pytho")
     p.send("n.org\r\n\r\nFORM data")
-    print p.throw(StopIteration)
+    print(p.throw(StopIteration))
 
 
 
@@ -603,18 +603,18 @@ def handler_rev(req, headers):
         while True:
             msg += yield               #2
     except StopIteration:
-        print "BODY:", msg
+        print("BODY:", msg)
 
 def demo_complete_protocol_2():
     """A handler with different flow"""
     p = http_protocol2(handler_rev)
-    print 1, p.send(None)
-    print 2, p.send("GET /docs HT")
-    print 3, p.send("TP/1.0\r\nHost: pyt")
-    print 4, p.send("hon.org\r\n\r\nFORM")
-    print 5, p.next()
-    print 6, p.send("data")
-    try: print 7, p.throw(StopIteration)
+    print(1, p.send(None))
+    print(2, p.send("GET /docs HT"))
+    print(3, p.send("TP/1.0\r\nHost: pyt"))
+    print(4, p.send("hon.org\r\n\r\nFORM"))
+    print(5, next(p))
+    print(6, p.send("data"))
+    try: print(7, p.throw(StopIteration))
     except StopIteration: pass
 
 
@@ -631,7 +631,7 @@ def Fragment_from_compose():
     #...
     try:
       pass # ...
-    except StopIteration, retval:
+    except StopIteration as retval:
       generators.pop()
       if retval.args:
         messages = list(retval.args) \
@@ -667,23 +667,23 @@ def demo_flow_control():
     try:
         while True:
             r = template.send(m)
-            m = None if r else msgs.next()
-            print r,
+            m = None if r else next(msgs)
+            print(r, end=' ')
     except StopIteration: pass
 
 #25
 
 def a_template_2():
-    print (yield """
+    print((yield """
         <html><body>
-          <table><tr>""")
+          <table><tr>"""))
     for i in range(3):
-        print (yield """
-            <td>%d></td>""" % i)
-    print (yield """
+        print((yield """
+            <td>%d></td>""" % i))
+    print((yield """
           </tr></table>
         <html><body>
-        """)
+        """))
 
 
 def demo_flow_control_2():
@@ -691,7 +691,7 @@ def demo_flow_control_2():
     msgs = iter([None,'GET /','GET /en'])
     template = a_template()
     while True:
-        print template.send(msgs.next())
+        print(template.send(next(msgs)))
 
 
 
@@ -709,7 +709,7 @@ def demo_what_about_thread_local():
         yield h()
     def h():
         tx_id = local("tx_id")  #2
-        print tx_id
+        print(tx_id)
     list(compose(f()))
 
 
@@ -751,7 +751,7 @@ def demo_what_about_thread_local():
 
 #28
 
-funcs = (f for f in locals().values() if 
+funcs = (f for f in list(locals().values()) if
         isfunction(f) and f.__code__.co_name.startswith("demo"))
 
 if len(sys.argv) > 1:
@@ -760,7 +760,7 @@ if len(sys.argv) > 1:
 system('clear')
 
 for f in sorted(funcs, key=lambda k: k.__code__.co_firstlineno):
-    print "\n* %s()\n* %s" % (f.__code__.co_name, f.func_doc)
+    print("\n* %s()\n* %s" % (f.__code__.co_name, f.__doc__))
     try: f() # run def demo_*():
     except: print_exc()
 

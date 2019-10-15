@@ -43,28 +43,29 @@ def asProcess(g):
         wrapper(g, reactor)
         try:
             reactor.loop()
-        except StopIteration, e:
-            if e.args:
-                return e.args[0]
+        except StopIteration as e:
+            return e.value
 
     @identify
     def wrapper(generator, reactor):
         this = yield
-        reactor.addProcess(process=this.next)
+        reactor.addProcess(process=this.__next__)
         try:
             yield
             g = compose(generator)
             while True:
-                _response = g.next()
+                _response = g.__next__()
                 if _response is Yield:
                     continue
                 if callable(_response):
-                    _response(reactor, this.next)
+                    _response(reactor, this.__next__)
                     yield
                     _response.resumeProcess()
                 yield
+        except StopIteration as e:
+            return e.value
         finally:
-            reactor.removeProcess(process=this.next)
+            reactor.removeProcess(process=this.__next__)
 
     if type(g) == FunctionType:  # asProcess used as decorator
         @wraps(g)

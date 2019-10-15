@@ -37,7 +37,7 @@ class Gio(object):
         self._generator = compose(generator)
         self._contextstack = []
         self._callback2generator = compose(self.callback2generator())
-        self._callback2generator.next()
+        self._callback2generator.__next__()
 
     def __repr__(self):
         return repr(self._generator)
@@ -72,7 +72,7 @@ class Gio(object):
                         finally:
                             context.close()
                 response = None
-            except TimeoutException, e:
+            except TimeoutException as e:
                 response = self._generator.throw(e)
 
     def throw(self, exception):
@@ -88,13 +88,13 @@ class Gio(object):
         self._contextstack.pop()
 
     def addWriter(self, context):
-        self._reactor.addWriter(context, self._callback2generator.next)
+        self._reactor.addWriter(context, self._callback2generator.__next__)
 
     def removeWriter(self, context):
         self._reactor.removeWriter(context)
 
     def addReader(self, context):
-        self._reactor.addReader(context, self._callback2generator.next)
+        self._reactor.addReader(context, self._callback2generator.__next__)
 
     def removeReader(self, context):
         self._reactor.removeReader(context)

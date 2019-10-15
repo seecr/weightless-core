@@ -102,32 +102,32 @@ class PythonTest(TestCase):
         try:
             firstTry.send('hello')
             self.fail()
-        except TypeError, e:
-            self.assertEquals("can't send non-None value to a just-started generator", str(e))
+        except TypeError as e:
+            self.assertEqual("can't send non-None value to a just-started generator", str(e))
         secondTry = withoutAutoStart()
-        secondTry.next() # 'start'
+        next(secondTry) # 'start'
         message = secondTry.send('hello')
-        self.assertEquals('hello', message)
+        self.assertEqual('hello', message)
         thirdTry = withAutoStart()
         message = thirdTry.send('hello')
-        self.assertEquals('hello', message)
+        self.assertEqual('hello', message)
 
     def testThreeWaysOfStoping(self):
         f1 = explicitReturn()
         f2 = raiseStopIteration()
         f3 = endOfFunction()
         try:
-            f1.next()
+            next(f1)
             self.fail()
         except StopIteration:
             pass
         try:
-            f2.next()
+            next(f2)
             self.fail()
         except StopIteration:
             pass
         try:
-            f3.next()
+            next(f3)
             self.fail()
         except StopIteration:
             pass
@@ -137,23 +137,23 @@ class PythonTest(TestCase):
         c.send('python')
         c.send('day')
         k = c.throw(StopIteration())
-        self.assertEquals('done', k)
+        self.assertEqual('done', k)
 
     def testLineLengthsCoroutine(self):
         c = wordLengths3()
-        self.assertEquals(6, c.send('python'))
-        self.assertEquals(3, c.send('day'))
+        self.assertEqual(6, c.send('python'))
+        self.assertEqual(3, c.send('day'))
 
     def testLineLengthsWithGeneratorForOutput(self):
         g = wordLengths2(['python', 'day'])
-        self.assertEquals([6,3], list(g))
+        self.assertEqual([6,3], list(g))
         g = wordLengths2_alternative(['python', 'day'])
-        self.assertEquals([6,3], list(g))
+        self.assertEqual([6,3], list(g))
 
     def testLineLengths1(self):
         l = wordLengths1(['python', 'day'])
-        self.assertEquals([6, 3], l)
+        self.assertEqual([6, 3], l)
         l = wordLengths1_alternative(['python', 'day'])
-        self.assertEquals([6, 3], l)
+        self.assertEqual([6, 3], l)
 
 main()
