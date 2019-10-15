@@ -1,26 +1,26 @@
 /* begin license *
- * 
- * "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
- * 
+ *
+ * "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+ *
  * Copyright (C) 2009-2011 Seek You Too (CQ2) http://www.cq2.nl
- * Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
- * 
+ * Copyright (C) 2011-2013 Seecr (Seek You Too B.V.) http://seecr.nl
+ *
  * This file is part of "Weightless"
- * 
+ *
  * "Weightless" is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * "Weightless" is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with "Weightless"; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- * 
+ *
  * end license */
 
 /* This code is formatted with:
@@ -32,6 +32,7 @@
 #include <structmember.h>
 
 #include "_core.h"
+#include "_observable.h"
 
 ////////// Python Object and Type structures //////////
 
@@ -60,8 +61,7 @@ typedef struct {
 
 ////////// Yield Python Type //////////
 static PyTypeObject PyYield_Type = {
-    PyObject_HEAD_INIT(&PyType_Type)
-    0,                         /*ob_size*/
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "Yield",                   /*tp_name*/
     sizeof(PyYieldObject),     /*tp_basicsize*/
     0,                         /*tp_itemsize*/
@@ -383,7 +383,7 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
             response = PyObject_CallMethod(generator, "send", "(O)", message); // new ref
             Py_CLEAR(message);
         }
-    
+
         if(response) { // normal response
             if(is_generator(response)) {
 
@@ -480,10 +480,10 @@ static PyObject* compose_send(PyComposeObject* self, PyObject* message) {
     PyObject* exc_type = NULL;
     PyObject* exc_val = NULL;
     if(self->paused_on_step && message != Py_None) {
-        exc_val = PyString_FromString("Cannot accept data when stepping. First send None.");
+        exc_val = PyUnicode_FromString("Cannot accept data when stepping. First send None.");
         exc_type = PyExc_AssertionError;
     } else if(!self->expect_data && message != Py_None) {
-        exc_val = PyString_FromString("Cannot accept data. First send None.");
+        exc_val = PyUnicode_FromString("Cannot accept data. First send None.");
         exc_type = PyExc_AssertionError;
     } else
         messages_insert(self, message);
@@ -569,7 +569,7 @@ PyObject* find_local_in_locals(PyFrameObject* frame, PyObject* name) {
         if(localVar) {
             PyObject* localName = PyTuple_GetItem(frame->f_code->co_varnames, i);
 
-            if(_PyString_Eq(name, localName)) {
+            if(PyUnicode_Compare(name, localName) == 0) {
                 Py_INCREF(localVar);
                 return localVar;
             }
@@ -579,7 +579,7 @@ PyObject* find_local_in_locals(PyFrameObject* frame, PyObject* name) {
     if(frame->f_stacktop > frame->f_valuestack) {
         PyObject* o = frame->f_stacktop[-1];
 
-        if(o->ob_type == &PyCompose_Type) {
+        if(Py_TYPE(o) == &PyCompose_Type) {
             return find_local_in_compose((PyComposeObject*) o, name);
         }
     }
@@ -605,7 +605,9 @@ PyObject* local(PyObject* self, PyObject* name) {
     PyObject* result = find_local_in_frame(frame, name);
 
     if(!result) {
-        PyErr_SetString(PyExc_AttributeError, PyString_AsString(name));
+        PyObject * ascii_name = PyUnicode_AsASCIIString(name);
+        PyErr_SetString(PyExc_AttributeError, PyBytes_AsString(ascii_name));
+        Py_DECREF(ascii_name);
         return NULL;
     }
 
@@ -623,10 +625,10 @@ PyObject* tostring(PyObject* self, PyObject* gen) {
         PyFrameObject* frame = ((PyGenObject*)gen)->gi_frame;
 
         if(!frame)
-            return PyString_FromString("<no frame>");
+            return PyUnicode_FromString("<no frame>");
 
         int ilineno = PyCode_Addr2Line(frame->f_code, frame->f_lasti);
-        PyObject* lineno = PyInt_FromLong(ilineno); // new ref
+        PyObject* lineno = PyLong_FromLong(ilineno); // new ref
         PyObject* codeline = PyObject_CallFunctionObjArgs(py_getline,
                              frame->f_code->co_filename, lineno, NULL); // new ref
         Py_CLEAR(lineno);
@@ -638,15 +640,22 @@ PyObject* tostring(PyObject* self, PyObject* gen) {
 
         if(!codeline_stripped) return NULL;
 
-        PyObject* result =
-            PyString_FromFormat("  File \"%s\", line %d, in %s\n    %s",
-                                PyString_AsString(frame->f_code->co_filename),
-                                ilineno, PyString_AsString(frame->f_code->co_name),
-                                PyString_AsString(codeline_stripped)); // new ref
+        PyObject* filename_ascii = PyUnicode_AsASCIIString(frame->f_code->co_filename);
+        PyObject* function_ascii = PyUnicode_AsASCIIString(frame->f_code->co_name);
+        PyObject* codeline_ascii = PyUnicode_AsASCIIString(codeline_stripped);
+
+        PyObject* result
+            = PyUnicode_FromFormat("  File \"%s\", line %d, in %s\n    %s",
+                                PyBytes_AsString(filename_ascii),
+                                ilineno, PyBytes_AsString(function_ascii),
+                                PyBytes_AsString(codeline_ascii)); // new ref
+        Py_DECREF(filename_ascii);
+        Py_DECREF(function_ascii);
+        Py_DECREF(codeline_ascii);
         Py_CLEAR(codeline_stripped);
         return result;
 
-    } else if(gen->ob_type == &PyCompose_Type) {
+    } else if(Py_TYPE(gen) == &PyCompose_Type) {
         PyComposeObject* cmps = (PyComposeObject*) gen;
         PyObject* result = NULL;
         PyObject** generator = cmps->generators_base;
@@ -658,8 +667,11 @@ PyObject* tostring(PyObject* self, PyObject* gen) {
                 result = s;
 
             else {
-                PyString_ConcatAndDel(&result, PyString_FromString("\n"));
-                PyString_ConcatAndDel(&result, s);
+                PyObject* x = PyUnicode_FromString("\n");
+                result = PyUnicode_Concat(result, x);
+                Py_DECREF(x);
+                result = PyUnicode_Concat(result, s);
+                Py_DECREF(s);
             }
         }
 
@@ -683,8 +695,7 @@ static PyMethodDef compose_methods[] = {
 
 
 PyTypeObject PyCompose_Type = {
-    PyObject_HEAD_INIT(&PyType_Type)
-    0,                                      /* ob_size */
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "compose",                              /* tp_name */
     sizeof(PyComposeObject),                /* tp_basicsize */
     0,                                      /* tp_itemsize */
@@ -738,12 +749,12 @@ PyTypeObject PyCompose_Type = {
 ////////// Module initialization //////////
 
 static PyCodeObject* create_empty_code(void) {
-    PyObject* py_srcfile = PyString_FromString(__FILE__);
-    PyObject* py_funcname = PyString_FromString("compose");
-    PyObject* empty_string = PyString_FromString("");
+    PyObject* py_srcfile = PyUnicode_FromString(__FILE__);
+    PyObject* py_funcname = PyUnicode_FromString("compose");
+    PyObject* empty_string = PyBytes_FromString("");
     PyObject* empty_tuple = PyTuple_New(0);
     PyCodeObject* code = PyCode_New(
-                             0, 0, 1, 0,  // stacksize is 1
+                             0, 0, 0, 1, 0,  // stacksize is 1
                              empty_string,
                              empty_tuple,
                              empty_tuple,
@@ -757,12 +768,12 @@ static PyCodeObject* create_empty_code(void) {
     return code;
 }
 
-PyMODINIT_FUNC init_compose(PyObject* module) {
+int init_compose(PyObject* module) {
     PyObject* linecache = PyImport_ImportModule("linecache"); // new ref
 
     if(!linecache) {
         PyErr_Print();
-        return;
+        return -1;
     }
 
     PyObject* dict = PyModule_GetDict(linecache); // borrowed ref
@@ -770,7 +781,7 @@ PyMODINIT_FUNC init_compose(PyObject* module) {
     if(!dict) {
         Py_CLEAR(linecache);
         PyErr_Print();
-        return;
+        return -1;
     }
 
     py_getline = PyMapping_GetItemString(dict, "getline"); // new ref
@@ -778,7 +789,7 @@ PyMODINIT_FUNC init_compose(PyObject* module) {
     if(!py_getline) {
         Py_CLEAR(linecache);
         PyErr_Print();
-        return;
+        return -1;
     }
 
     py_code = create_empty_code();
@@ -787,7 +798,7 @@ PyMODINIT_FUNC init_compose(PyObject* module) {
         Py_CLEAR(linecache);
         Py_CLEAR(py_getline);
         PyErr_Print();
-        return;
+        return -1;
     }
 
     if(PyType_Ready(&PyCompose_Type) < 0) {
@@ -795,7 +806,7 @@ PyMODINIT_FUNC init_compose(PyObject* module) {
         Py_CLEAR(py_getline);
         Py_CLEAR(py_code);
         PyErr_Print();
-        return;
+        return -1;
     }
 
 
@@ -804,6 +815,7 @@ PyMODINIT_FUNC init_compose(PyObject* module) {
 
     Py_INCREF(&PyYield_Type);
     PyModule_AddObject(module, "Yield", (PyObject*) &PyYield_Type);
+    return 0;
 }
 
 
@@ -852,59 +864,59 @@ PyObject* compose_selftest(PyObject* self, PyObject* null) {
     // test next on messages queue
     assertTrue(0 == _messages_size(&c), "now queue size must be 0 again");
     assertTrue(messages_empty(&c), "messages must be empty again");
-    messages_append(&c, PyInt_FromLong(5));
-    messages_append(&c, PyInt_FromLong(6));
+    messages_append(&c, PyLong_FromLong(5));
+    messages_append(&c, PyLong_FromLong(6));
     assertTrue(2 == _messages_size(&c), "now queue size must be 2");
-    assertTrue(PyInt_AsLong(messages_next(&c)) == 5, "incorrect value from queue");
-    assertTrue(PyInt_AsLong(messages_next(&c)) == 6, "incorrect value from queue");
+    assertTrue(PyLong_AsLong(messages_next(&c)) == 5, "incorrect value from queue");
+    assertTrue(PyLong_AsLong(messages_next(&c)) == 6, "incorrect value from queue");
     // test wrap around on append
     compose_clear(&c);
     _compose_initialize(&c);
 
     for(i = 0; i < QUEUE_SIZE - 2; i++)                                     // 8
-        messages_append(&c, PyInt_FromLong(i));
+        messages_append(&c, PyLong_FromLong(i));
 
     assertTrue(i == _messages_size(&c), "queue must be equals to i");
-    int status = messages_append(&c, PyInt_FromLong(i));                    // 9
+    int status = messages_append(&c, PyLong_FromLong(i));                    // 9
     assertTrue(i + 1 == _messages_size(&c), "queue must be equals to i+1");
     assertTrue(status == 1, "status must be ok");
-    status = messages_append(&c, PyInt_FromLong(i));                        // full!
+    status = messages_append(&c, PyLong_FromLong(i));                        // full!
     assertTrue(status == 0, "status of append must 0 (no room)");
     assertTrue(PyExc_RuntimeError == PyErr_Occurred(), "runtime exception must be set");
     PyErr_Clear();
-    status = messages_insert(&c, PyInt_FromLong(99));
+    status = messages_insert(&c, PyLong_FromLong(99));
     assertTrue(status == 0, "status of insert must 0 (no room)");
     assertTrue(PyExc_RuntimeError == PyErr_Occurred(), "runtime exception must be set");
     PyErr_Clear();
     // test wrap around on insert
     compose_clear(&c);
     _compose_initialize(&c);
-    status = messages_insert(&c, PyInt_FromLong(42));
+    status = messages_insert(&c, PyLong_FromLong(42));
     assertTrue(1 == _messages_size(&c), "after insert queue must be equals to 1");
     assertTrue(status == 1, "status after first insert must be ok");
-    status = messages_insert(&c, PyInt_FromLong(42));
+    status = messages_insert(&c, PyLong_FromLong(42));
     assertTrue(2 == _messages_size(&c), "after insert queue must be equals to 2");
     assertTrue(status == 1, "status after second insert must be ok");
 
     for(i = 0; i < QUEUE_SIZE - 3; i++)
-        status = messages_insert(&c, PyInt_FromLong(i));
+        status = messages_insert(&c, PyLong_FromLong(i));
 
     assertTrue(9 == _messages_size(&c), "after insert queue must be equals to 9");
     assertTrue(status == 1, "status after 9 inserts must be ok");
-    status = messages_insert(&c, PyInt_FromLong(4242));
+    status = messages_insert(&c, PyLong_FromLong(4242));
     assertTrue(status == 0, "status after 10 inserts must be error");
     assertTrue(PyExc_RuntimeError == PyErr_Occurred(), "runtime exception must be set here too");
     PyErr_Clear();
     // test wrap around on next
     compose_clear(&c);
     _compose_initialize(&c);
-    messages_insert(&c, PyInt_FromLong(1000)); // wrap backward
-    messages_append(&c, PyInt_FromLong(1001)); // wrap forward
+    messages_insert(&c, PyLong_FromLong(1000)); // wrap backward
+    messages_append(&c, PyLong_FromLong(1001)); // wrap forward
     PyObject* o = messages_next(&c);           // end
-    assertTrue(1000 == PyInt_AsLong(o), "expected 1000");
+    assertTrue(1000 == PyLong_AsLong(o), "expected 1000");
     assertTrue(2 == o->ob_refcnt, "refcount on next must be 2");
     o = messages_next(&c);                     // wrap
-    assertTrue(1001 == PyInt_AsLong(o), "expected 1001");
+    assertTrue(1001 == PyLong_AsLong(o), "expected 1001");
     assertTrue(2 == o->ob_refcnt, "refcount on next must be 2");
     o = messages_next(&c);
     assertTrue(NULL == o, "error condition on next: empty");
