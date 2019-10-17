@@ -24,7 +24,7 @@
 #
 ## end license ##
 
-from _acceptor import Acceptor
+from ._acceptor import Acceptor
 from weightless.core import identify, Yield, compose
 from weightless.http import REGEXP, parseHeaders, parseHeader
 
@@ -385,7 +385,7 @@ class HttpHandler(object):
         if self._timer:
             self._reactor.removeTimer(self._timer)
         self._reactor.removeReader(self._sok)
-        self._reactor.addWriter(self._sok, self._writeResponse(encoding=encoding).next, prio=self._prio)
+        self._reactor.addWriter(self._sok, self._writeResponse(encoding=encoding).__next__, prio=self._prio)
 
     def finalize(self):
         self._finalize(self._generatorFactory)
@@ -413,7 +413,7 @@ class HttpHandler(object):
             except StopIteration:
                 pass
             self._closeConnection()
-            raise original_exc[0], original_exc[1], original_exc[2]
+            raise original_exc[1]
 
     @identify
     @compose
@@ -439,7 +439,7 @@ class HttpHandler(object):
                 data = self._rest
             else:
                 try:
-                    data = self._handler.next()
+                    data = self._handler.__next__()
                 except (AssertionError, SystemExit, KeyboardInterrupt):
                     raise
                 except StopIteration:
@@ -471,11 +471,11 @@ class HttpHandler(object):
                 if data is Yield:
                     continue
                 if callable(data):
-                    data(self._reactor, this.next)
+                    data(self._reactor, this.__next__)
                     yield
                     data.resumeWriter()
                     continue
-                if type(data) is unicode:
+                if type(data) is str:
                     data = data.encode(self._defaultEncoding)
 
             if encodeResponseBody is not None:
@@ -511,7 +511,7 @@ class HttpHandler(object):
 
         try:
             self._sok.shutdown(SHUT_RDWR)
-        except SocketError, e:
+        except SocketError as e:
             code, message = e.args
             if code == 107:
                 pass # KVS: not well understood, not tested. It seems some quick (local) servers close the connection before this point is reached. It may happen more generally. In any case, it is based on a truely existing phenomenon

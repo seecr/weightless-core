@@ -24,10 +24,10 @@
 #
 ## end license ##
 
-from __future__ import with_statement
+
 
 import sys
-from StringIO import StringIO
+from io import StringIO
 from re import sub
 from sys import exc_info
 from time import sleep
@@ -60,8 +60,8 @@ class MockSocket(object):
         self._readAndWritable.close()
 
 fileDict = {
-    '__file__': MockSocket.fileno.im_func.func_code.co_filename, # Hacky, but sys.modules[aModuleName].__file__ is inconsistent with traceback-filenames
-    'suspend.py': Suspend.__call__.func_code.co_filename,
+    '__file__': MockSocket.fileno.__func__.__code__.co_filename, # Hacky, but sys.modules[aModuleName].__file__ is inconsistent with traceback-filenames
+    'suspend.py': Suspend.__call__.__code__.co_filename,
 }
 
 
@@ -72,43 +72,43 @@ class SuspendTest(WeightlessTestCase):
         def getSuspend():
             trace.calledMethods.reset()
             suspend = Suspend(doNext=trace.doNext)
-            self.assertEquals([], trace.calledMethodNames())
+            self.assertEqual([], trace.calledMethodNames())
 
             suspend(reactor=trace, whenDone=trace.whenDone)
-            self.assertEquals(['doNext', 'suspend'], trace.calledMethodNames())
+            self.assertEqual(['doNext', 'suspend'], trace.calledMethodNames())
             doNextM, suspendM = trace.calledMethods
-            self.assertEquals(((suspend,), {}), (doNextM.args, doNextM.kwargs))
-            self.assertEquals(((), {}), (suspendM.args, suspendM.kwargs))
+            self.assertEqual(((suspend,), {}), (doNextM.args, doNextM.kwargs))
+            self.assertEqual(((), {}), (suspendM.args, suspendM.kwargs))
             trace.calledMethods.reset()
             return suspend
 
         suspend = getSuspend()
         suspend.resume(response='whatever')
-        self.assertEquals(['whenDone'], trace.calledMethodNames())
+        self.assertEqual(['whenDone'], trace.calledMethodNames())
         trace.calledMethods.reset()
         # Below no change of result, no side-effects
-        self.assertEquals('whatever', suspend.getResult())
+        self.assertEqual('whatever', suspend.getResult())
         try:
             suspend.resume(response='DIFFERENT')
-        except AssertionError, e:
-            self.assertEquals('Suspend already settled.', str(e))
+        except AssertionError as e:
+            self.assertEqual('Suspend already settled.', str(e))
         else: self.fail()
-        self.assertEquals('whatever', suspend.getResult())
-        self.assertRaises(AssertionError, lambda: suspend.throw(exc_type=Exception, exc_value=Exception('Very'), exc_traceback=None))
-        self.assertEquals('whatever', suspend.getResult())
-        self.assertEquals([], trace.calledMethodNames())
+        self.assertEqual('whatever', suspend.getResult())
+        self.assertRaises(AssertionError, lambda: suspend.throw(exc_type=Exception(exc_value=Exception('Very')).with_traceback(exc_traceback=None)))
+        self.assertEqual('whatever', suspend.getResult())
+        self.assertEqual([], trace.calledMethodNames())
 
         suspend = getSuspend()
-        suspend.throw(RuntimeError, RuntimeError('Very'), None)
-        self.assertEquals(['whenDone'], trace.calledMethodNames())
+        suspend.throw(RuntimeError(RuntimeError('Very')).with_traceback(None))
+        self.assertEqual(['whenDone'], trace.calledMethodNames())
         trace.calledMethods.reset()
         # Below no change of result, no side-effects
         self.assertRaises(RuntimeError, lambda: suspend.getResult())
         self.assertRaises(AssertionError, lambda: suspend.resume(response='whatever'))
         self.assertRaises(RuntimeError, lambda: suspend.getResult())
-        self.assertRaises(AssertionError, lambda: suspend.throw(exc_type=Exception, exc_value=Exception('Very'), exc_traceback=None))
+        self.assertRaises(AssertionError, lambda: suspend.throw(exc_type=Exception(exc_value=Exception('Very')).with_traceback(exc_traceback=None)))
         self.assertRaises(RuntimeError, lambda: suspend.getResult())
-        self.assertEquals([], trace.calledMethodNames())
+        self.assertEqual([], trace.calledMethodNames())
 
     def testReactorSuspend(self):
         handle = ['initial value']
@@ -132,7 +132,7 @@ class SuspendTest(WeightlessTestCase):
 
                 # cleanup fd's
                 sok1.close(); sok2.close()
-            self.assertEquals(2, out.getvalue().count('closing'), out.getvalue())
+            self.assertEqual(2, out.getvalue().count('closing'), out.getvalue())
 
     def testReactorResumeWriter(self):
         with Reactor() as reactor:
@@ -142,7 +142,7 @@ class SuspendTest(WeightlessTestCase):
                 yield
                 yield
             sok = MockSocket()
-            reactor.addWriter(sok, callback().next)
+            reactor.addWriter(sok, callback().__next__)
             reactor.step()
             reactor.resumeWriter(handle[0])
             reactor.step()
@@ -161,7 +161,7 @@ class SuspendTest(WeightlessTestCase):
                 yield
                 yield
             sok = MockSocket()
-            reactor.addReader(sok, callback().next)
+            reactor.addReader(sok, callback().__next__)
             reactor.step()
             reactor.resumeReader(handle[0])
             reactor.step()
@@ -179,7 +179,7 @@ class SuspendTest(WeightlessTestCase):
                     handle[0] = reactor.suspend()
                     yield
                     yield
-                handle = [callback().next]
+                handle = [callback().__next__]
                 sok = MockSocket()
                 reactor.addProcess(handle[0])
                 reactor.step()
@@ -201,17 +201,17 @@ class SuspendTest(WeightlessTestCase):
                 sok = MockSocket()
                 reactor.addWriter(sok, callback)
                 reactor.step()
-                self.assertEquals(sok.fileno(), handle[0])
+                self.assertEqual(sok.fileno(), handle[0])
                 try:
                     reactor.addWriter(sok, callback)
                     self.fail("Exception not raised")
-                except ValueError, e:
-                    self.assertEquals('Socket is suspended', str(e))
+                except ValueError as e:
+                    self.assertEqual('Socket is suspended', str(e))
                 try:
                     reactor.addReader(sok, callback)
                     self.fail("Exception not raised")
-                except ValueError, e:
-                    self.assertEquals('Socket is suspended', str(e))
+                except ValueError as e:
+                    self.assertEqual('Socket is suspended', str(e))
 
                 # cleanup fd's
                 sok.close()
@@ -247,28 +247,28 @@ class SuspendTest(WeightlessTestCase):
                 yield "result = %s" % suspend.getResult()
                 yield 'after suspend'
             listener = MyMockSocket()
-            port = PortNumberGenerator.next()
+            port = next(PortNumberGenerator)
             httpserver = HttpServer(reactor, port, handler, sok=listener)
             httpserver.listen()
             reactor.removeReader(listener) # avoid new connections
             httpserver._acceptor._accept()
-            self.assertEquals(1, len(reactor._fds))
-            self.assertEquals([READ_INTENT], [v.intent for v in reactor._fds.values()])
+            self.assertEqual(1, len(reactor._fds))
+            self.assertEqual([READ_INTENT], [v.intent for v in list(reactor._fds.values())])
             reactor.step()
-            self.assertEquals(1, len(reactor._fds))
-            self.assertEquals([WRITE_INTENT], [v.intent for v in reactor._fds.values()])
+            self.assertEqual(1, len(reactor._fds))
+            self.assertEqual([WRITE_INTENT], [v.intent for v in list(reactor._fds.values())])
             reactor.step()
             reactor.step()
-            self.assertEquals(reactor, suspend._reactor)
-            self.assertEquals(0, len(reactor._fds))
+            self.assertEqual(reactor, suspend._reactor)
+            self.assertEqual(0, len(reactor._fds))
             suspend.resume('RESPONSE')
-            self.assertEquals(1, len(reactor._fds))
-            self.assertEquals([WRITE_INTENT], [v.intent for v in reactor._fds.values()])
+            self.assertEqual(1, len(reactor._fds))
+            self.assertEqual([WRITE_INTENT], [v.intent for v in list(reactor._fds.values())])
             reactor.step()
             reactor.step()
             reactor.step()
-            self.assertEquals(['before suspend', 'result = RESPONSE', 'after suspend'], listener.data)
-            self.assertEquals(0, len(reactor._fds))
+            self.assertEqual(['before suspend', 'result = RESPONSE', 'after suspend'], listener.data)
+            self.assertEqual(0, len(reactor._fds))
 
             # cleanup (most) fd's
             listener.close()
@@ -282,12 +282,12 @@ class SuspendTest(WeightlessTestCase):
                 try:
                     suspend.getResult()
                     self.fail()
-                except ValueError, e:
+                except ValueError as e:
                     tbstring = format_exc()
                     yield "result = %s" % tbstring
                 yield 'after suspend'
             listener = MyMockSocket()
-            port = PortNumberGenerator.next()
+            port = next(PortNumberGenerator)
             httpserver = HttpServer(reactor, port, handler, sok=listener)
             httpserver.listen()
             reactor.removeReader(listener) # avoid new connections
@@ -295,15 +295,15 @@ class SuspendTest(WeightlessTestCase):
             reactor.step()
             reactor.step()
             reactor.step()
-            self.assertEquals(reactor, suspend._reactor)
-            self.assertEquals(0, len(reactor._fds))
+            self.assertEqual(reactor, suspend._reactor)
+            self.assertEqual(0, len(reactor._fds))
             def raiser():
                 raise ValueError("BAD VALUE")
             try:
                 raiser()
-            except ValueError, e:
+            except ValueError as e:
                 exc_type, exc_value, exc_traceback = exc_info()
-                suspend.throw(exc_type, exc_value, exc_traceback)
+                suspend.throw(exc_type(exc_value).with_traceback(exc_traceback))
             reactor.step()
             reactor.step()
             reactor.step()
@@ -316,11 +316,11 @@ class SuspendTest(WeightlessTestCase):
     raise ValueError("BAD VALUE")
 ValueError: BAD VALUE
             """ % fileDict)
-            self.assertEquals(3, len(listener.data))
-            self.assertEquals('before suspend', listener.data[0])
+            self.assertEqual(3, len(listener.data))
+            self.assertEqual('before suspend', listener.data[0])
             self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
-            self.assertEquals('after suspend', listener.data[2])
-            self.assertEquals(0, len(reactor._fds))
+            self.assertEqual('after suspend', listener.data[2])
+            self.assertEqual(0, len(reactor._fds))
 
             # cleanup (most) fd's
             listener.close()
@@ -329,24 +329,24 @@ ValueError: BAD VALUE
         # with calltrace; happy path
         trace = CallTrace(returnValues={'addTimer': 'timerToken'})
         suspend = Suspend(doNext=trace.doNext, timeout=3.14, onTimeout=trace.onTimeout)
-        self.assertEquals([], trace.calledMethodNames())
-        self.assertEquals(None, suspend._timer)
+        self.assertEqual([], trace.calledMethodNames())
+        self.assertEqual(None, suspend._timer)
 
         suspend(reactor=trace, whenDone=trace.whenDone)
-        self.assertEquals(['doNext', 'addTimer', 'suspend'], trace.calledMethodNames())
+        self.assertEqual(['doNext', 'addTimer', 'suspend'], trace.calledMethodNames())
         doNextM, addTimerM, suspendM = trace.calledMethods
-        self.assertEquals(((suspend,), {}), (doNextM.args, doNextM.kwargs))
-        self.assertEquals(((), {'seconds': 3.14, 'callback': suspend._timedOut}), (addTimerM.args, addTimerM.kwargs))
-        self.assertEquals(((), {}), (suspendM.args, suspendM.kwargs))
-        self.assertEquals('timerToken', suspend._timer)
+        self.assertEqual(((suspend,), {}), (doNextM.args, doNextM.kwargs))
+        self.assertEqual(((), {'seconds': 3.14, 'callback': suspend._timedOut}), (addTimerM.args, addTimerM.kwargs))
+        self.assertEqual(((), {}), (suspendM.args, suspendM.kwargs))
+        self.assertEqual('timerToken', suspend._timer)
 
         trace.calledMethods.reset()
         suspend._timedOut()
-        self.assertEquals(['onTimeout', 'whenDone'], trace.calledMethodNames())
+        self.assertEqual(['onTimeout', 'whenDone'], trace.calledMethodNames())
         onTimeoutM, whenDoneM = trace.calledMethods
-        self.assertEquals(((), {}), (onTimeoutM.args, onTimeoutM.kwargs))
-        self.assertEquals(((), {}), (whenDoneM.args, whenDoneM.kwargs))
-        self.assertEquals(None, suspend._timer)
+        self.assertEqual(((), {}), (onTimeoutM.args, onTimeoutM.kwargs))
+        self.assertEqual(((), {}), (whenDoneM.args, whenDoneM.kwargs))
+        self.assertEqual(None, suspend._timer)
 
         self.assertRaises(TimeoutException, lambda: suspend.getResult())
 
@@ -355,12 +355,12 @@ ValueError: BAD VALUE
             trace = CallTrace(returnValues={'addTimer': 'timerToken'})
             suspend = Suspend(doNext=trace.doNext, timeout=3.14, onTimeout=trace.onTimeout)
             suspend(reactor=trace, whenDone=trace.whenDone)
-            self.assertEquals(['doNext', 'addTimer', 'suspend'], trace.calledMethodNames())
+            self.assertEqual(['doNext', 'addTimer', 'suspend'], trace.calledMethodNames())
 
             trace.calledMethods.reset()
             suspend._timedOut()
-            self.assertEquals(['onTimeout', 'whenDone'], trace.calledMethodNames())
-            self.assertEquals(True, suspend._settled)
+            self.assertEqual(['onTimeout', 'whenDone'], trace.calledMethodNames())
+            self.assertEqual(True, suspend._settled)
             trace.calledMethods.reset()
             return trace, suspend
 
@@ -371,13 +371,13 @@ ValueError: BAD VALUE
         # resume on settled is a no-op
         trace, suspend = prepare()
         self.assertRaises(AssertionError, lambda: suspend.resume('whatever'))
-        self.assertEquals([], trace.calledMethodNames())
+        self.assertEqual([], trace.calledMethodNames())
         self.assertRaises(TimeoutException, lambda: suspend.getResult())
 
         # throw on settled is a no-op
         trace, suspend = prepare()
-        self.assertRaises(AssertionError, lambda: suspend.throw(RuntimeError, RuntimeError('R'), None))
-        self.assertEquals([], trace.calledMethodNames())
+        self.assertRaises(AssertionError, lambda: suspend.throw(RuntimeError(RuntimeError('R')).with_traceback(None)))
+        self.assertEqual([], trace.calledMethodNames())
         self.assertRaises(TimeoutException, lambda: suspend.getResult())
 
     def testSuspendCouldTimeoutButDidNot(self):
@@ -385,14 +385,14 @@ ValueError: BAD VALUE
         def prepare():
             trace = CallTrace(returnValues={'addTimer': 'timerToken'})
             suspend = Suspend(doNext=trace.doNext, timeout=3.14, onTimeout=trace.onTimeout)
-            self.assertEquals([], trace.calledMethodNames())
+            self.assertEqual([], trace.calledMethodNames())
 
             suspend(reactor=trace, whenDone=trace.whenDone)
-            self.assertEquals(['doNext', 'addTimer', 'suspend'], trace.calledMethodNames())
+            self.assertEqual(['doNext', 'addTimer', 'suspend'], trace.calledMethodNames())
             doNextM, addTimerM, suspendM = trace.calledMethods
-            self.assertEquals(((suspend,), {}), (doNextM.args, doNextM.kwargs))
-            self.assertEquals(((), {'seconds': 3.14, 'callback': suspend._timedOut}), (addTimerM.args, addTimerM.kwargs))
-            self.assertEquals(((), {}), (suspendM.args, suspendM.kwargs))
+            self.assertEqual(((suspend,), {}), (doNextM.args, doNextM.kwargs))
+            self.assertEqual(((), {'seconds': 3.14, 'callback': suspend._timedOut}), (addTimerM.args, addTimerM.kwargs))
+            self.assertEqual(((), {}), (suspendM.args, suspendM.kwargs))
 
             trace.calledMethods.reset()
             return trace, suspend
@@ -400,20 +400,20 @@ ValueError: BAD VALUE
         # with resume
         trace, suspend = prepare()
         suspend.resume('retval')
-        self.assertEquals(['removeTimer', 'whenDone'], trace.calledMethodNames())
+        self.assertEqual(['removeTimer', 'whenDone'], trace.calledMethodNames())
         removeTimerM, whenDoneM = trace.calledMethods
-        self.assertEquals(((), {'token': 'timerToken'}), (removeTimerM.args, removeTimerM.kwargs))
-        self.assertEquals(((), {}), (whenDoneM.args, whenDoneM.kwargs))
+        self.assertEqual(((), {'token': 'timerToken'}), (removeTimerM.args, removeTimerM.kwargs))
+        self.assertEqual(((), {}), (whenDoneM.args, whenDoneM.kwargs))
 
-        self.assertEquals('retval', suspend.getResult())
+        self.assertEqual('retval', suspend.getResult())
 
         # with throw
         trace, suspend = prepare()
-        suspend.throw(RuntimeError, RuntimeError('R'), None)
-        self.assertEquals(['removeTimer', 'whenDone'], trace.calledMethodNames())
+        suspend.throw(RuntimeError(RuntimeError('R')).with_traceback(None))
+        self.assertEqual(['removeTimer', 'whenDone'], trace.calledMethodNames())
         removeTimerM, whenDoneM = trace.calledMethods
-        self.assertEquals(((), {'token': 'timerToken'}), (removeTimerM.args, removeTimerM.kwargs))
-        self.assertEquals(((), {}), (whenDoneM.args, whenDoneM.kwargs))
+        self.assertEqual(((), {'token': 'timerToken'}), (removeTimerM.args, removeTimerM.kwargs))
+        self.assertEqual(((), {}), (whenDoneM.args, whenDoneM.kwargs))
 
         self.assertRaises(RuntimeError, lambda: suspend.getResult())
 
@@ -429,14 +429,14 @@ ValueError: BAD VALUE
 
             suspend = Suspend(doNext=trace.doNext, timeout=3.14, onTimeout=trace.onTimeout)
             suspend(reactor=trace, whenDone=trace.whenDone)
-            self.assertEquals(['doNext', 'addTimer', 'suspend'], trace.calledMethodNames())
+            self.assertEqual(['doNext', 'addTimer', 'suspend'], trace.calledMethodNames())
             trace.calledMethods.reset()
             return trace, suspend
 
         # basic invariant
         trace, suspend = prepare(lambda: None)
         suspend._timedOut()
-        self.assertEquals(['onTimeout', 'whenDone'], trace.calledMethodNames())
+        self.assertEqual(['onTimeout', 'whenDone'], trace.calledMethodNames())
         self.assertRaises(TimeoutException, lambda: suspend.getResult())
 
         # normal exceptions
@@ -456,7 +456,7 @@ Traceback (most recent call last):
 Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway !
                 ''' % fileDict)
             self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(err.getvalue()))
-        self.assertEquals(['onTimeout', 'whenDone'], trace.calledMethodNames())
+        self.assertEqual(['onTimeout', 'whenDone'], trace.calledMethodNames())
         self.assertRaises(TimeoutException, lambda: suspend.getResult())
 
         # fatal exceptions
@@ -468,8 +468,8 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
                 suspend._timedOut()
             except:
                 c, v, t = exc_info()
-                self.assertEquals(['onTimeout'], trace.calledMethodNames())
-                raise c, v, t.tb_next
+                self.assertEqual(['onTimeout'], trace.calledMethodNames())
+                raise c(v).with_traceback(t.tb_next)
 
         self.assertRaises(KeyboardInterrupt, lambda: suspendCallWithOnTimeoutRaising(KeyboardInterrupt()))
         self.assertRaises(SystemExit, lambda: suspendCallWithOnTimeoutRaising(SystemExit()))
@@ -490,9 +490,9 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
             def workInSuspendGenF():
                 this = yield
                 suspend = yield
-                suspend._reactor.addProcess(process=this.next)
+                suspend._reactor.addProcess(process=this.__next__)
                 try:
-                    for i in xrange(5):
+                    for i in range(5):
                         count.append(True)
                         yield
                     while True:
@@ -504,7 +504,7 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
                 except TimeoutException:
                     timedOut.append(True)
                 finally:
-                    suspend._reactor.removeProcess(process=this.next)
+                    suspend._reactor.removeProcess(process=this.__next__)
                 yield  # Wait for GC
 
             def workInSuspend():
@@ -512,7 +512,7 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
                 def doNext(suspend):
                     g.send(suspend)
                 def onTimeout():
-                    g.throw(TimeoutException, TimeoutException(), None)
+                    g.throw(TimeoutException(TimeoutException()).with_traceback(None))
                 return doNext, onTimeout
 
             def suspendWrap():
@@ -529,29 +529,29 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
                 if expectTimeout:
                     self.fail()
             except TimeoutException:
-                self.assertEquals(5, len(count))
-                self.assertEquals(expectTimeout, bool(timedOut))
+                self.assertEqual(5, len(count))
+                self.assertEqual(expectTimeout, bool(timedOut))
 
             if not expectTimeout:
-                self.assertEquals('retval', result)
+                self.assertEqual('retval', result)
 
             testRun.append(True)
 
         # Simple driver - timing out
         testRun = []
         asProcess(test(expectTimeout=True))
-        self.assertEquals(True, bool(testRun))
+        self.assertEqual(True, bool(testRun))
 
         # Simple driver - not timing out
         del testRun[:]
         asProcess(test(expectTimeout=False))
-        self.assertEquals(True, bool(testRun))
+        self.assertEqual(True, bool(testRun))
 
         # http server - timing out
         reactor0 = self.reactor
         self.reactor = reactor1 = Reactor()
         del testRun[:]
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         def reqHandler(**whatever):
             def inner():
                 yield test(expectTimeout=True)
@@ -568,12 +568,12 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
                     allData += sok.recv(4096)
             finally:
                 servert.shutdown()
-        self.assertEquals(True, bool(testRun))
+        self.assertEqual(True, bool(testRun))
 
         # http server - not timing out
         self.reactor = reactor2 = Reactor()
         del testRun[:]
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         def reqHandler(**whatever):
             def inner():
                 yield test(expectTimeout=False)
@@ -590,7 +590,7 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
                     allData += sok.recv(4096)
             finally:
                 servert.shutdown()
-        self.assertEquals(True, bool(testRun))
+        self.assertEqual(True, bool(testRun))
 
         # cleanup (most) stuff
         reactor0.shutdown()
@@ -622,7 +622,7 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
     1/0  # Division by zero exception
 ZeroDivisionError: integer division or modulo by zero
         """ % fileDict)
-        self.assertEquals(ZeroDivisionError, exc_type)
+        self.assertEqual(ZeroDivisionError, exc_type)
         self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(format_exc(exc_traceback)))
 
     def testDoNextThrowsImmediatelyOnFatalExceptions(self):
@@ -645,22 +645,22 @@ ZeroDivisionError: integer division or modulo by zero
                 try:
                     suspend.getResult()
                     self.fail()
-                except ValueError, e:
+                except ValueError as e:
                     tbstring = format_exc()
                     yield "result = %s" % tbstring
                 yield 'after suspend'
             listener = MyMockSocket()
-            port = PortNumberGenerator.next()
+            port = next(PortNumberGenerator)
             httpserver = HttpServer(reactor, port, handler, sok=listener)
             httpserver.listen()
             reactor.removeReader(listener) # avoid new connections
             httpserver._acceptor._accept()
-            self.assertEquals(1, len(reactor._fds))
+            self.assertEqual(1, len(reactor._fds))
             reactor.step()
             reactor.step()
             reactor.step()
-            self.assertEquals(reactor, suspend._reactor)
-            self.assertEquals(0, len(reactor._fds))
+            self.assertEqual(reactor, suspend._reactor)
+            self.assertEqual(0, len(reactor._fds))
             def raiser():
                 raise ValueError("BAD VALUE")
             try:
@@ -668,7 +668,7 @@ ZeroDivisionError: integer division or modulo by zero
             except:
                 exc_value = exc_info()[1]
                 suspend.throw(exc_value)
-            self.assertEquals(1, len(reactor._fds))
+            self.assertEqual(1, len(reactor._fds))
             reactor.step()
             reactor.step()
             reactor.step()
@@ -679,11 +679,11 @@ ZeroDivisionError: integer division or modulo by zero
         raise self._exception[0], self._exception[1], self._exception[2]
     ValueError: BAD VALUE
             """ % fileDict)
-            self.assertEquals(3, len(listener.data))
-            self.assertEquals('before suspend', listener.data[0])
+            self.assertEqual(3, len(listener.data))
+            self.assertEqual('before suspend', listener.data[0])
             self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
-            self.assertEquals('after suspend', listener.data[2])
-            self.assertEquals(0, len(reactor._fds))
+            self.assertEqual('after suspend', listener.data[2])
+            self.assertEqual(0, len(reactor._fds))
 
             # cleanup (most) fd's
             listener.close()
@@ -693,14 +693,14 @@ ZeroDivisionError: integer division or modulo by zero
         s = Suspend()
         s(reactor, whenDone=lambda:None)
         s.resume('state')
-        self.assertEquals('state', s.getResult())
+        self.assertEqual('state', s.getResult())
 
     def testGetNoneResult(self):
         reactor = CallTrace('reactor')
         s = Suspend()
         s(reactor, whenDone=lambda:None)
         s.resume()
-        self.assertEquals(None, s.getResult())
+        self.assertEqual(None, s.getResult())
 
     def testGetResultRaisesException(self):
         reactor = CallTrace('reactor')
@@ -719,7 +719,7 @@ ZeroDivisionError: integer division or modulo by zero
             three = MockSocket()
             reactor.addWriter(one, lambda: None)
             reactor.addReader(two, lambda: None)
-            reactor.addReader(three, handler().next)
+            reactor.addReader(three, handler().__next__)
             reactor.step()
             self.assertTrue(one.fileno() in reactor._fds)
             reactor.cleanup(one)

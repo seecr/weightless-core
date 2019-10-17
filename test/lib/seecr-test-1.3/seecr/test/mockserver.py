@@ -2,7 +2,7 @@
 #
 # "Seecr Test" provides test tools.
 #
-# Copyright (C) 2012 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2012, 2015 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Seecr Test"
 #
@@ -23,16 +23,15 @@
 ## end license ##
 
 from sys import stdout
-from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER
+from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, AF_INET, SOCK_STREAM, IPPROTO_TCP
 from struct import pack
 from select import select
 from time import sleep
 from threading import Thread
-from urlparse import urlsplit
-from cgi import parse_qs
+from urllib.parse import urlsplit, parse_qs
 
 # _httpspec is originally from Weightless (http://weightless.io)
-from _httpspec import REGEXP, parseHeaders
+from ._httpspec import REGEXP, parseHeaders
 
 
 class MockServer(Thread):
@@ -40,7 +39,7 @@ class MockServer(Thread):
         Thread.__init__(self)
         self.daemon = True
         address = (ipAddress, port)
-        self.socket = socket()
+        self.socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
         self.socket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         self.socket.setsockopt(SOL_SOCKET, SO_LINGER, pack('ii', 0, 0))
         self.socket.bind(address)
@@ -71,24 +70,25 @@ class MockServer(Thread):
                 contentLength = None
                 request = c.recv(4096)
                 while True:
-                    if not '\r\n\r\n' in request:
+                    if not b'\r\n\r\n' in request:
                         request += c.recv(4096)
                         continue
                     if contentLength:
                         if contentLength > len(body):
                             request += c.recv(contentLength - len(body))
+                            header, body = request.split(b'\r\n\r\n')
                         break
-                    header, body = request.split('\r\n\r\n')
-                    for h in header.split('\r\n'):
-                        if h.startswith('Content-Length'):
-                            contentLength = int(h.split(':')[1])
+                    header, body = request.split(b'\r\n\r\n')
+                    for h in header.split(b'\r\n'):
+                        if h.startswith(b'Content-Length'):
+                            contentLength = int(h.split(b':')[1])
                     if not contentLength:
                         break
 
                 self.requests.append(request)
 
                 match = REGEXP.REQUEST.match(request)
-                RequestURI = match.group('RequestURI')
+                RequestURI = match.group('RequestURI').decode('ascii')
                 scheme, netloc, path, query, fragments = urlsplit(RequestURI)
                 Host, port = None, None
                 if netloc:
@@ -108,8 +108,9 @@ class MockServer(Thread):
                     query=query,
                     fragments=fragments,
                     arguments=arguments,
-                    Headers=Headers)
-                c.send(response)
+                    Headers=Headers,
+                    Body=body)
+                c.send(_maybeEncodeAsUtf8(response))
                 c.close()
 
         self.socket.close()
@@ -121,3 +122,9 @@ class MockServer(Thread):
             return self.responses.pop(0)
         return 'HTTP/1.0 500 Internal server error\r\n\r\nMockServer ran out of responses.'
 
+
+def _maybeEncodeAsUtf8(in_):
+    if type(in_) != str:
+        return in_
+
+    return in_.encode()

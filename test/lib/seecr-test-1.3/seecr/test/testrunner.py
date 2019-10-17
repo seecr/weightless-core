@@ -1,25 +1,25 @@
 ## begin license ##
-# 
-# "Seecr Test" provides test tools. 
-# 
-# Copyright (C) 2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+#
+# "Seecr Test" provides test tools.
+#
+# Copyright (C) 2012, 2014-2015, 2018 Seecr (Seek You Too B.V.) http://seecr.nl
+#
 # This file is part of "Seecr Test"
-# 
+#
 # "Seecr Test" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Seecr Test" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Seecr Test"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 import types
@@ -27,6 +27,7 @@ from sys import stdout, stderr, exit
 from time import time
 from traceback import print_exc
 from unittest import TestSuite as UnitTestTestSuite, TestLoader as UnitTestTestLoader, TestResult as UnitTestResult, TestCase
+from optparse import OptionParser
 
 
 class TestResult(UnitTestResult):
@@ -64,6 +65,20 @@ class TestResult(UnitTestResult):
         elif self.dots:
             self._errWrite('.')
 
+    def addSkip(self, test, reason):
+        UnitTestResult.addSkip(self, test, reason)
+        if self.showAll:
+            self._errWrite('skip {0!r}\n'.format(reason))
+        elif self.dots:
+            self._errWrite('s')
+
+    def addExpectedFailure(self, test, err):
+        UnitTestResult.addExpectedFailure(self, test, err)
+        if self.showAll:
+            self._errWrite('expected failure\n')
+        elif self.dots:
+            self._errWrite('e')
+
     def printResult(self, timeTaken):
         self._write('\n')
         self._printErrorList('ERROR', self.errors)
@@ -75,16 +90,19 @@ class TestResult(UnitTestResult):
         self._write("\n")
         if not self.wasSuccessful():
             output = "FAILED ("
-            failed, errored = map(len, (self.failures, self.errors))
+            failed, errored = list(map(len, (self.failures, self.errors)))
             if failed:
                 output += "failures=%d" % failed
             if errored:
                 if failed: output += ", "
                 output += "errors=%d" % errored
-            self._write(output + ")\n")
+            self._write(output + ")")
         else:
-            self._write("OK\n")
-        self._write('\033[0m')
+            self._write("OK")
+        skipped = len(self.skipped)
+        if skipped:
+            self._write(' skipped=%d' % skipped)
+        self._write('\n\033[0m')
 
     def _printErrorList(self, flavour, errors):
         for test, err in errors:
@@ -133,19 +151,53 @@ class TestGroup(object):
                 suite.addTest(self._loader.loadTestsFromName(testcase[1], testclass))
         return suite
 
+
+class TestArguments(object):
+    def __init__(self, args=None):
+        if args is None:
+            from sys import argv
+            args = argv[1:]
+        parser = OptionParser()
+        parser.add_option('-g', '--group', help='Group', default=None)
+        parser.add_option('-l', '--list', default=False, action='store_true', help='List groups')
+        parser.add_option('', '--fast', action="store_true", help='Enable fastmode', default=False)
+        parser.add_option('-v', '--verbose', action="store_true", help='Be more verbose', default=False)
+        options, self.testnames = parser.parse_args(args)
+        self.groupnames = None if options.group is None else [options.group]
+        self.fastMode = options.fast
+        self.verbose = options.verbose
+        self.listGroups = options.list
+
 class TestRunner(object):
-    def __init__(self):
+    def __init__(self, verbose=None):
         self._groups = []
         self._stream = stdout
+        self._args = self.parseArgs()
+        if verbose is None:
+            verbose = self._args.verbose
+        self._verbosity = 2 if verbose else 1
+        self.fastMode = self._args.fastMode
 
     def addGroup(self, *args, **kwargs):
         self._groups.append(TestGroup(*args, **kwargs))
 
-    def run(self, testnames=None, groupnames=None):
+    @staticmethod
+    def parseArgs(args=None):
+        return TestArguments(args=args)
+
+    def run(self, testnames='?', groupnames='?'):
+        if groupnames == '?':
+            groupnames = self._args.groupnames
+        if testnames == '?':
+            testnames = self._args.testnames
         t0 = time()
-        testResult = TestResult()
-        quit = False
+        testResult = TestResult(verbosity=self._verbosity)
         groups = self._groups
+        if self._args.listGroups:
+            print('Groups:')
+            for g in sorted(groups):
+                print(' -', g.name)
+            exit(0)
         if groupnames:
             groups = (group for group in self._groups if group.name in groupnames)
         for group in groups:
@@ -153,7 +205,7 @@ class TestRunner(object):
             if not suite.countTestCases():
                 continue
             try:
-                group.setUp() 
+                group.setUp()
                 suite.run(result=testResult, state=group.state)
             except:
                 print_exc()
@@ -163,6 +215,7 @@ class TestRunner(object):
         timeTaken = time() - t0
         testResult.printResult(timeTaken)
         exit(not testResult.wasSuccessful())
+
 
 
 class TestSuite(UnitTestTestSuite):
@@ -206,15 +259,15 @@ class TestLoader(UnitTestTestLoader):
 
         if type(obj) == types.ModuleType:
             return self.loadTestsFromModule(obj)
-        elif (isinstance(obj, (type, types.ClassType)) and 
+        elif (isinstance(obj, type) and
               issubclass(obj, TestCase)):
             return self.loadTestsFromTestCase(obj)
-        elif (type(obj) == types.UnboundMethodType and 
-              isinstance(parent, (type, types.ClassType)) and 
+        elif (type(obj) == types.UnboundMethodType and
+              isinstance(parent, type) and
               issubclass(parent, TestCase)):
             return TestSuite([parent(obj.__name__)])
         elif isinstance(obj, TestSuite):
-            return obj 
+            return obj
         elif hasattr(obj, '__call__'):
             test = obj()
             if isinstance(test, TestSuite):

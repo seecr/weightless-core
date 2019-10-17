@@ -24,19 +24,19 @@
 #
 ## end license ##
 
-from __future__ import with_statement
+
 
 from weightlesstestcase import WeightlessTestCase
 from seecr.test.portnumbergenerator import PortNumberGenerator
 
 import sys
-from StringIO import StringIO
+from io import StringIO
 from re import compile
 from select import select
 from socket import socket, SHUT_RDWR, SO_REUSEADDR, SOL_SOCKET
 from subprocess import Popen, PIPE
 from time import sleep
-from urllib2 import urlopen, Request, urlopen
+from urllib.request import urlopen, Request, urlopen
 
 from weightless.core import compose, Observable, Transparant, be, autostart
 from weightless.io import Gio, Reactor, Server
@@ -70,7 +70,7 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
     def assertNetStat(self, local, remote, state):
         statelines = getNetStat(local, remote)
         if not state:
-            self.assertEquals(0, len(statelines), statelines)
+            self.assertEqual(0, len(statelines), statelines)
         else:
             self.assertTrue(state in statelines[0], statelines[0])
 
@@ -88,37 +88,37 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
         with self.loopingReactor():
             result1 = urlopen(Request('http://localhost:%s/' % self.port, data='Johan')).read()
             result2 = urlopen(Request('http://localhost:%s/' % self.port, data='Erik')).read()
-        self.assertEquals('Hello Johan', result1)
-        self.assertEquals('Hello Erik', result2)
+        self.assertEqual('Hello Johan', result1)
+        self.assertEqual('Hello Erik', result2)
 
     def testContentLenght(self):
         body = []
         class MyServer(object):
             def processRequest(this, Method, RequestURI, HTTPVersion, Headers, **kwargs):
-                length = int(Headers['content-length'].keys()[0])
+                length = int(list(Headers['content-length'].keys())[0])
                 @autostart
                 def destination(result):
                     while True:
                         result += (yield)
                 result = []
                 yield http.copyBytes(length, destination(result))
-                self.assertEquals('This is a body', ''.join(result))
+                self.assertEqual('This is a body', ''.join(result))
                 yield http.ok()
                 yield http.headers('a', 'b')
                 yield 'Hello ' + ''.join(result)
         self.httpprotocol.addObserver(MyServer())
         with self.loopingReactor():
             result1 = urlopen(Request('http://localhost:%s/' % self.port, data='This is a body')).read()
-        self.assertEquals('Hello This is a body', result1)
+        self.assertEqual('Hello This is a body', result1)
 
     def testOneRequest(self):
         done = []
         class MyServer(object):
             def processRequest(this, Method, RequestURI, HTTPVersion, Headers, **kwargs):
-                self.assertEquals('GET', Method)
-                self.assertEquals('/seven', RequestURI)
-                self.assertEquals('1.0', HTTPVersion)
-                self.assertEquals({}, Headers)
+                self.assertEqual('GET', Method)
+                self.assertEqual('/seven', RequestURI)
+                self.assertEqual('1.0', HTTPVersion)
+                self.assertEqual({}, Headers)
                 yield 'Hello there'
                 done.append(True)
         self.httpprotocol.addObserver(MyServer())
@@ -127,8 +127,8 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
         sok.send('GET /seven HTTP/1.0\r\n\r\n')
         while not done:
             self.reactor.step()
-        self.assertEquals([True], done)
-        self.assertEquals('Hello there', sok.recv(99))
+        self.assertEqual([True], done)
+        self.assertEqual('Hello there', sok.recv(99))
 
     def testHttp11TwoRequests(self):
         done = []
@@ -145,14 +145,14 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
         while not done:
             self.reactor.step()
         response = sok.recv(999)
-        self.assertEquals('HTTP/1.1 200 Ok\r\n\r\nEcho /six', response)
+        self.assertEqual('HTTP/1.1 200 Ok\r\n\r\nEcho /six', response)
         sok.send('GET /seven HTTP/1.1\r\n\r\n')
         done = []
         while not done:
             self.reactor.step()
-        self.assertEquals([True], done)
+        self.assertEqual([True], done)
         response = sok.recv(999)
-        self.assertEquals('HTTP/1.1 200 Ok\r\n\r\nEcho /seven', response)
+        self.assertEqual('HTTP/1.1 200 Ok\r\n\r\nEcho /seven', response)
         sok.close() # need to do this, because we use HTTP/1.1
         self.reactor.step()
 
@@ -166,12 +166,12 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
         sok.connect(('localhost', self.port)) # ONE connection!
         sok.send('GET /one HTTP/1.1\r\n\r\n')
         self.reactor.step().step().step()
-        self.assertEquals('answer 1', sok.recv(999))
+        self.assertEqual('answer 1', sok.recv(999))
         self.reactor.step()
-        self.assertEquals('answer 2', sok.recv(999))
+        self.assertEqual('answer 2', sok.recv(999))
         sok.shutdown(1)
         self.reactor.step()
-        self.assertEquals('', sok.recv(999))
+        self.assertEqual('', sok.recv(999))
         sok.close()
 
     def testPOSTandThenGET(self):
@@ -181,7 +181,7 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
                     return this.handle(ContentLength)
             def handle(this, ContentLength):
                 body = yield http.readRe('(?P<BODY>.*)', ContentLength)
-                self.assertEquals('XXYYZZ', body['BODY'])
+                self.assertEqual('XXYYZZ', body['BODY'])
                 yield http.ok()
                 yield http.noheaders()
                 yield 'this was the post handler'
@@ -200,18 +200,18 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
         sok.connect(('localhost', self.port)) # ONE connection!
         sok.send('POST /one HTTP/1.1\r\nContent-Length: %s\r\n\r\n' % len(body) + body)
         self.reactor.step().step().step()
-        self.assertEquals('HTTP/1.1 200 Ok\r\n', sok.recv(999))
+        self.assertEqual('HTTP/1.1 200 Ok\r\n', sok.recv(999))
         self.reactor.step()
-        self.assertEquals('\r\n', sok.recv(999))
+        self.assertEqual('\r\n', sok.recv(999))
         self.reactor.step()
-        self.assertEquals('this was the post handler', sok.recv(999))
+        self.assertEqual('this was the post handler', sok.recv(999))
         sok.send('GET /two HTTP/1.1\r\n\r\n')
         self.reactor.step().step()
-        self.assertEquals('HTTP/1.1 200 Ok\r\n', sok.recv(999))
+        self.assertEqual('HTTP/1.1 200 Ok\r\n', sok.recv(999))
         self.reactor.step()
-        self.assertEquals('\r\n', sok.recv(999))
+        self.assertEqual('\r\n', sok.recv(999))
         self.reactor.step()
-        self.assertEquals('this was the GET handler', sok.recv(999))
+        self.assertEqual('this was the GET handler', sok.recv(999))
         sok.close()
         self.reactor.step()
 
@@ -226,7 +226,7 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
                         while True: yield
                     yield http.copyBytes(ContentLength, devNull())
                 wrong = yield 'Path = ' + str(RequestURI)
-                self.assertEquals(None, wrong) # Second request must not end up here
+                self.assertEqual(None, wrong) # Second request must not end up here
                 done.append(True)
         self.httpprotocol.addObserver(MyServer())
         sok = socket()
@@ -236,11 +236,11 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
         sok.send('GET /two HTTP/1.1\r\nConnection: close\r\n\r\n')
         while not done == [True]:
             self.reactor.step()
-        self.assertEquals([True], done)
-        self.assertEquals('HTTP/1.1 200 Ok\r\nPath = /one', sok.recv(99))
+        self.assertEqual([True], done)
+        self.assertEqual('HTTP/1.1 200 Ok\r\nPath = /one', sok.recv(99))
         while not done == [True, True]:
             self.reactor.step()
-        self.assertEquals('HTTP/1.1 200 Ok\r\nPath = /two', sok.recv(99))
+        self.assertEqual('HTTP/1.1 200 Ok\r\nPath = /two', sok.recv(99))
         sok.close()
 
     def testConnectionCloseForHTTP10afterPIPELINING(self):
@@ -255,18 +255,18 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
         sok.send('GET /one HTTP/1.1\r\n\r\n') #pipeline 2 requests
         sok.send('GET /two HTTP/1.0\r\n\r\n')
         self.reactor.step().step().step()
-        self.assertEquals('HTTP/1.1 200 Ok\r\n', sok.recv(999))
+        self.assertEqual('HTTP/1.1 200 Ok\r\n', sok.recv(999))
         self.reactor.step()
-        self.assertEquals('Content-Length: 3\r\n\r\n', sok.recv(999))
+        self.assertEqual('Content-Length: 3\r\n\r\n', sok.recv(999))
         self.reactor.step()
-        self.assertEquals('Bye', sok.recv(999))
+        self.assertEqual('Bye', sok.recv(999))
         self.reactor.step()
-        self.assertEquals('HTTP/1.1 200 Ok\r\n', sok.recv(999))
+        self.assertEqual('HTTP/1.1 200 Ok\r\n', sok.recv(999))
         self.reactor.step()
-        self.assertEquals('Content-Length: 3\r\n\r\n', sok.recv(999))
+        self.assertEqual('Content-Length: 3\r\n\r\n', sok.recv(999))
         self.reactor.step()
-        self.assertEquals('Bye', sok.recv(999))
-        self.assertEquals('', sok.recv(999))  # empty string means 'closed' in socket land
+        self.assertEqual('Bye', sok.recv(999))
+        self.assertEqual('', sok.recv(999))  # empty string means 'closed' in socket land
 
     def testTimerFiresWhenConnectedClientIsSilent(self):
         sok = socket()
@@ -274,12 +274,12 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
         localport = sok.getsockname()[1]
         with self.loopingReactor():
             response = sok.recv(9999)
-        self.assertEquals('HTTP/1.1 408 Request Timeout\r\n\r\n', response)
+        self.assertEqual('HTTP/1.1 408 Request Timeout\r\n\r\n', response)
         sok.close()
         stat = getNetStat(self.port, localport)
         self.assertTrue('TIME_WAIT' in stat[0], stat[0])
         stat = getNetStat(localport, self.port)
-        self.assertEquals(0, len(stat), stat)
+        self.assertEqual(0, len(stat), stat)
 
     def testTimerWhenInvalidRequest(self):
         sok = socket()
@@ -288,13 +288,13 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
         sok.send('some garbage'*1024) # some kB garbage to trigger buffer protection
         sok.send('\rxyz') # unterminated end of Headers
         self.reactor.step().step().step().step()
-        self.assertEquals('HTTP/1.1 413 Request Entity Too Large\r\n\r\n', sok.recv(999))
+        self.assertEqual('HTTP/1.1 413 Request Entity Too Large\r\n\r\n', sok.recv(999))
         #self.reactor.step()
         #self.assertEquals('\r\n', sok.recv(999))
         sok.close()
 
     def testReuseAddress(self):
-        remoteport = PortNumberGenerator.next()
+        remoteport = next(PortNumberGenerator)
         server = socket()
         server.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         server.bind(('127.0.0.1', remoteport))
@@ -310,7 +310,7 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
             self.fail('bind must succeed')
 
     def testCloseStatesRemoteFirst(self):
-        remoteport = PortNumberGenerator.next()
+        remoteport = next(PortNumberGenerator)
         server = socket()
         server.bind(('127.0.0.1', remoteport))
         server.listen(1)
@@ -337,12 +337,12 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
             self.fail('re-bind must raise Address Already in Use Exception')
         except AssertionError:
             raise
-        except Exception, e:
+        except Exception as e:
             pass
 
 
     def testCloseStatesLocalFirst(self):
-        remoteport = PortNumberGenerator.next()
+        remoteport = next(PortNumberGenerator)
         server = socket()
         server.bind(('localhost', remoteport))
         server.listen(1)
@@ -381,12 +381,12 @@ class HttpProtocolIntegrationTest(WeightlessTestCase):
         localport = sok.getsockname()[1]
         sok.send('GET /one HTTP/1.1\r\n\r\n')
         self.reactor.step().step().step().step().step()
-        self.assertEquals('HTTP/1.1 200 Ok\r\n\r\nBye', sok.recv(999))
+        self.assertEqual('HTTP/1.1 200 Ok\r\n\r\nBye', sok.recv(999))
         sok.shutdown(SHUT_RDWR)     # initiate shutdown/close
         self.assertNetStat(localport, remoteport, 'FIN_WAIT')
         self.assertNetStat(remoteport, localport, 'CLOSE_WAIT')
         self.reactor.step()
-        self.assertEquals('', sok.recv(999))  # empty string means 'closed' in socket land
+        self.assertEqual('', sok.recv(999))  # empty string means 'closed' in socket land
         self.assertNetStat(localport, remoteport, 'TIME_WAIT')
         self.assertNetStat(remoteport, localport, None)
 

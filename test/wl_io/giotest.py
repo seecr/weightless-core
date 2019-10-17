@@ -1,4 +1,4 @@
-from __future__ import with_statement
+
 ## begin license ##
 #
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
@@ -55,8 +55,8 @@ class GioTest(WeightlessTestCase):
             try:
                 g = Gio(reactor(), handler())
                 self.fail('must not come here')
-            except AssertionError, e:
-                self.assertEquals('Gio: No context available.', str(e))
+            except AssertionError as e:
+                self.assertEqual('Gio: No context available.', str(e))
 
             return
             yield
@@ -79,7 +79,7 @@ class GioTest(WeightlessTestCase):
                 self.fail('Must not come here')
             except StopIteration:
                 pass
-            self.assertEquals([], g._contextstack)
+            self.assertEqual([], g._contextstack)
         finally:
             lhs.close(); rhs.close()
 
@@ -97,7 +97,7 @@ class GioTest(WeightlessTestCase):
             self.fail('Must not come here')
         except GeneratorExit:
             pass
-        self.assertEquals([], g._contextstack)
+        self.assertEqual([], g._contextstack)
 
     def XXXtestGioAsContext(self):
         # TS: Disabled: file-contexts don't work with epoll' Reactor since a file-fd is *always* readable and writable.
@@ -109,11 +109,11 @@ class GioTest(WeightlessTestCase):
                 yield 'write this!'
         Gio(self.reactor, myProcessor())
         self.reactor.step()
-        self.assertEquals('read this!', self.dataIn[:19])
+        self.assertEqual('read this!', self.dataIn[:19])
         self.reactor.step()
-        self.assertEquals('read this!write this!', open(self.tempfile).read()[:21])
-        self.assertEquals({}, self.reactor._readers)
-        self.assertEquals({}, self.reactor._writers)
+        self.assertEqual('read this!write this!', open(self.tempfile).read()[:21])
+        self.assertEqual({}, self.reactor._readers)
+        self.assertEqual({}, self.reactor._writers)
 
     def XXXtestAlternate(self):
         # TS: Disabled: file-contexts don't work with epoll' Reactor since a file-fd is *always* readable and writable.
@@ -135,8 +135,8 @@ class GioTest(WeightlessTestCase):
         with self.loopingReactor():
             while not done:
                 pass
-        self.assertEquals('1234abcd', open(self.tempdir+'/1').read())
-        self.assertEquals('abcd1234', open(self.tempdir+'/2').read())
+        self.assertEqual('1234abcd', open(self.tempdir+'/1').read())
+        self.assertEqual('abcd1234', open(self.tempdir+'/2').read())
 
     def XXXtestNesting(self):
         # TS: Disabled: file-contexts don't work with epoll' Reactor since a file-fd is *always* readable and writable.
@@ -156,8 +156,8 @@ class GioTest(WeightlessTestCase):
         Gio(self.reactor, swapContents())
         while not done:
             self.reactor.step()
-        self.assertEquals('1234abcd', open(self.tempdir+'/1').read())
-        self.assertEquals('abcd1234', open(self.tempdir+'/2').read())
+        self.assertEqual('1234abcd', open(self.tempdir+'/1').read())
+        self.assertEqual('abcd1234', open(self.tempdir+'/2').read())
 
     def testSocketHandshake(self):
         with Reactor() as reactor:
@@ -169,12 +169,12 @@ class GioTest(WeightlessTestCase):
             def jack(channel):
                 with channel:
                     x = yield 'My name is Jack'
-                    self.assertEquals(None, x)
+                    self.assertEqual(None, x)
                     self.response = yield
             Gio(reactor, jack(SocketContext(lhs)))
             Gio(reactor, peter(SocketContext(rhs)))
             reactor.step().step().step().step()
-            self.assertEquals('Hello Jack', self.response)
+            self.assertEqual('Hello Jack', self.response)
 
     def testLargeBuffers(self):
         with stdout_replaced():
@@ -194,10 +194,10 @@ class GioTest(WeightlessTestCase):
                 while sum(len(message) for message in messages) < messageSize:
                     reactor.step()
                 self.assertTrue(len(messages) > 1) # test is only sensible when multiple parts are sent
-                self.assertEquals(messageSize, len(''.join(messages)))
+                self.assertEqual(messageSize, len(''.join(messages)))
 
     def testHowToCreateAHttpServer(self):
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         # SERVER
         class HttpServer:
             def __init__(self, reactor, port):
@@ -234,7 +234,7 @@ class GioTest(WeightlessTestCase):
         Gio(self.reactor, httpClient())
         while not responses:
             self.reactor.step()
-        self.assertEquals(['HTTP/1.1 200 Ok\r\n\r\nGoodbye'], responses)
+        self.assertEqual(['HTTP/1.1 200 Ok\r\n\r\nGoodbye'], responses)
         server.stop()
 
     def testTimerDoesNotFire(self):
@@ -253,9 +253,9 @@ class GioTest(WeightlessTestCase):
             g = Gio(reactor(), handler())
             for _ in range(42):
                 yield
-            self.assertEquals([True], done)
-            self.assertEquals([], reactor()._timers)
-            self.assertEquals([], g._contextstack)
+            self.assertEqual([True], done)
+            self.assertEqual([], reactor()._timers)
+            self.assertEqual([], g._contextstack)
 
         asProcess(test())
 
@@ -267,7 +267,7 @@ class GioTest(WeightlessTestCase):
                 try:
                     with SocketContext(lhs):  # quick hack, can block.
                         with Timer(0.01):
-                            for i in xrange(999999):
+                            for i in range(999999):
                                 yield 'a'
                 except TimeoutException:
                     done.append(False)
@@ -277,9 +277,9 @@ class GioTest(WeightlessTestCase):
             g = Gio(reactor(), handler())
             while not done:
                 yield
-            self.assertEquals([False], done)
-            self.assertEquals([], reactor()._timers)
-            self.assertEquals([], g._contextstack)
+            self.assertEqual([False], done)
+            self.assertEqual([], reactor()._timers)
+            self.assertEqual([], g._contextstack)
 
         asProcess(test())
 
@@ -292,7 +292,7 @@ class GioTest(WeightlessTestCase):
                     with SocketContext(lhs):  # quick hack, can block.
                         with Timer(0.01):
                             try:
-                                for i in xrange(999999):
+                                for i in range(999999):
                                     yield 'a'
                             except TimeoutException:
                                 done.append(False)
@@ -302,8 +302,8 @@ class GioTest(WeightlessTestCase):
             g = Gio(reactor(), handler())
             while done != [False]:
                 yield
-            self.assertEquals([False], done)
-            self.assertEquals([], reactor()._timers)
-            self.assertEquals([], g._contextstack)
+            self.assertEqual([False], done)
+            self.assertEqual([], reactor()._timers)
+            self.assertEqual([], g._contextstack)
 
         asProcess(test())

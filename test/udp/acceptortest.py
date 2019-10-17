@@ -37,9 +37,9 @@ from weightless.udp import Acceptor
 class UdpAcceptorTest(TestCase):
     def testStartListening(self):
         reactor = CallTrace()
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         Acceptor(reactor, port, lambda sok: lambda: None)
-        self.assertEquals('addReader', reactor.calledMethods[0].name)
+        self.assertEqual('addReader', reactor.calledMethods[0].name)
         sok = reactor.calledMethods[0].args[0]
         out = Popen(['netstat', '--numeric', '--listening', '--udp'], stdout=PIPE, stderr=PIPE).communicate()[0]
         self.assertTrue(str(port) in out, out)
@@ -54,24 +54,24 @@ class UdpAcceptorTest(TestCase):
                 data.append(sock.recvfrom(2048))
             return handle
         reactor = CallTrace()
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         Acceptor(reactor, port, sinkFactory)
-        self.assertEquals('addReader', reactor.calledMethods[0].name)
+        self.assertEqual('addReader', reactor.calledMethods[0].name)
         handleCallback = reactor.calledMethods[0].args[1]
         sok = socket(AF_INET, SOCK_DGRAM)
         sok.sendto("TEST", ('localhost', port))
         handleCallback()
         contents, remoteAddr = data[0]
-        self.assertEquals("TEST", contents)
+        self.assertEqual("TEST", contents)
         sok.sendto("ANOTHER TEST", ('localhost', port))
         handleCallback()
-        self.assertEquals(2, len(data))
+        self.assertEqual(2, len(data))
         reactor.calledMethods[0].args[0].close()
         sok.close()
 
     def testAcceptorWithPrio(self):
         reactor = CallTrace()
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         Acceptor(reactor, port, lambda sok: None, prio=5)
-        self.assertEquals('addReader', reactor.calledMethods[0].name)
-        self.assertEquals(5, reactor.calledMethods[0].kwargs['prio'])
+        self.assertEqual('addReader', reactor.calledMethods[0].name)
+        self.assertEqual(5, reactor.calledMethods[0].kwargs['prio'])

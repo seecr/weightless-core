@@ -30,17 +30,19 @@ from types import GeneratorType, FunctionType
 
 from os.path import dirname, abspath, isdir, join            #DO_NOT_DISTRIBUTE
 from sys import version_info                                 #DO_NOT_DISTRIBUTE
-pycmd = "python%s.%s" % version_info[:2]                     #DO_NOT_DISTRIBUTE
-_mydir = abspath(dirname(__file__))                          #DO_NOT_DISTRIBUTE
-_projectdir = dirname(dirname(_mydir))                       #DO_NOT_DISTRIBUTE
-if isdir(join(_mydir, '.svn')) or isdir(join(_projectdir, '.git')):  #DO_NOT_DISTRIBUTE
-    from os import system                                    #DO_NOT_DISTRIBUTE
-    status = system(                                         #DO_NOT_DISTRIBUTE
-        "cd %s/../..; %s setup.py build_ext --inplace"       #DO_NOT_DISTRIBUTE
-        % (abspath(dirname(__file__)), pycmd))               #DO_NOT_DISTRIBUTE
-    if status > 0:                                           #DO_NOT_DISTRIBUTE
-        import sys                                           #DO_NOT_DISTRIBUTE
-        sys.exit(status)                                     #DO_NOT_DISTRIBUTE
+# TS: FIXME Re-enable When Py3 stuff works.
+print("Hello, re-enable C-building stuffs")
+#pycmd = "python%s.%s" % version_info[:2]                     #DO_NOT_DISTRIBUTE
+#_mydir = abspath(dirname(__file__))                          #DO_NOT_DISTRIBUTE
+#_projectdir = dirname(dirname(_mydir))                       #DO_NOT_DISTRIBUTE
+#if isdir(join(_mydir, '.svn')) or isdir(join(_projectdir, '.git')):  #DO_NOT_DISTRIBUTE
+#    from os import system                                    #DO_NOT_DISTRIBUTE
+#    status = system(                                         #DO_NOT_DISTRIBUTE
+#        "cd %s/../..; %s setup.py build_ext --inplace"       #DO_NOT_DISTRIBUTE
+#        % (abspath(dirname(__file__)), pycmd))               #DO_NOT_DISTRIBUTE
+#    if status > 0:                                           #DO_NOT_DISTRIBUTE
+#        import sys                                           #DO_NOT_DISTRIBUTE
+#        sys.exit(status)                                     #DO_NOT_DISTRIBUTE
 
 import platform
 if hasattr(platform, 'python_implementation'):
@@ -64,7 +66,7 @@ except ImportError as e:
         return type(o) is GeneratorType
     class DeclineMessage(Exception):
         pass
-    from ._compose_py import compose as _compose, Yield
+    from ._compose_py import compose as _compose, Yield, value_with_pushback
     from ._local_py import local
     from ._tostring_py import tostring
     cextension = False

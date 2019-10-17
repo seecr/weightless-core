@@ -54,7 +54,7 @@ class HttpProtocolTest(TestCase):
 
     def processConnection(self):
         stack = compose(self.p.processConnection())
-        self.assertEquals(None, stack.next()) # i.e. it starts with accepting data
+        self.assertEqual(None, next(stack)) # i.e. it starts with accepting data
         return stack
 
     def testRequestHandledByDifferentObservers(self):
@@ -70,12 +70,12 @@ class HttpProtocolTest(TestCase):
         self.addHandler(GetHandler())
         stack = self.processConnection()
         response = stack.send('GET / HTTP/1.1\r\n\r\n')
-        self.assertEquals('HTTP/1.1 200 Ok\r\n', response)
-        self.assertEquals('hello GET', stack.next())
-        stack.next()
+        self.assertEqual('HTTP/1.1 200 Ok\r\n', response)
+        self.assertEqual('hello GET', next(stack))
+        next(stack)
         response = stack.send('HEAD / HTTP/1.1\r\n\r\n')
-        self.assertEquals('HTTP/1.1 200 Ok\r\n', response)
-        self.assertEquals('hello POST', stack.next())
+        self.assertEqual('HTTP/1.1 200 Ok\r\n', response)
+        self.assertEqual('hello POST', next(stack))
 
     def testForwardParsedGETRequest(self):
         args = []
@@ -89,19 +89,19 @@ class HttpProtocolTest(TestCase):
         header = 'Content-Type: text/xml; encoding="utf-8"; version="1.0"'
         message = 'GET %s HTTP/1.1\r\n%s\r\n\r\n' % (uri, header)
         response = stack.send(message)
-        self.assertEquals('HTTP/1.....etc', response)
+        self.assertEqual('HTTP/1.....etc', response)
         args = args[0]
-        self.assertEquals('HTTP/1.....etc', response)
-        self.assertEquals(args['fragment'], 'ref')
-        self.assertEquals(args['RequestURI'], 'http://host:80/path;user=jan/show;a=all?&a=b&a=c#ref')
-        self.assertEquals(args['netloc'], ('host', '80')),
+        self.assertEqual('HTTP/1.....etc', response)
+        self.assertEqual(args['fragment'], 'ref')
+        self.assertEqual(args['RequestURI'], 'http://host:80/path;user=jan/show;a=all?&a=b&a=c#ref')
+        self.assertEqual(args['netloc'], ('host', '80')),
         headers = args['Headers']
-        self.assertEquals(headers['content-type'], {'text/xml': {'encoding':'utf-8', 'version':'1.0'}})
-        self.assertEquals(args['query'], {'a': ['b', 'c']})
-        self.assertEquals(args['path'], '/path;user=jan/show;a=all')
-        self.assertEquals(args['scheme'], 'http')
-        self.assertEquals(args['Method'], 'GET')
-        self.assertEquals(args['HTTPVersion'], '1.1')
+        self.assertEqual(headers['content-type'], {'text/xml': {'encoding':'utf-8', 'version':'1.0'}})
+        self.assertEqual(args['query'], {'a': ['b', 'c']})
+        self.assertEqual(args['path'], '/path;user=jan/show;a=all')
+        self.assertEqual(args['scheme'], 'http')
+        self.assertEqual(args['Method'], 'GET')
+        self.assertEqual(args['HTTPVersion'], '1.1')
 
     def testForwardParsedPOSTRequest(self):
         args = []
@@ -116,19 +116,19 @@ class HttpProtocolTest(TestCase):
         message = 'POST %s HTTP/1.0\r\n%s\r\n\r\n' % (uri, header)
         response = stack.send(message)
         args = args[0]
-        self.assertEquals('HTTP/1.....etc', response)
-        self.assertEquals(args['fragment'], 'anchor')
-        self.assertEquals(args['RequestURI'], 'http://ahost:8000/a/b;user=pete/a;b=any?&x=y&p=q#anchor')
-        self.assertEquals(args['netloc'], ('ahost', '8000')),
+        self.assertEqual('HTTP/1.....etc', response)
+        self.assertEqual(args['fragment'], 'anchor')
+        self.assertEqual(args['RequestURI'], 'http://ahost:8000/a/b;user=pete/a;b=any?&x=y&p=q#anchor')
+        self.assertEqual(args['netloc'], ('ahost', '8000')),
         headers = args['Headers']
-        self.assertEquals(headers['content-length'], {'20': {}})
-        self.assertEquals(headers['content-type'], {'text/plain': {'encoding':'utf-16', 'version':'1.1'}})
-        self.assertEquals(args['ContentLength'], 20)
-        self.assertEquals(args['query'], {'x': ['y'], 'p': ['q']})
-        self.assertEquals(args['path'], '/a/b;user=pete/a;b=any')
-        self.assertEquals(args['scheme'], 'http')
-        self.assertEquals(args['Method'], 'POST')
-        self.assertEquals(args['HTTPVersion'], '1.0')
+        self.assertEqual(headers['content-length'], {'20': {}})
+        self.assertEqual(headers['content-type'], {'text/plain': {'encoding':'utf-16', 'version':'1.1'}})
+        self.assertEqual(args['ContentLength'], 20)
+        self.assertEqual(args['query'], {'x': ['y'], 'p': ['q']})
+        self.assertEqual(args['path'], '/a/b;user=pete/a;b=any')
+        self.assertEqual(args['scheme'], 'http')
+        self.assertEqual(args['Method'], 'POST')
+        self.assertEqual(args['HTTPVersion'], '1.0')
 
     def testPOST(self):
         class Buffer(object):
@@ -149,12 +149,12 @@ class HttpProtocolTest(TestCase):
         self.addHandler(MyHandler())
         stack = self.processConnection()
         response = stack.send('POST / HTTP/1.1\r')
-        self.assertEquals(None, response)
+        self.assertEqual(None, response)
         response = stack.send('\nContent-Length: 5\r\n\r\n12345')
-        self.assertEquals('HTTP/1.1 2', response)
-        response = stack.next()
-        self.assertEquals('00 Ok\r\n', response)
-        self.assertEquals('12345', buff.value())
+        self.assertEqual('HTTP/1.1 2', response)
+        response = next(stack)
+        self.assertEqual('00 Ok\r\n', response)
+        self.assertEqual('12345', buff.value())
 
     def testPostWith100Continue(self):
         class Buffer(object):
@@ -174,12 +174,12 @@ class HttpProtocolTest(TestCase):
         self.addHandler(MyHandler())
         stack = self.processConnection()
         response = stack.send('POST / HTTP/1.1\r\nContent-Length: 5\r\nExpect: 100-continue\r\n\r\n')
-        self.assertEquals('HTTP/1.1 100 Continue\r\n', response)
+        self.assertEqual('HTTP/1.1 100 Continue\r\n', response)
         response = stack.send(None)
-        self.assertEquals(None, response)
+        self.assertEqual(None, response)
         response = stack.send('12345')
-        self.assertEquals('HTTP/1.1 200 Ok\r\n', response)
-        self.assertEquals('12345', buff.value())
+        self.assertEqual('HTTP/1.1 200 Ok\r\n', response)
+        self.assertEqual('12345', buff.value())
 
     def testPostWith100ContinueNOT(self):
         class MyHandler(object):
@@ -188,12 +188,12 @@ class HttpProtocolTest(TestCase):
         self.addHandler(MyHandler())
         stack = self.processConnection()
         response = stack.send('POST / HTTP/1.1\r\nContent-Length: 5\r\nExpect: 100-continue\r\n\r\n')
-        self.assertEquals('HTTP/1.1 417 Expectation failed\r\n', response)
+        self.assertEqual('HTTP/1.1 417 Expectation failed\r\n', response)
 
     def testNotImplemented(self):
         stack = self.processConnection()
         response = stack.send('POST / HTTP/1.1\r\nContent-Length: 5\r\n\r\n')
-        self.assertEquals('HTTP/1.1 501 Not Implemented\r\n', response)
+        self.assertEqual('HTTP/1.1 501 Not Implemented\r\n', response)
 
     def testReadChunkEncoded(self):
         parts = []
@@ -212,11 +212,11 @@ class HttpProtocolTest(TestCase):
         self.addHandler(MyHandler())
         stack = self.processConnection()
         response = stack.send('POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n5\r\n12345\r\n0')
-        self.assertEquals(None, response)
+        self.assertEqual(None, response)
         response = stack.send('\r\n')
-        self.assertEquals('HTTP/1.1 200 Ok\r\n', response)
-        response = stack.next()
-        self.assertEquals('12345', response)
-        self.assertEquals('12345', ''.join(parts))
+        self.assertEqual('HTTP/1.1 200 Ok\r\n', response)
+        response = next(stack)
+        self.assertEqual('12345', response)
+        self.assertEqual('12345', ''.join(parts))
 
     #Client

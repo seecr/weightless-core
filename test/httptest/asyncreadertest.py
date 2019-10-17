@@ -25,7 +25,7 @@
 #
 ## end license ##
 
-from __future__ import with_statement
+
 from re import sub
 from socket import socket, gaierror as SocketGaiError
 from sys import exc_info, version_info
@@ -42,7 +42,7 @@ from weightless.http import _httprequest as httpRequestModule
 from seecr.test.io import stderr_replaced, stdout_replaced
 from seecr.test.portnumbergenerator import PortNumberGenerator
 from weightlesstestcase import WeightlessTestCase, StreamingData
-from httpreadertest import server as testserver
+from .httpreadertest import server as testserver
 
 
 PYVERSION = '%s.%s' % version_info[:2]
@@ -50,7 +50,7 @@ PYVERSION = '%s.%s' % version_info[:2]
 class AsyncReaderTest(WeightlessTestCase):
     def setUp(self):
         WeightlessTestCase.setUp(self)
-        self.port = PortNumberGenerator.next()
+        self.port = next(PortNumberGenerator)
         self.httpserver = HttpServer(self.reactor, self.port, self._dispatch)
         self.httpserver.listen()
 
@@ -59,15 +59,15 @@ class AsyncReaderTest(WeightlessTestCase):
         WeightlessTestCase.tearDown(self)
 
     def testRequestLine(self):
-        self.assertEquals('GET / HTTP/1.0\r\n', _requestLine('GET', '/'))
-        self.assertEquals('POST / HTTP/1.0\r\n', _requestLine('POST', '/'))
+        self.assertEqual('GET / HTTP/1.0\r\n', _requestLine('GET', '/'))
+        self.assertEqual('POST / HTTP/1.0\r\n', _requestLine('POST', '/'))
 
     def testEmptyRequestConvenientlyTranslatedToSlash(self):
-        self.assertEquals('GET / HTTP/1.0\r\n', _requestLine('GET', ''))
-        self.assertEquals('POST / HTTP/1.0\r\n', _requestLine('POST', ''))
+        self.assertEqual('GET / HTTP/1.0\r\n', _requestLine('GET', ''))
+        self.assertEqual('POST / HTTP/1.0\r\n', _requestLine('POST', ''))
 
     def testPassRequestThruToBackOfficeServer(self):
-        backofficeport = PortNumberGenerator.next()
+        backofficeport = next(PortNumberGenerator)
         def passthruhandler(*args, **kwargs):
             request = kwargs['RequestURI']
             response = yield httpget('localhost', backofficeport, request)
@@ -79,10 +79,10 @@ class AsyncReaderTest(WeightlessTestCase):
         client = clientget('localhost', self.port, '/depot?arg=1&arg=2')
         self._loopReactorUntilDone()
         response = client.recv(99)
-        self.assertEquals('hello!', response)
+        self.assertEqual('hello!', response)
 
     def testPassRequestThruToBackOfficeServerWithHttpRequest(self):
-        backofficeport = PortNumberGenerator.next()
+        backofficeport = next(PortNumberGenerator)
         def passthruhandler(*args, **kwargs):
             request = kwargs['RequestURI']
             response = yield HttpRequest().httprequest(host='localhost', port=backofficeport, request=request)
@@ -94,7 +94,7 @@ class AsyncReaderTest(WeightlessTestCase):
         client = clientget('localhost', self.port, '/depot?arg=1&arg=2')
         self._loopReactorUntilDone()
         response = client.recv(99)
-        self.assertEquals('hello!', response)
+        self.assertEqual('hello!', response)
 
     @stderr_replaced
     def testConnectFails(self):
@@ -137,28 +137,28 @@ TypeError: an integer is required
     return getattr(self._sock,name)(*args)
 TypeError: an integer is required
        """ % fileDict)
-        self.assertEquals(TypeError, self.error[0])
+        self.assertEqual(TypeError, self.error[0])
         self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(''.join(format_exception(*self.error))))
 
         target = ('localhost', 87, '/') # invalid port
         clientget('localhost', self.port, '/')
         self._loopReactorUntilDone()
-        self.assertEquals(IOError, self.error[0])
+        self.assertEqual(IOError, self.error[0])
 
-        target = ('UEYR^$*FD(#>NDJ.khfd9.(*njnd', PortNumberGenerator.next(), '/') # invalid host
+        target = ('UEYR^$*FD(#>NDJ.khfd9.(*njnd', next(PortNumberGenerator), '/') # invalid host
         clientget('localhost', self.port, '/')
         self._loopReactorUntilDone()
-        self.assertEquals(SocketGaiError, self.error[0])
+        self.assertEqual(SocketGaiError, self.error[0])
 
-        target = ('127.0.0.1', PortNumberGenerator.next(), '/')  # No-one listens
+        target = ('127.0.0.1', next(PortNumberGenerator), '/')  # No-one listens
         clientget('localhost', self.port, '/')
         self._loopReactorUntilDone()
-        self.assertEquals(IOError, self.error[0])
-        self.assertEquals('111', str(self.error[1]))
+        self.assertEqual(IOError, self.error[0])
+        self.assertEqual('111', str(self.error[1]))
 
     @stdout_replaced
     def testTracebackPreservedAcrossSuspend(self):
-        backofficeport = PortNumberGenerator.next()
+        backofficeport = next(PortNumberGenerator)
         expectedrequest = ''
         testserver(backofficeport, [], expectedrequest)
         target = ('localhost', backofficeport, '/')
@@ -201,9 +201,9 @@ RuntimeError: Boom!""" % fileDict)
 
     def testHttpPost(self):
         post_request = []
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         self.referenceHttpServer(port, post_request)
-        body = u"BÖDY" * 20000
+        body = "BÖDY" * 20000
         responses = []
         def posthandler(*args, **kwargs):
             response = yield httppost('localhost', port, '/path', body,
@@ -216,17 +216,17 @@ RuntimeError: Boom!""" % fileDict)
         self._loopReactorUntilDone()
 
         self.assertTrue("POST RESPONSE" in responses[0], responses[0])
-        self.assertEquals('POST', post_request[0]['command'])
-        self.assertEquals('/path', post_request[0]['path'])
+        self.assertEqual('POST', post_request[0]['command'])
+        self.assertEqual('/path', post_request[0]['path'])
         headers = post_request[0]['headers'].headers
-        self.assertEquals(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n'], headers)
-        self.assertEquals(body, post_request[0]['body'])
+        self.assertEqual(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n'], headers)
+        self.assertEqual(body, post_request[0]['body'])
 
     def testHttpPostWithoutHeaders(self):
         post_request = []
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         self.referenceHttpServer(port, post_request)
-        body = u"BÖDY" * 20000
+        body = "BÖDY" * 20000
         responses = []
         def posthandler(*args, **kwargs):
             response = yield httppost('localhost', port, '/path', body)
@@ -237,17 +237,17 @@ RuntimeError: Boom!""" % fileDict)
         self._loopReactorUntilDone()
 
         self.assertTrue("POST RESPONSE" in responses[0], responses[0])
-        self.assertEquals('POST', post_request[0]['command'])
-        self.assertEquals('/path', post_request[0]['path'])
+        self.assertEqual('POST', post_request[0]['command'])
+        self.assertEqual('/path', post_request[0]['path'])
         headers = post_request[0]['headers'].headers
-        self.assertEquals(['Content-Length: 100000\r\n'], headers)
-        self.assertEquals(body, post_request[0]['body'])
+        self.assertEqual(['Content-Length: 100000\r\n'], headers)
+        self.assertEqual(body, post_request[0]['body'])
 
     def testHttpsPost(self):
         post_request = []
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         self.referenceHttpServer(port, post_request, ssl=True)
-        body = u"BÖDY" * 20000
+        body = "BÖDY" * 20000
         responses = []
         def posthandler(*args, **kwargs):
             response = yield httpspost('localhost', port, '/path', body,
@@ -260,17 +260,17 @@ RuntimeError: Boom!""" % fileDict)
         self._loopReactorUntilDone()
 
         self.assertTrue("POST RESPONSE" in responses[0], responses[0])
-        self.assertEquals('POST', post_request[0]['command'])
-        self.assertEquals('/path', post_request[0]['path'])
+        self.assertEqual('POST', post_request[0]['command'])
+        self.assertEqual('/path', post_request[0]['path'])
         headers = post_request[0]['headers'].headers
-        self.assertEquals(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n'], headers)
-        self.assertEquals(body, post_request[0]['body'])
+        self.assertEqual(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n'], headers)
+        self.assertEqual(body, post_request[0]['body'])
 
     @stderr_replaced
     def testHttpsPostOnIncorrectPort(self):
         responses = []
         def posthandler(*args, **kwargs):
-            response = yield httpspost('localhost', PortNumberGenerator.next(), '/path', "body",
+            response = yield httpspost('localhost', next(PortNumberGenerator), '/path', "body",
                     headers={'Content-Type': 'text/plain'}
             )
             yield response
@@ -280,11 +280,11 @@ RuntimeError: Boom!""" % fileDict)
         self._loopReactorUntilDone()
 
         self.assertTrue(self.error[0] is IOError)
-        self.assertEquals("111", str(self.error[1]))
+        self.assertEqual("111", str(self.error[1]))
 
     def testHttpGet(self):
         get_request = []
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         self.referenceHttpServer(port, get_request)
 
         responses = []
@@ -303,14 +303,14 @@ RuntimeError: Boom!""" % fileDict)
         self._loopReactorUntilDone()
 
         self.assertTrue("GET RESPONSE" in responses[0], responses[0])
-        self.assertEquals('GET', get_request[0]['command'])
-        self.assertEquals('/path', get_request[0]['path'])
+        self.assertEqual('GET', get_request[0]['command'])
+        self.assertEqual('/path', get_request[0]['path'])
         headers = get_request[0]['headers'].headers
-        self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
+        self.assertEqual(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
 
     def testHttpRequest(self):
         get_request = []
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         self.referenceHttpServer(port, get_request)
 
         responses = []
@@ -333,9 +333,9 @@ RuntimeError: Boom!""" % fileDict)
     def testHttpRequestWithTimeout(self):
         # And thus too http(s)get/post/... and friends.
         get_request = []
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         def slowData():
-            for i in xrange(5):
+            for i in range(5):
                 yield i
                 sleep(0.01)
 
@@ -348,7 +348,7 @@ RuntimeError: Boom!""" % fileDict)
                         timeout=timeout,
                     )
                     responses.append(response)
-                except TimeoutException, e:
+                except TimeoutException as e:
                     responses.append(e)
                 finally:
                     assert responses, 'Either a timeout or response should have occurred.'
@@ -365,23 +365,23 @@ RuntimeError: Boom!""" % fileDict)
         responseText = ''.join(responses)
         self.assertTrue(responseText.startswith('HTTP/1.0 200 OK'), responseText)
         self.assertTrue('01234' in responseText, responseText)
-        self.assertEquals(1, len(get_request))
+        self.assertEqual(1, len(get_request))
 
         # Timing out
         del get_request[:]
         del responses[:]
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         self.referenceHttpServer(port=port, request=get_request, streamingData=slowData())
         self.handler = handlerFactory(timeout=0.02)
         clientget('localhost', self.port, '/')
         self._loopReactorUntilDone()
-        self.assertEquals([TimeoutException], [type(r) for r in responses])
-        self.assertEquals(1, len(get_request))
-        self.assertEquals('GET', get_request[0]['command'])
+        self.assertEqual([TimeoutException], [type(r) for r in responses])
+        self.assertEqual(1, len(get_request))
+        self.assertEqual('GET', get_request[0]['command'])
 
     def testHttpGetWithReallyLargeHeaders(self):
         get_request = []
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         self.referenceHttpServer(port, get_request)
 
         responses = []
@@ -406,16 +406,16 @@ RuntimeError: Boom!""" % fileDict)
 
         headers = get_request[0]['headers'].headers
         headersAsDict = dict([tuple(h.strip().split(': ', 1)) for h in headers])
-        self.assertEquals(len(headersOrig), len(headersAsDict))
-        self.assertEquals(headersOrig, headersAsDict)
+        self.assertEqual(len(headersOrig), len(headersAsDict))
+        self.assertEqual(headersOrig, headersAsDict)
 
         self.assertTrue("GET RESPONSE" in responses[0], responses[0])
-        self.assertEquals('GET', get_request[0]['command'])
-        self.assertEquals('/path', get_request[0]['path'])
+        self.assertEqual('GET', get_request[0]['command'])
+        self.assertEqual('/path', get_request[0]['path'])
 
     def testHttpGetWithMaxSize(self):
         get_requests = []
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         self.referenceHttpServer(port, get_requests, streamingData="response"*1024)
 
         responses = []
@@ -423,7 +423,7 @@ RuntimeError: Boom!""" % fileDict)
             try:
                 response = yield httpget('localhost', port, '/path', maxResponseSize=1024)
                 responses.append(response)
-            except Exception, e:
+            except Exception as e:
                 responses.append(e)
         self.handler = gethandler
         clientget('localhost', self.port, '/')
@@ -431,15 +431,15 @@ RuntimeError: Boom!""" % fileDict)
             with stdout_replaced():
                 self._loopReactorUntilDone()
 
-        self.assertEquals([TooBigResponseException], [type(r) for r in responses])
-        self.assertEquals(1024, responses[0].args[0])
-        self.assertEquals(1, len(get_requests))
-        self.assertEquals('GET', get_requests[0]['command'])
+        self.assertEqual([TooBigResponseException], [type(r) for r in responses])
+        self.assertEqual(1024, responses[0].args[0])
+        self.assertEqual(1, len(get_requests))
+        self.assertEqual('GET', get_requests[0]['command'])
 
     def testHttpAndHttpsGetStreaming(self):
         for useSsl in [False, True]:
             get_request = []
-            port = PortNumberGenerator.next()
+            port = next(PortNumberGenerator)
             streamingData = StreamingData(data=[c for c in "STREAMING GET RESPONSE"])
             self.referenceHttpServer(port, get_request, ssl=useSsl, streamingData=streamingData)
 
@@ -465,17 +465,17 @@ RuntimeError: Boom!""" % fileDict)
             clientget('localhost', self.port, '/')
             self._loopReactorUntilDone()
 
-            self.assertEquals([None], responses)
+            self.assertEqual([None], responses)
             self.assertTrue("STREAMING GET RESPONSE" in ''.join(dataHandled), dataHandled)
             self.assertTrue(len(dataHandled) > len("STREAMING GET RESPONSE"), dataHandled)
-            self.assertEquals('GET', get_request[0]['command'])
-            self.assertEquals('/path', get_request[0]['path'])
+            self.assertEqual('GET', get_request[0]['command'])
+            self.assertEqual('/path', get_request[0]['path'])
             headers = get_request[0]['headers'].headers
-            self.assertEquals(['Accept: text/plain\r\n'], headers)
+            self.assertEqual(['Accept: text/plain\r\n'], headers)
 
     def testHttpsGet(self):
         get_request = []
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         self.referenceHttpServer(port, get_request, ssl=True)
 
         responses = []
@@ -491,15 +491,15 @@ RuntimeError: Boom!""" % fileDict)
         self._loopReactorUntilDone()
 
         self.assertTrue("GET RESPONSE" in responses[0], responses[0])
-        self.assertEquals('GET', get_request[0]['command'])
-        self.assertEquals('/path', get_request[0]['path'])
+        self.assertEqual('GET', get_request[0]['command'])
+        self.assertEqual('/path', get_request[0]['path'])
         headers = get_request[0]['headers'].headers
-        self.assertEquals(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
+        self.assertEqual(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
 
     def testHttpGetViaProxy(self):
         get_request = []
-        port = PortNumberGenerator.next()
-        proxyPort = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
+        proxyPort = next(PortNumberGenerator)
         self.proxyServer(proxyPort, get_request)
         self.referenceHttpServer(port, get_request)
 
@@ -517,10 +517,10 @@ RuntimeError: Boom!""" % fileDict)
         self._loopReactorUntilDone()
 
         self.assertTrue("GET RESPONSE" in responses[0], responses[0])
-        self.assertEquals('CONNECT', get_request[0]['command'])
-        self.assertEquals('localhost:%s' % port, get_request[0]['path'])
-        self.assertEquals('GET', get_request[1]['command'])
-        self.assertEquals('/path', get_request[1]['path'])
+        self.assertEqual('CONNECT', get_request[0]['command'])
+        self.assertEqual('localhost:%s' % port, get_request[0]['path'])
+        self.assertEqual('GET', get_request[1]['command'])
+        self.assertEqual('/path', get_request[1]['path'])
 
     def _dispatch(self, *args, **kwargs):
         @compose
@@ -549,9 +549,9 @@ def clientget(host, port, path):
     return client
 
 fileDict = {
-    '__file__': clientget.func_code.co_filename,
-    'suspend.py': Suspend.__call__.func_code.co_filename,
-    'httprequest.py': _requestLine.func_code.co_filename,
+    '__file__': clientget.__code__.co_filename,
+    'suspend.py': Suspend.__call__.__code__.co_filename,
+    'httprequest.py': _requestLine.__code__.co_filename,
 }
 
 def ignoreLineNumbers(s):

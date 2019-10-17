@@ -34,7 +34,7 @@ from socket import socket, AF_INET, SOCK_STREAM
 from time import time
 
 from os.path import join, dirname, abspath
-from StringIO import StringIO
+from io import StringIO
 import sys, string, os
 from tempfile import mkdtemp, mkstemp
 from shutil import rmtree
@@ -42,13 +42,13 @@ from shutil import rmtree
 from threading import Thread, Event
 from weightless.io import Reactor
 
-from BaseHTTPServer import BaseHTTPRequestHandler
-from SocketServer import TCPServer, ThreadingMixIn, BaseServer
-from SimpleHTTPServer import SimpleHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler
+from socketserver import TCPServer, ThreadingMixIn, BaseServer
+from http.server import SimpleHTTPRequestHandler
 from ssl import wrap_socket
-from urllib2 import urlopen
+from urllib.request import urlopen
 from select import select
-from urlparse import urlunparse, urlparse
+from urllib.parse import urlunparse, urlparse
 
 mydir = dirname(abspath(__file__))
 sslDir = join(mydir, 'ssl')
@@ -61,21 +61,21 @@ class WeightlessTestCase(TestCase):
         fd, self.tempfile = mkstemp()
         os.close(fd)
         self.reactor = Reactor()
-        self.port = PortNumberGenerator.next()
+        self.port = next(PortNumberGenerator)
 
     def tearDown(self):
         t0 = time()
         if hasattr(self, 'httpd') and hasattr(self.httpd, 'shutdown'):
             self.httpd.shutdown()
-        self.assertEquals({}, self.reactor._fds)
-        self.assertEquals({}, self.reactor._suspended)
-        self.assertEquals({}, self.reactor._processes)
+        self.assertEqual({}, self.reactor._fds)
+        self.assertEqual({}, self.reactor._suspended)
+        self.assertEqual({}, self.reactor._processes)
         for t in self.reactor._timers:
             cb = t.callback
-            code = cb.func_code
-            print 'WARNING: dangling timer in reactor. Remaining timout: %s with callback to %s() in %s at line %s.' \
-                % (t.time-t0, cb.func_name, code.co_filename, code.co_firstlineno)
-        self.assertEquals([], self.reactor._timers)
+            code = cb.__code__
+            print('WARNING: dangling timer in reactor. Remaining timout: %s with callback to %s() in %s at line %s.' \
+                % (t.time-t0, cb.__name__, code.co_filename, code.co_firstlineno))
+        self.assertEqual([], self.reactor._timers)
         self.reactor.shutdown()
         rmtree(self.tempdir)
         os.remove(self.tempfile)
@@ -269,7 +269,7 @@ class StreamingData(object):
 
         self._event.clear()
 
-    def next(self):
+    def __next__(self):
         self._event.wait(timeout=self._timeout)
         if not self._event.is_set():
             raise AssertionError('Timeout reached')

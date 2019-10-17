@@ -31,7 +31,7 @@ from functools import partial
 
 from weightless.io import Suspend, TimeoutException, TooBigResponseException
 from weightless.core import compose, identify
-from urlparse import urlsplit
+from urllib.parse import urlsplit
 
 
 def httprequest(host, port, request, body=None, headers=None, proxyServer=None, ssl=False, prio=None, handlePartialResponse=None, method='GET', timeout=None, maxResponseSize=None):
@@ -39,7 +39,7 @@ def httprequest(host, port, request, body=None, headers=None, proxyServer=None, 
     kw = {}
     if timeout is not None:
         def onTimeout():
-            g.throw(TimeoutException, TimeoutException(), None)
+            g.throw(TimeoutException(TimeoutException()).with_traceback(None))
 
         kw = {
             'timeout': timeout,
@@ -93,12 +93,13 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
 
     try:
         sok.connect((host, port))
-    except SocketError, (errno, msg):
+    except SocketError as xxx_todo_changeme:
+        (errno, msg) = xxx_todo_changeme.args
         if errno != EINPROGRESS:
             raise
 
     try:
-        suspend._reactor.addWriter(sok, this.next, prio=prio)
+        suspend._reactor.addWriter(sok, this.__next__, prio=prio)
         try:
             yield
             err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
@@ -111,7 +112,7 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
             sok.sendall(  # hotfix EG d.d. 1/3/14
                 ("CONNECT %s:%d HTTP/1.0\r\n" +
                 "Host: %s:%d\r\n\r\n") % (origHost, origPort, origHost, origPort))
-            suspend._reactor.addReader(sok, this.next, prio=prio)
+            suspend._reactor.addReader(sok, this.__next__, prio=prio)
             try:
                 # hotfix EG d.d. 1/3/14
                 response = ''
@@ -133,13 +134,13 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
         if ssl:
             sok = yield _sslHandshake(sok, this, suspend, prio)
 
-        suspend._reactor.addWriter(sok, this.next, prio=prio)
+        suspend._reactor.addWriter(sok, this.__next__, prio=prio)
         yield
         try:
             # error checking
             if body:
                 data = body
-                if type(data) is unicode:
+                if type(data) is str:
                     data = data.encode(getdefaultencoding())
                 headers.update({'Content-Length': len(data)})
             yield _sendHttpHeaders(sok, method, request, headers)
@@ -147,7 +148,7 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
                 yield _asyncSend(sok, data)
         finally:
             suspend._reactor.removeWriter(sok)
-        suspend._reactor.addReader(sok, this.next, prio=prio)
+        suspend._reactor.addReader(sok, this.__next__, prio=prio)
         responses = []
         size = 0
         try:
@@ -193,11 +194,11 @@ def _sslHandshake(sok, this, suspend, prio):
             break
         except SSLError as err:
             if err.args[0] == SSL_ERROR_WANT_READ:
-                suspend._reactor.addReader(sok, this.next, prio=prio)
+                suspend._reactor.addReader(sok, this.__next__, prio=prio)
                 yield
                 suspend._reactor.removeReader(sok)
             elif err.args[0] == SSL_ERROR_WANT_WRITE:
-                suspend._reactor.addWriter(sok, this.next, prio=prio)
+                suspend._reactor.addWriter(sok, this.__next__, prio=prio)
                 yield
                 suspend._reactor.removeWriter(sok)
             else:
@@ -215,7 +216,7 @@ def _asyncSend(sok, data):
 def _sendHttpHeaders(sok, method, request, headers):
     data = _requestLine(method, request)
     if headers:
-        data += ''.join('%s: %s\r\n' % i for i in headers.items())
+        data += ''.join('%s: %s\r\n' % i for i in list(headers.items()))
     data += '\r\n'
     yield _asyncSend(sok, data)
 

@@ -18,7 +18,7 @@ def dieAfter(seconds=5.0):
             tokenList = []
             def cb():
                 tokenList.pop()
-                this.throw(AssertionError, AssertionError('dieAfter triggered after %s seconds.' % seconds), None)
+                this.throw(AssertionError(AssertionError('dieAfter triggered after %s seconds.' % seconds)).with_traceback(None))
             tokenList.append(reactor().addTimer(seconds=seconds, callback=cb))
             try:
                 retval = yield generatorFunction(*args, **kwargs)
@@ -26,6 +26,6 @@ def dieAfter(seconds=5.0):
                 c, v, t = exc_info()
                 if tokenList:
                     reactor().removeTimer(token=tokenList[0])
-                raise c, v, t
+                raise c(v).with_traceback(t)
         return helper
     return dieAfter

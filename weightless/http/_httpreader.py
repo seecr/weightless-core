@@ -24,9 +24,9 @@
 ## end license ##
 
 from socket import socket, SHUT_RDWR
-from urlparse import urlsplit
+from urllib.parse import urlsplit
 from weightless.http import REGEXP, FORMAT, HTTP, parseHeaders
-from _bufferedhandler import BufferedHandler
+from ._bufferedhandler import BufferedHandler
 
 RECVSIZE = 4096
 
@@ -42,11 +42,11 @@ def Connector(reactor, host, port):
 
 class HandlerFacade(object):
     def __init__(self, responseHandler, errorHandler, bodyHandler):
-        self._bodyHandler = bodyHandler and bodyHandler() or xrange(0)
+        self._bodyHandler = bodyHandler and bodyHandler() or range(0)
         self.throw = errorHandler
         self.send = responseHandler
-    def next(self):
-        return self._bodyHandler.next()
+    def __next__(self):
+        return next(self._bodyHandler)
     def __iter__(self):
         return self
 
@@ -70,7 +70,7 @@ def HttpReaderFacade(reactor, url, responseHandler, errorHandler=None, timeout=1
 class HttpReader(object):
 
     def __init__(self, reactor, sokket, handler, method, host, path, headers={}, timeout=1, recvSize=RECVSIZE):
-        self._responseBuffer = ''
+        self._responseBuffer = b''
         self._restData = None
         self._handler = handler
         self._sok = sokket
@@ -84,36 +84,36 @@ class HttpReader(object):
 
         self._timer = self._reactor.addTimer(self._timeOuttime, self._timeOut)
         self._recvSize = recvSize
-        self._buffer = ''
+        self._buffer = b''
         self._peername = self._sok.getpeername()
 
     def _sendPostRequest(self, path, host, headers):
         headers['Transfer-Encoding'] = 'chunked'
         self._sok.sendall(
-            FORMAT.RequestLine % {'Method': 'POST', 'Request_URI': path, 'HTTPVersion':'1.1'}
-            + FORMAT.HostHeader % {'Host': host}
-            + ''.join(FORMAT.Header % header for header in headers.items())
+            FORMAT.RequestLine % {'Method': b'POST', 'Request_URI': bytes(path), 'HTTPVersion': b'1.1'}
+            + FORMAT.HostHeader % {'Host': bytes(host)}
+            + ''.join(FORMAT.Header % list(map(bytes, header)) for header in list(headers.items()))
             + FORMAT.UserAgentHeader
             + HTTP.CRLF)
-        item = self._handler.next()
+        item = next(self._handler)
         while item:
             self._sendChunk(item)
-            item = self._handler.next()
+            item = next(self._handler)
 
         self._sendChunk('')
         self._reactor.removeWriter(self._sok)
         self._reactor.addReader(self._sok, self._headerFragment)
 
     def _createChunk(self, data):
-        return hex(len(data))[len('0x'):].upper() + HTTP.CRLF + data + HTTP.CRLF
+        return bytes(hex(len(data))[len('0x'):].upper()) + HTTP.CRLF + bytes(data) + HTTP.CRLF
 
     def _sendChunk(self, data):
         self._sok.sendall(self._createChunk(data))
 
     def _sendGetRequest(self, path, host):
         self._sok.sendall(
-            FORMAT.RequestLine % {'Method': 'GET', 'Request_URI': path, 'HTTPVersion':'1.1'}
-            + FORMAT.HostHeader % {'Host': host}
+            FORMAT.RequestLine % {'Method': b'GET', 'Request_URI': bytes(path), 'HTTPVersion': b'1.1'}
+            + FORMAT.HostHeader % {'Host': bytes(host)}
             + FORMAT.UserAgentHeader
             + HTTP.CRLF)
         self._reactor.removeWriter(self._sok)
@@ -130,7 +130,7 @@ class HttpReader(object):
         if match.end() < len(self._responseBuffer):
             restData = self._responseBuffer[match.end():]
         else:
-            restData = ''
+            restData = b''
         response = match.groupdict()
         response['Headers'] = parseHeaders(response['_headers'])
         self._chunked = 'Transfer-Encoding' in response['Headers'] and response['Headers']['Transfer-Encoding'] == 'chunked'
@@ -156,7 +156,7 @@ class HttpReader(object):
     def _stop(self):
         self._reactor.removeReader(self._sok)
         self._sok.close()
-        self._handler.throw(StopIteration())
+        self._handler.close()
 
     def _sendFragment(self, fragment):
         if self._chunked:
@@ -164,7 +164,7 @@ class HttpReader(object):
 
             match = REGEXP.CHUNK_SIZE_LINE.match(self._buffer)
             if match:
-                chunkSize = int("0x" + self._buffer[:match.end()], 16)
+                chunkSize = int("0x" + str(self._buffer[:match.end()]), 16)
                 if chunkSize == 0:
                     self._stop()
                     return

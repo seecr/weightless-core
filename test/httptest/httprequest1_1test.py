@@ -83,7 +83,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r1(sok, log, remoteAddress, connectionNr):
             # Request
             data = yield read(untilExpected=expectedrequest)
-            self.assertEquals(expectedrequest, data)
+            self.assertEqual(expectedrequest, data)
 
             # Response
             _headers = 'HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\n'
@@ -103,7 +103,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
             ))
             try:
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/path?arg=1&arg=2')
-                self.assertEquals({
+                self.assertEqual({
                         'HTTPVersion': '1.1',
                         'Headers': {'Content-Length': '6'},
                         'ReasonPhrase': 'OK',
@@ -111,9 +111,9 @@ class HttpRequest1_1Test(WeightlessTestCase):
                     },
                     statusAndHeaders
                 )
-                self.assertEquals('hello!', body)
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals({1: (None, [])}, mss.state.connections)
+                self.assertEqual('hello!', body)
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual({1: (None, [])}, mss.state.connections)
             finally:
                 mss.close()
 
@@ -123,7 +123,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r1(sok, log, remoteAddress, connectionNr):
             toRead = 'HEAD /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write('HTTP/1.0 200 OK\r\n\r\n<BODY>')
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -131,7 +131,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r2(sok, log, remoteAddress, connectionNr):
             toRead = 'HEAD /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write('HTTP/1.0 200 OK\r\n\r\n')
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -144,13 +144,13 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 try:
                     _, _ = yield httprequest1_1(method='HEAD', host='localhost', port=mss.port, request='/first')
                     self.fail()
-                except ValueError, e:
-                    self.assertEquals('Body not empty.', str(e))
+                except ValueError as e:
+                    self.assertEqual('Body not empty.', str(e))
                 statusAndHeaders, body = yield httprequest1_1(method='HEAD', host='localhost', port=mss.port, request='/second')
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
-                self.assertEquals('', body)
-                self.assertEquals(2, mss.nrOfRequests)
-                self.assertEquals({1: (None, []), 2: (None, [])}, mss.state.connections)
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
+                self.assertEqual('', body)
+                self.assertEqual(2, mss.nrOfRequests)
+                self.assertEqual({1: (None, []), 2: (None, [])}, mss.state.connections)
             finally:
                 mss.close()
 
@@ -160,7 +160,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r1(sok, log, remoteAddress, connectionNr):
             toRead = 'POST /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write('HTTP/1.0 204 No Content\r\n\r\n<BODY>')
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -169,7 +169,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
             # Should be a "conditional get request"; but we don't care (yet).
             toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write('HTTP/1.0 304 Not Modified\r\n\r\n<BODY>')
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -178,7 +178,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
             # Should be a "conditional get request"; but we don't care (yet).
             toRead = 'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write('HTTP/1.0 304 Not Modified\r\n\r\n')
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -191,16 +191,16 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 try:
                     _, _ = yield httprequest1_1(method='POST', host='localhost', port=mss.port, request='/first')
                     self.fail()
-                except ValueError, e:
-                    self.assertEquals('Body not empty.', str(e))
+                except ValueError as e:
+                    self.assertEqual('Body not empty.', str(e))
                 try:
                     _, _ = yield httprequest1_1(method='GET', host='localhost', port=mss.port, request='/second')
                     self.fail()
-                except ValueError, e:
-                    self.assertEquals('Body not empty.', str(e))
+                except ValueError as e:
+                    self.assertEqual('Body not empty.', str(e))
                 statusAndHeaders, body = yield httprequest1_1(method='GET', host='localhost', port=mss.port, request='/third')
-                self.assertEquals('304', statusAndHeaders['StatusCode'])
-                self.assertEquals({1: (None, []), 2: (None, []), 3: (None, [])}, mss.state.connections)
+                self.assertEqual('304', statusAndHeaders['StatusCode'])
+                self.assertEqual({1: (None, []), 2: (None, []), 3: (None, [])}, mss.state.connections)
             finally:
                 mss.close()
 
@@ -210,7 +210,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r1(sok, log, remoteAddress, connectionNr):
             toRead = 'GET / HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write('HTTP/1.1 101 Switching Protocols\r\n\r\n')
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -223,9 +223,9 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 try:
                     _, _ = yield httprequest1_1(host='localhost', port=mss.port, request='/')
                     self.fail()
-                except ValueError, e:
-                    self.assertEquals('1XX status code recieved.', str(e))
-                self.assertEquals({1: (None, [])}, mss.state.connections)
+                except ValueError as e:
+                    self.assertEqual('1XX status code recieved.', str(e))
+                self.assertEqual({1: (None, [])}, mss.state.connections)
             finally:
                 mss.close()
 
@@ -235,7 +235,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r1(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.0 200 Okee-Dan\r\n\r\n")
             yield write("Hi!")
@@ -247,9 +247,9 @@ class HttpRequest1_1Test(WeightlessTestCase):
             mss.listen()
             try:
                 statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/first')
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
-                self.assertEquals('Hi!', body)
-                self.assertEquals({1: (None, [])}, mss.state.connections)
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
+                self.assertEqual('Hi!', body)
+                self.assertEqual({1: (None, [])}, mss.state.connections)
             finally:
                 mss.close()
 
@@ -259,7 +259,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r1(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.0 200 Yes\r\nContent-Length: 4\r\n\r\n")
             yield write("1234<TOO-LONG>")
@@ -268,7 +268,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r2(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.0 200 Yes\r\nContent-Length: 4\r\n\r\n")
             yield write("A")  # Too short.
@@ -277,7 +277,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r3(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.0 200 Yes\r\nContent-Length: 4\r\n\r\n")
             yield write("ABCD")
@@ -291,19 +291,19 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 try:
                     statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/first')
                     self.fail()
-                except ValueError, e:
-                    self.assertEquals('Excess bytes (> Content-Length) read.', str(e))
+                except ValueError as e:
+                    self.assertEqual('Excess bytes (> Content-Length) read.', str(e))
 
                 try:
                     statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/second')
                     self.fail()
-                except ValueError, e:
-                    self.assertEquals('Premature close', str(e))
+                except ValueError as e:
+                    self.assertEqual('Premature close', str(e))
 
                 statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/third')
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
-                self.assertEquals('ABCD', body)
-                self.assertEquals({1: (None, []), 2: (None, []), 3: (None, [])}, mss.state.connections)
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
+                self.assertEqual('ABCD', body)
+                self.assertEqual({1: (None, []), 2: (None, []), 3: (None, [])}, mss.state.connections)
             finally:
                 mss.close()
 
@@ -314,7 +314,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r1(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write('HTTP/1.1 200 ok\r\nContent-Length: 4\r\n')
             yield zleep(0.001)
@@ -326,7 +326,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r2(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write('HTTP/1.1 200 ok\r\nContent-Length: 4\r\n\r\n')
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -334,7 +334,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r3(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write('HTTP/1.1 200 ok\r\nContent-Length: 4\r\n\r\n123')
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -342,7 +342,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r4(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /fourth HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             for c in 'HTTP/1.1 200 ok\r\nContent-Length: 4\r\nConnection: close\r\n\r\n1234':
                 yield write(c)
@@ -351,7 +351,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r5(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /fifth HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             for c in 'HTTP/1.1 200 ok\r\nContent-Length: 4\r\n\r\n1234':
                 yield write(c)
@@ -370,32 +370,32 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 try:
                     _, _ = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first')
                     self.fail()
-                except ValueError, e:
-                    self.assertEquals('Excess bytes (> Content-Length) read.', str(e))
+                except ValueError as e:
+                    self.assertEqual('Excess bytes (> Content-Length) read.', str(e))
 
                 try:
                     _, _ = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/second')
                     self.fail()
-                except ValueError, e:
-                    self.assertEquals('Premature close', str(e))
+                except ValueError as e:
+                    self.assertEqual('Premature close', str(e))
 
                 try:
                     _, _ = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/third')
                     self.fail()
-                except ValueError, e:
-                    self.assertEquals('Premature close', str(e))
+                except ValueError as e:
+                    self.assertEqual('Premature close', str(e))
 
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/fourth')
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
-                self.assertEquals('1234', body)
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
+                self.assertEqual('1234', body)
 
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/fifth')
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
-                self.assertEquals('1234', body)
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
+                self.assertEqual('1234', body)
 
                 yield zleep(0.001)
-                self.assertEquals(5, mss.nrOfRequests)
-                self.assertEquals([None] * 5, [c.value for c in mss.state.connections.values()])
+                self.assertEqual(5, mss.nrOfRequests)
+                self.assertEqual([None] * 5, [c.value for c in list(mss.state.connections.values())])
             finally:
                 mss.close()
 
@@ -409,7 +409,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
             # Request
             toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             # Weird servers say 100 Continue after request - even when not requested to do so.
             yield write(data='HTTP/1.1 100 Continue\r\nwEiRd: Header\r\n\r\n')
@@ -428,7 +428,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
             # Request
             toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             # Response statusline & headers
             yield write(data='HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n')
@@ -451,36 +451,36 @@ class HttpRequest1_1Test(WeightlessTestCase):
                     ),
                 ))
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first', timeout=1.0)
-                self.assertEquals({
+                self.assertEqual({
                         'HTTPVersion': '1.1',
                         'StatusCode': '200',
                         'ReasonPhrase': 'OK',
                         'Headers': {'Content-Length': '3'},
                     }, statusAndHeaders)
-                self.assertEquals('ACK', body)
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals(IN_PROGRESS, mss.state.connections.get(1).value)
+                self.assertEqual('ACK', body)
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual(IN_PROGRESS, mss.state.connections.get(1).value)
                 conn1Log = mss.state.connections.get(1).log
                 remoteAddress1Host = conn1Log[0][0]
-                self.assertEquals('127.0.0.1', remoteAddress1Host)
-                self.assertEquals(['Response1Done'], conn1Log[1:])
+                self.assertEqual('127.0.0.1', remoteAddress1Host)
+                self.assertEqual(['Response1Done'], conn1Log[1:])
 
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/second')
-                self.assertEquals({
+                self.assertEqual({
                         'HTTPVersion': '1.1',
                         'StatusCode': '200',
                         'ReasonPhrase': 'OK',
                         'Headers': {'Content-Length': '0'},
                     }, statusAndHeaders)
-                self.assertEquals('', body)
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals(IN_PROGRESS, mss.state.connections.get(1).value)
+                self.assertEqual('', body)
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual(IN_PROGRESS, mss.state.connections.get(1).value)
                 conn1Log = mss.state.connections.get(1).log
-                self.assertEquals(['Response1Done', 'Response2Done'], conn1Log[1:])
+                self.assertEqual(['Response1Done', 'Response2Done'], conn1Log[1:])
 
                 yield zleep(0.06)
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals('Finished', mss.state.connections.get(1).value)
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual('Finished', mss.state.connections.get(1).value)
             finally:
                 mss.close()
 
@@ -491,7 +491,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r1(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n")
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -499,7 +499,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r2(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r")
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -507,7 +507,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r3(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nBAD_DATA")
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -515,7 +515,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r4(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /fourth HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nRUBBISCH")
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -523,7 +523,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r5(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /fifth HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n\r\n0\r\nNOT_A_TRAILER\r\n\r")
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -531,7 +531,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r6(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /sixth HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n0\r\n\r\n")
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -539,7 +539,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r7(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /seventh HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n3\r\nABC\r\n0\r\nTr: Ailer\r\n\r\n")
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -552,44 +552,44 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 try:
                     _, _ = yield httprequest1_1(host='localhost', port=mss.port, request='/first')
                     self.fail()
-                except ValueError, e:
-                    self.assertEquals('Premature close', str(e))
+                except ValueError as e:
+                    self.assertEqual('Premature close', str(e))
 
                 try:
                     _, _ = yield httprequest1_1(host='localhost', port=mss.port, request='/second')
                     self.fail()
-                except ValueError, e:
-                    self.assertEquals('Premature close', str(e))
+                except ValueError as e:
+                    self.assertEqual('Premature close', str(e))
 
                 try:
                     _, _ = yield httprequest1_1(host='localhost', port=mss.port, request='/third')
                     self.fail()
-                except ValueError, e:
-                    self.assertEquals('Data after last chunk', str(e))
+                except ValueError as e:
+                    self.assertEqual('Data after last chunk', str(e))
 
                 try:
                     _, _ = yield httprequest1_1(host='localhost', port=mss.port, request='/fourth')
                     self.fail()
-                except ValueError, e:
-                    self.assertEquals('Premature close', str(e))
+                except ValueError as e:
+                    self.assertEqual('Premature close', str(e))
 
                 try:
                     _, _ = yield httprequest1_1(host='localhost', port=mss.port, request='/fifth')
                     self.fail()
-                except ValueError, e:
-                    self.assertEquals('Premature close', str(e))
+                except ValueError as e:
+                    self.assertEqual('Premature close', str(e))
 
                 statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/sixth')
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
-                self.assertEquals('', body)
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
+                self.assertEqual('', body)
 
                 statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/seventh')
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
-                self.assertEquals('ABC', body)
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
+                self.assertEqual('ABC', body)
 
                 yield zleep(0.001)
-                self.assertEquals(7, mss.nrOfRequests)
-                self.assertEquals([None] * 7, [c.value for c in mss.state.connections.values()])
+                self.assertEqual(7, mss.nrOfRequests)
+                self.assertEqual([None] * 7, [c.value for c in list(mss.state.connections.values())])
             finally:
                 mss.close()
 
@@ -602,7 +602,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
             # Request 1
             toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             # Response statusline & headers
             yield write(data='HTTP/1.1 200 OK\r\nTransfer')
@@ -617,7 +617,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
             # Request 2
             toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             # Response statusline & headers
             yield write(data='HTTP/1.1 200 oK\r\nTRANSFER-encoding: blue, GREEN, Banana, GZip, ChunKeD\r\n\r\n1\r\nx\r\n0\r\n\r\n')  # As long as chunked is last, whatever.
@@ -626,7 +626,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
             # Request 3
             toRead = 'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             # Response statusline & headers
             yield write(data='HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n')
@@ -649,46 +649,46 @@ class HttpRequest1_1Test(WeightlessTestCase):
                     ),
                 ))
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first', timeout=1.0)
-                self.assertEquals({
+                self.assertEqual({
                         'HTTPVersion': '1.1',
                         'StatusCode': '200',
                         'ReasonPhrase': 'OK',
                         'Headers': {'Transfer-Encoding': 'chunked'},
                     }, statusAndHeaders)
-                self.assertEquals('0123456789A', body)
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals(IN_PROGRESS, mss.state.connections.get(1).value)
+                self.assertEqual('0123456789A', body)
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual(IN_PROGRESS, mss.state.connections.get(1).value)
                 conn1Log = mss.state.connections.get(1).log
-                self.assertEquals(['Response1Done'], conn1Log)
+                self.assertEqual(['Response1Done'], conn1Log)
 
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/second')
-                self.assertEquals({
+                self.assertEqual({
                         'HTTPVersion': '1.1',
                         'StatusCode': '200',
                         'ReasonPhrase': 'oK',
                         'Headers': {'Transfer-Encoding': 'blue, GREEN, Banana, GZip, ChunKeD'},
                     }, statusAndHeaders)
-                self.assertEquals('x', body)
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals(IN_PROGRESS, mss.state.connections.get(1).value)
-                self.assertEquals(['Response1Done', 'Response2Done'], conn1Log)
+                self.assertEqual('x', body)
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual(IN_PROGRESS, mss.state.connections.get(1).value)
+                self.assertEqual(['Response1Done', 'Response2Done'], conn1Log)
 
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/third')
-                self.assertEquals({
+                self.assertEqual({
                         'HTTPVersion': '1.1',
                         'StatusCode': '200',
                         'ReasonPhrase': 'OK',
                         'Headers': {'Transfer-Encoding': 'chunked'},
                     }, statusAndHeaders)
-                self.assertEquals('', body)
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals(IN_PROGRESS, mss.state.connections.get(1).value)
+                self.assertEqual('', body)
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual(IN_PROGRESS, mss.state.connections.get(1).value)
                 conn1Log = mss.state.connections.get(1).log
-                self.assertEquals(['Response1Done', 'Response2Done', 'Response3Done'], conn1Log)
+                self.assertEqual(['Response1Done', 'Response2Done', 'Response3Done'], conn1Log)
 
                 yield zleep(0.015)
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals('Finished', mss.state.connections.get(1).value)
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual('Finished', mss.state.connections.get(1).value)
             finally:
                 mss.close()
 
@@ -698,7 +698,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r1(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.1 200 Okee-Dan\r\n\r\n")
             yield write("Hi!")
@@ -711,9 +711,9 @@ class HttpRequest1_1Test(WeightlessTestCase):
             mss.listen()
             try:
                 statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/first')
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
-                self.assertEquals('Hi!', body)
-                self.assertEquals({1: (None, [])}, mss.state.connections)
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
+                self.assertEqual('Hi!', body)
+                self.assertEqual({1: (None, [])}, mss.state.connections)
             finally:
                 mss.close()
 
@@ -729,7 +729,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r_content_length(sok, log, remoteAddress, connectionNr):
             # Request
             data = yield read(untilExpected=expectedrequest)
-            self.assertEquals(expectedrequest, data)
+            self.assertEqual(expectedrequest, data)
 
             # Response
             _headers = 'HTTP/1.1 200 OK\r\nContent-Length: 26\r\n\r\n'
@@ -740,7 +740,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r_close(sok, log, remoteAddress, connectionNr):
             # Request
             data = yield read(untilExpected=expectedrequest)
-            self.assertEquals(expectedrequest, data)
+            self.assertEqual(expectedrequest, data)
 
             # Response
             _headers = 'HTTP/1.0 200 OK\r\n\r\n'
@@ -751,7 +751,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r_chunked(sok, log, remoteAddress, connectionNr):
             # Request
             data = yield read(untilExpected=expectedrequest)
-            self.assertEquals(expectedrequest, data)
+            self.assertEqual(expectedrequest, data)
 
             # Response
             _headers = 'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n'
@@ -771,15 +771,15 @@ class HttpRequest1_1Test(WeightlessTestCase):
             ))
             try:
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/stuff', bodyMaxSize=bodyMaxSize)
-                self.assertEquals(
+                self.assertEqual(
                     expectedStatusAndHeaders,
                     statusAndHeaders
                 )
                 expected = expected_response[:expectedLength]
-                self.assertEquals(expected, body)
-                self.assertEquals(expectedLength, len(body))
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals({1: (None, [])}, mss.state.connections)
+                self.assertEqual(expected, body)
+                self.assertEqual(expectedLength, len(body))
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual({1: (None, [])}, mss.state.connections)
             finally:
                 mss.close()
 
@@ -830,8 +830,8 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 try:
                     _, _ = yield httprequest1_1(method='CONNECT', host='localhost', port=mss.port, request='/')
                     self.fail()
-                except ValueError, e:
-                    self.assertEquals('CONNECT method unsupported.', str(e))
+                except ValueError as e:
+                    self.assertEqual('CONNECT method unsupported.', str(e))
             finally:
                 mss.close()
 
@@ -841,12 +841,12 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r1(sok, log, remoteAddress, connectionNr):
             s = 'GET /path HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=s)
-            self.assertEquals(s, data)
+            self.assertEqual(s, data)
 
             # Force close, focus on timout testing without pooling here.
             yield write('HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\n')
 
-            for i in xrange(5):
+            for i in range(5):
                 yield zleep(0.01)
                 yield write(str(i))
 
@@ -856,18 +856,18 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r2(sok, log, remoteAddress, connectionNr):
             s = 'GET /path HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=s)
-            self.assertEquals(s, data)
+            self.assertEqual(s, data)
 
             yield write('HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\n')
             log.append('headers')
 
             try:
-                for i in xrange(5):
+                for i in range(5):
                     yield zleep(0.01)
                     yield write(str(i))
                     log.append(i)
-            except SocketError, e:
-                self.assertEquals(32, e.args[0])  # Broken pipe
+            except SocketError as e:
+                self.assertEqual(32, e.args[0])  # Broken pipe
 
             sok.close()  # shutdown would fail with errno: 107 / "Transport endpoint is not connected".
             raise StopIteration('finished')
@@ -884,10 +884,10 @@ class HttpRequest1_1Test(WeightlessTestCase):
                     timeout=0.5, port=mss.port,
                     **staticArgs
                 )
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
-                self.assertEquals('01234', body)
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals(('finished', []), mss.state.connections.get(1))
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
+                self.assertEqual('01234', body)
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual(('finished', []), mss.state.connections.get(1))
 
                 # Timing out
                 try:
@@ -898,10 +898,10 @@ class HttpRequest1_1Test(WeightlessTestCase):
                     self.fail()
                 except TimeoutException:
                     pass
-                self.assertEquals(2, mss.nrOfRequests)
-                self.assertEquals((IN_PROGRESS, ['headers', 0]), mss.state.connections.get(2))
+                self.assertEqual(2, mss.nrOfRequests)
+                self.assertEqual((IN_PROGRESS, ['headers', 0]), mss.state.connections.get(2))
                 yield zleep(0.025)
-                self.assertEquals(('finished', ['headers', 0, 1]), mss.state.connections.get(2))
+                self.assertEqual(('finished', ['headers', 0, 1]), mss.state.connections.get(2))
             finally:
                 mss.close()
 
@@ -911,7 +911,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r1(sok, log, remoteAddress, connectionNr):
             s = "GET /first HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
             data = yield read(untilExpected=s)
-            self.assertEquals(s, data)
+            self.assertEqual(s, data)
 
             yield write('HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n')
             yield write('DATA')
@@ -921,7 +921,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
             # second request
             s = "GET /second HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
             data = yield read(untilExpected=s)
-            self.assertEquals(s, data)
+            self.assertEqual(s, data)
 
             yield write('HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\n')
             yield write('DATA')
@@ -931,7 +931,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
             # third request
             s = "GET /third HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
             data = yield read(untilExpected=s)
-            self.assertEquals(s, data)
+            self.assertEqual(s, data)
 
             yield write('HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\n')
             yield write('DATA')
@@ -968,41 +968,41 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 # 1st request; no socket reuse by server request.
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='127.0.0.1', port=mss.port, request='/first')
                 # Request went ok.
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
-                self.assertEquals('DATA', body)
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
+                self.assertEqual('DATA', body)
 
                 # mss interaction ok.
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals((None, []), mss.state.connections.get(1))
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual((None, []), mss.state.connections.get(1))
 
                 # Actual test:
-                self.assertEquals(['getPooledSocket'], loggingPool.calledMethodNames())
-                self.assertEquals(((), {'host': '127.0.0.1', 'port': mss.port}), (loggingPool.calledMethods[0].args, loggingPool.calledMethods[0].kwargs))
-                self.assertEquals([None], getLog)
+                self.assertEqual(['getPooledSocket'], loggingPool.calledMethodNames())
+                self.assertEqual(((), {'host': '127.0.0.1', 'port': mss.port}), (loggingPool.calledMethods[0].args, loggingPool.calledMethods[0].kwargs))
+                self.assertEqual([None], getLog)
                 loggingPool.calledMethods.reset()
                 del getLog[:]
 
                 # 2st request; socket reuse.
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='127.0.0.1', port=mss.port, request='/second')
                 # Request went ok.
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
-                self.assertEquals('DATA', body)
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
+                self.assertEqual('DATA', body)
 
                 # mss interaction ok.
-                self.assertEquals(2, mss.nrOfRequests)
-                self.assertEquals((IN_PROGRESS, [2]), mss.state.connections.get(2))
+                self.assertEqual(2, mss.nrOfRequests)
+                self.assertEqual((IN_PROGRESS, [2]), mss.state.connections.get(2))
 
                 # Actual test:
-                self.assertEquals(['getPooledSocket', 'putSocketInPool'], loggingPool.calledMethodNames())
+                self.assertEqual(['getPooledSocket', 'putSocketInPool'], loggingPool.calledMethodNames())
                 _get, _put = loggingPool.calledMethods
-                self.assertEquals(((), {'host': '127.0.0.1', 'port': mss.port}), (_get.args, _get.kwargs))
-                self.assertEquals([None], getLog)
-                self.assertEquals(((), set(['host', 'port', 'sock'])), (_put.args, set(_put.kwargs.keys())))
-                self.assertEquals('127.0.0.1', _put.kwargs['host'])
-                self.assertEquals(mss.port, _put.kwargs['port'])
+                self.assertEqual(((), {'host': '127.0.0.1', 'port': mss.port}), (_get.args, _get.kwargs))
+                self.assertEqual([None], getLog)
+                self.assertEqual(((), set(['host', 'port', 'sock'])), (_put.args, set(_put.kwargs.keys())))
+                self.assertEqual('127.0.0.1', _put.kwargs['host'])
+                self.assertEqual(mss.port, _put.kwargs['port'])
                 storedFileno = _put.kwargs['sock'].fileno()
                 self.assertTrue(bool(storedFileno), _put.kwargs['sock'])
-                self.assertEquals([None], putLog)
+                self.assertEqual([None], putLog)
                 del getLog[:]
                 del putLog[:]
                 loggingPool.calledMethods.reset()
@@ -1010,24 +1010,24 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 # 3st request; socket reused.
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='127.0.0.1', port=mss.port, request='/third')
                 # Request went ok.
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
-                self.assertEquals('DATA', body)
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
+                self.assertEqual('DATA', body)
 
                 # mss interaction ok.
-                self.assertEquals(2, mss.nrOfRequests)
-                self.assertEquals((IN_PROGRESS, [2, 3]), mss.state.connections.get(2))
+                self.assertEqual(2, mss.nrOfRequests)
+                self.assertEqual((IN_PROGRESS, [2, 3]), mss.state.connections.get(2))
 
                 # Actual test:
-                self.assertEquals(['getPooledSocket', 'putSocketInPool'], loggingPool.calledMethodNames())
-                self.assertEquals(storedFileno, getLog[0].fileno())
-                self.assertEquals(storedFileno, loggingPool.calledMethods[1].kwargs['sock'].fileno())
+                self.assertEqual(['getPooledSocket', 'putSocketInPool'], loggingPool.calledMethodNames())
+                self.assertEqual(storedFileno, getLog[0].fileno())
+                self.assertEqual(storedFileno, loggingPool.calledMethods[1].kwargs['sock'].fileno())
                 pooledSocket = yield _realPool.getPooledSocket(host='127.0.0.1', port=mss.port)
-                self.assertEquals(storedFileno, pooledSocket.fileno())
+                self.assertEqual(storedFileno, pooledSocket.fileno())
 
                 # Wait for connection #2 close.
                 yield zleep(0.02)
 
-                self.assertEquals(None, mss.state.connections.get(2).value)
+                self.assertEqual(None, mss.state.connections.get(2).value)
             finally:
                 mss.close()
 
@@ -1040,7 +1040,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r1(sok, log, remoteAddress, connectionNr):
             # Request
             data = yield read(untilExpected=expectedrequest)
-            self.assertEquals(expectedrequest, data)
+            self.assertEqual(expectedrequest, data)
 
             # Response
             _headers = 'HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\n'
@@ -1058,17 +1058,17 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request=request)
                 yield 'HTTP/1.0 200 Ok\r\n\r\n'
                 yield statusAndHeaders['StatusCode'] + '\n' + body
-            wlPort = PortNumberGenerator.next()
+            wlPort = next(PortNumberGenerator)
             wlHttp = HttpServer(reactor=reactor(), port=wlPort, generatorFactory=_passthruhandler)
 
             wlHttp.listen()
             mss.listen()
             try:
                 statusAndHeaders, body = yield httprequest1_1(host='localhost', port=wlPort, request='/path?arg=1&arg=2', timeout=1.0)
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals({1: (None, [])}, mss.state.connections)
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
-                self.assertEquals('200\nhello!', body)
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual({1: (None, [])}, mss.state.connections)
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
+                self.assertEqual('200\nhello!', body)
             finally:
                 wlHttp.shutdown()
                 mss.close()
@@ -1097,9 +1097,9 @@ class HttpRequest1_1Test(WeightlessTestCase):
             try:
                 _, _ = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/')
                 self.fail()
-            except RuntimeError, e:
+            except RuntimeError as e:
                 c, v, t = exc_info()
-                self.assertEquals('Boom!', str(e))
+                self.assertEqual('Boom!', str(e))
             finally:
                 mss.close()
 
@@ -1114,7 +1114,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
   File "%(__file__)s", line 951, in getPooledSocket
     raise RuntimeError('Boom!')
 RuntimeError: Boom!\n""" % fileDict)
-            self.assertEquals(expectedTraceback, ignoreLineNumbers(resultingTraceback))
+            self.assertEqual(expectedTraceback, ignoreLineNumbers(resultingTraceback))
 
         asProcess(test())
 
@@ -1123,12 +1123,12 @@ RuntimeError: Boom!\n""" % fileDict)
         def test():
             try:
                 _, _ = yield httprequest1_1(
-                    method='POST', host='localhost', port=PortNumberGenerator.next(), request='/path', body="body",
+                    method='POST', host='localhost', port=next(PortNumberGenerator), request='/path', body="body",
                     headers={'Content-Type': 'text/plain'}, secure=True,
                 )
                 self.fail()
-            except IOError, e:
-                self.assertEquals(ECONNREFUSED, e.args[0])  # errno: 111.
+            except IOError as e:
+                self.assertEqual(ECONNREFUSED, e.args[0])  # errno: 111.
 
         asProcess(test())
 
@@ -1138,28 +1138,28 @@ RuntimeError: Boom!\n""" % fileDict)
             try:
                 _, _ = yield httprequest1_1(host='localhost', port='PORT', request='/')
                 self.fail()
-            except TypeError, e:
-                self.assertEquals('an integer is required', str(e))
+            except TypeError as e:
+                self.assertEqual('an integer is required', str(e))
 
             #"Invalid" port (no-one listens)
             try:
                 _, _ = yield httprequest1_1(host='localhost', port=87, request='/')  # 87 -> IANA: mfcobol (Micro Focus Cobol) "any private terminal link".
                 self.fail()
-            except IOError, e:
-                self.assertEquals(ECONNREFUSED, e.args[0])  # errno: 111.
+            except IOError as e:
+                self.assertEqual(ECONNREFUSED, e.args[0])  # errno: 111.
 
             # Invalid host
             try:
-                _, _ = yield httprequest1_1(host='UEYR^$*FD(#>NDJ.khfd9.(*njnd', port=PortNumberGenerator.next(), request='/')
+                _, _ = yield httprequest1_1(host='UEYR^$*FD(#>NDJ.khfd9.(*njnd', port=next(PortNumberGenerator), request='/')
                 self.fail()
             except SocketGaiError:
                 pass
             # No-one listens
             try:
-                _, _ = yield httprequest1_1(host='127.0.0.1', port=PortNumberGenerator.next(), request='/')
+                _, _ = yield httprequest1_1(host='127.0.0.1', port=next(PortNumberGenerator), request='/')
                 self.fail()
-            except IOError, e:
-                self.assertEquals(ECONNREFUSED, e.args[0])  # errno: 111.
+            except IOError as e:
+                self.assertEqual(ECONNREFUSED, e.args[0])  # errno: 111.
 
         asProcess(test())
 
@@ -1167,7 +1167,7 @@ RuntimeError: Boom!\n""" % fileDict)
         def r1(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
             # One OK -> into pool
@@ -1179,7 +1179,7 @@ RuntimeError: Boom!\n""" % fileDict)
         def r2(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nDone")
             # In pool (cleanup here).
@@ -1198,22 +1198,22 @@ RuntimeError: Boom!\n""" % fileDict)
             try:
                 # new socket & into pool.
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first')
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals(IN_PROGRESS, mss.state.connections.get(1).value)
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual(IN_PROGRESS, mss.state.connections.get(1).value)
 
                 # wait for socket to go "bad".
                 yield zleep(0.002)
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals(None, mss.state.connections.get(1).value)
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual(None, mss.state.connections.get(1).value)
 
                 # reuse -> send #fail -> new socket & retry.
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/second')
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
-                self.assertEquals('Done', body)
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
+                self.assertEqual('Done', body)
 
-                self.assertEquals(2, mss.nrOfRequests)
-                self.assertEquals(None, mss.state.connections.get(2).value)
+                self.assertEqual(2, mss.nrOfRequests)
+                self.assertEqual(None, mss.state.connections.get(2).value)
                 pooledSocket = yield socketPool.getPooledSocket(host='localhost', port=mss.port)
                 self.assertTrue(bool(pooledSocket.fileno()))
             finally:
@@ -1225,7 +1225,7 @@ RuntimeError: Boom!\n""" % fileDict)
         def r1(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
             # One OK -> into pool
@@ -1252,26 +1252,26 @@ RuntimeError: Boom!\n""" % fileDict)
             try:
                 # new socket & into pool.
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first')
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals(IN_PROGRESS, mss.state.connections.get(1).value)
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual(IN_PROGRESS, mss.state.connections.get(1).value)
 
                 # wait for socket to go "bad".
                 yield zleep(0.002)
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals(None, mss.state.connections.get(1).value)
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual(None, mss.state.connections.get(1).value)
 
                 # reuse -> send #fail -> new socket & retry -> #fails again
                 try:
                     statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/second')
                     self.fail()
-                except ValueError, e:
-                    self.assertEquals('Premature close', str(e))
+                except ValueError as e:
+                    self.assertEqual('Premature close', str(e))
 
-                self.assertEquals(2, mss.nrOfRequests)
-                self.assertEquals(None, mss.state.connections.get(2).value)
+                self.assertEqual(2, mss.nrOfRequests)
+                self.assertEqual(None, mss.state.connections.get(2).value)
                 pooledSocket = yield socketPool.getPooledSocket(host='localhost', port=mss.port)
-                self.assertEquals(None, pooledSocket)
+                self.assertEqual(None, pooledSocket)
             finally:
                 mss.close()
 
@@ -1281,7 +1281,7 @@ RuntimeError: Boom!\n""" % fileDict)
         def r1(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
             # One OK -> into pool
@@ -1289,7 +1289,7 @@ RuntimeError: Boom!\n""" % fileDict)
 
             toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             # Get the hopes up ...
             yield zleep(0.001)
@@ -1300,7 +1300,7 @@ RuntimeError: Boom!\n""" % fileDict)
         def r2(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nDone")
             # In pool (cleanup here).
@@ -1319,20 +1319,20 @@ RuntimeError: Boom!\n""" % fileDict)
             try:
                 # new socket & into pool.
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first')
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
 
                 yield zleep(0.002)
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals(IN_PROGRESS, mss.state.connections.get(1).value)
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual(IN_PROGRESS, mss.state.connections.get(1).value)
 
                 # reuse -> first recv #fail -> new socket & retry.
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/second')
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
-                self.assertEquals('Done', body)
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
+                self.assertEqual('Done', body)
 
-                self.assertEquals(2, mss.nrOfRequests)
-                self.assertEquals(None, mss.state.connections.get(1).value)
-                self.assertEquals(None, mss.state.connections.get(2).value)
+                self.assertEqual(2, mss.nrOfRequests)
+                self.assertEqual(None, mss.state.connections.get(1).value)
+                self.assertEqual(None, mss.state.connections.get(2).value)
                 pooledSocket = yield socketPool.getPooledSocket(host='localhost', port=mss.port)
                 self.assertTrue(bool(pooledSocket.fileno()))
             finally:
@@ -1344,7 +1344,7 @@ RuntimeError: Boom!\n""" % fileDict)
         def r1(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nDone")
             # In pool (cleanup here).
@@ -1370,11 +1370,11 @@ RuntimeError: Boom!\n""" % fileDict)
                     statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first')
                     self.assertTrue('EBADF' in err.getvalue(), err.getvalue())
                     self.assertTrue('Bad file descriptor' in err.getvalue(), err.getvalue())
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
-                self.assertEquals('Done', body)
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
+                self.assertEqual('Done', body)
 
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals(None, mss.state.connections.get(1).value)
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual(None, mss.state.connections.get(1).value)
                 pooledSocket = yield socketPool.getPooledSocket(host='localhost', port=mss.port)
                 self.assertTrue(bool(pooledSocket.fileno()))
             finally:
@@ -1387,14 +1387,14 @@ RuntimeError: Boom!\n""" % fileDict)
         def r1(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
             log.append(1)
 
             toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write("HTTP/1.1 Oh No!...")
             yield zleep(0.001)
@@ -1412,16 +1412,16 @@ RuntimeError: Boom!\n""" % fileDict)
             mss.listen()
             try:
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/first')
-                self.assertEquals('200', statusAndHeaders['StatusCode'])
+                self.assertEqual('200', statusAndHeaders['StatusCode'])
                 yield zleep(0.001)
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals((IN_PROGRESS, [1]), mss.state.connections.get(1))
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual((IN_PROGRESS, [1]), mss.state.connections.get(1))
 
                 try:
                     statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/second')
                     self.fail()
-                except ValueError, e:
-                    self.assertEquals('Premature close', str(e))
+                except ValueError as e:
+                    self.assertEqual('Premature close', str(e))
             finally:
                 mss.close()
 
@@ -1452,58 +1452,58 @@ RuntimeError: Boom!\n""" % fileDict)
 
         # Minimal
         result = retval(top.any.httprequest(host='h', port=12, request='/'))
-        self.assertEquals(['httprequest1_1'], trace.calledMethodNames())
+        self.assertEqual(['httprequest1_1'], trace.calledMethodNames())
         call, = trace.calledMethods
-        self.assertEquals(((), {'host': 'h', 'request': '/', 'port': 12}), (call.args, call.kwargs))
-        self.assertEquals('HTTP/1.7 200 Okee\r\nHdr: Vl\r\nHost: farfaraway.com\r\nTransfer-Encoding: chunked\r\n\r\nBody', result)
+        self.assertEqual(((), {'host': 'h', 'request': '/', 'port': 12}), (call.args, call.kwargs))
+        self.assertEqual('HTTP/1.7 200 Okee\r\nHdr: Vl\r\nHost: farfaraway.com\r\nTransfer-Encoding: chunked\r\n\r\nBody', result)
         trace.calledMethods.reset()
 
         # ssl=True
         result = retval(top.any.httprequest(host='h', port=12, request='/', ssl=True))
-        self.assertEquals(['httprequest1_1'], trace.calledMethodNames())
+        self.assertEqual(['httprequest1_1'], trace.calledMethodNames())
         call, = trace.calledMethods
-        self.assertEquals(((), {'host': 'h', 'request': '/', 'port': 12, 'secure': True}), (call.args, call.kwargs))
+        self.assertEqual(((), {'host': 'h', 'request': '/', 'port': 12, 'secure': True}), (call.args, call.kwargs))
         self.assertTrue(result.startswith('HTTP/1.7 200'), result)
         trace.calledMethods.reset()
 
         # ssl=False
         result = retval(top.any.httprequest(host='h', port=12, request='/', ssl=False))
         call, = trace.calledMethods
-        self.assertEquals(((), {'host': 'h', 'request': '/', 'port': 12, 'secure': False}), (call.args, call.kwargs))
+        self.assertEqual(((), {'host': 'h', 'request': '/', 'port': 12, 'secure': False}), (call.args, call.kwargs))
         trace.calledMethods.reset()
 
         # All arguments
         result = retval(top.any.httprequest(host='h', port=12, request='/', ssl=True, body='sendme', headers={'h': 'v'}, method='SOME', prio=7, timeout=22.0))
         call, = trace.calledMethods
-        self.assertEquals(((), {'host': 'h', 'request': '/', 'port': 12, 'secure': True, 'body': 'sendme', 'headers': {'h': 'v'}, 'method': 'SOME', 'prio': 7, 'timeout': 22.0}), (call.args, call.kwargs))
+        self.assertEqual(((), {'host': 'h', 'request': '/', 'port': 12, 'secure': True, 'body': 'sendme', 'headers': {'h': 'v'}, 'method': 'SOME', 'prio': 7, 'timeout': 22.0}), (call.args, call.kwargs))
         trace.calledMethods.reset()
 
         # Unsupported features of HttpRequest.
         try:
             retval(top.any.httprequest(host='example.org', port=80, request='/', proxyServer='proxy.example.org'))
             self.fail()
-        except TypeError, e:
-            self.assertEquals('proxyServer and handlePartialResponse arguments not supported in HttpRequest1_1 - so cannot adapt.', str(e))
+        except TypeError as e:
+            self.assertEqual('proxyServer and handlePartialResponse arguments not supported in HttpRequest1_1 - so cannot adapt.', str(e))
         self.assertRaises(TypeError, lambda: retval(top.any.httprequest(host='example.org', port=80, request='/', proxyServer='proxy.example.org')))
 
         # Too much
         try:
             retval(top.any.httprequest(host='example.org', port=80, request='/', unknown='argument', illogical='yes!'))
             self.fail()
-        except TypeError, e:
-            self.assertEquals('Unexpected argument(s): unknown, illogical', str(e))
+        except TypeError as e:
+            self.assertEqual('Unexpected argument(s): unknown, illogical', str(e))
         # Too few
         try:
             retval(top.any.httprequest(host='example.org', port=80))
             self.fail()
-        except TypeError, e:
+        except TypeError as e:
             self.assertTrue('httprequest() takes exactly' in str(e), str(e))
 
     def testHttpRequestAdapterWithImplementation(self):
         def r1(sok, log, remoteAddress, connectionNr):
             toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write('HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 0\r\n\r\n')
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -1511,7 +1511,7 @@ RuntimeError: Boom!\n""" % fileDict)
         def r2(sok, log, remoteAddress, connectionNr):
             toRead = 'POST /second HTTP/1.1\r\nH: V\r\nContent-Length: 12\r\nHost: localhost\r\n\r\nrequest-body'
             data = yield read(untilExpected=toRead)
-            self.assertEquals(toRead, data)
+            self.assertEqual(toRead, data)
 
             yield write('HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 4\r\n\r\nDone')
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -1531,12 +1531,12 @@ RuntimeError: Boom!\n""" % fileDict)
                 # minimal
                 result = yield top.any.httprequest(host='localhost', port=mss.port, request='/first')
                 expected = 'HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'
-                self.assertEquals(expected, result)
+                self.assertEqual(expected, result)
 
                 # all (valid) arguments
                 result = yield top.any.httprequest(method='POST', host='localhost', port=mss.port, request='/second', body='request-body', headers={'H': 'V'}, ssl=False, prio=2, timeout=5.0)
                 expected = 'HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 4\r\n\r\nDone'
-                self.assertEquals(expected, result)
+                self.assertEqual(expected, result)
             finally:
                 mss.close()
 
@@ -1547,9 +1547,9 @@ RuntimeError: Boom!\n""" % fileDict)
     def testHttpPost(self):
         # Implementation-test for POST.
         post_request = []
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         self.referenceHttpServer(port, post_request)
-        body = u"BÖDY" * 20000
+        body = "BÖDY" * 20000
 
         def test():
             statusAndHeaders, _body = yield httprequest1_1(
@@ -1563,20 +1563,20 @@ RuntimeError: Boom!\n""" % fileDict)
 
         asProcess(test())
 
-        self.assertEquals(1, len(post_request))
+        self.assertEqual(1, len(post_request))
         post_req = post_request[0]
-        self.assertEquals('POST', post_req['command'])
-        self.assertEquals('/path', post_req['path'])
+        self.assertEqual('POST', post_req['command'])
+        self.assertEqual('/path', post_req['path'])
         headers = post_req['headers'].headers
-        self.assertEquals(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n', 'Host: vvvvvv.example.org\r\n'], sorted(headers))
+        self.assertEqual(['Content-Length: 100000\r\n', 'Content-Type: text/plain\r\n', 'Host: vvvvvv.example.org\r\n'], sorted(headers))
 
     def testHttpPostWithoutExplicitHeaders(self):
         # Implementation-test:
         # Host header added (from host argument) if not given explicitly.
         post_request = []
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         self.referenceHttpServer(port, post_request)
-        body = u"BÖDY" * 20000
+        body = "BÖDY" * 20000
         def posthandler(*args, **kwargs):
             response = yield httprequest1_1(
                 method='POST', host='localhost', port=port, request='/path', body=body,
@@ -1586,24 +1586,24 @@ RuntimeError: Boom!\n""" % fileDict)
 
         def test():
             statusAndHeaders, _body = yield httprequest1_1(method='POST', host='localhost', port=port, request='/path', body=body)
-            self.assertEquals('200', statusAndHeaders['StatusCode'])
-            self.assertEquals("POST RESPONSE", _body)
+            self.assertEqual('200', statusAndHeaders['StatusCode'])
+            self.assertEqual("POST RESPONSE", _body)
 
         asProcess(test())
 
-        self.assertEquals('POST', post_request[0]['command'])
-        self.assertEquals('/path', post_request[0]['path'])
+        self.assertEqual('POST', post_request[0]['command'])
+        self.assertEqual('/path', post_request[0]['path'])
         headers = post_request[0]['headers'].headers
-        self.assertEquals([
+        self.assertEqual([
                 'Content-Length: 100000\r\n',
                 'Host: localhost\r\n',
             ], sorted(headers))
-        self.assertEquals(body, post_request[0]['body'])
+        self.assertEqual(body, post_request[0]['body'])
 
     def testHttpsGet(self):
         # Implementation-test:
         get_request = []
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         self.referenceHttpServer(port, get_request, ssl=True)
 
         def test():
@@ -1611,47 +1611,47 @@ RuntimeError: Boom!\n""" % fileDict)
                     host='localhost', port=port, request='/path',
                     secure=True,
             )
-            self.assertEquals('200', statusAndHeaders['StatusCode'])
-            self.assertEquals("GET RESPONSE", body)
+            self.assertEqual('200', statusAndHeaders['StatusCode'])
+            self.assertEqual("GET RESPONSE", body)
 
         asProcess(test())
 
-        self.assertEquals('GET', get_request[0]['command'])
-        self.assertEquals('/path', get_request[0]['path'])
+        self.assertEqual('GET', get_request[0]['command'])
+        self.assertEqual('/path', get_request[0]['path'])
         headers = get_request[0]['headers'].headers
-        self.assertEquals(['Host: localhost\r\n'], headers)
+        self.assertEqual(['Host: localhost\r\n'], headers)
 
     def testHttpsPost(self):
         # Implementation-test: Testing SSL/TLS with a "real" server.
         post_request = []
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         self.referenceHttpServer(port, post_request, ssl=True)
-        body = u"BÖDY" * 20000
+        body = "BÖDY" * 20000
 
         def test():
             statusAndHeaders, _body = yield httprequest1_1(
                 method='POST', host='localhost', port=port, request='/path', body=body,
                 headers={'Content-Type': 'text/plain'}, secure=True,
             )
-            self.assertEquals('200', statusAndHeaders['StatusCode'])
-            self.assertEquals("POST RESPONSE", _body)
+            self.assertEqual('200', statusAndHeaders['StatusCode'])
+            self.assertEqual("POST RESPONSE", _body)
 
         asProcess(test())
 
-        self.assertEquals('POST', post_request[0]['command'])
-        self.assertEquals('/path', post_request[0]['path'])
+        self.assertEqual('POST', post_request[0]['command'])
+        self.assertEqual('/path', post_request[0]['path'])
         headers = post_request[0]['headers'].headers
-        self.assertEquals([
+        self.assertEqual([
                 'Content-Length: 100000\r\n',
                 'Content-Type: text/plain\r\n',
                 'Host: localhost\r\n',
             ], sorted(headers))
-        self.assertEquals(body, post_request[0]['body'])
+        self.assertEqual(body, post_request[0]['body'])
 
     def testHttpGet(self):
         # Implementation-test
         get_request = []
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         self.referenceHttpServer(port, get_request)
 
         def test():
@@ -1663,15 +1663,15 @@ RuntimeError: Boom!\n""" % fileDict)
                 },
                 prio=4
             )
-            self.assertEquals('200', statusAndHeaders['StatusCode'])
-            self.assertEquals("GET RESPONSE", body)
+            self.assertEqual('200', statusAndHeaders['StatusCode'])
+            self.assertEqual("GET RESPONSE", body)
 
         asProcess(test())
 
-        self.assertEquals('GET', get_request[0]['command'])
-        self.assertEquals('/path', get_request[0]['path'])
+        self.assertEqual('GET', get_request[0]['command'])
+        self.assertEqual('/path', get_request[0]['path'])
         headers = get_request[0]['headers'].headers
-        self.assertEquals(sorted([
+        self.assertEqual(sorted([
                 'Content-Length: 0\r\n',
                 'Content-Type: text/plain\r\n',
                 'Host: localhost\r\n',
@@ -1682,14 +1682,14 @@ RuntimeError: Boom!\n""" % fileDict)
     def testHttpWithUnsupportedMethod(self):
         # Implementation-test:
         get_request = []
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         self.referenceHttpServer(port, get_request)
 
         def test():
             statusAndHeaders, body = yield httprequest1_1(
                 method='MYMETHOD', host='localhost', port=port, request='/path',
             )
-            self.assertEquals('501', statusAndHeaders['StatusCode'])  # "Not Implemented"
+            self.assertEqual('501', statusAndHeaders['StatusCode'])  # "Not Implemented"
             self.assertTrue("Message: Unsupported method ('MYMETHOD')" in body, body)
 
         asProcess(test())
@@ -1697,7 +1697,7 @@ RuntimeError: Boom!\n""" % fileDict)
     def testReallyLargeHeaders(self):
         # Implementation-test:
         get_request = []
-        port = PortNumberGenerator.next()
+        port = next(PortNumberGenerator)
         self.referenceHttpServer(port, get_request)
 
         headersOrig = {'Accept': 'text/plain'}
@@ -1710,18 +1710,18 @@ RuntimeError: Boom!\n""" % fileDict)
                 host='localhost', port=port, request='/path',
                 headers=headersOrig,
             )
-            self.assertEquals('200', statusAndHeaders['StatusCode'])
-            self.assertEquals("GET RESPONSE", body)
+            self.assertEqual('200', statusAndHeaders['StatusCode'])
+            self.assertEqual("GET RESPONSE", body)
 
         asProcess(test())
 
         headers = get_request[0]['headers'].headers
         headersAsDict = dict([tuple(h.strip().split(': ', 1)) for h in headers])
-        self.assertEquals(len(headersOrig), len(headersAsDict))
-        self.assertEquals(headersOrig, headersAsDict)
+        self.assertEqual(len(headersOrig), len(headersAsDict))
+        self.assertEqual(headersOrig, headersAsDict)
 
-        self.assertEquals('GET', get_request[0]['command'])
-        self.assertEquals('/path', get_request[0]['path'])
+        self.assertEqual('GET', get_request[0]['command'])
+        self.assertEqual('/path', get_request[0]['path'])
 
     ##
     ## Internals
@@ -1731,31 +1731,31 @@ RuntimeError: Boom!\n""" % fileDict)
         sw = SocketWrapper(sok=trace)
 
         # Wrapper used once per connection-request; recievedData initially False.
-        self.assertEquals(False, sw.recievedData)
+        self.assertEqual(False, sw.recievedData)
 
         # Any method / property passed on and memoized.
         self.assertTrue(callable(sw.whatever))
-        self.assertEquals('b', sw.a)
+        self.assertEqual('b', sw.a)
         trace.a = 'c'
-        self.assertEquals('b', sw.a)  # still a; properties on a socket obj. don't change - so not a problem.
+        self.assertEqual('b', sw.a)  # still a; properties on a socket obj. don't change - so not a problem.
 
         # Other method calls don't change recievedData state.
         sw.send('daataaa')
-        self.assertEquals(False, sw.recievedData)
+        self.assertEqual(False, sw.recievedData)
 
         # recv does
         result = sw.recv(44)
-        self.assertEquals('12', result)
-        self.assertEquals(True, sw.recievedData)
+        self.assertEqual('12', result)
+        self.assertEqual(True, sw.recievedData)
         self.assertTrue(trace is sw.unwrap_recievedData())
 
         # recv with no data does not
         trace = CallTrace(methods={'recv': lambda *a, **kw: ''})
         sw = SocketWrapper(sok=trace)
-        self.assertEquals(False, sw.recievedData)
+        self.assertEqual(False, sw.recievedData)
         result = sw.recv(bufsize=33, flags='No Idea')
-        self.assertEquals('', result)
-        self.assertEquals(False, sw.recievedData)
+        self.assertEqual('', result)
+        self.assertEqual(False, sw.recievedData)
 
     def testDeChunk(self):
         # Initial size 0 - all-in-one "packet".
@@ -1763,61 +1763,61 @@ RuntimeError: Boom!\n""" % fileDict)
         try:
             dc.send('0\r\n\r\n')
             self.fail()
-        except StopIteration, e:
-            self.assertEquals(0, len(e.args))
+        except StopIteration as e:
+            self.assertEqual(0, len(e.args))
 
         # Initial size 1; then 0 - all-in-one "packet".
         dc = _deChunk()
-        self.assertEquals('A', dc.send('1\r\nA\r\n0\r\n\r\n'))
+        self.assertEqual('A', dc.send('1\r\nA\r\n0\r\n\r\n'))
         try:
             dc.send(None)
             self.fail()
-        except StopIteration, e:
-            self.assertEquals(0, len(e.args))
+        except StopIteration as e:
+            self.assertEqual(0, len(e.args))
 
         # Initial size 3; then 0 - multiple "packets".
         dc = _deChunk()
-        self.assertEquals(None, dc.send('3\r'))
-        self.assertEquals(None, dc.send('\n'))
-        self.assertEquals(None, dc.send('A'))
-        self.assertEquals(None, dc.send('B'))
-        self.assertEquals(None, dc.send('C'))
-        self.assertEquals(None, dc.send('\r'))
-        self.assertEquals('ABC', dc.send('\n'))
-        self.assertEquals(None, dc.send(None))
-        self.assertEquals(None, dc.send('0'))
-        self.assertEquals(None, dc.send('\r'))
-        self.assertEquals(None, dc.send('\n'))
-        self.assertEquals(None, dc.send('\r'))
+        self.assertEqual(None, dc.send('3\r'))
+        self.assertEqual(None, dc.send('\n'))
+        self.assertEqual(None, dc.send('A'))
+        self.assertEqual(None, dc.send('B'))
+        self.assertEqual(None, dc.send('C'))
+        self.assertEqual(None, dc.send('\r'))
+        self.assertEqual('ABC', dc.send('\n'))
+        self.assertEqual(None, dc.send(None))
+        self.assertEqual(None, dc.send('0'))
+        self.assertEqual(None, dc.send('\r'))
+        self.assertEqual(None, dc.send('\n'))
+        self.assertEqual(None, dc.send('\r'))
         try:
             dc.send('\n')
             self.fail()
-        except StopIteration, e:
-            self.assertEquals(0, len(e.args))
+        except StopIteration as e:
+            self.assertEqual(0, len(e.args))
 
         # Initial size 2; then 3; then 0; then trailers - all-in-one "packet".
         dc = _deChunk()
-        self.assertEquals('AB', dc.send('2\r\nAB\r\n3\r\nCDE\r\n0\r\nTrailing1: Header1\r\nTrailing2: Header2\r\n\r\n'))
-        self.assertEquals('CDE', dc.send(None))
+        self.assertEqual('AB', dc.send('2\r\nAB\r\n3\r\nCDE\r\n0\r\nTrailing1: Header1\r\nTrailing2: Header2\r\n\r\n'))
+        self.assertEqual('CDE', dc.send(None))
         try:
             dc.send(None)
             self.fail()
-        except StopIteration, e:
-            self.assertEquals(0, len(e.args))
+        except StopIteration as e:
+            self.assertEqual(0, len(e.args))
 
         # Initial size 2; then 3; then 0 - multiple "packets".
         dc = _deChunk()
-        self.assertEquals(None, dc.send('2\r\nA'))
-        self.assertEquals('AB', dc.send('B\r\n3\r\nCDE\r'))
-        self.assertEquals(None, dc.send(None))
-        self.assertEquals('CDE', dc.send('\n0\r\nTrailing1: Header1\r'))
-        self.assertEquals(None, dc.send(None))
-        self.assertEquals(None, dc.send('\nTrailing2: Header2\r\n\r'))
+        self.assertEqual(None, dc.send('2\r\nA'))
+        self.assertEqual('AB', dc.send('B\r\n3\r\nCDE\r'))
+        self.assertEqual(None, dc.send(None))
+        self.assertEqual('CDE', dc.send('\n0\r\nTrailing1: Header1\r'))
+        self.assertEqual(None, dc.send(None))
+        self.assertEqual(None, dc.send('\nTrailing2: Header2\r\n\r'))
         try:
             dc.send('\n')
             self.fail()
-        except StopIteration, e:
-            self.assertEquals(0, len(e.args))
+        except StopIteration as e:
+            self.assertEqual(0, len(e.args))
 
     def testDeChunkFailsOnExcessData(self):
         # Note: this can only reliably be detection if sok.recv(n) data
@@ -1829,76 +1829,76 @@ RuntimeError: Boom!\n""" % fileDict)
         try:
             dc.send('0\r\n\r\n<EXCESS-DATA>')
             self.fail()
-        except ValueError, e:
-            self.assertEquals('Data after last chunk', str(e))
+        except ValueError as e:
+            self.assertEqual('Data after last chunk', str(e))
 
         # after trailers
         dc = _deChunk()
-        self.assertEquals(None, dc.send('0\r\nTrai: ler\r\n\r'))
+        self.assertEqual(None, dc.send('0\r\nTrai: ler\r\n\r'))
         try:
             dc.send('\nX')
-        except ValueError, e:
-            self.assertEquals('Data after last chunk', str(e))
+        except ValueError as e:
+            self.assertEqual('Data after last chunk', str(e))
 
     def testShutdownAndCloseOnce_OnlyOnce(self):
         sok = CallTrace()
         cb = _shutAndCloseOnce(sok)
-        self.assertEquals([], sok.calledMethodNames())
+        self.assertEqual([], sok.calledMethodNames())
 
         cb()
-        self.assertEquals(['shutdown', 'close'], sok.calledMethodNames())
+        self.assertEqual(['shutdown', 'close'], sok.calledMethodNames())
         shutdown, close = sok.calledMethods
-        self.assertEquals(((), {}), (close.args, close.kwargs))
-        self.assertEquals(((SHUT_RDWR,), {}), (shutdown.args, shutdown.kwargs))
+        self.assertEqual(((), {}), (close.args, close.kwargs))
+        self.assertEqual(((SHUT_RDWR,), {}), (shutdown.args, shutdown.kwargs))
 
         sok.calledMethods.reset()
         cb()
-        self.assertEquals([], sok.calledMethodNames())
+        self.assertEqual([], sok.calledMethodNames())
 
     def testShutdownAndCloseOnce_Exceptions(self):
         sok = CallTrace()
         sok.exceptions['shutdown'] = Exception('xcptn')
         cb = _shutAndCloseOnce(sok)
-        self.assertEquals([], sok.calledMethodNames())
+        self.assertEqual([], sok.calledMethodNames())
 
         self.assertRaises(Exception, lambda: cb())
-        self.assertEquals(['shutdown'], sok.calledMethodNames())
+        self.assertEqual(['shutdown'], sok.calledMethodNames())
         shutdown = sok.calledMethods[0]
-        self.assertEquals(((SHUT_RDWR,), {}), (shutdown.args, shutdown.kwargs))
+        self.assertEqual(((SHUT_RDWR,), {}), (shutdown.args, shutdown.kwargs))
 
         sok.calledMethods.reset()
         cb()
-        self.assertEquals(['close'], sok.calledMethodNames())
+        self.assertEqual(['close'], sok.calledMethodNames())
         close = sok.calledMethods[0]
-        self.assertEquals(((), {}), (close.args, close.kwargs))
+        self.assertEqual(((), {}), (close.args, close.kwargs))
 
         sok.calledMethods.reset()
         cb()
-        self.assertEquals([], sok.calledMethodNames())
+        self.assertEqual([], sok.calledMethodNames())
 
     def testShutdownAndCloseOnce_IgnoreExceptions(self):
         sok = CallTrace()
         sok.exceptions['shutdown'] = Exception('xcptn')
         cb = _shutAndCloseOnce(sok)
-        self.assertEquals([], sok.calledMethodNames())
+        self.assertEqual([], sok.calledMethodNames())
 
         cb(ignoreExceptions=True)
-        self.assertEquals(['shutdown', 'close'], sok.calledMethodNames())
+        self.assertEqual(['shutdown', 'close'], sok.calledMethodNames())
         shutdown, close = sok.calledMethods
-        self.assertEquals(((SHUT_RDWR,), {}), (shutdown.args, shutdown.kwargs))
-        self.assertEquals(((), {}), (close.args, close.kwargs))
+        self.assertEqual(((SHUT_RDWR,), {}), (shutdown.args, shutdown.kwargs))
+        self.assertEqual(((), {}), (close.args, close.kwargs))
 
         sok.calledMethods.reset()
         cb(ignoreExceptions=True)
-        self.assertEquals([], sok.calledMethodNames())
+        self.assertEqual([], sok.calledMethodNames())
 
     def testRequestLine(self):
-        self.assertEquals('GET / HTTP/1.1\r\n', _requestLine('GET', '/'))
-        self.assertEquals('POST / HTTP/1.1\r\n', _requestLine('POST', '/'))
+        self.assertEqual('GET / HTTP/1.1\r\n', _requestLine('GET', '/'))
+        self.assertEqual('POST / HTTP/1.1\r\n', _requestLine('POST', '/'))
 
     def testEmptyRequestConvenientlyTranslatedToSlash(self):
-        self.assertEquals('GET / HTTP/1.1\r\n', _requestLine('GET', ''))
-        self.assertEquals('POST / HTTP/1.1\r\n', _requestLine('POST', ''))
+        self.assertEqual('GET / HTTP/1.1\r\n', _requestLine('GET', ''))
+        self.assertEqual('POST / HTTP/1.1\r\n', _requestLine('POST', ''))
 
     def testChunkRe(self):
         def m(s):
@@ -1906,32 +1906,32 @@ RuntimeError: Boom!\n""" % fileDict)
 
         s = '0\r\n'
         self.assertTrue(m(s))
-        self.assertEquals((0, 1), (m(s).start(1), m(s).end(1)))
-        self.assertEquals('0\r\n', m(s).group())
-        self.assertEquals('0\r\n', m(s).group(0))
-        self.assertEquals('0', m(s).group(1))
-        self.assertEquals((0, 3), (m(s).start(), m(s).end()))
-        self.assertEquals((0, 3), (m(s).start(0), m(s).end(0)))
+        self.assertEqual((0, 1), (m(s).start(1), m(s).end(1)))
+        self.assertEqual('0\r\n', m(s).group())
+        self.assertEqual('0\r\n', m(s).group(0))
+        self.assertEqual('0', m(s).group(1))
+        self.assertEqual((0, 3), (m(s).start(), m(s).end()))
+        self.assertEqual((0, 3), (m(s).start(0), m(s).end(0)))
 
         s = 'a05fBc\r\n'
         self.assertTrue(m(s))
-        self.assertEquals(s, m(s).group())
-        self.assertEquals('a05fBc', m(s).group(1))
+        self.assertEqual(s, m(s).group())
+        self.assertEqual('a05fBc', m(s).group(1))
 
         s = 'a5;chunky=extension;q=x;aap=noot\r\n'
         self.assertTrue(m(s))
-        self.assertEquals(s, m(s).group())
-        self.assertEquals('a5', m(s).group(1))
+        self.assertEqual(s, m(s).group())
+        self.assertEqual('a5', m(s).group(1))
 
         s = 'a5;&*!@)_==++>>WHATEVER<<\r\n'  # We're more permissive than needed.
         self.assertTrue(m(s))
-        self.assertEquals(s, m(s).group())
-        self.assertEquals('a5', m(s).group(1))
+        self.assertEqual(s, m(s).group())
+        self.assertEqual('a5', m(s).group(1))
 
         s = 'a5\r\nb4\r\n'
         self.assertTrue(m(s))
-        self.assertEquals('a5\r\n', m(s).group())
-        self.assertEquals('a5', m(s).group(1))
+        self.assertEqual('a5\r\n', m(s).group())
+        self.assertEqual('a5', m(s).group(1))
 
         self.assertFalse(m(''))
         self.assertFalse(m('g1\r\n'))  # Not hexadecimal.
@@ -1951,28 +1951,28 @@ RuntimeError: Boom!\n""" % fileDict)
 
         s = '\r\n'
         self.assertTrue(m(s))
-        self.assertEquals('\r\n', m(s).group())
-        self.assertEquals(0, m(s).start())
-        self.assertEquals(2, m(s).end())
-        self.assertEquals({'_trailers': None}, m(s).groupdict())
+        self.assertEqual('\r\n', m(s).group())
+        self.assertEqual(0, m(s).start())
+        self.assertEqual(2, m(s).end())
+        self.assertEqual({'_trailers': None}, m(s).groupdict())
 
         s = 'Head: Er\r\n\r\n'
-        self.assertEquals(0, m(s).start())
-        self.assertEquals(12, m(s).end())
-        self.assertEquals({'_trailers': 'Head: Er\r\n'}, m(s).groupdict())
+        self.assertEqual(0, m(s).start())
+        self.assertEqual(12, m(s).end())
+        self.assertEqual({'_trailers': 'Head: Er\r\n'}, m(s).groupdict())
 
         s = 'H1: V1\r\nH2: V2\r\n\r\n'
-        self.assertEquals(0, m(s).start())
-        self.assertEquals(18, m(s).end())
-        self.assertEquals({'_trailers': 'H1: V1\r\nH2: V2\r\n'}, m(s).groupdict())
+        self.assertEqual(0, m(s).start())
+        self.assertEqual(18, m(s).end())
+        self.assertEqual({'_trailers': 'H1: V1\r\nH2: V2\r\n'}, m(s).groupdict())
 
         s = 'H1: V1\r\nH2: V2\r\nH3: V3\r\n\r\n'
-        self.assertEquals(0, m(s).start())
-        self.assertEquals(26, m(s).end())
-        self.assertEquals({'_trailers': 'H1: V1\r\nH2: V2\r\nH3: V3\r\n'}, m(s).groupdict())
+        self.assertEqual(0, m(s).start())
+        self.assertEqual(26, m(s).end())
+        self.assertEqual({'_trailers': 'H1: V1\r\nH2: V2\r\nH3: V3\r\n'}, m(s).groupdict())
 
         # trailers parsable as headers
-        self.assertEquals({
+        self.assertEqual({
                 'H1': 'V1',
                 'H2': 'V2',
                 'H3': 'V3',
@@ -2000,10 +2000,10 @@ RuntimeError: Boom!\n""" % fileDict)
         try:
             with stdout_replaced():  # Ignore reactor.shutdown() noticing httprequest1_1 still in-the-air.
                 asProcess(run())
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertTrue(str(e).startswith('Unexpected Connection #1 from: 127.0.0.1:'), str(e))
 
-        self.assertEquals(0, len(serverFailsRequestDoesNot))
+        self.assertEqual(0, len(serverFailsRequestDoesNot))
 
     def testMockSocketServerOneRequestExpectedAndCompleted(self):
         def r1(sok, log, remoteAddress, connectionNr):
@@ -2019,7 +2019,7 @@ RuntimeError: Boom!\n""" % fileDict)
             mss.listen()
             try:
                 statusAndHeaders, body = yield httprequest1_1(method='GET', host='127.0.0.1', port=mss.port, request='/')
-                self.assertEquals({
+                self.assertEqual({
                         'HTTPVersion': '1.1',
                         'Headers': {
                             'Content-Length': '0'
@@ -2029,15 +2029,15 @@ RuntimeError: Boom!\n""" % fileDict)
                     },
                     statusAndHeaders
                 )
-                self.assertEquals('', body)
-                self.assertEquals(1, mss.nrOfRequests)
-                self.assertEquals({1: ('GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n', [])}, mss.state.connections)
+                self.assertEqual('', body)
+                self.assertEqual(1, mss.nrOfRequests)
+                self.assertEqual({1: ('GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n', [])}, mss.state.connections)
             finally:
                 mss.close()
             raise StopIteration(42)
 
         result = asProcess(run())
-        self.assertEquals(42, result)
+        self.assertEqual(42, result)
 
 
 class MockSocketServer(object):
@@ -2049,7 +2049,7 @@ class MockSocketServer(object):
     """
 
     def __init__(self):
-        self.port = PortNumberGenerator.next()
+        self.port = next(PortNumberGenerator)
         self.nrOfRequests = 0
         self.setReplies()  # Default handler - any connection fails.
 
@@ -2103,7 +2103,7 @@ class _ExactExpectationHandler(object):
         for handler in list(self.busy):
             if handler == exclude:
                 continue  # If set, excluded itself is initiating the close because of a fatal error.
-            handler.throw(AbortException, AbortException('Closing MockSocketServer connections'), None)
+            handler.throw(AbortException(AbortException('Closing MockSocketServer connections')).with_traceback(None))
 
     def _startAndTrackCompletion(self, gf, sok, remoteAddress, connectionNr):
         @identify
@@ -2118,29 +2118,29 @@ class _ExactExpectationHandler(object):
             this = __this__ = yield
             self.busy.add(this)
             self.connections[connectionNr] = _Connection(IN_PROGRESS, log)
-            reactor().addProcess(process=this.next)
+            reactor().addProcess(process=this.__next__)
             _removeProcess = True
             yield
             try:
                 try:
                     g = compose(gf(sok=sok, log=log, remoteAddress=remoteAddress, connectionNr=connectionNr))
-                except Exception, e:
+                except Exception as e:
                     raise AssertionError('Test error: MockSocketServer connection reply #{connectionNr} riased %{error}s - should have resulted in a generator'.format({'error': repr(e), 'connectionNr': connectionNr}))
 
                 try:
                     try:
                         while True:
                             sys.stdout.flush()
-                            _response = g.next()
+                            _response = next(g)
                             sys.stdout.flush()
                             if _response is not Yield and callable(_response):
-                                _response(reactor(), this.next)
+                                _response(reactor(), this.__next__)
                                 _removeProcess = False
                                 yield
                                 _removeProcess = True
                                 _response.resumeProcess()
                             yield
-                    except StopIteration, e:
+                    except StopIteration as e:
                         retval = e.args[0] if e.args else None
                 except AssertionError:
                     c, v, t = exc_info()
@@ -2149,10 +2149,10 @@ class _ExactExpectationHandler(object):
                         'host': remoteAddress[0],
                         'port': remoteAddress[1],
                     }) + str(v)
-                    raise c, c(msg), t
+                    raise c(c(msg)).with_traceback(t)
                 except (KeyboardInterrupt, SystemExit):
                     raise
-                except Exception, e:
+                except Exception as e:
                     if not isinstance(e, AbortException):
                         print_exc()  # HCK
                     retval = e
@@ -2161,7 +2161,7 @@ class _ExactExpectationHandler(object):
                 raise
             finally:
                 if _removeProcess:
-                    reactor().removeProcess(process=this.next)
+                    reactor().removeProcess(process=this.__next__)
                 self.busy.remove(this)
 
             self.connections[connectionNr] = _Connection(retval, log)
@@ -2203,7 +2203,7 @@ def read(bytes=None, forSeconds=None, untilExpected=None, timeout=1.0):
     if bytes is not None:
         test = lambda bytesRead: len(bytesRead) >= bytes
     if untilExpected is not None:
-        if isinstance(untilExpected, basestring):
+        if isinstance(untilExpected, str):
             test = lambda bytesRead: bytesRead.startswith(untilExpected)
         else:  # callable presumed
             test = lambda bytesRead: untilExpected(bytesRead)
@@ -2238,7 +2238,7 @@ def _readOnce(timeout):
     sok = local('__sok__')
     g = _readOnceGF(sok=sok)
     def onTimeout():
-        g.throw(TimeoutException, TimeoutException(), None)
+        g.throw(TimeoutException(TimeoutException()).with_traceback(None))
     s = Suspend(doNext=g.send, timeout=timeout, onTimeout=onTimeout)
     yield s
     result = s.getResult()
@@ -2250,7 +2250,7 @@ def _readOnceGF(sok):
     this = yield
     suspend = yield
 
-    suspend._reactor.addReader(sok=sok, sink=this.next)
+    suspend._reactor.addReader(sok=sok, sink=this.__next__)
     try:
         try:
             yield
@@ -2299,12 +2299,12 @@ Written so far:\n{written}'''.format(**{
 
 def _writeOnce(data, timeout):
     sok = local('__sok__')
-    if isinstance(data, unicode):
+    if isinstance(data, str):
         raise AssertionError('Expects a string, not unicode')
 
     g = _writeOnceGF(sok=sok, data=data)
     def onTimeout():
-        g.throw(TimeoutException, TimeoutException(), None)
+        g.throw(TimeoutException(TimeoutException()).with_traceback(None))
     s = Suspend(doNext=g.send, timeout=timeout, onTimeout=onTimeout)
     yield s
     result = s.getResult()
@@ -2316,7 +2316,7 @@ def _writeOnceGF(sok, data):
     this = yield
     suspend = yield
 
-    suspend._reactor.addWriter(sok=sok, source=this.next)
+    suspend._reactor.addWriter(sok=sok, source=this.__next__)
     try:
         try:
             yield
@@ -2343,7 +2343,7 @@ def ignoreLineNumbers(s):
     return sub("line \d+,", "line [#],", s)
 
 fileDict = {
-    '__file__': ignoreLineNumbers.func_code.co_filename,
-    '_suspend.py': Suspend.__call__.func_code.co_filename,
-    '_httprequest1_1.py': _requestLine.func_code.co_filename,
+    '__file__': ignoreLineNumbers.__code__.co_filename,
+    '_suspend.py': Suspend.__call__.__code__.co_filename,
+    '_httprequest1_1.py': _requestLine.__code__.co_filename,
 }
