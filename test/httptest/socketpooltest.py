@@ -187,7 +187,7 @@ class SocketPoolTest(SeecrTestCase):
                         wasStillPooled.append(fromPool)
 
                     if fromPool is None: break
-                raise StopIteration(wasStillPooled)
+                return wasStillPooled
 
             s0 = MockSok('s0')
             s1 = MockSok('s1')
@@ -225,7 +225,7 @@ class SocketPoolTest(SeecrTestCase):
                             wasStillPooled.append(fromPool)
 
                         if fromPool is None: break
-                raise StopIteration(wasStillPooled)
+                return wasStillPooled
 
             yield sp.putSocketInPool(host='h', port=1, sock=MockSok('sH'))
             yield sp.putSocketInPool(host='i', port=2, sock=MockSok('sI'))
@@ -250,7 +250,7 @@ class SocketPoolTest(SeecrTestCase):
                             wasStillPooled.append(fromPool)
 
                         if fromPool is None: break
-                raise StopIteration(wasStillPooled)
+                return wasStillPooled
 
             sJ = MockSok('sJ')
             sJ2 = MockSok('sJ2')

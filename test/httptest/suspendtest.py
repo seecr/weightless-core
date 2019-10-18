@@ -94,19 +94,19 @@ class SuspendTest(WeightlessTestCase):
             self.assertEqual('Suspend already settled.', str(e))
         else: self.fail()
         self.assertEqual('whatever', suspend.getResult())
-        self.assertRaises(AssertionError, lambda: suspend.throw(exc_type=Exception(exc_value=Exception('Very')).with_traceback(exc_traceback=None)))
+        self.assertRaises(AssertionError, lambda: suspend.throw(exc_type=Exception, exc_value=Exception('Very'), exc_traceback=None))
         self.assertEqual('whatever', suspend.getResult())
         self.assertEqual([], trace.calledMethodNames())
 
         suspend = getSuspend()
-        suspend.throw(RuntimeError(RuntimeError('Very')).with_traceback(None))
+        suspend.throw(RuntimeError, RuntimeError('Very'), None)
         self.assertEqual(['whenDone'], trace.calledMethodNames())
         trace.calledMethods.reset()
         # Below no change of result, no side-effects
         self.assertRaises(RuntimeError, lambda: suspend.getResult())
         self.assertRaises(AssertionError, lambda: suspend.resume(response='whatever'))
         self.assertRaises(RuntimeError, lambda: suspend.getResult())
-        self.assertRaises(AssertionError, lambda: suspend.throw(exc_type=Exception(exc_value=Exception('Very')).with_traceback(exc_traceback=None)))
+        self.assertRaises(AssertionError, lambda: suspend.throw(exc_type=Exception, exc_value=Exception('Very'), exc_traceback=None))
         self.assertRaises(RuntimeError, lambda: suspend.getResult())
         self.assertEqual([], trace.calledMethodNames())
 
@@ -303,7 +303,7 @@ class SuspendTest(WeightlessTestCase):
                 raiser()
             except ValueError as e:
                 exc_type, exc_value, exc_traceback = exc_info()
-                suspend.throw(exc_type(exc_value).with_traceback(exc_traceback))
+                suspend.throw(exc_type, exc_value, exc_traceback)
             reactor.step()
             reactor.step()
             reactor.step()
@@ -376,7 +376,7 @@ ValueError: BAD VALUE
 
         # throw on settled is a no-op
         trace, suspend = prepare()
-        self.assertRaises(AssertionError, lambda: suspend.throw(RuntimeError(RuntimeError('R')).with_traceback(None)))
+        self.assertRaises(AssertionError, lambda: suspend.throw(RuntimeError, RuntimeError('R'), None))
         self.assertEqual([], trace.calledMethodNames())
         self.assertRaises(TimeoutException, lambda: suspend.getResult())
 
@@ -409,7 +409,7 @@ ValueError: BAD VALUE
 
         # with throw
         trace, suspend = prepare()
-        suspend.throw(RuntimeError(RuntimeError('R')).with_traceback(None))
+        suspend.throw(RuntimeError, RuntimeError('R'), None)
         self.assertEqual(['removeTimer', 'whenDone'], trace.calledMethodNames())
         removeTimerM, whenDoneM = trace.calledMethods
         self.assertEqual(((), {'token': 'timerToken'}), (removeTimerM.args, removeTimerM.kwargs))
@@ -469,7 +469,7 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
             except:
                 c, v, t = exc_info()
                 self.assertEqual(['onTimeout'], trace.calledMethodNames())
-                raise c(v).with_traceback(t.tb_next)
+                raise v.with_traceback(t.tb_next)
 
         self.assertRaises(KeyboardInterrupt, lambda: suspendCallWithOnTimeoutRaising(KeyboardInterrupt()))
         self.assertRaises(SystemExit, lambda: suspendCallWithOnTimeoutRaising(SystemExit()))
@@ -512,7 +512,7 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
                 def doNext(suspend):
                     g.send(suspend)
                 def onTimeout():
-                    g.throw(TimeoutException(TimeoutException()).with_traceback(None))
+                    g.throw(TimeoutException, TimeoutException(), None)
                 return doNext, onTimeout
 
             def suspendWrap():
@@ -522,7 +522,7 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
                 result = s.getResult()
                 if expectTimeout:
                     self.fail('Should not have come here')
-                raise StopIteration(result)
+                return result
 
             try:
                 result = yield suspendWrap()

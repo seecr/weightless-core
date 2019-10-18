@@ -124,7 +124,7 @@ class MessageBase(object):
             for r in self.all(*args, **kwargs):
                 try:
                     result = yield r
-                    raise StopIteration(result)
+                    return result
                 except DeclineMessage:
                     continue
         except:
@@ -268,7 +268,7 @@ class Transparent(Observable):
             response = yield self.any.unknown(message, *args, **kwargs)
         except NoneOfTheObserversRespond:
             raise DeclineMessage
-        raise StopIteration(response)
+        return response
     def do_unknown(self, message, *args, **kwargs):
         self.do.unknown(message, *args, **kwargs)
     def call_unknown(self, message, *args, **kwargs):

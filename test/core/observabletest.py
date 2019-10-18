@@ -119,10 +119,10 @@ class ObservableTest(TestCase):
     def testAllAssertsNoneReturnValues(self):
         class A(object):
             def f(self):
-                raise StopIteration(1)
+                return 1
                 yield
             def all_unknown(self, message, *args, **kwargs):
-                raise StopIteration(2)
+                return 2
                 yield
         root = be((Observable(), (A(),)))
         g = compose(root.all.f())
@@ -170,17 +170,17 @@ class ObservableTest(TestCase):
         # OnceMessage assertion on None: #1a "normal object"
         class AnObject(object):
             def f(self):
-                raise StopIteration(1)
+                return 1
                 yield
 
         # OnceMessage assertion on None: #1b "Observable"
         class AnObservable(Observable):
             def g(self):
-                raise StopIteration(1)
+                return 1
                 yield
 
         root = be(
-        (Observable(), 
+        (Observable(),
             (AnObject(),),
             (AnObservable(),),
         ))
@@ -205,12 +205,12 @@ class ObservableTest(TestCase):
         # This will normally never happen.
         class AnObservable(Observable):
             def g(self):
-                raise StopIteration(1)
+                return 1
                 yield
         class MockedOnceMessageSelf(OnceMessage):
             pass
         def retvalGen(*args, **kwargs):
-            raise StopIteration(1)
+            return 1
             yield
         oncedObservable = AnObservable()
         mockedSelf = MockedOnceMessageSelf(observers=oncedObservable._observers, message='noRelevantMethodHere', observable='AnObservableObject(name=None)')
@@ -226,18 +226,18 @@ class ObservableTest(TestCase):
     def testAnyOrCallCallsFirstImplementer(self):
         class A(object):
             def f(self):
-                raise StopIteration(A.f)
+                return A.f
                 yield
             def f_sync(self):
                 return A.f
         class B(object):
             def f(self):
-                raise StopIteration(B.f)
+                return B.f
                 yield
             def f_sync(self):
                 return B.f
             def g(self):
-                raise StopIteration(B.g)
+                return B.g
                 yield
             def g_sync(self):
                 return B.g
@@ -261,11 +261,11 @@ class ObservableTest(TestCase):
         class A(Observable):
             def f(self):
                 response = yield self.any.f()
-                raise StopIteration(response)
+                return response
         class B(object):
             def f(self):
                 yield "data"
-                raise StopIteration('retval')
+                return 'retval'
         root = be((Observable(), ((A(), (B(),)))))
         self.assertEqual(GeneratorType, type(root.any.f()))
         self.assertEqual(["data"], list(compose(root.any.f())))
@@ -303,7 +303,7 @@ class ObservableTest(TestCase):
     def testAnyViaUnknown(self):
         class A(object):
             def any_unknown(self, message, *args, **kwargs):
-                raise StopIteration((message, args, kwargs), )
+                return (message, args, kwargs)
                 yield
         root = be((Observable(), (A(),)))
         try: next(compose(root.any.f(1, a=2)))
@@ -462,7 +462,7 @@ class ObservableTest(TestCase):
                 return this.call.interface()
             def async_interface(this): # any
                 r = yield this.any.async_interface()
-                raise StopIteration(r)
+                return r
             def event(this): #do
                 this.do.event()
         class B(Observable):
@@ -472,7 +472,7 @@ class ObservableTest(TestCase):
                 return this.call.interface()
             def async_interface(this): #any
                 r = yield this.any.async_interface()
-                raise StopIteration(r)
+                return r
             def event(this): #do
                 this.do.event()
         class C(Observable):
@@ -485,7 +485,7 @@ class ObservableTest(TestCase):
                 yield anAction
                 x = yield
                 yield x * 'C'
-                raise StopIteration(x)
+                return x
             def event(this): #do
                 events.append('C')
         class D(Observable):
@@ -871,7 +871,7 @@ class ObservableTest(TestCase):
         # any, all, do, call and once
         class OddObject(object):
             def stopIter(self):
-                raise StopIteration('Stop!')
+                return 'Stop!'
             def genExit(self):
                 raise GeneratorExit('Exit!')
 
@@ -889,7 +889,7 @@ class ObservableTest(TestCase):
             expected = ignoreLineNumbers('''>> should not have raised Generator-Exception:
 Traceback (most recent call last):
   File "%(__file__)s", line [#], in stopIter
-    raise StopIteration('Stop!')
+    return 'Stop!'
 StopIteration: Stop!
 ''' % fileDict)
             self.assertTrue(ignoreLineNumbers(str(e)).endswith(expected), str(e))
@@ -1023,7 +1023,7 @@ GeneratorExit: Exit!
             def call_unknown(self, message, *args, **kwargs):
                 return getattr(self, self.attrName)
             def any_unknown(self, message, *args, **kwargs):
-                raise StopIteration(getattr(self, self.attrName))
+                return getattr(self, self.attrName)
                 yield
 
         root = be((Observable(),
@@ -1032,7 +1032,7 @@ GeneratorExit: Exit!
             ),
             (GetAttr('__class__'),)
         ))
-    
+
         try:
             result = root.call.someMessage()
             self.fail("should not get here: %s" % result)
@@ -1074,9 +1074,9 @@ GeneratorExit: Exit!
             def any_unknown(self, message, *args, **kwargs):
                 if message == 'theMessage':
                     value = yield self.any.unknown(message, *args, **kwargs)
-                    raise StopIteration(value)
+                    return value
                 raise DeclineMessage
-        
+
         root = be((Observable(),
             (SemiTransparent(),
                 (Responder(41),)
@@ -1093,7 +1093,7 @@ GeneratorExit: Exit!
                 if message == 'theMessage':
                     yield self.all.unknown(message, *args, **kwargs)
                 raise DeclineMessage
-        
+
         root = be((Observable(),
             (SemiTransparent(),
                 (Responder(41),)
@@ -1110,7 +1110,7 @@ GeneratorExit: Exit!
                 if message == 'theMessage':
                     self.do.unknown(message, *args, **kwargs)
                 raise DeclineMessage
-        
+
         observer1 = CallTrace('observer1')
         observer2 = CallTrace('observer2')
         root = be((Observable(),
@@ -1165,7 +1165,7 @@ GeneratorExit: Exit!
         from time import time
         class A(Observable):
             def f(self):
-                raise StopIteration(None)
+                return
                 yield
         root = Observable()
         connector = Transparent()
@@ -1204,10 +1204,10 @@ GeneratorExit: Exit!
         self.assertEqual(None, tb, format_tb(tb))
 
     def get_tracked_objects(self):
-        return [o for o in gc.get_objects() if type(o) in 
+        return [o for o in gc.get_objects() if type(o) in
                 (compose, GeneratorType, Exception,
                     AllMessage, AnyMessage, DoMessage, OnceMessage)]
- 
+
     def setUp(self):
         TestCase.setUp(self)
         gc.collect()
@@ -1240,7 +1240,7 @@ class Responder(Observable):
         self._value = value
     def any_unknown(self, message, *args, **kwargs):
         yield self._value
-        raise StopIteration(self._value)
+        return self._value
     def call_unknown(self, message, *args, **kwargs):
         return self._value
     def all_unknown(self, message, *args, **kwargs):

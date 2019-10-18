@@ -40,5 +40,5 @@ def sleep(seconds):
     except TimeoutException:
         pass
 
-    raise StopIteration(None)
+    return
 

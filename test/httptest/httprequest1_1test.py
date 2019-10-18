@@ -437,7 +437,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
 
             # Socket dead, but no-one currently uses it (in pool), so not noticed.
             yield zleep(0.05)
-            raise StopIteration('Finished')
+            return 'Finished'
 
         @dieAfter(seconds=5.0)
         def test():
@@ -635,7 +635,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
 
             # Socket dead, but no-one currently uses it (in pool), so not noticed.
             yield zleep(0.01)
-            raise StopIteration('Finished')
+            return 'Finished'
 
         @dieAfter(seconds=5.0)
         def test():
@@ -851,7 +851,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 yield write(str(i))
 
             sok.shutdown(SHUT_RDWR); sok.close()
-            raise StopIteration('finished')
+            return 'finished'
 
         def r2(sok, log, remoteAddress, connectionNr):
             s = 'GET /path HTTP/1.1\r\nHost: localhost\r\n\r\n'
@@ -870,7 +870,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 self.assertEqual(32, e.args[0])  # Broken pipe
 
             sok.close()  # shutdown would fail with errno: 107 / "Transport endpoint is not connected".
-            raise StopIteration('finished')
+            return 'finished'
 
         def test():
             port = []
@@ -946,12 +946,12 @@ class HttpRequest1_1Test(WeightlessTestCase):
             def getPooledSocket(*a, **kw):
                 retval = yield _realPool.getPooledSocket(*a, **kw)
                 getLog.append(retval)
-                raise StopIteration(retval)
+                return retval
             putLog = []
             def putSocketInPool(*a, **kw):
                 retval = yield _realPool.putSocketInPool(*a, **kw)
                 putLog.append(retval)
-                raise StopIteration(retval)
+                return retval
             loggingPool = CallTrace('LoggingSocketPool', methods={
                 'getPooledSocket': getPooledSocket,
                 'putSocketInPool': putSocketInPool,
@@ -1429,7 +1429,7 @@ RuntimeError: Boom!\n""" % fileDict)
 
     def testHttpRequestAdapterWithMock(self):
         def httprequestMessageMock(**kwargs):
-            raise StopIteration((
+            return (
                 {
                     'HTTPVersion': '1.7',  # Ofcouse.., but fun.
                     'StatusCode': '200',
@@ -1441,7 +1441,7 @@ RuntimeError: Boom!\n""" % fileDict)
                     },
                 },
                 'Body'
-            ))
+            )
             yield
         trace = CallTrace('HttpRequest1_1Mock', methods={'httprequest1_1': httprequestMessageMock})
         top = be((Observable(),
@@ -2011,7 +2011,7 @@ RuntimeError: Boom!\n""" % fileDict)
             data = yield read(untilExpected='GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n')
             yield write(data='HTTP/1.1 200 Okidokie\r\nContent-Length: 0\r\n\r\n')
             sok.shutdown(SHUT_RDWR); sok.close()
-            raise StopIteration(data)
+            return data
 
         def run():
             mss = MockSocketServer()
@@ -2034,7 +2034,7 @@ RuntimeError: Boom!\n""" % fileDict)
                 self.assertEqual({1: ('GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n', [])}, mss.state.connections)
             finally:
                 mss.close()
-            raise StopIteration(42)
+            return 42
 
         result = asProcess(run())
         self.assertEqual(42, result)
@@ -2103,7 +2103,7 @@ class _ExactExpectationHandler(object):
         for handler in list(self.busy):
             if handler == exclude:
                 continue  # If set, excluded itself is initiating the close because of a fatal error.
-            handler.throw(AbortException(AbortException('Closing MockSocketServer connections')).with_traceback(None))
+            handler.throw(AbortException, AbortException('Closing MockSocketServer connections'), None)
 
     def _startAndTrackCompletion(self, gf, sok, remoteAddress, connectionNr):
         @identify
@@ -2149,7 +2149,7 @@ class _ExactExpectationHandler(object):
                         'host': remoteAddress[0],
                         'port': remoteAddress[1],
                     }) + str(v)
-                    raise c(c(msg)).with_traceback(t)
+                    raise c(msg).with_traceback(t)
                 except (KeyboardInterrupt, SystemExit):
                     raise
                 except Exception as e:
@@ -2232,17 +2232,17 @@ Read so far:\n{bytesRead}'''.format(**{
                 })
                 raise AssertionError(msg)
 
-    raise StopIteration(bytesRead)
+    return bytesRead
 
 def _readOnce(timeout):
     sok = local('__sok__')
     g = _readOnceGF(sok=sok)
     def onTimeout():
-        g.throw(TimeoutException(TimeoutException()).with_traceback(None))
+        g.throw(TimeoutException, TimeoutException(), None)
     s = Suspend(doNext=g.send, timeout=timeout, onTimeout=onTimeout)
     yield s
     result = s.getResult()
-    raise StopIteration(result)
+    return result
 
 @identify
 @compose
@@ -2304,11 +2304,11 @@ def _writeOnce(data, timeout):
 
     g = _writeOnceGF(sok=sok, data=data)
     def onTimeout():
-        g.throw(TimeoutException(TimeoutException()).with_traceback(None))
+        g.throw(TimeoutException, TimeoutException(), None)
     s = Suspend(doNext=g.send, timeout=timeout, onTimeout=onTimeout)
     yield s
     result = s.getResult()
-    raise StopIteration(result)
+    return result
 
 @identify
 @compose

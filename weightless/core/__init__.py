@@ -88,6 +88,6 @@ def maybe_str_to_bytes(v):
     return v
 
 #from compose import compose, local, tostring, Yield
-from .utils import identify, autostart, retval, consume, asList, asString, return_
+from .utils import identify, autostart, retval, consume, asList, asString
 from ._observable import Observable, Transparent, be, methodOrMethodPartialStr, NoneOfTheObserversRespond
 

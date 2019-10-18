@@ -259,7 +259,7 @@ class ReactorTest(WeightlessTestCase):
             _reactor.addProcess(process=this.__next__)
             try:
                 yield  # Wait for reactor's step
-                other.throw(Exception(Exception('Stop Please')).with_traceback(None))  # I'll do the work, other should not bother.
+                other.throw(Exception, Exception('Stop Please'), None)  # I'll do the work, other should not bother.
                 log.append('work')
             except Exception as e:
                 self.assertEqual('Stop Please', str(e))
@@ -283,7 +283,7 @@ class ReactorTest(WeightlessTestCase):
             _reactor.addReader(sok=rw, sink=this.__next__)
             try:
                 yield  # Wait for reactor's step
-                other.throw(Exception(Exception('Stop Please')).with_traceback(None))  # I'll do the work, other should not bother.
+                other.throw(Exception, Exception('Stop Please'), None)  # I'll do the work, other should not bother.
                 log.append('work')
             except Exception as e:
                 self.assertEqual('Stop Please', str(e))
@@ -308,7 +308,7 @@ class ReactorTest(WeightlessTestCase):
             _reactor.addWriter(sok=rw, source=this.__next__)
             try:
                 yield  # Wait for reactor's step
-                other.throw(Exception(Exception('Stop Please')).with_traceback(None))  # I'll do the work, other should not bother.
+                other.throw(Exception, Exception('Stop Please'), None)  # I'll do the work, other should not bother.
                 log.append('work')
             except Exception as e:
                 self.assertEqual('Stop Please', str(e))
@@ -332,7 +332,7 @@ class ReactorTest(WeightlessTestCase):
             token = _reactor.addTimer(seconds=0, callback=this.__next__)
             try:
                 yield  # Wait for reactor's step
-                other.throw(Exception(Exception('Stop Please')).with_traceback(None))  # I'll do the work, other should not bother.
+                other.throw(Exception, Exception('Stop Please'), None)  # I'll do the work, other should not bother.
                 log.append('work')
             except Exception as e:
                 self.assertEqual('Stop Please', str(e))

@@ -29,7 +29,7 @@ from sys import stdout, exc_info, getrecursionlimit, version_info
 import gc
 from weakref import ref
 from types import GeneratorType
-from weightless.core import autostart, cpython
+from weightless.core import autostart, cpython, value_with_pushback
 from weightless.core._local_py import local as pyLocal
 from weightless.core._compose_py import compose as pyCompose
 from weightless.core._tostring_py import tostring as pyTostring
@@ -173,7 +173,7 @@ class _ComposeTest(TestCase):
         def threadB():
             yield 7                     # <= A
             r = yield
-            raise StopIteration(r * 2)     # <= B
+            return r * 2     # <= B
         t = compose(threadA())
         self.assertEqual(7, next(t))              # 7 yielded at A
         next(t) # adhere to 'send on None' protocol
@@ -182,7 +182,7 @@ class _ComposeTest(TestCase):
     def testReturnOne(self):
         data = []
         def child():
-            raise StopIteration('result')
+            return 'result'
             yield
         def parent():
             result = yield child()
@@ -194,7 +194,7 @@ class _ComposeTest(TestCase):
     def testReturnEmptyString(self):
         data = []
         def child():
-            raise StopIteration('')
+            return ''
             yield
         def parent():
             result = yield child()
@@ -206,7 +206,7 @@ class _ComposeTest(TestCase):
     def testReturnThree(self):
         data = []
         def child():
-            raise StopIteration('result', 'remainingData1', 'other2')
+            return value_with_pushback('result', 'remainingData1', 'other2')
             yield
         def parent():
             result = yield child()
@@ -225,7 +225,7 @@ class _ComposeTest(TestCase):
         messages = []
         responses = []
         def child1():
-            raise StopIteration('result', 'remainingData0', 'remainingData1')
+            return value_with_pushback('result', 'remainingData0', 'remainingData1')
             yield
         def child2():
             messages.append((yield 'A'))                # I want to 'send' and do not accept data
@@ -249,7 +249,7 @@ class _ComposeTest(TestCase):
 
     def testStopIterationWithReturnValue(self):
         def f():
-            raise StopIteration('return value')
+            return value_with_pushback('return value')
             yield 'something'
         def g():
             self.retval = yield f()
@@ -261,17 +261,17 @@ class _ComposeTest(TestCase):
         def ding1():
             dataIn = yield None     # receive 'dataIn'
             self.assertEqual('dataIn', dataIn)
-            raise StopIteration('ding1retval', 'rest('+dataIn+')')
+            return value_with_pushback('ding1retval', 'rest('+dataIn+')')
         def ding2():
             dataIn = yield None     # receive 'rest(dataIn)'
             #retval = RETURN, 'ding2retval', 'rest('+dataIn+')'
-            raise StopIteration('ding2retval', 'rest('+dataIn+')')
+            return value_with_pushback('ding2retval', 'rest('+dataIn+')')
         def child():
             ding1retval = yield ding1()
             r.append('child-1:' + str(ding1retval))
             ding2retval = yield ding2()
             r.append('child-2:' + str(ding2retval))
-            raise StopIteration('childretval')
+            return 'childretval'
         def parent():
             childRetVal = yield child()
             self.assertEqual('childretval', childRetVal)
@@ -355,7 +355,7 @@ class _ComposeTest(TestCase):
         def f():
             x = yield
             data.append(x)
-            raise StopIteration(*tuple(x))
+            return value_with_pushback(*tuple(x))
         def g():
             r = yield f()
             data.append(r)
@@ -471,7 +471,7 @@ class _ComposeTest(TestCase):
         def f1(arg):
             r = yield None
             yield arg
-            raise StopIteration('aap', 'rest')
+            return value_with_pushback('aap', 'rest')
         def f2(arg):
             r1 = yield f1('noot')
             r2 = yield f1('mies')
@@ -519,7 +519,7 @@ class _ComposeTest(TestCase):
             except GeneratorExit:
                 raise
             except Exception as e:
-                raise StopIteration(e, 'more')
+                return value_with_pushback(e, 'more')
         def f3(arg):
             e = yield f2('aa')
             more = yield None
@@ -605,7 +605,7 @@ class _ComposeTest(TestCase):
             try:
                 yield 'response'
             except StopIteration:
-                raise StopIteration('return')
+                return 'return'
         def f():
             ret = yield sub()
             self.assertEqual('return', ret)
@@ -619,7 +619,7 @@ class _ComposeTest(TestCase):
     def testAdhereToYieldNoneMeansReadAndYieldValueMeansWriteWhenMessagesAreBuffered(self):
         done = []
         def bufferSome():
-            raise StopIteration('retval', 'rest1', 'rest2')
+            return value_with_pushback('retval', 'rest1', 'rest2')
             yield
         def writeSome():
             yield 'write this'
@@ -639,7 +639,7 @@ class _ComposeTest(TestCase):
     def testAdhereToYieldNoneMeansReadAndYieldValueMeansWriteWhenMessagesAreBuffered2(self):
         done = []
         def bufferSome():
-            raise StopIteration('retval', 'rest1', 'rest2')
+            return value_with_pushback('retval', 'rest1', 'rest2')
             yield
         def writeSome():
             data = yield 'write this'
@@ -910,7 +910,7 @@ class _ComposeTest(TestCase):
                 yield
             except GeneratorExit:
                 msg.append('GeneratorExit turned into StopIteration')
-                raise StopIteration  # <= this is the clue, see next test
+                return # <= this is the clue, see next test
         g5 = compose(f5())
         next(g5)
         try:
@@ -945,10 +945,9 @@ class _ComposeTest(TestCase):
         def f8():
             try:
                 yield f9()
-            #except RuntimeError, e:
             except ValueError as e:
                 msg.append(str(e))
-                raise StopIteration()
+                return
         def f9():
             try:
                 yield
@@ -1046,16 +1045,16 @@ class _ComposeTest(TestCase):
 
     def testRaiseStopIterationWithRemainingMessages(self):
         def f0():
-            raise StopIteration()
+            return
             yield
         def f1():
-            raise StopIteration(1)
+            return 1
             yield
         def f2():
-            raise StopIteration(2,3)
+            return value_with_pushback(2,3)
             yield
         def f3():
-            raise StopIteration(4,5,6)
+            return value_with_pushback(4,5,6)
             yield
         try: next(f0())
         except StopIteration as e: self.assertEqual((), e.args)
@@ -1068,7 +1067,7 @@ class _ComposeTest(TestCase):
 
     def testRaisStopIterationWithTupleValue(self):
         def f0():
-            raise StopIteration((1, 2))
+            return value_with_pushback((1, 2))
             yield
         def f1():
             result = yield f0()
@@ -1079,7 +1078,7 @@ class _ComposeTest(TestCase):
     def testConcurrentFlow(self):
         def f():
             first_msg = yield
-            raise StopIteration(*first_msg.split())
+            return value_with_pushback(*first_msg.split())
         def g():
             first = yield f()
             yield "response" # in between receiving msgs
@@ -1095,7 +1094,7 @@ class _ComposeTest(TestCase):
 
     def testRaiseRemainingMessages(self):
         def f():
-            raise StopIteration(1,2,3)
+            return value_with_pushback(1,2,3)
             yield
         def g():
             one = yield f()
@@ -1229,7 +1228,7 @@ class ComposeCTest(_ComposeTest):
     def testQueueSize(self):
         testrange = 9 #QUEUE SIZE = 10
         def f():
-            raise StopIteration(*range(testrange))
+            return value_with_pushback(*range(testrange))
             yield 'f done'
         def g():
             results = []
@@ -1244,7 +1243,7 @@ class ComposeCTest(_ComposeTest):
     def testQueueSizeExceeded(self):
         testrange = 10 #QUEUE SIZE = 10
         def f():
-            raise StopIteration(*range(testrange))
+            return value_with_pushback(*range(testrange))
             yield
         def g():
             x = yield f()
@@ -1274,7 +1273,7 @@ class ComposeCTest(_ComposeTest):
         DECREF(<temporary>) in compose_clear()"""
         def f():
             msg = yield
-            raise StopIteration(*msg.split())
+            return value_with_pushback(*msg.split())
 
         r = compose(f())
         next(r)

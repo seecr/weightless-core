@@ -161,7 +161,7 @@ class FdContext(Context):
             message = os.read(self._fd, self.readBufSize)
         finally:
             self.gio.removeReader(self)
-        raise StopIteration(message)
+        return message
 
 class SocketContext(FdContext):
 

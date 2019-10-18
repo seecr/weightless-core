@@ -94,7 +94,9 @@ class Suspend(object):
 
     def getResult(self):
         if self._exception:
-            raise self._exception[1].with_traceback(self._exception[2])
+            c, v, t = self._exception
+            v = v if v else c()
+            raise v.with_traceback(t)
         return self._response
 
     def _timedOut(self):

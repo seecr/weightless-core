@@ -82,7 +82,7 @@ class SocketPool(Observable):
         try:
             s = socks.pop()[0]
             self._poolSize -= 1
-            raise StopIteration(s)
+            return s
         except IndexError:
             del self._pool[key]
             return

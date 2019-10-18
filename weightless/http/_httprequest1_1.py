@@ -350,7 +350,7 @@ def _bodyMaxSize(fn):
 
                     if (bodyMaxSize is not None) and len(responses) >= bodyMaxSize:
                         g.close()
-                        raise StopIteration(responses[:bodyMaxSize])
+                        return responses[:bodyMaxSize]
             except StopIteration:
                 return responses if (bodyMaxSize is None) else responses[:bodyMaxSize]
 

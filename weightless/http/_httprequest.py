@@ -39,7 +39,7 @@ def httprequest(host, port, request, body=None, headers=None, proxyServer=None, 
     kw = {}
     if timeout is not None:
         def onTimeout():
-            g.throw(TimeoutException(TimeoutException()).with_traceback(None))
+            g.throw(TimeoutException, TimeoutException(), None)
 
         kw = {
             'timeout': timeout,
@@ -49,7 +49,7 @@ def httprequest(host, port, request, body=None, headers=None, proxyServer=None, 
     s = Suspend(doNext=g.send, **kw)
     yield s
     result = s.getResult()
-    raise StopIteration(result)
+    return result
 
 httpget = httprequest
 httppost = partial(httprequest, method='POST')
@@ -65,7 +65,7 @@ class HttpRequest(object):
     @staticmethod
     def httprequest(**kwargs):
         result = yield httprequest(**kwargs)
-        raise StopIteration(result)
+        return result
 
 def _createSocket():
     sok = socket()
@@ -205,7 +205,7 @@ def _sslHandshake(sok, this, suspend, prio):
                 raise
     if count == 254:
         raise ValueError("SSL handshake failed.")
-    raise StopIteration(sok)
+    return sok
 
 def _asyncSend(sok, data):
     while data != "":
