@@ -82,6 +82,11 @@ def compose(X, *args, **kwargs):
         return _compose(X, *args, **kwargs)
     raise TypeError("compose() expects generator, got %s" % repr(X))
 
+def maybe_str_to_bytes(v):
+    if isinstance(v, str):
+        return v.encode()
+    return v
+
 #from compose import compose, local, tostring, Yield
 from .utils import identify, autostart, retval, consume, asList, asString, return_
 from ._observable import Observable, Transparent, be, methodOrMethodPartialStr, NoneOfTheObserversRespond

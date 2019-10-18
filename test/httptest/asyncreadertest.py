@@ -32,7 +32,7 @@ from sys import exc_info, version_info
 from time import sleep
 from traceback import format_exception
 
-from weightless.core import compose
+from weightless.core import compose, maybe_str_to_bytes
 from weightless.http import HttpServer, httprequest, httpget, httppost, httpspost, httpsget, HttpRequest
 from weightless.io import Suspend, TimeoutException, TooBigResponseException
 
@@ -545,7 +545,7 @@ RuntimeError: Boom!""" % fileDict)
 def clientget(host, port, path):
     client = socket()
     client.connect((host,  port))
-    client.send('GET %s HTTP/1.1\r\n\r\n' % path)
+    client.send(b'GET %s HTTP/1.1\r\n\r\n' % maybe_str_to_bytes(path))
     return client
 
 fileDict = {

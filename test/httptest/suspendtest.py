@@ -60,7 +60,7 @@ class MockSocket(object):
         self._readAndWritable.close()
 
 fileDict = {
-    '__file__': MockSocket.fileno.__func__.__code__.co_filename, # Hacky, but sys.modules[aModuleName].__file__ is inconsistent with traceback-filenames
+    '__file__': MockSocket.fileno.__code__.co_filename, # Hacky, but sys.modules[aModuleName].__file__ is inconsistent with traceback-filenames
     'suspend.py': Suspend.__call__.__code__.co_filename,
 }
 

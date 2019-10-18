@@ -31,7 +31,7 @@ from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_RDWR
 from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
 from sys import exc_info, getdefaultencoding
 
-from weightless.core import compose, identify, Observable, autostart, Yield
+from weightless.core import compose, identify, Observable, autostart, Yield, maybe_str_to_bytes
 from weightless.io import Suspend, TimeoutException
 from weightless.http import REGEXP, HTTP, FORMAT, parseHeaders
 
@@ -550,11 +550,6 @@ class SocketWrapper(object):
         setattr(self, attr, value)  # Only methods and read-only properties exist on a socket-obj.
         return value
 
-
-def maybe_str_to_bytes(v):
-    if isinstance(v, str):
-        return v.encode()
-    return v
 
 _ALLOWED_OPTIONAL_ADAPTER_ARGUMENTS = set(['body', 'headers', 'method', 'prio', 'ssl', 'timeout', 'bodyMaxSize'])
 _noop = lambda *a, **kw: None
