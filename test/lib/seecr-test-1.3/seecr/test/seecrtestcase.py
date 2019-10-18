@@ -217,7 +217,7 @@ class CompareXml(object):
         except AssertionError:
             c, v, t = exc_info()
             v = c(str(v) + self._contextStr(expectedNode, resultNode))
-            raise c(v).with_traceback(t.tb_next)
+            raise v.with_traceback(t.tb_next)
 
     def _contextStr(self, expectedNode, resultNode):
         if not hasattr(self, '_context'):
