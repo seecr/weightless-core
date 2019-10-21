@@ -131,7 +131,8 @@ def _compose(initial, stepping):
             generators.pop()
             retval = returnValue.value
             if isinstance(retval, value_with_pushback):
-                messages[0:0] = list(retval.value, *retval.pushback)
+                messages[0:0] = retval.pushback
+                messages.insert(0, retval.value)
             else:
                 messages.insert(0, retval)
         except BaseException:
