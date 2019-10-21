@@ -26,25 +26,27 @@
 
 from ._acceptor import Acceptor
 from weightless.core import identify, Yield, compose
-from weightless.http import REGEXP, parseHeaders, parseHeader
+from weightless.http import HTTP, REGEXP, parseHeaders, parseHeader
 
 import re
+from io import BytesIO
 from resource import getrlimit, RLIMIT_NOFILE
 from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
 from tempfile import TemporaryFile
 from traceback import print_exception
 from email import message_from_file as parse_mime_message
+from email.parser import BytesParser
 from zlib import compressobj as deflateCompress
 from zlib import decompressobj as deflateDeCompress
 from zlib import Z_DEFAULT_COMPRESSION, DEFLATED, MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY
 
-from sys import getdefaultencoding, exc_info
+from sys import exc_info
 import sys
 
 
 RECVSIZE = 4096
-CRLF = '\r\n'
-CRLF_LEN = 2
+CRLF = HTTP.CRLF
+CRLF_LEN = len(CRLF)
 
 
 class HttpServer(object):
@@ -95,7 +97,7 @@ def maxFileDescriptors():
     return softLimit
 
 def defaultErrorHandler(**kwargs):
-    yield 'HTTP/1.0 503 Service Unavailable\r\n\r\n<html><head></head><body><h1>Service Unavailable</h1></body></html>'
+    yield b'HTTP/1.0 503 Service Unavailable\r\n\r\n<html><head></head><body><h1>Service Unavailable</h1></body></html>'
 
 def parseContentEncoding(headerValue):
     return [x.strip().lower() for x in headerValue.split(',')]
@@ -124,7 +126,7 @@ def parseAcceptEncoding(headerValue):
 
 
 _removeHeaderReCache = {}
-CONTENT_LENGTH_RE = re.compile(r'\r\nContent-Length:.*?\r\n', flags=re.I)
+CONTENT_LENGTH_RE = re.compile(rb'\r\nContent-Length:.*?\r\n', flags=re.I)
 def updateResponseHeaders(headers, match, addHeaders=None, removeHeaders=None, requireAbsent=None):
     requireAbsent = set(requireAbsent or [])
     addHeaders = addHeaders or {}
@@ -144,13 +146,13 @@ def updateResponseHeaders(headers, match, addHeaders=None, removeHeaders=None, r
     for header in removeHeaders:
         headerRe = _removeHeaderReCache.get(header, None)
         if headerRe is None:
-
-            headerRe = re.compile(r'\r\n%s:.*?\r\n' % re.escape(header), flags=re.I)
+            headerRe = re.compile(rb'\r\n%s:.*?\r\n' % re.escape(maybe_str_to_bytes(header)), flags=re.I)
             _removeHeaderReCache[header] = headerRe
+
         _headers = headerRe.sub(CRLF, _headers, count=1)
 
     for header, value in addHeaders.items():
-        _headers += '%s: %s\r\n' % (header, value)
+        _headers += b'%s: %s\r\n' % (maybe_str_to_bytes(header), maybe_str_to_bytes(value))
 
     return _statusLine + _headers + CRLF, _body
 
@@ -208,7 +210,7 @@ class HttpHandler(object):
         self._reactor = reactor
         self._sok = sok
         self._generatorFactory = generatorFactory
-        self._dataBuffer = ''
+        self._dataBuffer = b''
         self._rest = None
         self._timeout = timeout
         self._timer = None
@@ -216,10 +218,9 @@ class HttpHandler(object):
         self.request = None
         self._dealWithCall = self._readHeaders
         self._prio = prio
-        self._window = ''
+        self._window = b''
         self._maxConnections = maxConnections if maxConnections else maxFileDescriptors()
         self._errorHandler = errorHandler if errorHandler else defaultErrorHandler
-        self._defaultEncoding = getdefaultencoding()
 
         self._compressResponse = compressResponse
         self._decodeRequestBody = None
@@ -244,7 +245,7 @@ class HttpHandler(object):
         if not match:
             return # for more data
         self.request = match.groupdict()
-        self.request['Body'] = ''
+        self.request['Body'] = BytesIO()
         self.request['Headers'] = parseHeaders(self.request['_headers'])
         matchEnd = match.end()
         self._dataBuffer = self._dataBuffer[matchEnd:]
@@ -253,11 +254,11 @@ class HttpHandler(object):
             if cType.startswith('multipart/form-data'):
                 self._tempfile = TemporaryFile('w+b')
                 #self._tempfile = open('/tmp/mimetest', 'w+b')
-                self._tempfile.write('Content-Type: %s\r\n\r\n' % self.request['Headers']['Content-Type'])
+                self._tempfile.write(b'Content-Type: %s\r\n\r\n' % maybe_str_to_bytes(self.request['Headers']['Content-Type']))
                 self.setCallDealer(lambda: self._readMultiForm(pDict['boundary']))
                 return
         if 'Expect' in self.request['Headers']:
-            self._sok.send('HTTP/1.1 100 Continue\r\n\r\n')
+            self._sok.send(b'HTTP/1.1 100 Continue\r\n\r\n')
 
         if self._reactor.getOpenConnections() > self._maxConnections:
             self.request['ResponseCode'] = 503
@@ -274,11 +275,12 @@ class HttpHandler(object):
         self._window += self._dataBuffer
         self._window = self._window[-2*self._recvSize:]
 
-        if self._window.endswith("\r\n--%s--\r\n" % boundary):
+        if self._window.endswith(b"\r\n--%s--\r\n" % maybe_str_to_bytes(boundary)):
             self._tempfile.seek(0)
 
             form = {}
-            for msg in parse_mime_message(self._tempfile).get_payload():
+            parser = BytesParser()
+            for msg in parser.parse(self._tempfile).get_payload():
                 cType, pDict = parseHeader(msg['Content-Disposition'])
                 contentType = msg.get_content_type()
                 fieldName = pDict['name'][1:-1]
@@ -296,7 +298,7 @@ class HttpHandler(object):
             self.finalize()
             return
 
-        self._dataBuffer= ''
+        self._dataBuffer= b''
 
     def _processFilename(self, filename):
         parts = filename.split('\\')
@@ -334,10 +336,10 @@ class HttpHandler(object):
             return
 
         if self._decodeRequestBody is not None:
-            self.request['Body'] = self._decodeRequestBody.decompress(self._dataBuffer)
-            self.request['Body'] += self._decodeRequestBody.flush()
+            self.request['Body'].write(self._decodeRequestBody.decompress(self._dataBuffer))
+            self.request['Body'].write(self._decodeRequestBody.flush())
         else:
-            self.request['Body'] = self._dataBuffer
+            self.request['Body'].write(self._dataBuffer)
 
         self.finalize()
 
@@ -352,15 +354,17 @@ class HttpHandler(object):
     def _readChunkBody(self):
         if self._chunkSize == 0:
             if self._decodeRequestBody is not None:
-                self.request['Body'] += self._decodeRequestBody.flush()
+                self.request['Body'].write(self._decodeRequestBody.flush())
             return self.finalize()
 
         if len(self._dataBuffer) < self._chunkSize + CRLF_LEN:
             return # for more data
+
+        chunk = self._dataBuffer[:self._chunkSize]
         if self._decodeRequestBody is not None:
-            self.request['Body'] += self._decodeRequestBody.decompress(self._dataBuffer[:self._chunkSize])
+            self.request['Body'].write(self._decodeRequestBody.decompress(chunk))
         else:
-            self.request['Body'] += self._dataBuffer[:self._chunkSize]
+            self.request['Body'].write(chunk)
         self._dataBuffer = self._dataBuffer[self._chunkSize + CRLF_LEN:]
         self.setCallDealer(self._readChunk)
 
@@ -375,6 +379,7 @@ class HttpHandler(object):
 
     def _finalize(self, finalizeMethod):
         del self.request['_headers']
+        self.request['Body'] = self.request['Body'].getvalue()
 
         encoding = None
         if self._compressResponse == True:
@@ -391,7 +396,7 @@ class HttpHandler(object):
         self._finalize(self._generatorFactory)
 
     def _badRequest(self):
-        self._sok.send('HTTP/1.0 400 Bad Request\r\n\r\n')
+        self._sok.send(b'HTTP/1.0 400 Bad Request\r\n\r\n')
         self._reactor.removeReader(self._sok)
         self._sok.shutdown(SHUT_RDWR)
         self._sok.close()
@@ -421,12 +426,12 @@ class HttpHandler(object):
         this = yield
         endHeader = False
         responseStarted = False
-        headers = ''
+        headers = b''
         encodeResponseBody = SUPPORTED_COMPRESSION_CONTENT_ENCODINGS[encoding]['encode']() if encoding is not None else None
         data = None
 
         def _no_response_500(msg):
-            self._rest = 'HTTP/1.0 500 Internal Server Error\r\n\r\n'
+            self._rest = b'HTTP/1.0 500 Internal Server Error\r\n\r\n'
             while self._rest:
                 yield
                 data = self._rest
