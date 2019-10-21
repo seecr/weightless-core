@@ -56,7 +56,7 @@ try:
     from os import getenv
     if getenv('WEIGHTLESS_COMPOSE_TEST') == 'PYTHON':
         raise ImportError('Python compose for testing purposes')
-    from ext import compose as _compose, local, tostring, Yield, is_generator, DeclineMessage
+    from .ext import compose as _compose, local, tostring, Yield, is_generator, DeclineMessage
     cextension = True
     ComposeType = _compose
 except ImportError as e:

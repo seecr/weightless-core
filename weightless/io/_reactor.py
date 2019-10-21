@@ -483,9 +483,6 @@ def _closeAndIgnoreFdErrors(obj):
         # For why re-trying after EINTR is not a good idea for close(), see:
         #   http://lwn.net/Articles/576478/
         (errno, description) = e.args
-        # EBADF, EIO or EINTR -- non of which are really relevant in our shutdown.
-        # For why re-trying after EINTR is not a good idea for close(), see:
-        #   http://lwn.net/Articles/576478/
         _printException()
 
 def _shutdownMessage(message, thing, context):

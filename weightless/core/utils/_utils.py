@@ -68,8 +68,9 @@ def autostart(generatorFunction):
 def readRe(regexp, maximum=None):
     if isinstance(regexp, (str, bytes)):
         regexp = compile(regexp)
+    is_bytes_re = isinstance(regexp.pattern, bytes)
     match = None
-    message = ''
+    message = b'' if is_bytes_re else ''
     while not match:
         if maximum and len(message) > maximum:
             raise OverflowError('no match after %s bytes' % len(message))
@@ -79,7 +80,7 @@ def readRe(regexp, maximum=None):
         message += msg
         match = regexp.match(message)
     if not match:
-        raise Exception("no match at eof: '%s'" % message)
+        raise Exception("no match at eof: '%s'" % str(message))
     args = match.groupdict()
     rest = message[match.end():]
     if rest:
@@ -92,6 +93,8 @@ def readAll():
         while True:
             data.append((yield))
     except StopIteration:
+        if data and isinstance(data[0], bytes):
+            return b''.join(data)
         return ''.join(data)
 
 def copyBytes(tosend, target):

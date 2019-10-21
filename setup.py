@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 ## begin license ##
 #
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io

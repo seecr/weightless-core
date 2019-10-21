@@ -93,8 +93,8 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
 
     try:
         sok.connect((host, port))
-    except SocketError as xxx_todo_changeme:
-        (errno, msg) = xxx_todo_changeme.args
+    except SocketError as e:
+        (errno, msg) = e.args
         if errno != EINPROGRESS:
             raise
 
@@ -110,22 +110,22 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
 
         if proxyServer:
             sok.sendall(  # hotfix EG d.d. 1/3/14
-                ("CONNECT %s:%d HTTP/1.0\r\n" +
-                "Host: %s:%d\r\n\r\n") % (origHost, origPort, origHost, origPort))
+                (b"CONNECT %s:%d HTTP/1.0\r\n" +
+                b"Host: %s:%d\r\n\r\n") % (origHost.encode(), origPort, origHost.encode(), origPort))
             suspend._reactor.addReader(sok, this.__next__, prio=prio)
             try:
                 # hotfix EG d.d. 1/3/14
-                response = ''
+                response = b''
                 while True:
                     yield
                     fragment = sok.recv(4096)
-                    if fragment == '':
+                    if fragment == b'':
                         break
                     response += fragment
-                    if "\r\n\r\n" in response:
+                    if b"\r\n\r\n" in response:
                         break
                 status = response.split()[:2]
-                if not "200" in status:
+                if not b"200" in status:
                     raise ValueError("Failed to connect through proxy")
                 # end hotfix
             finally:
@@ -141,7 +141,7 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
             if body:
                 data = body
                 if type(data) is str:
-                    data = data.encode(getdefaultencoding())
+                    data = data.encode()
                 headers.update({'Content-Length': len(data)})
             yield _sendHttpHeaders(sok, method, request, headers)
             if body:
@@ -160,7 +160,7 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
                     if e.errno != SSL_ERROR_WANT_READ:
                         raise
                     continue
-                if response == '':
+                if response == b'':
                     break
                 size += len(response)
                 if not maxResponseSize is None and size > maxResponseSize:
@@ -174,7 +174,7 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
             suspend._reactor.removeReader(sok)
             sok.shutdown(SHUT_RDWR)
             sok.close()
-        suspend.resume(None if handlePartialResponse else ''.join(responses))
+        suspend.resume(None if handlePartialResponse else b''.join(responses))
     except (AssertionError, KeyboardInterrupt, SystemExit):
         raise
     except TimeoutException:
@@ -208,7 +208,7 @@ def _sslHandshake(sok, this, suspend, prio):
     return sok
 
 def _asyncSend(sok, data):
-    while data != "":
+    while data != b"":
         size = sok.send(data)
         data = data[size:]
         yield
@@ -216,11 +216,11 @@ def _asyncSend(sok, data):
 def _sendHttpHeaders(sok, method, request, headers):
     data = _requestLine(method, request)
     if headers:
-        data += ''.join('%s: %s\r\n' % i for i in list(headers.items()))
-    data += '\r\n'
+        data += b''.join(b'%s: %s\r\n' % tuple(map(maybe_str_to_bytes, i)) for i in headers.items())
+    data += b'\r\n'
     yield _asyncSend(sok, data)
 
 def _requestLine(method, request):
-    if request == '':
+    if request in {'', b''}:
         request = '/'
-    return "%s %s HTTP/1.0\r\n" % (method, request)
+    return b"%s %s HTTP/1.0\r\n" % (method.encode(), maybe_str_to_bytes(request))

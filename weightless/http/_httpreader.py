@@ -25,6 +25,7 @@
 
 from socket import socket, SHUT_RDWR
 from urllib.parse import urlsplit
+from weightless.core import maybe_str_to_bytes
 from weightless.http import REGEXP, FORMAT, HTTP, parseHeaders
 from ._bufferedhandler import BufferedHandler
 
@@ -90,9 +91,9 @@ class HttpReader(object):
     def _sendPostRequest(self, path, host, headers):
         headers['Transfer-Encoding'] = 'chunked'
         self._sok.sendall(
-            FORMAT.RequestLine % {'Method': b'POST', 'Request_URI': bytes(path), 'HTTPVersion': b'1.1'}
-            + FORMAT.HostHeader % {'Host': bytes(host)}
-            + ''.join(FORMAT.Header % list(map(bytes, header)) for header in list(headers.items()))
+            FORMAT.RequestLine % {'Method': b'POST', 'Request_URI': path.encode(), 'HTTPVersion': b'1.1'}
+            + FORMAT.HostHeader % {'Host': host.encode()}
+            + ''.join(FORMAT.Header % tuple(map(maybe_str_to_bytes, header)) for header in headers.items())
             + FORMAT.UserAgentHeader
             + HTTP.CRLF)
         item = next(self._handler)
@@ -105,15 +106,15 @@ class HttpReader(object):
         self._reactor.addReader(self._sok, self._headerFragment)
 
     def _createChunk(self, data):
-        return bytes(hex(len(data))[len('0x'):].upper()) + HTTP.CRLF + bytes(data) + HTTP.CRLF
+        return hex(len(data))[len('0x'):].upper().encode() + HTTP.CRLF + maybe_str_to_bytes(data) + HTTP.CRLF
 
     def _sendChunk(self, data):
         self._sok.sendall(self._createChunk(data))
 
     def _sendGetRequest(self, path, host):
         self._sok.sendall(
-            FORMAT.RequestLine % {'Method': b'GET', 'Request_URI': bytes(path), 'HTTPVersion': b'1.1'}
-            + FORMAT.HostHeader % {'Host': bytes(host)}
+            FORMAT.RequestLine % {'Method': b'GET', 'Request_URI': path.encode(), 'HTTPVersion': b'1.1'}
+            + FORMAT.HostHeader % {'Host': host.encode()}
             + FORMAT.UserAgentHeader
             + HTTP.CRLF)
         self._reactor.removeWriter(self._sok)

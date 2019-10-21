@@ -112,8 +112,8 @@ class HttpServerTest(WeightlessTestCase):
                 while True:
                     try:
                         r = sok.recv(4096)
-                    except SocketError as xxx_todo_changeme:
-                        (errno, msg) = xxx_todo_changeme.args
+                    except SocketError as e:
+                        (errno, msg) = e.args
                         if errno == EAGAIN:
                             break
                         raise

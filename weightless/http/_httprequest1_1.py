@@ -442,7 +442,7 @@ def _sslHandshake(sok, this, suspend, prio):
 def _requestLine(method, request):
     if request in {'', b''}:
         request = '/'
-    return "%s %s HTTP/1.1\r\n" % (method.encode(), maybe_str_to_bytes(request))
+    return b"%s %s HTTP/1.1\r\n" % (method.encode(), maybe_str_to_bytes(request))
 
 def _determineDoCloseFromConnection(headers):
     connectionHeaderValue = headers.get('Connection')
@@ -526,7 +526,7 @@ def _asyncRead(sok):
             sok.setsockopt(SOL_TCP, TCP_QUICKACK, 1)
             continue
 
-        if response == '':
+        if response == b'':
             return _CLOSED
         return response
 

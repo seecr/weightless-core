@@ -1558,8 +1558,8 @@ class ReactorTest(WeightlessTestCase):
                         reactor.addReader(sok=fd, sink=lambda: None)
                         self.assertTrue('Operation not permitted' in err.getvalue(), err.getvalue())
                     self.fail()
-                except IOError as xxx_todo_changeme:
-                    (errno, description) = xxx_todo_changeme.args
+                except IOError as e:
+                    (errno, description) = e.args
                     self.assertEqual(EPERM, errno)
                     self.assertEqual('Operation not permitted', description)
         finally:
