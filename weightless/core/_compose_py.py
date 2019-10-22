@@ -140,7 +140,7 @@ def _compose(initial, stepping):
             exType, exValue, exTraceback = exc_info()
             exception = (exType, exValue, exTraceback.tb_next)
     if exception:
-        raise exception[1]
+        raise exception[1].with_traceback(exception[2])
     if messages:
         if len(messages) > 1:
             return value_with_pushback(*messages)

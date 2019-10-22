@@ -1223,6 +1223,10 @@ GeneratorExit: Exit!
                 return repr(o)
         gc.collect()
         diff = set(self.get_tracked_objects()) - set(self._baseline)
+        for obj in list(diff):
+            if getattr(getattr(obj, 'gi_code', None), 'co_name', None) in {'testPartExecutor'}:
+                diff.remove(obj)
+
         self.assertEqual(set(), diff)
         for obj in diff:
             print("Leak:")

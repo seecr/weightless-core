@@ -35,7 +35,7 @@ def findInLocals(f_locals, localName):
                 return findInLocals(generator.gi_frame.f_locals, localName)
             except AttributeError:
                 pass
-    raise AttributeError(localName)
+    raise AttributeError(localName) from None
 
 def findLocalInFrame(frame, localName):
     while frame:
@@ -45,11 +45,11 @@ def findLocalInFrame(frame, localName):
             pass
         frame = frame.f_back
 
-    raise AttributeError(localName)
+    raise AttributeError(localName) from None
 
 def local(localName):
     frame = currentframe().f_back
     try:
         return findLocalInFrame(frame, localName)
     except AttributeError:
-        raise AttributeError(localName)
+        raise AttributeError(localName) from None
