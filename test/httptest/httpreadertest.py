@@ -37,7 +37,7 @@ from threading import Thread, Event
 
 from weightless.io import Reactor
 from weightless.http import HttpReader
-from weightless.core import VERSION as WlVersion
+from weightless.core import VERSION as WlVersion, maybe_str_to_bytes
 from weightless.http._httpreader import HttpReaderFacade, Connector, HandlerFacade, _httpParseUrl
 import sys
 from io import StringIO
@@ -52,7 +52,7 @@ def server(port, response, expectedrequest, delay=0, loop=50):
         newSok, addr = serverSok.accept()
         newSok.settimeout(1)
 
-        msg = ''
+        msg = b''
         for i in range(loop):
             if expectedrequest:
                 try:
@@ -67,9 +67,9 @@ def server(port, response, expectedrequest, delay=0, loop=50):
                     print("expected:", repr(expectedrequest))
                     return
         if response:
-            if hasattr(response, 'next'):
+            if hasattr(response, '__next__'):
                 for r in response:
-                    newSok.send(r)
+                    newSok.send(maybe_str_to_bytes(r))
             else:
                 newSok.send(response)
             sleep(delay)

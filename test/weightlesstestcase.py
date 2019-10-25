@@ -40,6 +40,7 @@ from tempfile import mkdtemp, mkstemp
 from shutil import rmtree
 
 from threading import Thread, Event
+from weightless.core import maybe_str_to_bytes
 from weightless.io import Reactor
 
 from http.server import BaseHTTPRequestHandler
@@ -183,12 +184,12 @@ class WeightlessTestCase(TestCase):
                 self.end_headers()
 
                 if not streamingData:
-                    self.wfile.write('GET RESPONSE')
+                    self.wfile.write(b'GET RESPONSE')
                     self.wfile.flush()
                     return
 
                 for dataFragment in streamingData:
-                    self.wfile.write(dataFragment)
+                    self.wfile.write(maybe_str_to_bytes(dataFragment))
                     self.wfile.flush()
 
             def do_POST(self, *args, **kwargs):
@@ -199,7 +200,7 @@ class WeightlessTestCase(TestCase):
                     'body': self.rfile.read(int(self.headers["Content-Length"]))})
                 self.send_response(200, "OK")
                 self.end_headers()
-                self.wfile.write('POST RESPONSE')
+                self.wfile.write(b'POST RESPONSE')
                 self.wfile.flush()
 
         if ssl:

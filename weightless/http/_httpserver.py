@@ -481,7 +481,7 @@ class HttpHandler(object):
                     data.resumeWriter()
                     continue
                 if type(data) is str:
-                    data = data.encode(self._defaultEncoding)
+                    data = data.encode()
 
             if encodeResponseBody is not None:
                 if endHeader is False:

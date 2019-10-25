@@ -30,7 +30,7 @@ from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
 from functools import partial
 
 from weightless.io import Suspend, TimeoutException, TooBigResponseException
-from weightless.core import compose, identify
+from weightless.core import compose, identify, maybe_str_to_bytes
 from urllib.parse import urlsplit
 
 
@@ -142,7 +142,7 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
                 data = body
                 if type(data) is str:
                     data = data.encode()
-                headers.update({'Content-Length': len(data)})
+                headers.update({'Content-Length': str(len(data))})
             yield _sendHttpHeaders(sok, method, request, headers)
             if body:
                 yield _asyncSend(sok, data)
