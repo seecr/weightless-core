@@ -26,6 +26,7 @@
 VERSION='$Version: x.y.z$'[9:-1].strip() # Modified by package scripts
 
 from functools import wraps
+from struct import Struct
 from types import GeneratorType, FunctionType
 
 from os.path import dirname, abspath, isdir, join            #DO_NOT_DISTRIBUTE
@@ -87,7 +88,8 @@ def maybe_str_to_bytes(v):
         return v.encode()
     return v
 
+int2byte = Struct(">B").pack # from six, see: https://github.com/benjaminp/six
+
 #from compose import compose, local, tostring, Yield
 from .utils import identify, autostart, retval, consume, asList, asString
 from ._observable import Observable, Transparent, be, methodOrMethodPartialStr, NoneOfTheObserversRespond
-

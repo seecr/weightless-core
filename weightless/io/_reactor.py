@@ -375,7 +375,7 @@ class Reactor(object):
     def _writeProcessPipe(self):
         while True:
             try:
-                write(self._processWritePipe, 'x')
+                write(self._processWritePipe, b'x')
                 break
             except (IOError, OSError) as e:
                 (errno, description) = e.args

@@ -279,6 +279,10 @@ def _readHeader(sok, rest=b''):
     statusAndHeaders = match.groupdict()
     headers = parseHeaders(statusAndHeaders['_headers'])
     del statusAndHeaders['_headers']
+    statusAndHeaders['HTTPVersion'] = statusAndHeaders['HTTPVersion'].decode()
+    statusAndHeaders['StatusCode'] = statusAndHeaders['StatusCode'].decode()
+    _rp = statusAndHeaders['ReasonPhrase']
+    statusAndHeaders['ReasonPhrase'] = _rp.decode() if _rp.isascii() else _rp
     statusAndHeaders['Headers'] = headers
 
     if statusAndHeaders['StatusCode'] == '100':
