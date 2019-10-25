@@ -32,7 +32,7 @@ from sys import exc_info, version_info
 from time import sleep
 from traceback import format_exception
 
-from weightless.core import compose, maybe_str_to_bytes
+from weightless.core import compose, maybe_str_to_bytes, int2byte
 from weightless.core._compose_py import _compose as _compose_py
 from weightless.http import HttpServer, httprequest, httpget, httppost, httpspost, httpsget, HttpRequest
 from weightless.io import Suspend, TimeoutException, TooBigResponseException
@@ -322,7 +322,7 @@ RuntimeError: Boom!""" % fileDict
         clientget('localhost', self.port, '/')
         self._loopReactorUntilDone()
 
-        self.assertTrue("Message: Unsupported method ('MYMETHOD')" in responses[0], responses[0])
+        self.assertTrue(b"Message: Unsupported method ('MYMETHOD')" in responses[0], responses[0])
 
     def testHttpRequestWithTimeout(self):
         # And thus too http(s)get/post/... and friends.
@@ -330,7 +330,7 @@ RuntimeError: Boom!""" % fileDict
         port = next(PortNumberGenerator)
         def slowData():
             for i in range(5):
-                yield i
+                yield str(i)
                 sleep(0.01)
 
         responses = []
@@ -356,9 +356,9 @@ RuntimeError: Boom!""" % fileDict
         clientget('localhost', self.port, '/')
         self._loopReactorUntilDone()
         self.assertTrue(len(responses) >= 1)
-        responseText = ''.join(responses)
-        self.assertTrue(responseText.startswith('HTTP/1.0 200 OK'), responseText)
-        self.assertTrue('01234' in responseText, responseText)
+        responseText = b''.join(responses)
+        self.assertTrue(responseText.startswith(b'HTTP/1.0 200 OK'), responseText)
+        self.assertTrue(b'01234' in responseText, responseText)
         self.assertEqual(1, len(get_request))
 
         # Timing out
@@ -382,7 +382,7 @@ RuntimeError: Boom!""" % fileDict
         headersOrig = {'Accept': 'text/plain'}
         headersOrig.update([
             ('X-Really-Largely-Large-%s' % i, 'aLargelyLargeValue')
-            for i in range(10000)
+            for i in range(50)
         ])
         def gethandler(*args, **kwargs):
             response = 'no response yet'
@@ -433,19 +433,19 @@ RuntimeError: Boom!""" % fileDict
         for useSsl in [False, True]:
             get_request = []
             port = next(PortNumberGenerator)
-            streamingData = StreamingData(data=[c for c in b"STREAMING GET RESPONSE"])
+            streamingData = StreamingData(data=list(map(int2byte, b"STREAMING GET RESPONSE")))
             self.referenceHttpServer(port, get_request, ssl=useSsl, streamingData=streamingData)
 
             dataHandled = []
             def handleDataFragment(data):
                 dataHandled.append(data)
-                if '\r\n\r\n' in ''.join(dataHandled):
+                if b'\r\n\r\n' in b''.join(dataHandled):
                     streamingData.doNext()
 
             responses = []
             def gethandler(*args, **kwargs):
                 f = httpsget if useSsl else httpget
-                response = 'no response yet'
+                response = b'no response yet'
                 try:
                     response = yield f('localhost', port, '/path',
                         headers={'Accept': 'text/plain'},
@@ -453,18 +453,18 @@ RuntimeError: Boom!""" % fileDict
                     )
                 finally:
                     responses.append(response)
-                yield 'HTTP/1.0 200 OK\r\n\r\n'
+                yield b'HTTP/1.0 200 OK\r\n\r\n'
             self.handler = gethandler
             clientget('localhost', self.port, '/')
             self._loopReactorUntilDone()
 
             self.assertEqual([None], responses)
-            self.assertTrue(b"STREAMING GET RESPONSE" in ''.join(dataHandled), dataHandled)
+            self.assertTrue(b"STREAMING GET RESPONSE" in b''.join(dataHandled), dataHandled)
             self.assertTrue(len(dataHandled) > len(b"STREAMING GET RESPONSE"), dataHandled)
             self.assertEqual('GET', get_request[0]['command'])
             self.assertEqual('/path', get_request[0]['path'])
-            headers = get_request[0]['headers'].headers
-            self.assertEqual(['Accept: text/plain\r\n'], headers)
+            headers = referenceResponseHeaders(get_request[0])
+            self.assertEqual({'Accept': 'text/plain'}, headers)
 
     def testHttpsGet(self):
         get_request = []
@@ -486,8 +486,8 @@ RuntimeError: Boom!""" % fileDict
         self.assertTrue(b"GET RESPONSE" in responses[0], responses[0])
         self.assertEqual('GET', get_request[0]['command'])
         self.assertEqual('/path', get_request[0]['path'])
-        headers = get_request[0]['headers'].headers
-        self.assertEqual(['Content-Length: 0\r\n', 'Content-Type: text/plain\r\n'], headers)
+        headers = referenceResponseHeaders(get_request[0])
+        self.assertEqual({'Content-Length': '0', 'Content-Type': 'text/plain'}, headers)
 
     def testHttpGetViaProxy(self):
         get_request = []

@@ -223,7 +223,7 @@ class WeightlessTestCase(TestCase):
                 self.send_response(200, "Connection established")
                 self.end_headers()
                 origRequest = self.connection.recv(4096)
-                path = "http://" + self.path + origRequest.split()[1]
+                path = "http://" + self.path + origRequest.split()[1].decode()
                 self.wfile.write(urlopen(path).read())
                 self.wfile.flush()
                 self.connection.close()

@@ -42,7 +42,7 @@ from sys import exc_info, version_info
 from time import time
 from traceback import format_exception, print_exc
 
-from weightless.core import compose, identify, Yield, local, be, Observable, retval
+from weightless.core import compose, identify, Yield, local, be, Observable, retval, int2byte
 from weightless.io import Suspend, TimeoutException, reactor
 from weightless.io.utils import asProcess, sleep as zleep
 from weightless.http import HttpServer, SocketPool, parseHeaders
@@ -78,7 +78,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
     ##
     ## HTTP/1.1 (and backwards compatible with HTTP/1.0) Protocol
     def testHttpRequestBasics(self):
-        expectedrequest = "GET /path?arg=1&arg=2 HTTP/1.1\r\nHost: localhost\r\n\r\n"
+        expectedrequest = b"GET /path?arg=1&arg=2 HTTP/1.1\r\nHost: localhost\r\n\r\n"
 
         def r1(sok, log, remoteAddress, connectionNr):
             # Request
@@ -86,10 +86,10 @@ class HttpRequest1_1Test(WeightlessTestCase):
             self.assertEqual(expectedrequest, data)
 
             # Response
-            _headers = 'HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\n'
+            _headers = b'HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\n'
             yield write(data=_headers)
-            yield write(data='hel')
-            yield write(data='lo!')
+            yield write(data=b'hel')
+            yield write(data=b'lo!')
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def test():
@@ -111,7 +111,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
                     },
                     statusAndHeaders
                 )
-                self.assertEqual('hello!', body)
+                self.assertEqual(b'hello!', body)
                 self.assertEqual(1, mss.nrOfRequests)
                 self.assertEqual({1: (None, [])}, mss.state.connections)
             finally:
@@ -121,19 +121,19 @@ class HttpRequest1_1Test(WeightlessTestCase):
 
     def testHttp10BodyDisallowed(self):
         def r1(sok, log, remoteAddress, connectionNr):
-            toRead = 'HEAD /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'HEAD /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write('HTTP/1.0 200 OK\r\n\r\n<BODY>')
+            yield write(b'HTTP/1.0 200 OK\r\n\r\n<BODY>')
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r2(sok, log, remoteAddress, connectionNr):
-            toRead = 'HEAD /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'HEAD /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write('HTTP/1.0 200 OK\r\n\r\n')
+            yield write(b'HTTP/1.0 200 OK\r\n\r\n')
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def test():
@@ -148,7 +148,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
                     self.assertEqual('Body not empty.', str(e))
                 statusAndHeaders, body = yield httprequest1_1(method='HEAD', host='localhost', port=mss.port, request='/second')
                 self.assertEqual('200', statusAndHeaders['StatusCode'])
-                self.assertEqual('', body)
+                self.assertEqual(b'', body)
                 self.assertEqual(2, mss.nrOfRequests)
                 self.assertEqual({1: (None, []), 2: (None, [])}, mss.state.connections)
             finally:
@@ -158,29 +158,29 @@ class HttpRequest1_1Test(WeightlessTestCase):
 
     def testHttp11BodyDisallowed(self):
         def r1(sok, log, remoteAddress, connectionNr):
-            toRead = 'POST /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'POST /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write('HTTP/1.0 204 No Content\r\n\r\n<BODY>')
+            yield write(b'HTTP/1.0 204 No Content\r\n\r\n<BODY>')
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r2(sok, log, remoteAddress, connectionNr):
             # Should be a "conditional get request"; but we don't care (yet).
-            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write('HTTP/1.0 304 Not Modified\r\n\r\n<BODY>')
+            yield write(b'HTTP/1.0 304 Not Modified\r\n\r\n<BODY>')
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r3(sok, log, remoteAddress, connectionNr):
             # Should be a "conditional get request"; but we don't care (yet).
-            toRead = 'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write('HTTP/1.0 304 Not Modified\r\n\r\n')
+            yield write(b'HTTP/1.0 304 Not Modified\r\n\r\n')
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def test():
@@ -208,11 +208,11 @@ class HttpRequest1_1Test(WeightlessTestCase):
 
     def testHttp11OneHundredResponseDisallowed(self):
         def r1(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET / HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET / HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write('HTTP/1.1 101 Switching Protocols\r\n\r\n')
+            yield write(b'HTTP/1.1 101 Switching Protocols\r\n\r\n')
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def test():
@@ -233,12 +233,12 @@ class HttpRequest1_1Test(WeightlessTestCase):
 
     def testHttp10CloseDelimitedBody(self):
         def r1(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.0 200 Okee-Dan\r\n\r\n")
-            yield write("Hi!")
+            yield write(b"HTTP/1.0 200 Okee-Dan\r\n\r\n")
+            yield write(b"Hi!")
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def test():
@@ -248,7 +248,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
             try:
                 statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/first')
                 self.assertEqual('200', statusAndHeaders['StatusCode'])
-                self.assertEqual('Hi!', body)
+                self.assertEqual(b'Hi!', body)
                 self.assertEqual({1: (None, [])}, mss.state.connections)
             finally:
                 mss.close()
@@ -257,30 +257,30 @@ class HttpRequest1_1Test(WeightlessTestCase):
 
     def testHttp10ContentLengthDelimitedBody(self):
         def r1(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.0 200 Yes\r\nContent-Length: 4\r\n\r\n")
-            yield write("1234<TOO-LONG>")
+            yield write(b"HTTP/1.0 200 Yes\r\nContent-Length: 4\r\n\r\n")
+            yield write(b"1234<TOO-LONG>")
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r2(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.0 200 Yes\r\nContent-Length: 4\r\n\r\n")
-            yield write("A")  # Too short.
+            yield write(b"HTTP/1.0 200 Yes\r\nContent-Length: 4\r\n\r\n")
+            yield write(b"A")  # Too short.
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r3(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.0 200 Yes\r\nContent-Length: 4\r\n\r\n")
-            yield write("ABCD")
+            yield write(b"HTTP/1.0 200 Yes\r\nContent-Length: 4\r\n\r\n")
+            yield write(b"ABCD")
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def test():
@@ -302,7 +302,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
 
                 statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/third')
                 self.assertEqual('200', statusAndHeaders['StatusCode'])
-                self.assertEqual('ABCD', body)
+                self.assertEqual(b'ABCD', body)
                 self.assertEqual({1: (None, []), 2: (None, []), 3: (None, [])}, mss.state.connections)
             finally:
                 mss.close()
@@ -312,49 +312,49 @@ class HttpRequest1_1Test(WeightlessTestCase):
     def testHttp11ContentLengthDelimited(self):
         # Bad Things Happen, not persisted - simple OK variants too.
         def r1(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write('HTTP/1.1 200 ok\r\nContent-Length: 4\r\n')
+            yield write(b'HTTP/1.1 200 ok\r\nContent-Length: 4\r\n')
             yield zleep(0.001)
-            yield write('\r\n12')
+            yield write(b'\r\n12')
             yield zleep(0.001)
-            yield write('34<TOO-LONG>')
+            yield write(b'34<TOO-LONG>')
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r2(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write('HTTP/1.1 200 ok\r\nContent-Length: 4\r\n\r\n')
+            yield write(b'HTTP/1.1 200 ok\r\nContent-Length: 4\r\n\r\n')
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r3(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write('HTTP/1.1 200 ok\r\nContent-Length: 4\r\n\r\n123')
+            yield write(b'HTTP/1.1 200 ok\r\nContent-Length: 4\r\n\r\n123')
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r4(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /fourth HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /fourth HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            for c in 'HTTP/1.1 200 ok\r\nContent-Length: 4\r\nConnection: close\r\n\r\n1234':
-                yield write(c)
+            for c_int in b'HTTP/1.1 200 ok\r\nContent-Length: 4\r\nConnection: close\r\n\r\n1234':
+                yield write(int2byte(c_int))
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r5(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /fifth HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /fifth HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            for c in 'HTTP/1.1 200 ok\r\nContent-Length: 4\r\n\r\n1234':
-                yield write(c)
+            for c_int in b'HTTP/1.1 200 ok\r\nContent-Length: 4\r\n\r\n1234':
+                yield write(int2byte(c_int))
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def test():
@@ -387,11 +387,11 @@ class HttpRequest1_1Test(WeightlessTestCase):
 
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/fourth')
                 self.assertEqual('200', statusAndHeaders['StatusCode'])
-                self.assertEqual('1234', body)
+                self.assertEqual(b'1234', body)
 
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/fifth')
                 self.assertEqual('200', statusAndHeaders['StatusCode'])
-                self.assertEqual('1234', body)
+                self.assertEqual(b'1234', body)
 
                 yield zleep(0.001)
                 self.assertEqual(5, mss.nrOfRequests)
@@ -407,31 +407,31 @@ class HttpRequest1_1Test(WeightlessTestCase):
         def r1(sok, log, remoteAddress, connectionNr):
             log.append(remoteAddress)
             # Request
-            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
             # Weird servers say 100 Continue after request - even when not requested to do so.
-            yield write(data='HTTP/1.1 100 Continue\r\nwEiRd: Header\r\n\r\n')
+            yield write(data=b'HTTP/1.1 100 Continue\r\nwEiRd: Header\r\n\r\n')
 
             # Response statusline & headers
-            yield write(data='HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\n')
+            yield write(data=b'HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\n')
             yield zleep(seconds=0.05)
 
             # Response body
-            yield write(data='ACK')
+            yield write(data=b'ACK')
             log.append('Response1Done')
 
             # Delay before answering the 2nd request.
             yield zleep(seconds=0.05)
 
             # Request
-            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
             # Response statusline & headers
-            yield write(data='HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n')
+            yield write(data=b'HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n')
             log.append('Response2Done')
             sok.shutdown(SHUT_RDWR); sok.close()  # Server may do this, even if not advertised with "Connection: close"
 
@@ -472,7 +472,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
                         'ReasonPhrase': 'OK',
                         'Headers': {'Content-Length': '0'},
                     }, statusAndHeaders)
-                self.assertEqual('', body)
+                self.assertEqual(b'', body)
                 self.assertEqual(1, mss.nrOfRequests)
                 self.assertEqual(IN_PROGRESS, mss.state.connections.get(1).value)
                 conn1Log = mss.state.connections.get(1).log
@@ -489,59 +489,59 @@ class HttpRequest1_1Test(WeightlessTestCase):
     def testHttp11ChunkingDelimitedBody(self):
         # Bad Things Happen, not persisted - simple OK variants too.
         def r1(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n")
+            yield write(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n")
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r2(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r")
+            yield write(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r")
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r3(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nBAD_DATA")
+            yield write(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\nBAD_DATA")
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r4(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /fourth HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /fourth HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nRUBBISCH")
+            yield write(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nRUBBISCH")
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r5(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /fifth HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /fifth HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n\r\n0\r\nNOT_A_TRAILER\r\n\r")
+            yield write(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n\r\n0\r\nNOT_A_TRAILER\r\n\r")
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r6(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /sixth HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /sixth HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n0\r\n\r\n")
+            yield write(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n0\r\n\r\n")
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r7(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /seventh HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /seventh HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n3\r\nABC\r\n0\r\nTr: Ailer\r\n\r\n")
+            yield write(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n3\r\nABC\r\n0\r\nTr: Ailer\r\n\r\n")
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def test():
@@ -581,11 +581,11 @@ class HttpRequest1_1Test(WeightlessTestCase):
 
                 statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/sixth')
                 self.assertEqual('200', statusAndHeaders['StatusCode'])
-                self.assertEqual('', body)
+                self.assertEqual(b'', body)
 
                 statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/seventh')
                 self.assertEqual('200', statusAndHeaders['StatusCode'])
-                self.assertEqual('ABC', body)
+                self.assertEqual(b'ABC', body)
 
                 yield zleep(0.001)
                 self.assertEqual(7, mss.nrOfRequests)
@@ -600,36 +600,36 @@ class HttpRequest1_1Test(WeightlessTestCase):
         # {http: 1.1, EOR: chunking, explicit-close: False, comms: ok}
         def r1(sok, log, remoteAddress, connectionNr):
             # Request 1
-            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
             # Response statusline & headers
-            yield write(data='HTTP/1.1 200 OK\r\nTransfer')
+            yield write(data=b'HTTP/1.1 200 OK\r\nTransfer')
             yield zleep(seconds=0.01)
-            yield write(data='-Encoding: chunked\r\n')
+            yield write(data=b'-Encoding: chunked\r\n')
             yield zleep(seconds=0.01)
 
             # Last CRLF of header, begin Response body
-            yield write(data='\r\na\r\n0123456789\r\n1;chunk-ext-name=chunk-ext-value;cen=cev\r\nA\r\n0\r\n\r\n')
+            yield write(data=b'\r\na\r\n0123456789\r\n1;chunk-ext-name=chunk-ext-value;cen=cev\r\nA\r\n0\r\n\r\n')
             log.append('Response1Done')
 
             # Request 2
-            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
             # Response statusline & headers
-            yield write(data='HTTP/1.1 200 oK\r\nTRANSFER-encoding: blue, GREEN, Banana, GZip, ChunKeD\r\n\r\n1\r\nx\r\n0\r\n\r\n')  # As long as chunked is last, whatever.
+            yield write(data=b'HTTP/1.1 200 oK\r\nTRANSFER-encoding: blue, GREEN, Banana, GZip, ChunKeD\r\n\r\n1\r\nx\r\n0\r\n\r\n')  # As long as chunked is last, whatever.
             log.append('Response2Done')
 
             # Request 3
-            toRead = 'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /third HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
             # Response statusline & headers
-            yield write(data='HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n')
+            yield write(data=b'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n')
             log.append('Response3Done')
             sok.shutdown(SHUT_RDWR); sok.close()  # Server may do this, even if not advertised with "Connection: close"
 
@@ -655,7 +655,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
                         'ReasonPhrase': 'OK',
                         'Headers': {'Transfer-Encoding': 'chunked'},
                     }, statusAndHeaders)
-                self.assertEqual('0123456789A', body)
+                self.assertEqual(b'0123456789A', body)
                 self.assertEqual(1, mss.nrOfRequests)
                 self.assertEqual(IN_PROGRESS, mss.state.connections.get(1).value)
                 conn1Log = mss.state.connections.get(1).log
@@ -668,7 +668,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
                         'ReasonPhrase': 'oK',
                         'Headers': {'Transfer-Encoding': 'blue, GREEN, Banana, GZip, ChunKeD'},
                     }, statusAndHeaders)
-                self.assertEqual('x', body)
+                self.assertEqual(b'x', body)
                 self.assertEqual(1, mss.nrOfRequests)
                 self.assertEqual(IN_PROGRESS, mss.state.connections.get(1).value)
                 self.assertEqual(['Response1Done', 'Response2Done'], conn1Log)
@@ -680,7 +680,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
                         'ReasonPhrase': 'OK',
                         'Headers': {'Transfer-Encoding': 'chunked'},
                     }, statusAndHeaders)
-                self.assertEqual('', body)
+                self.assertEqual(b'', body)
                 self.assertEqual(1, mss.nrOfRequests)
                 self.assertEqual(IN_PROGRESS, mss.state.connections.get(1).value)
                 conn1Log = mss.state.connections.get(1).log
@@ -696,12 +696,12 @@ class HttpRequest1_1Test(WeightlessTestCase):
 
     def testHttp11CloseDelimitedBody(self):
         def r1(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.1 200 Okee-Dan\r\n\r\n")
-            yield write("Hi!")
+            yield write(b"HTTP/1.1 200 Okee-Dan\r\n\r\n")
+            yield write(b"Hi!")
             sok.shutdown(SHUT_RDWR); sok.close()
 
         @dieAfter(seconds=5.0)
@@ -712,7 +712,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
             try:
                 statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request='/first')
                 self.assertEqual('200', statusAndHeaders['StatusCode'])
-                self.assertEqual('Hi!', body)
+                self.assertEqual(b'Hi!', body)
                 self.assertEqual({1: (None, [])}, mss.state.connections)
             finally:
                 mss.close()
@@ -724,15 +724,15 @@ class HttpRequest1_1Test(WeightlessTestCase):
         self.fail('after which to bail on parsing headers')
 
     def testHttpRequestResponseBodyMaxSize(self):
-        expectedrequest = "GET /stuff HTTP/1.1\r\nHost: localhost\r\n\r\n"
-        expected_response = 'abcdefghijklmnopqrstuvwxyz'
+        expectedrequest = b"GET /stuff HTTP/1.1\r\nHost: localhost\r\n\r\n"
+        expected_response = b'abcdefghijklmnopqrstuvwxyz'
         def r_content_length(sok, log, remoteAddress, connectionNr):
             # Request
             data = yield read(untilExpected=expectedrequest)
             self.assertEqual(expectedrequest, data)
 
             # Response
-            _headers = 'HTTP/1.1 200 OK\r\nContent-Length: 26\r\n\r\n'
+            _headers = b'HTTP/1.1 200 OK\r\nContent-Length: 26\r\n\r\n'
             yield write(data=_headers)
             yield write(data=expected_response)
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -756,7 +756,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
             # Response
             _headers = 'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n'
             yield write(data=_headers)
-            yield write(data='1a\r\n{}\r\n0\r\n\r\n'.format(expected_response))
+            yield write(data=b'1a\r\n{}\r\n0\r\n\r\n'.format(expected_response))
             sok.shutdown(SHUT_RDWR); sok.close()
 
         @dieAfter(seconds=5.0)
@@ -839,32 +839,32 @@ class HttpRequest1_1Test(WeightlessTestCase):
 
     def testWithTimeout(self):
         def r1(sok, log, remoteAddress, connectionNr):
-            s = 'GET /path HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            s = b'GET /path HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=s)
             self.assertEqual(s, data)
 
             # Force close, focus on timout testing without pooling here.
-            yield write('HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\n')
+            yield write(b'HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\n')
 
             for i in range(5):
                 yield zleep(0.01)
-                yield write(str(i))
+                yield write(str(i).encode())
 
             sok.shutdown(SHUT_RDWR); sok.close()
             return 'finished'
 
         def r2(sok, log, remoteAddress, connectionNr):
-            s = 'GET /path HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            s = b'GET /path HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=s)
             self.assertEqual(s, data)
 
-            yield write('HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\n')
+            yield write(b'HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\n')
             log.append('headers')
 
             try:
                 for i in range(5):
                     yield zleep(0.01)
-                    yield write(str(i))
+                    yield write(str(i).encode())
                     log.append(i)
             except SocketError as e:
                 self.assertEqual(32, e.args[0])  # Broken pipe
@@ -885,7 +885,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
                     **staticArgs
                 )
                 self.assertEqual('200', statusAndHeaders['StatusCode'])
-                self.assertEqual('01234', body)
+                self.assertEqual(b'01234', body)
                 self.assertEqual(1, mss.nrOfRequests)
                 self.assertEqual(('finished', []), mss.state.connections.get(1))
 
@@ -909,32 +909,32 @@ class HttpRequest1_1Test(WeightlessTestCase):
 
     def testPoolProtocol(self):
         def r1(sok, log, remoteAddress, connectionNr):
-            s = "GET /first HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
+            s = b"GET /first HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
             data = yield read(untilExpected=s)
             self.assertEqual(s, data)
 
-            yield write('HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n')
-            yield write('DATA')
+            yield write(b'HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n')
+            yield write(b'DATA')
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r2(sok, log, remoteAddress, connectionNr):
             # second request
-            s = "GET /second HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
+            s = b"GET /second HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
             data = yield read(untilExpected=s)
             self.assertEqual(s, data)
 
-            yield write('HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\n')
-            yield write('DATA')
+            yield write(b'HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\n')
+            yield write(b'DATA')
             log.append(2)
             yield zleep(0.01)
 
             # third request
-            s = "GET /third HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
+            s = b"GET /third HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
             data = yield read(untilExpected=s)
             self.assertEqual(s, data)
 
-            yield write('HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\n')
-            yield write('DATA')
+            yield write(b'HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\n')
+            yield write(b'DATA')
             log.append(3)
             yield zleep(0.01)  # Don't close before back-in-the-pool & tests done.
             sok.shutdown(SHUT_RDWR); sok.close()
@@ -969,7 +969,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='127.0.0.1', port=mss.port, request='/first')
                 # Request went ok.
                 self.assertEqual('200', statusAndHeaders['StatusCode'])
-                self.assertEqual('DATA', body)
+                self.assertEqual(b'DATA', body)
 
                 # mss interaction ok.
                 self.assertEqual(1, mss.nrOfRequests)
@@ -986,7 +986,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='127.0.0.1', port=mss.port, request='/second')
                 # Request went ok.
                 self.assertEqual('200', statusAndHeaders['StatusCode'])
-                self.assertEqual('DATA', body)
+                self.assertEqual(b'DATA', body)
 
                 # mss interaction ok.
                 self.assertEqual(2, mss.nrOfRequests)
@@ -1011,7 +1011,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='127.0.0.1', port=mss.port, request='/third')
                 # Request went ok.
                 self.assertEqual('200', statusAndHeaders['StatusCode'])
-                self.assertEqual('DATA', body)
+                self.assertEqual(b'DATA', body)
 
                 # mss interaction ok.
                 self.assertEqual(2, mss.nrOfRequests)
@@ -1035,7 +1035,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
 
     def testHttpRequestWorksWhenDrivenByHttpServer(self):
         # Old name: testPassRequestThruToBackOfficeServer
-        expectedrequest = "GET /path?arg=1&arg=2 HTTP/1.1\r\nHost: localhost\r\n\r\n"
+        expectedrequest = b"GET /path?arg=1&arg=2 HTTP/1.1\r\nHost: localhost\r\n\r\n"
 
         def r1(sok, log, remoteAddress, connectionNr):
             # Request
@@ -1043,10 +1043,10 @@ class HttpRequest1_1Test(WeightlessTestCase):
             self.assertEqual(expectedrequest, data)
 
             # Response
-            _headers = 'HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\n'
+            _headers = b'HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\n'
             yield write(data=_headers)
-            yield write(data='hel')
-            yield write(data='lo!')
+            yield write(data=b'hel')
+            yield write(data=b'lo!')
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def test():
@@ -1057,7 +1057,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 request = kwargs['RequestURI']
                 statusAndHeaders, body = yield httprequest1_1(host='localhost', port=mss.port, request=request)
                 yield 'HTTP/1.0 200 Ok\r\n\r\n'
-                yield statusAndHeaders['StatusCode'] + '\n' + body
+                yield (statusAndHeaders['StatusCode'] + '\n').encode() + body
             wlPort = next(PortNumberGenerator)
             wlHttp = HttpServer(reactor=reactor(), port=wlPort, generatorFactory=_passthruhandler)
 
@@ -1068,7 +1068,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 self.assertEqual(1, mss.nrOfRequests)
                 self.assertEqual({1: (None, [])}, mss.state.connections)
                 self.assertEqual('200', statusAndHeaders['StatusCode'])
-                self.assertEqual('200\nhello!', body)
+                self.assertEqual(b'200\nhello!', body)
             finally:
                 wlHttp.shutdown()
                 mss.close()
@@ -1165,11 +1165,11 @@ RuntimeError: Boom!\n""" % fileDict)
 
     def testUnconditionalRetryOnPooledSocketSendtoFailing(self):
         def r1(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+            yield write(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
             # One OK -> into pool
             yield zleep(0.001)
 
@@ -1177,11 +1177,11 @@ RuntimeError: Boom!\n""" % fileDict)
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r2(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nDone")
+            yield write(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nDone")
             # In pool (cleanup here).
             sok.shutdown(SHUT_RDWR); sok.close()
 
@@ -1210,7 +1210,7 @@ RuntimeError: Boom!\n""" % fileDict)
                 # reuse -> send #fail -> new socket & retry.
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/second')
                 self.assertEqual('200', statusAndHeaders['StatusCode'])
-                self.assertEqual('Done', body)
+                self.assertEqual(b'Done', body)
 
                 self.assertEqual(2, mss.nrOfRequests)
                 self.assertEqual(None, mss.state.connections.get(2).value)
@@ -1223,11 +1223,11 @@ RuntimeError: Boom!\n""" % fileDict)
 
     def testUnconditionalRetryOnlyOnce(self):
         def r1(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+            yield write(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
             # One OK -> into pool
             yield zleep(0.001)
 
@@ -1279,15 +1279,15 @@ RuntimeError: Boom!\n""" % fileDict)
 
     def testUnconditionalRetryOnPooledSocketFirstRecvNoDataOnlyFailing(self):
         def r1(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+            yield write(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
             # One OK -> into pool
             yield zleep(0.001)
 
-            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
@@ -1298,11 +1298,11 @@ RuntimeError: Boom!\n""" % fileDict)
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r2(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nDone")
+            yield write(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nDone")
             # In pool (cleanup here).
             sok.shutdown(SHUT_RDWR); sok.close()
 
@@ -1328,7 +1328,7 @@ RuntimeError: Boom!\n""" % fileDict)
                 # reuse -> first recv #fail -> new socket & retry.
                 statusAndHeaders, body = yield top.any.httprequest1_1(host='localhost', port=mss.port, request='/second')
                 self.assertEqual('200', statusAndHeaders['StatusCode'])
-                self.assertEqual('Done', body)
+                self.assertEqual(b'Done', body)
 
                 self.assertEqual(2, mss.nrOfRequests)
                 self.assertEqual(None, mss.state.connections.get(1).value)
@@ -1342,11 +1342,11 @@ RuntimeError: Boom!\n""" % fileDict)
 
     def testUnconditionalRetryOnPooledSocketEBADFFailing(self):
         def r1(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nDone")
+            yield write(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nDone")
             # In pool (cleanup here).
             sok.shutdown(SHUT_RDWR); sok.close()
 
@@ -1371,7 +1371,7 @@ RuntimeError: Boom!\n""" % fileDict)
                     self.assertTrue('EBADF' in err.getvalue(), err.getvalue())
                     self.assertTrue('Bad file descriptor' in err.getvalue(), err.getvalue())
                 self.assertEqual('200', statusAndHeaders['StatusCode'])
-                self.assertEqual('Done', body)
+                self.assertEqual(b'Done', body)
 
                 self.assertEqual(1, mss.nrOfRequests)
                 self.assertEqual(None, mss.state.connections.get(1).value)
@@ -1385,18 +1385,18 @@ RuntimeError: Boom!\n""" % fileDict)
     def testNoUnconditionalRetryOnPooledSocketWhenDataAlreadyRecved(self):
         # ... in the context of the current connection.
         def r1(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+            yield write(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
             log.append(1)
 
-            toRead = 'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write("HTTP/1.1 Oh No!...")
+            yield write(b"HTTP/1.1 Oh No!...")
             yield zleep(0.001)
             sok.shutdown(SHUT_RDWR); sok.close()
 
@@ -1440,7 +1440,7 @@ RuntimeError: Boom!\n""" % fileDict)
                         'Hdr': 'Vl',
                     },
                 },
-                'Body'
+                b'Body'
             )
             yield
         trace = CallTrace('HttpRequest1_1Mock', methods={'httprequest1_1': httprequestMessageMock})
@@ -1455,7 +1455,7 @@ RuntimeError: Boom!\n""" % fileDict)
         self.assertEqual(['httprequest1_1'], trace.calledMethodNames())
         call, = trace.calledMethods
         self.assertEqual(((), {'host': 'h', 'request': '/', 'port': 12}), (call.args, call.kwargs))
-        self.assertEqual('HTTP/1.7 200 Okee\r\nHdr: Vl\r\nHost: farfaraway.com\r\nTransfer-Encoding: chunked\r\n\r\nBody', result)
+        self.assertEqual(b'HTTP/1.7 200 Okee\r\nHdr: Vl\r\nHost: farfaraway.com\r\nTransfer-Encoding: chunked\r\n\r\nBody', result)
         trace.calledMethods.reset()
 
         # ssl=True
@@ -1463,7 +1463,7 @@ RuntimeError: Boom!\n""" % fileDict)
         self.assertEqual(['httprequest1_1'], trace.calledMethodNames())
         call, = trace.calledMethods
         self.assertEqual(((), {'host': 'h', 'request': '/', 'port': 12, 'secure': True}), (call.args, call.kwargs))
-        self.assertTrue(result.startswith('HTTP/1.7 200'), result)
+        self.assertTrue(result.startswith(b'HTTP/1.7 200'), result)
         trace.calledMethods.reset()
 
         # ssl=False
@@ -1501,19 +1501,19 @@ RuntimeError: Boom!\n""" % fileDict)
 
     def testHttpRequestAdapterWithImplementation(self):
         def r1(sok, log, remoteAddress, connectionNr):
-            toRead = 'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
+            toRead = b'GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write('HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 0\r\n\r\n')
+            yield write(b'HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 0\r\n\r\n')
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def r2(sok, log, remoteAddress, connectionNr):
-            toRead = 'POST /second HTTP/1.1\r\nH: V\r\nContent-Length: 12\r\nHost: localhost\r\n\r\nrequest-body'
+            toRead = b'POST /second HTTP/1.1\r\nH: V\r\nContent-Length: 12\r\nHost: localhost\r\n\r\nrequest-body'
             data = yield read(untilExpected=toRead)
             self.assertEqual(toRead, data)
 
-            yield write('HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 4\r\n\r\nDone')
+            yield write(b'HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 4\r\n\r\nDone')
             sok.shutdown(SHUT_RDWR); sok.close()
 
         def test():
@@ -1530,12 +1530,12 @@ RuntimeError: Boom!\n""" % fileDict)
             try:
                 # minimal
                 result = yield top.any.httprequest(host='localhost', port=mss.port, request='/first')
-                expected = 'HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'
+                expected = b'HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'
                 self.assertEqual(expected, result)
 
                 # all (valid) arguments
                 result = yield top.any.httprequest(method='POST', host='localhost', port=mss.port, request='/second', body='request-body', headers={'H': 'V'}, ssl=False, prio=2, timeout=5.0)
-                expected = 'HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 4\r\n\r\nDone'
+                expected = b'HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 4\r\n\r\nDone'
                 self.assertEqual(expected, result)
             finally:
                 mss.close()
@@ -1587,7 +1587,7 @@ RuntimeError: Boom!\n""" % fileDict)
         def test():
             statusAndHeaders, _body = yield httprequest1_1(method='POST', host='localhost', port=port, request='/path', body=body)
             self.assertEqual('200', statusAndHeaders['StatusCode'])
-            self.assertEqual("POST RESPONSE", _body)
+            self.assertEqual(b"POST RESPONSE", _body)
 
         asProcess(test())
 
@@ -1634,7 +1634,7 @@ RuntimeError: Boom!\n""" % fileDict)
                 headers={'Content-Type': 'text/plain'}, secure=True,
             )
             self.assertEqual('200', statusAndHeaders['StatusCode'])
-            self.assertEqual("POST RESPONSE", _body)
+            self.assertEqual(b"POST RESPONSE", _body)
 
         asProcess(test())
 
@@ -1664,7 +1664,7 @@ RuntimeError: Boom!\n""" % fileDict)
                 prio=4
             )
             self.assertEqual('200', statusAndHeaders['StatusCode'])
-            self.assertEqual("GET RESPONSE", body)
+            self.assertEqual(b"GET RESPONSE", body)
 
         asProcess(test())
 
@@ -1690,7 +1690,7 @@ RuntimeError: Boom!\n""" % fileDict)
                 method='MYMETHOD', host='localhost', port=port, request='/path',
             )
             self.assertEqual('501', statusAndHeaders['StatusCode'])  # "Not Implemented"
-            self.assertTrue("Message: Unsupported method ('MYMETHOD')" in body, body)
+            self.assertTrue(b"Message: Unsupported method ('MYMETHOD')" in body, body)
 
         asProcess(test())
 
@@ -1711,7 +1711,7 @@ RuntimeError: Boom!\n""" % fileDict)
                 headers=headersOrig,
             )
             self.assertEqual('200', statusAndHeaders['StatusCode'])
-            self.assertEqual("GET RESPONSE", body)
+            self.assertEqual(b"GET RESPONSE", body)
 
         asProcess(test())
 
@@ -2008,8 +2008,8 @@ RuntimeError: Boom!\n""" % fileDict)
     def testMockSocketServerOneRequestExpectedAndCompleted(self):
         def r1(sok, log, remoteAddress, connectionNr):
             #data = yield read(forSeconds=0.1)
-            data = yield read(untilExpected='GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n')
-            yield write(data='HTTP/1.1 200 Okidokie\r\nContent-Length: 0\r\n\r\n')
+            data = yield read(untilExpected=b'GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n')
+            yield write(data=b'HTTP/1.1 200 Okidokie\r\nContent-Length: 0\r\n\r\n')
             sok.shutdown(SHUT_RDWR); sok.close()
             return data
 
@@ -2029,7 +2029,7 @@ RuntimeError: Boom!\n""" % fileDict)
                     },
                     statusAndHeaders
                 )
-                self.assertEqual('', body)
+                self.assertEqual(b'', body)
                 self.assertEqual(1, mss.nrOfRequests)
                 self.assertEqual({1: ('GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n', [])}, mss.state.connections)
             finally:
@@ -2178,12 +2178,12 @@ class _ExactExpectationHandler(object):
 IN_PROGRESS = type('IN_PROGRESS', (object,), {})()
 
 
-def read(bytes=None, forSeconds=None, untilExpected=None, timeout=1.0):
+def read(bytes_=None, forSeconds=None, untilExpected=None, timeout=1.0):
     """
     MockSocketServer' handler helper functions.
     Use these instead of recv/write yourself.
 
-    bytes:
+    bytes_:
         Minimal number of bytes to read.
     forSeconds:
         Attempt to read as much as possible within the given time.
@@ -2192,18 +2192,18 @@ def read(bytes=None, forSeconds=None, untilExpected=None, timeout=1.0):
     timeout:
         Must be set to some sane, low value - otherwise test hangs indefinitely.
     """
-    if not (sum((int(bytes is not None), int(forSeconds is not None), int(untilExpected is not None))) == 1):
-        raise AssertionError('One of either bytes, forSeconds or untilExpected must be given.')
+    if not (sum((int(bytes_ is not None), int(forSeconds is not None), int(untilExpected is not None))) == 1):
+        raise AssertionError('One of either bytes_, forSeconds or untilExpected must be given.')
 
-    bytesRead = ''
+    bytesRead = b''
     startTime = time()
 
     timeoutRelative = lambda: max(float(timeout) - (time() - startTime), 0)
 
-    if bytes is not None:
-        test = lambda bytesRead: len(bytesRead) >= bytes
+    if bytes_ is not None:
+        test = lambda bytesRead: len(bytesRead) >= bytes_
     if untilExpected is not None:
-        if isinstance(untilExpected, str):
+        if isinstance(untilExpected, bytes):
             test = lambda bytesRead: bytesRead.startswith(untilExpected)
         else:  # callable presumed
             test = lambda bytesRead: untilExpected(bytesRead)
@@ -2221,10 +2221,10 @@ def read(bytes=None, forSeconds=None, untilExpected=None, timeout=1.0):
         except TimeoutException:
             if forSeconds is None:
                 msg = '''Timeout reached while trying:
-    read(bytes={bytes}, forSeconds={forSeconds}, untilExpected={untilExpected}, timeout={timeout})
+    read(bytes_={bytes_}, forSeconds={forSeconds}, untilExpected={untilExpected}, timeout={timeout})
 
 Read so far:\n{bytesRead}'''.format(**{
-                    'bytes': bytes,
+                    'bytes_': bytes_,
                     'forSeconds': forSeconds,
                     'untilExpected': repr(untilExpected),
                     'timeout': timeout,
@@ -2299,8 +2299,8 @@ Written so far:\n{written}'''.format(**{
 
 def _writeOnce(data, timeout):
     sok = local('__sok__')
-    if isinstance(data, str):
-        raise AssertionError('Expects a string, not unicode')
+    if not isinstance(data, bytes):
+        raise AssertionError('Expects bytes, not unicode')
 
     g = _writeOnceGF(sok=sok, data=data)
     def onTimeout():
