@@ -1,26 +1,26 @@
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
 # Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 from unittest import TestCase
@@ -32,3 +32,18 @@ class HttpSpecTest(TestCase):
         self.assertEquals(('aap', {}), httpspec.parseHeader('aap'))
         self.assertEquals(('aap', {'noot': 'mies'}), httpspec.parseHeader('aap; noot=mies'))
         self.assertEquals(('aap', {'noot': 'mies', 'vis': 'vuur'}), httpspec.parseHeader('aap; noot=mies; vis=vuur'))
+
+    def testParseContentDispositionValues(self):
+        self.assertEquals(('attachment', {}), httpspec.parseHeader('attachment'))
+        self.assertEquals(('attachment', {'filename': 'document.pdf'}),
+            httpspec.parseHeader('attachment; filename=document.pdf'))
+
+        self.assertEquals(('attachment', {'filename': '"with a ;.pdf"'}),
+            httpspec.parseHeader('attachment; filename="with a ;.pdf"'))
+
+        self.assertEquals(('attachment', {'filename': 'document.pdf', 'filename*': '"another document.pdf"'}),
+            httpspec.parseHeader('attachment; filename=document.pdf; filename*="another document.pdf"'))
+
+        self.assertEquals(('attachment', {'filename': r'"with a \".pdf"'}),
+            httpspec.parseHeader(r'attachment; filename="with a \".pdf"'))
+

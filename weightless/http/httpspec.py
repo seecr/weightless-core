@@ -39,11 +39,13 @@ def parseHeaders(headerString):
     return headers
 
 def parseHeader(headerString):
-    parts = headerString.split(';')
+    parts = headerString.split(';', 1)
     cType = parts[0]
     pDict = {}
     if len(parts) != 1:
-        pDict = dict(part.strip().split('=', 1) for part in (part for part in parts[1:]))
+        x = compile(HTTP.named_field_name + "=" + "(?P<fieldvalue>(" + HTTP.token + "|" + HTTP.quoted_string + "))")
+        for each in (match.groupdict() for match in x.finditer(parts[1])):
+            pDict[each['fieldname']] = each['fieldvalue']
 
     return cType, pDict
 
@@ -62,6 +64,7 @@ class HTTP:
     CRLF = '\r\n'
     # http://www.w3.org/Protocols/rfc2616/rfc2616-sec2.html#sec2.2
     token =  r"([!#$%&'*+\-.0-9A-Z^_`a-z|~]+){1}"
+    quoted_string = r'(?s)".*?(?:(?<!\\)")'
     field_name = token
     field_value = '.*'
     named_field_name = '(?P<fieldname>' + field_name + ')'

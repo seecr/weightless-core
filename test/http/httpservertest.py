@@ -871,28 +871,27 @@ class HttpServerTest(WeightlessTestCase):
             return
             yield
 
-        with stdout_replaced():
-            with Reactor() as reactor:
-                server = HttpServer(reactor, self.port, handler)
-                server.listen()
-                sok = socket()
-                sok.connect(('localhost', self.port))
-                sok.send(httpRequest)
+        with Reactor() as reactor:
+            server = HttpServer(reactor, self.port, handler)
+            server.listen()
+            sok = socket()
+            sok.connect(('localhost', self.port))
+            sok.send(httpRequest)
 
-                reactor.addTimer(2, lambda: self.fail("Test Stuck"))
-                while self.requestData.get('Form', None) == None:
-                    reactor.step()
-                form = self.requestData['Form']
-                self.assertEquals(4, len(form))
-                self.assertEquals(['SOME ID'], form['id'])
-                self.assertEquals(1, len(form['somename']))
-                filename, mimetype, data = form['somename'][0]
-                self.assertEquals('Bank Gothic Medium BT.ttf', filename)
-                self.assertEquals('application/octet-stream', mimetype)
+            reactor.addTimer(2, lambda: self.fail("Test Stuck"))
+            while self.requestData.get('Form', None) == None:
+                reactor.step()
+            form = self.requestData['Form']
+            self.assertEquals(4, len(form))
+            self.assertEquals(['SOME ID'], form['id'])
+            self.assertEquals(1, len(form['somename']))
+            filename, mimetype, data = form['somename'][0]
+            self.assertEquals('Bank Gothic Medium BT.ttf', filename)
+            self.assertEquals('application/octet-stream', mimetype)
 
-                # cleanup
-                sok.close()
-                server.shutdown()
+            # cleanup
+            sok.close()
+            server.shutdown()
 
     def testTextFileSeenAsFile(self):
         httpRequest = open(inmydir('data/multipart-data-03')).read()
@@ -951,6 +950,34 @@ class HttpServerTest(WeightlessTestCase):
                 # cleanup
                 sok.close()
                 server.shutdown()
+    
+    def testReadMultipartFormEndBoundaryFilenameWithSemicolon(self):
+        httpRequest = open(inmydir('data/multipart-data-05')).read()
+        self.requestData = {}
+        def handler(**kwargs):
+            self.requestData = kwargs
+            return
+            yield
+
+        with stdout_replaced():
+            with Reactor() as reactor:
+                server = HttpServer(reactor, self.port, handler)
+                server.listen()
+                sok = socket()
+                sok.connect(('localhost', self.port))
+                sok.send(httpRequest)
+
+                reactor.addTimer(2, lambda: self.fail("Test Stuck"))
+                while self.requestData.get('Form', None) == None:
+                    reactor.step()
+                form = self.requestData['Form']
+                self.assertEquals(1, len(form))
+                self.assertEquals(('some filename.extension', 'text/plain', 3521*'X'), form['name with ; semicolon'][0])
+
+                # cleanup
+                sok.close()
+                server.shutdown()
+
 
     def testOnlyHandleAMaximumNrOfRequests(self):
         codes = []
