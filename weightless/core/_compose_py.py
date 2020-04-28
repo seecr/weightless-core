@@ -63,7 +63,7 @@ class Yield(object):
     def __new__(self):
         raise TypeError("cannot create 'Yield' instances")
 
-class value_with_pushback:
+class value_with_pushback(object):
     def __init__(self, value, *pushback):
         self.value = value
         self.pushback = pushback

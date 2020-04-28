@@ -141,7 +141,11 @@ class SeecrTestCase(TestCase):
         raise ValueError("No executable found for '%s'" % executable)
 
     def _getVmSize(self):
-        status = open('/proc/%d/status' % getpid()).read()
+        fp = open('/proc/%d/status' % getpid())
+        try:
+            status = fp.read()
+        finally:
+            fp.close()
         i = status.find('VmSize:') + len('VmSize:')
         j = status.find('kB', i)
         vmsize = int(status[i:j].strip())

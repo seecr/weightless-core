@@ -48,15 +48,15 @@ class ServerTest(WeightlessTestCase):
                 messages.append((yield))
         server = Server(self.reactor, self.port)
         server.addObserver(Interceptor())
-        sok = self.send('localhost', self.port, 'a message')
+        sok = self.send('localhost', self.port, b'a message')
         self.reactor.step().step()
-        self.assertEqual(['a message'], messages)
+        self.assertEqual([b'a message'], messages)
         sok.close()
         server.stop()
 
     def testConnectionNotProcessedRaisesError(self):
         server = Server(self.reactor, self.port)
-        sok = self.send('localhost', self.port, 'a message')
+        sok = self.send('localhost', self.port, b'a message')
         sys.stderr = StringIO()
         try:
             self.reactor.step()
@@ -72,12 +72,12 @@ class ServerTest(WeightlessTestCase):
                 yield 'over en uit'
         server = Server(self.reactor, self.port)
         server.addObserver(Interceptor())
-        connection = self.send('localhost', self.port, 'a message')
+        connection = self.send('localhost', self.port, b'a message')
         while connection not in select([connection],[],[],0)[0]:
             self.reactor.step()
-        self.assertEqual('over en uit', connection.recv(99))
+        self.assertEqual(b'over en uit', connection.recv(99))
         try:
-            connection.send('aap')
+            connection.send(b'aap')
             self.fail('connection is closed, this must raise an io error')
         except socket.error as e:
             pass
@@ -91,14 +91,14 @@ class ServerTest(WeightlessTestCase):
                 yield 'over en uit'
         server = Server(self.reactor, self.port)
         server.addObserver(Interceptor())
-        connection = self.send('localhost', self.port, 'a message')
+        connection = self.send('localhost', self.port, b'a message')
         sys.stderr = StringIO()
         try:
             self.reactor.step()
         finally:
             sys.stderr = sys.__stderr__
         try:
-            connection.send('aap')
+            connection.send(b'aap')
             self.fail('connection is closed, this must raise an io error')
         except socket.error as e:
             pass
@@ -112,9 +112,9 @@ class ServerTest(WeightlessTestCase):
                 yield 'Goodbye ' + message
         server = Server(self.reactor, self.port)
         server.addObserver(MyHandler())
-        conn3 = self.send('localhost', self.port, 'Klaas')
-        conn1 = self.send('localhost', self.port, 'Thijs')
-        conn2 = self.send('localhost', self.port, 'Johan')
+        conn3 = self.send('localhost', self.port, b'Klaas')
+        conn1 = self.send('localhost', self.port, b'Thijs')
+        conn2 = self.send('localhost', self.port, b'Johan')
         readable = []
         while conn1 not in readable or conn2 not in readable or conn3 not in readable:
             self.reactor.step()

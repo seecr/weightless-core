@@ -42,7 +42,7 @@ class UdpAcceptorTest(TestCase):
         self.assertEqual('addReader', reactor.calledMethods[0].name)
         sok = reactor.calledMethods[0].args[0]
         out = Popen(['netstat', '--numeric', '--listening', '--udp'], stdout=PIPE, stderr=PIPE).communicate()[0]
-        self.assertTrue(str(port) in out, out)
+        self.assertTrue(str(port).encode() in out, out)
         sok.close()
         callback = reactor.calledMethods[0].args[1]
         self.assertTrue(callable(callback))
@@ -59,11 +59,11 @@ class UdpAcceptorTest(TestCase):
         self.assertEqual('addReader', reactor.calledMethods[0].name)
         handleCallback = reactor.calledMethods[0].args[1]
         sok = socket(AF_INET, SOCK_DGRAM)
-        sok.sendto("TEST", ('localhost', port))
+        sok.sendto(b"TEST", ('localhost', port))
         handleCallback()
         contents, remoteAddr = data[0]
-        self.assertEqual("TEST", contents)
-        sok.sendto("ANOTHER TEST", ('localhost', port))
+        self.assertEqual(b"TEST", contents)
+        sok.sendto(b"ANOTHER TEST", ('localhost', port))
         handleCallback()
         self.assertEqual(2, len(data))
         reactor.calledMethods[0].args[0].close()

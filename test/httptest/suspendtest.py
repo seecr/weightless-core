@@ -267,7 +267,7 @@ class SuspendTest(WeightlessTestCase):
             reactor.step()
             reactor.step()
             reactor.step()
-            self.assertEqual(['before suspend', 'result = RESPONSE', 'after suspend'], listener.data)
+            self.assertEqual([b'before suspend', b'result = RESPONSE', b'after suspend'], listener.data)
             self.assertEqual(0, len(reactor._fds))
 
             # cleanup (most) fd's
@@ -310,6 +310,8 @@ class SuspendTest(WeightlessTestCase):
             expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
   File "%(__file__)s", line 152, in handler
     suspend.getResult()
+  File "../weightless/io/_suspend.py", line [#], in getResult
+    raise v.with_traceback(t)
   File "%(__file__)s", line 172, in testSuspendProtocolWithThrow
     raiser()
   File "%(__file__)s", line 170, in raiser
@@ -317,9 +319,9 @@ class SuspendTest(WeightlessTestCase):
 ValueError: BAD VALUE
             """ % fileDict)
             self.assertEqual(3, len(listener.data))
-            self.assertEqual('before suspend', listener.data[0])
+            self.assertEqual(b'before suspend', listener.data[0])
             self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
-            self.assertEqual('after suspend', listener.data[2])
+            self.assertEqual(b'after suspend', listener.data[2])
             self.assertEqual(0, len(reactor._fds))
 
             # cleanup (most) fd's
@@ -676,13 +678,13 @@ ZeroDivisionError: integer division or modulo by zero
       File "%(__file__)s", line 201, in handler
         suspend.getResult()
       File "%(suspend.py)s", line 62, in getResult
-        raise self._exception[0], self._exception[1], self._exception[2]
+        raise v.with_traceback(t)
     ValueError: BAD VALUE
             """ % fileDict)
             self.assertEqual(3, len(listener.data))
-            self.assertEqual('before suspend', listener.data[0])
+            self.assertEqual(b'before suspend', listener.data[0])
             self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
-            self.assertEqual('after suspend', listener.data[2])
+            self.assertEqual(b'after suspend', listener.data[2])
             self.assertEqual(0, len(reactor._fds))
 
             # cleanup (most) fd's
@@ -747,7 +749,7 @@ class MyMockSocket(object):
         pass
 
     def recv(self, *args):
-        return 'GET / HTTP/1.0\r\n\r\n'
+        return b'GET / HTTP/1.0\r\n\r\n'
 
     def getpeername(self):
         return 'itsme'
@@ -764,4 +766,6 @@ class MyMockSocket(object):
 
 
 def ignoreLineNumbers(s):
+    if type(s) is bytes:
+        s = s.decode()
     return sub("line \d+,", "line [#],", s)

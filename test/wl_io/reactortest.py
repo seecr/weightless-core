@@ -96,23 +96,28 @@ class ReactorTest(WeightlessTestCase):
         self.assertEqual(2, len(loggedShutdowns))
 
     def testAddSocketReading(self):
-        with Reactor() as reactor:
-            rw = readAndWritable()
-            self.assertTrue(rw.fileno() not in reactor._fds)
-            reactor.addReader(rw, lambda: None)
-            self.assertTrue(rw.fileno() in reactor._fds)
-            reactor.removeReader(rw)
-            self.assertFalse(rw.fileno() in reactor._fds)
+        rw = readAndWritable()
+        try:
+            with Reactor() as reactor:
+                self.assertTrue(rw.fileno() not in reactor._fds)
+                reactor.addReader(rw, lambda: None)
+                self.assertTrue(rw.fileno() in reactor._fds)
+                reactor.removeReader(rw)
+                self.assertFalse(rw.fileno() in reactor._fds)
+        finally:
+            rw.close()
 
     def testAddSocketWriting(self):
         rw = readAndWritable()
-
-        with Reactor() as reactor:
-            self.assertTrue(rw.fileno() not in reactor._fds)
-            reactor.addWriter(rw, None)
-            self.assertTrue(rw.fileno() in reactor._fds)
-            reactor.removeWriter(rw)
-            self.assertFalse(rw.fileno() in reactor._fds)
+        try:
+            with Reactor() as reactor:
+                self.assertTrue(rw.fileno() not in reactor._fds)
+                reactor.addWriter(rw, None)
+                self.assertTrue(rw.fileno() in reactor._fds)
+                reactor.removeWriter(rw)
+                self.assertFalse(rw.fileno() in reactor._fds)
+        finally:
+            rw.close()
 
     def testAddSocketRaisesException(self):
         class Sok: # raise exception when put into set
@@ -128,7 +133,7 @@ class ReactorTest(WeightlessTestCase):
     def testReadable(self):
         with Reactor() as reactor:
             r, w = os.pipe()
-            os.write(w, 'x')
+            os.write(w, b'x')
             def readable():
                 self.readable = True
             reactor.addReader(r, readable)
@@ -453,35 +458,41 @@ class ReactorTest(WeightlessTestCase):
 
     def testAssertionErrorInReadCallback(self):
         rwFd = readAndWritable()
-        with stderr_replaced():
-            with Reactor() as reactor:
-                def callback(): raise AssertionError('here is the assertion')
-                reactor.addReader(rwFd, callback)
-                try:
-                    reactor.step()
-                    self.fail('must raise exception')
-                except AssertionError as e:
-                    self.assertEqual('here is the assertion', str(e))
+        try:
+            with stderr_replaced():
+                with Reactor() as reactor:
+                    def callback(): raise AssertionError('here is the assertion')
+                    reactor.addReader(rwFd, callback)
+                    try:
+                        reactor.step()
+                        self.fail('must raise exception')
+                    except AssertionError as e:
+                        self.assertEqual('here is the assertion', str(e))
 
-                # cleanup your administration on the way out
-                self.assertEqual(0, fdsLenFromReactor(reactor))
-                self.assertEqual(set(), fdsReadyFromReactorEpoll(reactor))
+                    # cleanup your administration on the way out
+                    self.assertEqual(0, fdsLenFromReactor(reactor))
+                    self.assertEqual(set(), fdsReadyFromReactorEpoll(reactor))
+        finally:
+            rwFd.close()
 
     def testAssertionErrorInWRITECallback(self):
         rwFd = readAndWritable()
-        with stderr_replaced():
-            with Reactor() as reactor:
-                def callback(): raise AssertionError('here is the assertion')
-                reactor.addWriter(rwFd, callback)
-                try:
-                    reactor.step()
-                    self.fail('must raise exception')
-                except AssertionError as e:
-                    self.assertEqual('here is the assertion', str(e))
+        try:
+            with stderr_replaced():
+                with Reactor() as reactor:
+                    def callback(): raise AssertionError('here is the assertion')
+                    reactor.addWriter(rwFd, callback)
+                    try:
+                        reactor.step()
+                        self.fail('must raise exception')
+                    except AssertionError as e:
+                        self.assertEqual('here is the assertion', str(e))
 
-                # cleanup your administration on the way out
-                self.assertEqual(0, fdsLenFromReactor(reactor))
-                self.assertEqual(set(), fdsReadyFromReactorEpoll(reactor))
+                    # cleanup your administration on the way out
+                    self.assertEqual(0, fdsLenFromReactor(reactor))
+                    self.assertEqual(set(), fdsReadyFromReactorEpoll(reactor))
+        finally:
+            rwFd.close()
 
     def testWriteFollowsRead(self):
         with Reactor() as reactor:
@@ -569,10 +580,8 @@ class ReactorTest(WeightlessTestCase):
             reactor.addTimer(0.04, timeout)
             setTimeout(0.01, callback=signalTimeout)
             try:
-                with self.stderr_replaced() as s:
-                    while not self.time:
-                        reactor.step()
-                    self.assertTrue("[Errno 4] Interrupted system call" in s.getvalue(), s.getvalue())
+                while self.time is False:
+                    reactor.step()
                 self.assertTrue(self.alarm)
                 self.assertTrue(targetTime - 0.01 < self.time, targetTime + 0.01)
             except ioerror:
@@ -654,14 +663,14 @@ class ReactorTest(WeightlessTestCase):
             with stderr_replaced() as err:
                 reactor.removeReader(sok=rw1)
                 reactor.removeWriter(sok=rw2)
-                self.assertEqual(2, err.getvalue().count('Errno 9'), err.getvalue())
+                self.assertEqual(2, err.getvalue().count('Bad file descriptor'), err.getvalue())
 
             reactor.addTimer(seconds=0.001, callback=lambda: log.append("t1"))
             reactor.step()
 
             with stderr_replaced() as err:
                 reactor.removeWriter(sok=rw3)
-                self.assertEqual(1, err.getvalue().count('Errno 9'), err.getvalue())
+                self.assertEqual(1, err.getvalue().count('Bad file descriptor'), err.getvalue())
 
             self.assertEqual(["rw1", "t1"], log)
             self.assertEqual(0, len(reactor._fds))
@@ -706,7 +715,7 @@ class ReactorTest(WeightlessTestCase):
             reactor.step()
             self.fail()
         except Exception as e:
-            self.assertEqual('I/O operation on closed epoll fd', str(e))
+            self.assertEqual('I/O operation on closed epoll object', str(e))
 
     def testTimerDoesNotMaskAssertionErrors(self):
         with Reactor() as reactor:
@@ -814,15 +823,15 @@ class ReactorTest(WeightlessTestCase):
                 data1.append(remote1.recv(999))
             reactor.addReader(remote0, remoteHandler0, 0)
             reactor.addReader(remote1, remoteHandler1, 2)
-            local0.send('ape')
-            local1.send('nut')
+            local0.send(b'ape')
+            local1.send(b'nut')
             reactor.step() #0
-            self.assertEqual(['ape'], data0)
+            self.assertEqual([b'ape'], data0)
             self.assertEqual([], data1)
             reactor.step() #1
             self.assertEqual([], data1)
             reactor.step() #2
-            self.assertEqual(['nut'], data1)
+            self.assertEqual([b'nut'], data1)
 
             # cleanup
             reactor.removeReader(remote0)
@@ -855,16 +864,20 @@ class ReactorTest(WeightlessTestCase):
 
     def testDefaultPrio(self):
         with Reactor() as reactor:
-            rw1 = readAndWritable()
-            reactor.addReader(rw1, '')
-            self.assertEqual(Reactor.DEFAULTPRIO, reactor._fds[rw1.fileno()].prio)
-            rw2 = readAndWritable()
-            reactor.addWriter(rw2, '')
-            self.assertEqual(Reactor.DEFAULTPRIO, reactor._fds[rw2.fileno()].prio)
+            try:
+                rw1 = readAndWritable()
+                reactor.addReader(rw1, '')
+                self.assertEqual(Reactor.DEFAULTPRIO, reactor._fds[rw1.fileno()].prio)
+                rw2 = readAndWritable()
+                reactor.addWriter(rw2, '')
+                self.assertEqual(Reactor.DEFAULTPRIO, reactor._fds[rw2.fileno()].prio)
 
-            # cleanup
-            reactor.removeReader(rw1)
-            reactor.removeWriter(rw2)
+                # cleanup
+                reactor.removeReader(rw1)
+                reactor.removeWriter(rw2)
+            finally:
+                rw1.close()
+                rw2.close()
 
     def testWritePrio(self):
         with Reactor() as reactor:
@@ -872,13 +885,13 @@ class ReactorTest(WeightlessTestCase):
             local1, remote1 = socketpair()
             local1.setblocking(0)
             def remoteHandler0():
-                remote0.send('ape')
+                remote0.send(b'ape')
             def remoteHandler1():
-                remote1.send('nut')
+                remote1.send(b'nut')
             reactor.addWriter(remote0, remoteHandler0, 0)
             reactor.addWriter(remote1, remoteHandler1, 2)
             reactor.step() #0
-            self.assertEqual('ape', local0.recv(999))
+            self.assertEqual(b'ape', local0.recv(999))
             try:
                 local1.recv(999)
                 self.fail('must be no data on the socket yet')
@@ -891,7 +904,7 @@ class ReactorTest(WeightlessTestCase):
             except error:
                 pass
             reactor.step() #2
-            self.assertEqual('nut', local1.recv(999))
+            self.assertEqual(b'nut', local1.recv(999))
 
             # cleanup
             reactor.removeWriter(remote0)
@@ -902,17 +915,21 @@ class ReactorTest(WeightlessTestCase):
     def testGetOpenConnections(self):
         rw1 = readAndWritable()
         rw2 = readAndWritable()
-        with Reactor() as reactor:
-            self.assertEqual(0, reactor.getOpenConnections())
-            reactor.addReader(rw1, '')
-            self.assertEqual(1, reactor.getOpenConnections())
-            reactor.addWriter(rw2, '')
-            self.assertEqual(2, reactor.getOpenConnections())
+        try:
+            with Reactor() as reactor:
+                self.assertEqual(0, reactor.getOpenConnections())
+                reactor.addReader(rw1, '')
+                self.assertEqual(1, reactor.getOpenConnections())
+                reactor.addWriter(rw2, '')
+                self.assertEqual(2, reactor.getOpenConnections())
 
-            reactor.removeReader(rw1)
-            self.assertEqual(1, reactor.getOpenConnections())
-            reactor.removeWriter(rw2)
-            self.assertEqual(0, reactor.getOpenConnections())
+                reactor.removeReader(rw1)
+                self.assertEqual(1, reactor.getOpenConnections())
+                reactor.removeWriter(rw2)
+                self.assertEqual(0, reactor.getOpenConnections())
+        finally:
+            rw1.close()
+            rw2.close()
 
     def testAddProcessGenerator(self):
         with Reactor() as reactor:
@@ -1189,6 +1206,8 @@ class ReactorTest(WeightlessTestCase):
             # cleanup
             reactor.removeReader(sok=rwFD)
             reactor.cleanup(rwFD_unexpected)
+            rwFD.close()
+            rwFD_unexpected.close()
 
 
     def testRemoveFDAlsoEpollUnregisters(self):
@@ -1203,16 +1222,17 @@ class ReactorTest(WeightlessTestCase):
             reactor.removeReader(rwFD)
             self.assertEqual(0, fdsLenFromReactor(reactor))
             self.assertEqual(set(), fdsReadyFromReactorEpoll(reactor))
+            rwFD.close()
 
             # removeReader (or any other thing calling _removeFD) -  with bad-fd
             rwFD = readAndWritable()
             reactor.addReader(sok=rwFD, sink=cb)
             rwFD.close()
-            self.assertRaises(IOError, lambda: rwFD.fileno())
+            self.assertEqual(-1, rwFD.fileno())
 
             with stderr_replaced() as err:
                 reactor.removeReader(rwFD)
-                self.assertTrue('error: [Errno 9]' in err.getvalue(), err.getvalue())
+                self.assertTrue('Bad file descriptor' in err.getvalue(), err.getvalue())
             self.assertEqual(0, fdsLenFromReactor(reactor))
             self.assertEqual(set(), fdsReadyFromReactorEpoll(reactor))
 
@@ -1225,6 +1245,7 @@ class ReactorTest(WeightlessTestCase):
             reactor.removeWriter(rwFD)
             self.assertEqual(0, fdsLenFromReactor(reactor))
             self.assertEqual(set(), fdsReadyFromReactorEpoll(reactor))
+            rwFD.close()
 
             # suspend
             rwFD = readAndWritable()
@@ -1247,13 +1268,16 @@ class ReactorTest(WeightlessTestCase):
         with Reactor() as reactor:
             # normal
             rwFD = readAndWritable()
-            reactor.addReader(sok=rwFD, sink=cb)
-            self.assertEqual(1, fdsLenFromReactor(reactor))
-            self.assertEqual(set([rwFD.fileno()]), fdsReadyFromReactorEpoll(reactor))
+            try:
+                reactor.addReader(sok=rwFD, sink=cb)
+                self.assertEqual(1, fdsLenFromReactor(reactor))
+                self.assertEqual(set([rwFD.fileno()]), fdsReadyFromReactorEpoll(reactor))
 
-            reactor.cleanup(rwFD)
-            self.assertEqual(0, fdsLenFromReactor(reactor))
-            self.assertEqual(set(), fdsReadyFromReactorEpoll(reactor))
+                reactor.cleanup(rwFD)
+                self.assertEqual(0, fdsLenFromReactor(reactor))
+                self.assertEqual(set(), fdsReadyFromReactorEpoll(reactor))
+            finally:
+                rwFD.close()
 
             # as a file-obj with a bad-file-descriptor
             rwFD = readAndWritable()
@@ -1262,10 +1286,10 @@ class ReactorTest(WeightlessTestCase):
             self.assertEqual(set([rwFD.fileno()]), fdsReadyFromReactorEpoll(reactor))
 
             rwFD.close()
-            self.assertRaises(IOError, lambda: rwFD.fileno())
+            self.assertEqual(-1, rwFD.fileno()) # JJ: used to raise an exception in python2.7, in python3 return -1
             with stderr_replaced() as err:
                 reactor.cleanup(rwFD)
-                self.assertTrue("[Errno 9] Bad file descriptor" in err.getvalue())
+                self.assertTrue("Bad file descriptor" in err.getvalue(), err.getvalue())
             self.assertEqual(0, fdsLenFromReactor(reactor))
             self.assertEqual(set(), fdsReadyFromReactorEpoll(reactor))
 
@@ -1312,6 +1336,9 @@ class ReactorTest(WeightlessTestCase):
 
             # cleanup is like remove; no _badFdsLastCallback's
             self.assertEqual(0, len(reactor._badFdsLastCallback))
+
+            rw1.close()
+            rw3.close()
 
     def testAddProcessFromThread(self):
         with Reactor() as reactor:

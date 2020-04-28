@@ -248,8 +248,9 @@ class Reactor(object):
             self._cleanFdsByFileObj(fileOrFd)
             return
 
-        del self._fds[fd]
-        self._epollUnregister(fd=fd)
+        if fd in self._fds:
+            del self._fds[fd]
+            self._epollUnregister(fd=fd)
 
     def _lastCallbacks(self):
         while self._badFdsLastCallback:
@@ -350,7 +351,8 @@ class Reactor(object):
         "Ignores the expected (ENOENT & EBADF) and unexpected exceptions from epoll_ctl / unregister"
         self._removeFdsInCurrentStep.add(fd)
         try:
-            self._epoll.unregister(fd)
+            if fd != -1:
+                self._epoll.unregister(fd)
         except IOError as e:
             # If errno is either ENOENT or EBADF than the fd is already gone (epoll's EBADF automagical cleanup); not reproducable in Python's epoll binding - but staying on the safe side.
             (errno, description) = e.args
@@ -456,7 +458,11 @@ class _ProcessContext(object):
 def _fdNormalize(fd):
     if hasattr(fd, 'fileno'):
         try:
-            return fd.fileno()
+            fileno = fd.fileno()
+            if fileno == -1:
+                print("Bad file descriptor {}".format(fd), file=sys.stderr, flush=True)
+                raise _HandleEBADFError()
+            return fileno
         except (IOError, OSError, socket_error) as e:
             (errno, description) = e.args
             _printException()
@@ -470,7 +476,8 @@ def _fdOrNone(fd):
     "Only use for info/debugging - supresses errors without logging."
     if hasattr(fd, 'fileno'):
         try:
-            return fd.fileno()
+            fileno = fd.fileno()
+            return None if fileno == -1 else fileno
         except (IOError, OSError, socket_error):
             return None
     return fd

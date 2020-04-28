@@ -63,6 +63,7 @@ class WeightlessTestCase(TestCase):
         os.close(fd)
         self.reactor = Reactor()
         self.port = next(PortNumberGenerator)
+        self._soks = []
 
     def tearDown(self):
         t0 = time()
@@ -80,6 +81,8 @@ class WeightlessTestCase(TestCase):
         self.reactor.shutdown()
         rmtree(self.tempdir)
         os.remove(self.tempfile)
+        for s in self._soks:
+            s.close()
         TestCase.tearDown(self)
 
     def select(self, aString, index):
@@ -107,8 +110,9 @@ class WeightlessTestCase(TestCase):
 
     def send(self, host, port, message):
         sok = socket()
+        self._soks.append(sok)
         sok.connect((host, port))
-        sok.sendall(message)
+        sok.sendall(message.encode())
         return sok
 
     def httpGet(self, host, port, path):

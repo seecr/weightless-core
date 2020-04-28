@@ -39,6 +39,7 @@ else
 fi
 echo Performing tests: $tests
 
+tests="PYTHON"
 for t in $tests; do
     echo "================ $t _alltests.py $@ ================"
     #WEIGHTLESS_COMPOSE_TEST=$t gdb --args $pycmd _alltests.py "$@"

@@ -34,7 +34,7 @@ from resource import getrlimit, RLIMIT_NOFILE
 from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
 from tempfile import TemporaryFile
 from traceback import print_exception
-from email import message_from_file as parse_mime_message
+from email import message_from_file as parse_mime_message  #FIXME: TS: RemoveMe
 from email.parser import BytesParser
 from zlib import compressobj as deflateCompress
 from zlib import decompressobj as deflateDeCompress

@@ -41,7 +41,7 @@ from weightless.io._gio import Context, SocketContext, Timer, TimeoutException
 class GioTest(WeightlessTestCase):
 
     def testOpenReturnsContextManager(self):
-        result = giopen('http/data/testdata5kb')
+        result = giopen('httptest/data/testdata5kb')
         self.assertTrue(hasattr(result, '__enter__'))
         self.assertTrue(hasattr(result, '__exit__'))
 
@@ -165,7 +165,7 @@ class GioTest(WeightlessTestCase):
             def peter(channel):
                 with channel:
                     message = yield
-                    yield 'Hello ' + message[-4:]
+                    yield 'Hello ' + message.decode()[-4:]
             def jack(channel):
                 with channel:
                     x = yield 'My name is Jack'
@@ -174,7 +174,7 @@ class GioTest(WeightlessTestCase):
             Gio(reactor, jack(SocketContext(lhs)))
             Gio(reactor, peter(SocketContext(rhs)))
             reactor.step().step().step().step()
-            self.assertEqual('Hello Jack', self.response)
+            self.assertEqual(b'Hello Jack', self.response)
 
     def testLargeBuffers(self):
         with stdout_replaced():
@@ -189,12 +189,18 @@ class GioTest(WeightlessTestCase):
                 def jack(channel):
                     with channel:
                         yield 'X' * messageSize
-                Gio(reactor, jack(SocketContext(lhs)))
-                Gio(reactor, peter(SocketContext(rhs)))
-                while sum(len(message) for message in messages) < messageSize:
-                    reactor.step()
-                self.assertTrue(len(messages) > 1) # test is only sensible when multiple parts are sent
-                self.assertEqual(messageSize, len(''.join(messages)))
+                jack_socketContext = jack(SocketContext(lhs))
+                peter_socketContext = peter(SocketContext(rhs))
+                try:
+                    Gio(reactor, jack_socketContext)
+                    Gio(reactor, peter_socketContext)
+                    while sum(len(message) for message in messages) < messageSize:
+                        reactor.step()
+                    self.assertTrue(len(messages) > 1) # test is only sensible when multiple parts are sent
+                    self.assertEqual(messageSize, len(b''.join(messages)))
+                finally:
+                    jack_socketContext.close()
+                    peter_socketContext.close()
 
     def testHowToCreateAHttpServer(self):
         port = next(PortNumberGenerator)
@@ -219,6 +225,7 @@ class GioTest(WeightlessTestCase):
                 yield 'HTTP/1.1 200 Ok\r\n\r\nGoodbye'
             def stop(self):
                 self._reactor.removeReader(self._ear)
+                self._ear.close()
         server = HttpServer(self.reactor, port)
         #CLIENT
         responses = []
@@ -234,7 +241,7 @@ class GioTest(WeightlessTestCase):
         Gio(self.reactor, httpClient())
         while not responses:
             self.reactor.step()
-        self.assertEqual(['HTTP/1.1 200 Ok\r\n\r\nGoodbye'], responses)
+        self.assertEqual([b'HTTP/1.1 200 Ok\r\n\r\nGoodbye'], responses)
         server.stop()
 
     def testTimerDoesNotFire(self):
