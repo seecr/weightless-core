@@ -3,7 +3,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012, 2015, 2018-2019 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2012, 2015, 2018-2020 Seecr (Seek You Too B.V.) http://seecr.nl
 # Copyright (C) 2015 Koninklijke Bibliotheek (KB) http://www.kb.nl
 #
 # This file is part of "Weightless"
@@ -38,16 +38,21 @@ def parseHeaders(headerString):
         headers[fieldname.title()] = fieldvalue.strip()
     return headers
 
-def parseHeader(headerString):
-    parts = headerString.split(';', 1)
+def unquote(s):
+    if s and len(s) > 1 and s[0] == s[-1] == '"':
+        return s[1:-1]
+    return s
+
+def parseHeaderFieldvalue(fieldvalue):
+    parts = fieldvalue.split(';', 1)
     cType = parts[0]
     pDict = {}
     if len(parts) != 1:
-        x = compile(HTTP.named_field_name + "=" + "(?P<fieldvalue>(" + HTTP.token + "|" + HTTP.quoted_string + "))")
-        for each in (match.groupdict() for match in x.finditer(parts[1])):
-            pDict[each['fieldname']] = each['fieldvalue']
+        for each in (match.groupdict() for match in REGEXP.FIELDVALUE.finditer(parts[1])):
+            pDict[each['fieldname']] = unquote(each['fieldvalue'])
 
     return cType, pDict
+parseHeader = parseHeaderFieldvalue
 
 class HTTP:
     #class Response:
@@ -99,6 +104,7 @@ class REGEXP:
     HEADER = compile(HTTP.named_message_header)
     CHUNK_SIZE_LINE = compile(HTTP.Chunk_Size_Line)
     CRLF = compile(HTTP.CRLF)
+    FIELDVALUE = compile(HTTP.named_field_name + "=" + "(?P<fieldvalue>(" + HTTP.token + "|" + HTTP.quoted_string + "))")
 
 class FORMAT:
     RequestLine = '%(Method)s %(Request_URI)s HTTP/%(HTTPVersion)s' + HTTP.CRLF
