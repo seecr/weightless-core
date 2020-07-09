@@ -4,7 +4,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012, 2014-2015, 2018-2019 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2012, 2014-2015, 2018-2020 Seecr (Seek You Too B.V.) http://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -26,7 +26,7 @@
 
 from _acceptor import Acceptor
 from weightless.core import identify, Yield, compose
-from weightless.http import REGEXP, parseHeaders, parseHeader
+from weightless.http import REGEXP, parseHeaders, parseHeaderFieldvalue
 
 import re
 from resource import getrlimit, RLIMIT_NOFILE
@@ -249,7 +249,7 @@ class HttpHandler(object):
         matchEnd = match.end()
         self._dataBuffer = self._dataBuffer[matchEnd:]
         if 'Content-Type' in self.request['Headers']:
-            cType, pDict = parseHeader(self.request['Headers']['Content-Type'])
+            cType, pDict = parseHeaderFieldvalue(self.request['Headers']['Content-Type'])
             if cType.startswith('multipart/form-data'):
                 self._tempfile = TemporaryFile('w+b')
                 #self._tempfile = open('/tmp/mimetest', 'w+b')
@@ -279,14 +279,14 @@ class HttpHandler(object):
 
             form = {}
             for msg in parse_mime_message(self._tempfile).get_payload():
-                cType, pDict = parseHeader(msg['Content-Disposition'])
+                cType, pDict = parseHeaderFieldvalue(msg['Content-Disposition'])
                 contentType = msg.get_content_type()
-                fieldName = pDict['name'][1:-1]
+                fieldName = pDict['name']
                 if not fieldName in form:
                     form[fieldName] = []
 
                 if 'filename' in pDict:
-                    filename = self._processFilename(pDict['filename'][1:-1])
+                    filename = self._processFilename(pDict['filename'])
                     form[fieldName].append((filename, contentType, msg.get_payload()))
                 else:
                     form[fieldName].append(msg.get_payload())
