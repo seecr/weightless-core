@@ -33,16 +33,16 @@ class LocalTest(TestCase):
     def testScope(self):
         _some_var_on_the_callstack_ = 'aap'
         v = local('_some_var_on_the_callstack_')
-        self.assertEquals('aap', v)
+        self.assertEqual('aap', v)
 
     def testNone(self):
         var = None
-        self.assertEquals(None, local('var'))
+        self.assertEqual(None, local('var'))
 
     def testNotFound(self):
         try:
             v = local('no_such_thing')
-            print "V", v
+            print("V", v)
             self.fail()
         except AttributeError:
             pass
@@ -57,12 +57,12 @@ class LocalTest(TestCase):
             self.fail()
         except AttributeError:
             c, v, t = exc_info()
-            self.assertEquals("no_such_thing", str(v))
+            self.assertEqual("no_such_thing", str(v))
             names = []
             while t:
                 names.append(t.tb_frame.f_code.co_name)
                 t = t.tb_next
-            self.assertEquals(['testNotFoundStacktraceCleanNormalFunctions', 'a', 'b'] + ([] if cextension else ['local']), names)
+            self.assertEqual(['testNotFoundStacktraceCleanNormalFunctions', 'a', 'b'] + ([] if cextension else ['local']), names)
 
     def testNotFoundStacktraceCleanGeneratorFunctions(self):
         def a():
@@ -77,23 +77,23 @@ class LocalTest(TestCase):
             self.fail()
         except AttributeError:
             c, v, t = exc_info()
-            self.assertEquals("no_such_thing", str(v))
+            self.assertEqual("no_such_thing", str(v))
             names = []
             while t:
                 names.append(t.tb_frame.f_code.co_name)
                 t = t.tb_next
-            self.assertEquals(['testNotFoundStacktraceCleanGeneratorFunctions', 'consume', 'a', 'b', 'c'] + ([] if cextension else ['local']), names)
+            self.assertEqual(['testNotFoundStacktraceCleanGeneratorFunctions', 'consume', 'a', 'b', 'c'] + ([] if cextension else ['local']), names)
 
     def testVariousTypes(self):
         strArgument = 'string'
-        self.assertEquals('string', local('strArgument'))
+        self.assertEqual('string', local('strArgument'))
         intArgument = 1
-        self.assertEquals(1, local('intArgument'))
+        self.assertEqual(1, local('intArgument'))
 
         class MyObject(object):
             pass
         objArgument = MyObject()
-        self.assertEquals(objArgument, local('objArgument'))
+        self.assertEqual(objArgument, local('objArgument'))
 
     def testScoping(self):
         class MyObject(object):
@@ -103,8 +103,8 @@ class LocalTest(TestCase):
             toplevel=MyObject()
             refs.append(local('toplevel'))
         function()
-        self.assertEquals(1, len(refs))
-        self.assertEquals(MyObject, type(refs[0]))
+        self.assertEqual(1, len(refs))
+        self.assertEqual(MyObject, type(refs[0]))
 
     def testOne(self):
         a=1
@@ -114,11 +114,11 @@ class LocalTest(TestCase):
             d=4
             a=10
             b=6
-            self.assertEquals(4, local('d'))
-            self.assertEquals(10, local('a'))
+            self.assertEqual(4, local('d'))
+            self.assertEqual(10, local('a'))
         f1()
-        self.assertEquals(2, local('b'))
-        self.assertEquals(1, local('a'))
+        self.assertEqual(2, local('b'))
+        self.assertEqual(1, local('a'))
 
     def testWithGenerator(self):
         results = []
@@ -136,7 +136,7 @@ class LocalTest(TestCase):
             _y_ = 11
             list(e())
         list(f())
-        self.assertEquals([10,11,9], results)
+        self.assertEqual([10,11,9], results)
 
     def testLookupSelfWhileBeingInitialized(self):
         try:

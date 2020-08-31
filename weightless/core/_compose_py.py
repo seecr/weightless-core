@@ -121,7 +121,7 @@ def _compose(initial, stepping):
                 except BaseException:
                     exType, exValue, exTraceback = exc_info()
                     exception = (exType, exValue, exTraceback.tb_next)
-        except StopIteration, returnValue:
+        except StopIteration as returnValue:
             exception = None
             generators.pop()
             retvals = returnValue.args
@@ -134,6 +134,6 @@ def _compose(initial, stepping):
             exType, exValue, exTraceback = exc_info()
             exception = (exType, exValue, exTraceback.tb_next)
     if exception:
-        raise exception[0], exception[1], exception[2]
+        raise exception[0](exception[1]).with_traceback(exception[2])
     if messages:
         raise StopIteration(*messages)

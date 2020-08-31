@@ -94,7 +94,7 @@ class Suspend(object):
 
     def getResult(self):
         if self._exception:
-            raise self._exception[0], self._exception[1], self._exception[2]
+            raise self._exception[0](self._exception[1]).with_traceback(self._exception[2])
         return self._response
 
     def _timedOut(self):
@@ -106,5 +106,5 @@ class Suspend(object):
         except Exception:
             sys.stderr.write("Unexpected exception raised on Suspend's onTimeout callback (ignored):\n")
             print_exc()
-        self.throw(TimeoutException, TimeoutException(), None)
+        self.throw(TimeoutException(TimeoutException()).with_traceback(None))
 

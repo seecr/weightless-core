@@ -23,5 +23,5 @@
 #
 ## end license ##
 
-from asprocess import asProcess
-from _sleep import sleep
+from .asprocess import asProcess
+from ._sleep import sleep

@@ -1,29 +1,28 @@
 ## begin license ##
-# 
-# "Seecr Test" provides test tools. 
-# 
+#
+# "Seecr Test" provides test tools.
+#
 # Copyright (C) 2005-2009 Seek You Too (CQ2) http://www.cq2.nl
 # Copyright (C) 2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+#
 # This file is part of "Seecr Test"
-# 
+#
 # "Seecr Test" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Seecr Test" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Seecr Test"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
-from types import InstanceType, ClassType
 from re import compile
 
 def emptyGenerator():
@@ -50,14 +49,14 @@ class CallTrace:
             return object.__getattr__(self, attrname)
         if attrname in self.ignoredAttributes:
             raise AttributeError("'CallTrace' is instructed to not have an attribute called '%s'" % attrname)
-        if self.onlySpecifiedMethods and not attrname in (self.returnValues.keys() + self.methods.keys() + self.emptyGeneratorMethods):
-            raise AttributeError("'CallTrace' does not support '%s' as it is instructed to only allow specified methods." % attrname) 
+        if self.onlySpecifiedMethods and not attrname in (list(self.returnValues.keys()) + list(self.methods.keys()) + self.emptyGeneratorMethods):
+            raise AttributeError("'CallTrace' does not support '%s' as it is instructed to only allow specified methods." % attrname)
         return CallTraceMethod(attrname, self)
 
     def __calltrace__(self):
-        return map(str, self.calledMethods)
+        return list(map(str, self.calledMethods))
 
-    def __nonzero__(self):
+    def __bool__(self):
         return 1
 
     def __repr__(self):
@@ -79,7 +78,7 @@ class CallTraceMethod:
 
     def __repr__(self):
         return "<bound method %s of %s>" % (self.name, self._callTrace)
-            
+
 
 class TracedCall:
     def __init__(self, methodName, callTrace):
@@ -95,11 +94,11 @@ class TracedCall:
         self.arguments = list(args) # For backwards compatibility only
         self.kwargs = kwargs
         if self._callTrace._verbose:
-            print '%s.%s -> %s' % (
+            print('%s.%s -> %s' % (
                 self._callTrace._name,
                 self.__repr__(),
-                self.represent(self._callTrace.returnValues.get(self.name, None)))
-        if self._callTrace.exceptions.has_key(self.name):
+                self.represent(self._callTrace.returnValues.get(self.name, None))))
+        if self.name in self._callTrace.exceptions:
             raise self._callTrace.exceptions[self.name]
 
         returnValue = None
@@ -129,7 +128,7 @@ class TracedCall:
         if something == None:
             return 'None'
 
-        if isinstance(something, basestring):
+        if isinstance(something, str):
             return "'%s'" % something
         if type(something) == int or type(something) == float:
             return str(something)
@@ -146,7 +145,7 @@ class TracedCall:
         return typeName
 
     def __repr__(self):
-        return '%s(%s)' % (self.name, ", ".join(map(self.represent, self.args)+['%s=%s' % (key, self.represent(value)) for key, value in self.kwargs.items()]))
+        return '%s(%s)' % (self.name, ", ".join(list(map(self.represent, self.args))+['%s=%s' % (key, self.represent(value)) for key, value in list(self.kwargs.items())]))
 
 
 class CalledMethods(list):

@@ -48,7 +48,7 @@ class HttpRequest1_1(Observable):
         kw = {}
         if timeout is not None:
             def onTimeout():
-                g.throw(TimeoutException, TimeoutException(), None)
+                g.throw(TimeoutException(TimeoutException()).with_traceback(None))
 
             kw = {
                 'timeout': timeout,
@@ -99,12 +99,12 @@ def _do(observable, method, host, port, request, body=None, headers=None, bodyMa
 
     try:
         ## Connect or re-use from pool.
-        suspend._reactor.addProcess(process=this.next, prio=prio)
+        suspend._reactor.addProcess(process=this.__next__, prio=prio)
         try:
             yield Yield  # After this yield, Suspend._whenDone filled-in (by Suspend.__call__(reactor, whenDone)) and thus throwing is safe again.
             sok = yield observable.any.getPooledSocket(host=host, port=port)
         finally:
-            suspend._reactor.removeProcess(process=this.next)
+            suspend._reactor.removeProcess(process=this.__next__)
 
         if sok:
             sok = SocketWrapper(sok)
@@ -119,13 +119,13 @@ def _do(observable, method, host, port, request, body=None, headers=None, bodyMa
 
                 try:
                     ## Send Request-Line and Headers.
-                    suspend._reactor.addWriter(sok, this.next, prio=prio)
+                    suspend._reactor.addWriter(sok, this.__next__, prio=prio)
                     try:
                         yield Yield
                         # error checking
                         if body:
                             data = body
-                            if type(data) is unicode:
+                            if type(data) is str:
                                 data = data.encode(getdefaultencoding())
                             # Only specify Content-Length when there is a body, because:
                             #   - Having Content-Length or Transfer-Encoding specified on request, detemines wether a body exists;
@@ -139,14 +139,14 @@ def _do(observable, method, host, port, request, body=None, headers=None, bodyMa
                         suspend._reactor.removeWriter(sok)
 
                     ## Read response (& handle 100 Continue #fail)
-                    suspend._reactor.addReader(sok, this.next, prio=prio)
+                    suspend._reactor.addReader(sok, this.__next__, prio=prio)
                     try:
                         statusAndHeaders, body, doClose = yield _readHeaderAndBody(sok, method, requestHeaders=headers, bodyMaxSize=bodyMaxSize)
                     finally:
                         suspend._reactor.removeReader(sok)
                 except (AssertionError, KeyboardInterrupt, SystemExit):
                     raise
-                except (IOError, ValueError, KeyError), e:
+                except (IOError, ValueError, KeyError) as e:
                     # Expected errors:
                     # - IOError (and subclasses socket.error and it's subclasses - incl. SSLError)
                     # - ValueError raised when all kinds of expectations about behaviour or data fail.
@@ -167,11 +167,11 @@ def _do(observable, method, host, port, request, body=None, headers=None, bodyMa
             if doClose:
                 shutAndCloseOnce()
             else:
-                suspend._reactor.addProcess(process=this.next, prio=prio)
+                suspend._reactor.addProcess(process=this.__next__, prio=prio)
                 try:
                     yield observable.any.putSocketInPool(host=host, port=port, sock=sok.unwrap_recievedData())
                 finally:
-                    suspend._reactor.removeProcess(process=this.next)
+                    suspend._reactor.removeProcess(process=this.__next__)
             suspend.resume((statusAndHeaders, body))
         except BaseException:
             shutAndCloseOnce(ignoreExceptions=True)
@@ -201,11 +201,12 @@ def _createSocket(host, port, secure, this, suspend, prio):
     sok.setsockopt(SOL_TCP, TCP_NODELAY, 1)
     try:
         sok.connect((host, port))
-    except SocketError, (errno, msg):
+    except SocketError as xxx_todo_changeme:
+        (errno, msg) = xxx_todo_changeme.args
         if errno != EINPROGRESS:
             raise
 
-    suspend._reactor.addWriter(sok, this.next, prio=prio)
+    suspend._reactor.addWriter(sok, this.__next__, prio=prio)
     try:
         yield Yield
         err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
@@ -240,9 +241,9 @@ def _shutAndCloseOnce(sok):
 
 def _sendHttpHeaders(sok, method, request, headers, host):
     data = _requestLine(method, request)
-    if 'host' not in [k.lower() for k in headers.keys()]:
+    if 'host' not in [k.lower() for k in list(headers.keys())]:
         headers['Host'] = host
-    data += ''.join('%s: %s\r\n' % i for i in headers.items())
+    data += ''.join('%s: %s\r\n' % i for i in list(headers.items()))
     data += '\r\n'
     yield _asyncSend(sok, data)
 
@@ -341,7 +342,7 @@ def _bodyMaxSize(fn):
             responses = ''
             try:
                 while True:
-                    v = g.next()
+                    v = next(g)
                     if v is Yield or callable(v):
                         yield v
                         continue
@@ -426,11 +427,11 @@ def _sslHandshake(sok, this, suspend, prio):
             break
         except SSLError as err:
             if err.args[0] == SSL_ERROR_WANT_READ:
-                suspend._reactor.addReader(sok, this.next, prio=prio)
+                suspend._reactor.addReader(sok, this.__next__, prio=prio)
                 yield Yield
                 suspend._reactor.removeReader(sok)
             elif err.args[0] == SSL_ERROR_WANT_WRITE:
-                suspend._reactor.addWriter(sok, this.next, prio=prio)
+                suspend._reactor.addWriter(sok, this.__next__, prio=prio)
                 yield Yield
                 suspend._reactor.removeWriter(sok)
             else:
@@ -520,7 +521,7 @@ def _asyncRead(sok):
         try:
             response = sok.recv(4096)  # bufsize *must* be large enough - SSL Socket recv will hang indefinitely otherwise (until a timeout if given).
             sok.setsockopt(SOL_TCP, TCP_QUICKACK, 1)
-        except SSLError, e:
+        except SSLError as e:
             if e.errno != SSL_ERROR_WANT_READ:
                 raise
             sok.setsockopt(SOL_TCP, TCP_QUICKACK, 1)

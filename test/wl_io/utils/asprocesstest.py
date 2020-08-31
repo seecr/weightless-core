@@ -45,29 +45,29 @@ class AsProcessTest(SeecrTestCase):
         try:
             asProcess(functionNotReturningAGenerator)('whatever')
             self.fail()
-        except TypeError, e:
-            self.assertEquals("asProcess() expects a generator, got ['whatever']", str(e))
+        except TypeError as e:
+            self.assertEqual("asProcess() expects a generator, got ['whatever']", str(e))
 
         # decorator
         @asProcess
         def genFDecor():
             raise StopIteration('ok')
             yield
-        self.assertEquals('ok', genFDecor())
+        self.assertEqual('ok', genFDecor())
 
         # arguments passed into and returned as retval (normal and as decorator)
         def genF(a, b):
             raise StopIteration((a, b))
             yield
-        self.assertEquals((1, 2), asProcess(genF)(1, b=2))
-        self.assertEquals((1, 2), asProcess(genF(1, b=2)))
+        self.assertEqual((1, 2), asProcess(genF)(1, b=2))
+        self.assertEqual((1, 2), asProcess(genF(1, b=2)))
 
     def testDecorator(self):
         @asProcess
         def g():
             raise StopIteration(1)
             yield
-        self.assertEquals(1, g())
+        self.assertEqual(1, g())
 
         class A(object):
             @staticmethod
@@ -75,7 +75,7 @@ class AsProcessTest(SeecrTestCase):
             def g():
                 raise StopIteration(3)
                 yield
-        self.assertEquals(3, A.g())
+        self.assertEqual(3, A.g())
 
         def g(a):
             raise StopIteration(a)
@@ -114,11 +114,11 @@ class AsProcessTest(SeecrTestCase):
 
             return (res1, res2)
 
-        self.assertEquals([], events)
+        self.assertEqual([], events)
 
         result = multiple()
-        self.assertEquals((1, 2), result)
-        self.assertEquals([
+        self.assertEqual((1, 2), result)
+        self.assertEqual([
                 '1 start',
                 '1 yielded',
                 '1-2 called',
@@ -143,7 +143,7 @@ class AsProcessTest(SeecrTestCase):
             raise StopIteration('c')
             yield
 
-        self.assertEquals('c', a())
+        self.assertEqual('c', a())
 
     def testAsProcessInAsyncGeneratorBehavesLikeASynchrounusFunction(self):
         # Internals not leaked, different Reactor, blocking!
@@ -169,11 +169,11 @@ class AsProcessTest(SeecrTestCase):
         @identify
         def normalAsync():
             this = yield
-            reactor.addProcess(this.next)
+            reactor.addProcess(this.__next__)
             yield # waiting for realReactor's step()
             result = asProcess(a())
             yield # waiting for another step()
-            reactor.removeProcess(this.next)
+            reactor.removeProcess(this.__next__)
             raise Exception(('Stop', result))
 
         def raiser():
@@ -185,10 +185,10 @@ class AsProcessTest(SeecrTestCase):
             self.fail()
         except AssertionError:
             raise
-        except Exception, e:
-            self.assertEquals(('Stop', 'retval'), e.args[0])
+        except Exception as e:
+            self.assertEqual(('Stop', 'retval'), e.args[0])
 
-        self.assertEquals(['addTimer', 'addProcess', 'removeProcess'], mockReactor.calledMethodNames())
+        self.assertEqual(['addTimer', 'addProcess', 'removeProcess'], mockReactor.calledMethodNames())
 
     def testAsyncReturnValuePassing(self):
         def noRetval():
@@ -208,11 +208,11 @@ class AsProcessTest(SeecrTestCase):
             for _ in ['p', 'u', 's']:
                 _ = yield
             raise StopIteration((yield))
-        self.assertEquals(None, asProcess(noRetval()))
-        self.assertEquals(None, asProcess(noneRetval()))
-        self.assertEquals(1, asProcess(oneRetval()))
-        self.assertEquals(1, asProcess(oneRetvalWithIgnoredPushback()))
-        self.assertEquals('h', asProcess(retvalDependantOnPushbackEval()))
+        self.assertEqual(None, asProcess(noRetval()))
+        self.assertEqual(None, asProcess(noneRetval()))
+        self.assertEqual(1, asProcess(oneRetval()))
+        self.assertEqual(1, asProcess(oneRetvalWithIgnoredPushback()))
+        self.assertEqual('h', asProcess(retvalDependantOnPushbackEval()))
 
     def testDecoratedFunctionRaises(self):
         def raiser():
@@ -265,17 +265,17 @@ class AsProcessTest(SeecrTestCase):
 
         with stdout_replaced() as out:
             result = asProcess(timeAfterFinished())
-            self.assertEquals(42, result)
-            self.assertEquals(1, out.getvalue().count('Reactor shutdown:'), out.getvalue())
+            self.assertEqual(42, result)
+            self.assertEqual(1, out.getvalue().count('Reactor shutdown:'), out.getvalue())
 
     def testSuspendProtocolForCallables(self):
         @identify
         def whileSuspended():
             this = yield
             suspend = yield
-            suspend._reactor.addProcess(this.next)
+            suspend._reactor.addProcess(this.__next__)
             yield
-            suspend._reactor.removeProcess(this.next)
+            suspend._reactor.removeProcess(this.__next__)
             suspend.resume('whileSuspended')
             yield # Wait for GC
         def suspending():
@@ -286,4 +286,4 @@ class AsProcessTest(SeecrTestCase):
             this = '42'
             that = yield suspending()
             raise StopIteration((this, that))
-        self.assertEquals(('42', 'whileSuspended'), asProcess(thisAndThat()))
+        self.assertEqual(('42', 'whileSuspended'), asProcess(thisAndThat()))

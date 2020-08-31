@@ -56,14 +56,14 @@ class ObservableTest(TestCase):
     def testAllWithoutImplementers(self):
         observable = Observable()
         responses = observable.all.someMethodNobodyIsListeningTo()
-        self.assertEquals([], list(compose(responses)))
+        self.assertEqual([], list(compose(responses)))
 
     def testAllWithOneImplementer(self):
         class A(object):
             def f(self):
                 yield A.f
         root = be((Observable(), (A(),),))
-        self.assertEquals([A.f], list(compose(root.all.f())))
+        self.assertEqual([A.f], list(compose(root.all.f())))
 
     def testAllWithOneImplementerButMoreListening(self):
         class A(object):
@@ -72,7 +72,7 @@ class ObservableTest(TestCase):
             def f(self):
                 yield B.f
         root = be((Observable(), (A(),), (B(),)))
-        self.assertEquals([B.f], list(compose(root.all.f())))
+        self.assertEqual([B.f], list(compose(root.all.f())))
 
     def testAllWithMoreImplementers(self):
         class A(object):
@@ -82,7 +82,7 @@ class ObservableTest(TestCase):
             def f(self):
                 yield B.f
         root = be((Observable(), (A(),), (B(),)))
-        self.assertEquals([A.f, B.f], list(compose(root.all.f())))
+        self.assertEqual([A.f, B.f], list(compose(root.all.f())))
 
     def testAllWithException(self):
         class A(object):
@@ -95,26 +95,26 @@ class ObservableTest(TestCase):
         root = be((Observable(), (A(),), (B(),)))
         c = compose(root.all.f())
         try:
-            c.next()
+            next(c)
             self.fail()
-        except Exception, e:
-            self.assertEquals(A.f, e.args[0])
+        except Exception as e:
+            self.assertEqual(A.f, e.args[0])
         root = be((Observable(), (B(),), (A(),))) # other way around
         c = compose(root.all.f())
-        c.next()
+        next(c)
         try:
-            c.next()
+            next(c)
             self.fail()
-        except Exception, e:
-            self.assertEquals(A.f, e.args[0])
+        except Exception as e:
+            self.assertEqual(A.f, e.args[0])
 
     def testAllUnknown(self):
         class A(object):
             def all_unknown(self, *args, **kwargs):
                 yield args, kwargs
         root = be((Observable(), (A(),)))
-        r = compose(root.all.unknownmessage(1, two=2)).next()
-        self.assertEquals((('unknownmessage', 1), {'two': 2}), r)
+        r = next(compose(root.all.unknownmessage(1, two=2)))
+        self.assertEqual((('unknownmessage', 1), {'two': 2}), r)
 
     def testAllAssertsNoneReturnValues(self):
         class A(object):
@@ -127,16 +127,16 @@ class ObservableTest(TestCase):
         root = be((Observable(), (A(),)))
         g = compose(root.all.f())
         try:
-            g.next()
+            next(g)
             self.fail("Should not happen")
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertTrue("<bound method A.f of <core.observabletest.A object at 0x" in str(e), str(e))
             self.assertTrue(">> returned '1'" in str(e), str(e))
         g = compose(root.all.x())
         try:
-            g.next()
+            next(g)
             self.fail("Should not happen")
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertTrue("> returned '2'" in str(e), str(e))
             if not cextension:
                 self.assertTrue("<bound method A.all_unknown of <core.observabletest.A object at 0x" in str(e), str(e))
@@ -151,18 +151,18 @@ class ObservableTest(TestCase):
         root = be((Observable(), (Transparent(), (A(),))))
         g = compose(root.all.f())
         try:
-            g.next()
+            next(g)
             self.fail("Should not happen")
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertTrue("<bound method A.f of <core.observabletest.A object at 0x" in str(e), str(e))
             self.assertTrue(">> should have resulted in a generator." in str(e), str(e))
             self.assertFunctionsOnTraceback("testAllAssertsResultOfCallIsGeneratorOrComposed", "all_unknown", "verifyMethodResult")
 
         g = compose(root.all.undefinedMethod())
         try:
-            g.next()
+            next(g)
             self.fail("Should not happen")
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertTrue("<bound method A.all_unknown of <core.observabletest.A object at 0x" in str(e), str(e))
             self.assertTrue(">> should have resulted in a generator." in str(e), str(e))
 
@@ -186,18 +186,18 @@ class ObservableTest(TestCase):
         ))
         composed = compose(root.once.f())
         try:
-            composed.next()
+            next(composed)
             self.fail("Should not happen")
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertTrue("<bound method AnObject.f of <core.observabletest.AnObject object at 0x" in str(e), str(e))
             self.assertTrue(">> returned '1'" in str(e), str(e))
 
         root = be((Observable(), (AnObservable(),)))
         composed = compose(root.once.g())
         try:
-            composed.next()
+            next(composed)
             self.fail("Should not happen")
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertTrue("<bound method AnObservable.g of AnObservable(name=None)" in str(e), str(e))
             self.assertTrue("> returned '1'" in str(e), str(e))
 
@@ -218,10 +218,10 @@ class ObservableTest(TestCase):
 
         composed = compose(OnceMessage._callonce(mockedSelf, observers=[AnObservable()], args=(), kwargs={}, seen=set()))
         try:
-            composed.next()
+            next(composed)
             self.fail("Should not happen")
-        except AssertionError, e:
-            self.assertEquals("OnceMessage of AnObservableObject(name=None) returned '1', but must always be None", str(e))
+        except AssertionError as e:
+            self.assertEqual("OnceMessage of AnObservableObject(name=None) returned '1', but must always be None", str(e))
 
     def testAnyOrCallCallsFirstImplementer(self):
         class A(object):
@@ -244,18 +244,18 @@ class ObservableTest(TestCase):
         root = be((Observable(), (A(),), (B(),)))
 
         try:
-            compose(root.any.f()).next()
+            next(compose(root.any.f()))
             self.fail('Should not happen')
-        except StopIteration, e:
-            self.assertEquals((A.f,), e.args)
+        except StopIteration as e:
+            self.assertEqual((A.f,), e.args)
         try:
-            compose(root.any.g()).next()
+            next(compose(root.any.g()))
             self.fail('Should not happen')
-        except StopIteration, e:
-            self.assertEquals((B.g,), e.args)
+        except StopIteration as e:
+            self.assertEqual((B.g,), e.args)
 
-        self.assertEquals(A.f, root.call.f_sync())
-        self.assertEquals(B.g, root.call.g_sync())
+        self.assertEqual(A.f, root.call.f_sync())
+        self.assertEqual(B.g, root.call.g_sync())
 
     def testAnyViaOther(self):
         class A(Observable):
@@ -267,16 +267,16 @@ class ObservableTest(TestCase):
                 yield "data"
                 raise StopIteration('retval')
         root = be((Observable(), ((A(), (B(),)))))
-        self.assertEquals(GeneratorType, type(root.any.f()))
-        self.assertEquals(["data"], list(compose(root.any.f())))
+        self.assertEqual(GeneratorType, type(root.any.f()))
+        self.assertEqual(["data"], list(compose(root.any.f())))
 
         composed = compose(root.any.f())
         try:
-            composed.next()  # 'data'
-            composed.next()  # return 'retval'
+            next(composed)  # 'data'
+            next(composed)  # return 'retval'
             self.fail('Should not happen')
-        except StopIteration, e:
-            self.assertEquals(('retval',), e.args)
+        except StopIteration as e:
+            self.assertEqual(('retval',), e.args)
 
     @skip_if(cextension)
     def testAnyAssertsResultOfCallIsGeneratorOrComposed(self):
@@ -287,16 +287,16 @@ class ObservableTest(TestCase):
                 return 42
         root = be((Observable(), (A(),)))
         try:
-            compose(root.any.f()).next()
+            next(compose(root.any.f()))
             self.fail('Should not happen')
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertTrue("<bound method A.f of <core.observabletest.A object at 0x" in str(e), str(e))
             self.assertTrue(">> should have resulted in a generator." in str(e), str(e))
 
         try:
-            compose(root.any.undefinedMethod()).next()
+            next(compose(root.any.undefinedMethod()))
             self.fail('Should not happen')
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertTrue("<bound method A.any_unknown of <core.observabletest.A object at 0x" in str(e), str(e))
             self.assertTrue(">> should have resulted in a generator." in str(e), str(e))
 
@@ -306,9 +306,9 @@ class ObservableTest(TestCase):
                 raise StopIteration((message, args, kwargs), )
                 yield
         root = be((Observable(), (A(),)))
-        try: compose(root.any.f(1, a=2)).next()
-        except StopIteration, e: r = e.args[0]
-        self.assertEquals(('f', (1,), {'a': 2}), r)
+        try: next(compose(root.any.f(1, a=2)))
+        except StopIteration as e: r = e.args[0]
+        self.assertEqual(('f', (1,), {'a': 2}), r)
 
     def testCallViaUnknown(self):
         class A(object):
@@ -316,12 +316,12 @@ class ObservableTest(TestCase):
                 return message, args, kwargs
         root = be((Observable(), (A(),)))
         r = root.call.f(1, a=2)
-        self.assertEquals(('f', (1,), {'a': 2}), r)
+        self.assertEqual(('f', (1,), {'a': 2}), r)
 
     def testDoReturnsNone(self):
         observable = Observable()
         r = observable.do.f()
-        self.assertEquals(None, r)
+        self.assertEqual(None, r)
 
     def testDoCallsAllObservers(self):
         called = []
@@ -333,7 +333,7 @@ class ObservableTest(TestCase):
                 called.append(B.f)
         root = be((Observable(), (A(),), (B(),)))
         root.do.f()
-        self.assertEquals([A.f, B.f], called)
+        self.assertEqual([A.f, B.f], called)
 
     def testDoViaUnknown(self):
         called = []
@@ -342,7 +342,7 @@ class ObservableTest(TestCase):
                 called.append((message, args, kwargs))
         root = be((Observable(), (A(),)))
         root.do.f()
-        self.assertEquals([('f', (), {})], called)
+        self.assertEqual([('f', (), {})], called)
 
     @skip_if(cextension)
     def testDoAssertsIndividualCallsReturnNone(self):
@@ -357,14 +357,14 @@ class ObservableTest(TestCase):
         try:
             root.do.f()
             self.fail('Should not happen')
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertTrue("<bound method A.f of <core.observabletest.A object at 0x" in str(e), str(e))
             self.assertTrue(">> returned '<generator object" in str(e), str(e))
 
         try:
             root.do.undefinedMethod()
             self.fail('Should not happen')
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertTrue("<bound method A.do_unknown of <core.observabletest.A object at 0x" in str(e), str(e))
             self.assertTrue(">> returned '42'" in str(e), str(e))
 
@@ -374,7 +374,7 @@ class ObservableTest(TestCase):
             pass
         observable.addObserver(A())
         retval = observable.all.unknown('non_existing_method', 'one')
-        self.assertEquals([], list(compose(retval)))
+        self.assertEqual([], list(compose(retval)))
 
     def testUnknownDispatching(self):
         observable = Observable()
@@ -383,7 +383,7 @@ class ObservableTest(TestCase):
                 return one + " another"
         observable.addObserver(Listener())
         retval = observable.call.unknown('method', 'one')
-        self.assertEquals('one another', retval)
+        self.assertEqual('one another', retval)
 
     def testUnknownDispatchingBackToUnknown(self):
         observable = Observable()
@@ -392,7 +392,7 @@ class ObservableTest(TestCase):
                 return "via unknown " + one
         observable.addObserver(A())
         retval = observable.call.unknown('non_existing_method', 'one')
-        self.assertEquals("via unknown one", retval)
+        self.assertEqual("via unknown one", retval)
 
     def testUnknownIsEquivalentToNormalCall(self):
         observable = Observable()
@@ -404,41 +404,41 @@ class ObservableTest(TestCase):
         observable.addObserver(A())
         result1 = observable.call.unknown('normal')
         result2 = observable.call.unknown('other')
-        self.assertEquals(result1, result2)
+        self.assertEqual(result1, result2)
 
     def testBeOne(self):
         observer = Observable()
         root = be((observer,))
-        self.assertEquals(root, observer)
+        self.assertEqual(root, observer)
 
     def testBeTwo(self):
         observable = Observable()
         child0 = Observable()
         child1 = Observable()
         root = be((observable, (child0,), (child1,)))
-        self.assertEquals([child0, child1], observable._observers)
+        self.assertEqual([child0, child1], observable._observers)
 
     def testBeTree(self):
         observable = Observable()
         child0 = Observable()
         child1 = Observable()
         root = be((observable, (child0, (child1,))))
-        self.assertEquals([child0], root._observers)
-        self.assertEquals([child1], child0._observers)
+        self.assertEqual([child0], root._observers)
+        self.assertEqual([child1], child0._observers)
 
     def testAddStrandEmptyList(self):
         observable = Observable()
         observable.addStrand((), [])
-        self.assertEquals([], observable._observers)
+        self.assertEqual([], observable._observers)
 
     def testProperErrorMessage(self):
         observable = Observable()
         try:
             answer = list(compose(observable.any.gimmeAnswer('please')))
             self.fail('should raise NoneOfTheObserversRespond')
-        except NoneOfTheObserversRespond, e:
+        except NoneOfTheObserversRespond as e:
             self.assertFunctionsOnTraceback("testProperErrorMessage", "any")
-            self.assertEquals('None of the 0 observers respond to gimmeAnswer(...)', str(e))
+            self.assertEqual('None of the 0 observers respond to gimmeAnswer(...)', str(e))
 
     def testProperErrorMessageWhenArgsDoNotMatch(self):
         observable = Observable()
@@ -448,8 +448,8 @@ class ObservableTest(TestCase):
         try:
             answer = observable.call.yes()
             self.fail('should raise TypeError')
-        except TypeError, e:
-            self.assertEquals('yes() takes exactly 2 arguments (1 given)', str(e))
+        except TypeError as e:
+            self.assertEqual('yes() takes exactly 2 arguments (1 given)', str(e))
 
     def testWhatItIs(self):
         def anAction():
@@ -507,31 +507,31 @@ class ObservableTest(TestCase):
                     )
                 ))
         result = compose(t.all.dataflow())
-        result.next()
+        next(result)
         r = result.send(2)
-        self.assertEquals('CC', r)
-        result.next()
+        self.assertEqual('CC', r)
+        next(result)
         r = result.send(3)
-        self.assertEquals('DDD', r)
+        self.assertEqual('DDD', r)
 
         result = t.call.interface()
-        self.assertEquals('C', result)
+        self.assertEqual('C', result)
 
         noResult = t.do.event()
-        self.assertEquals(None, noResult)
-        self.assertEquals(['C', 'D'], events)
+        self.assertEqual(None, noResult)
+        self.assertEqual(['C', 'D'], events)
 
         result = compose(t.any.async_interface())
-        an_action = result.next()
-        self.assertEquals(anAction, an_action)
-        result.next()
+        an_action = next(result)
+        self.assertEqual(anAction, an_action)
+        next(result)
         r = result.send(5)
-        self.assertEquals('CCCCC', r)
+        self.assertEqual('CCCCC', r)
         try:
-            result.next()
+            next(result)
             self.fail()
-        except StopIteration, e:
-            self.assertEquals((5,), e.args)
+        except StopIteration as e:
+            self.assertEqual((5,), e.args)
 
     def testTransparentUnknownImplementationIsVisibleOnTraceback(self):
         class Leaf(Observable):
@@ -561,13 +561,13 @@ class ObservableTest(TestCase):
             self.assertFunctionsOnTraceback('testTransparentUnknownImplementationIsVisibleOnTraceback', 'call_unknown', 'aCall')
 
         try:
-            compose(root.any.aAny()).next()
+            next(compose(root.any.aAny()))
             self.fail('Should not happen')
         except RuntimeError:
             self.assertFunctionsOnTraceback('testTransparentUnknownImplementationIsVisibleOnTraceback', 'any_unknown', 'aAny', 'lookBusy')
 
         try:
-            compose(root.all.aAll()).next()
+            next(compose(root.all.aAll()))
             self.fail('Should not happen')
         except RuntimeError:
             self.assertFunctionsOnTraceback('testTransparentUnknownImplementationIsVisibleOnTraceback', 'all_unknown', 'aAll')
@@ -656,9 +656,9 @@ class ObservableTest(TestCase):
                 yield  # once is async
                 initcalled[0] += 1
         root = be((Observable(), (MyObserver(),)))
-        self.assertEquals([0], initcalled)
+        self.assertEqual([0], initcalled)
         consume(root.once.observer_init())
-        self.assertEquals([1], initcalled)
+        self.assertEqual([1], initcalled)
 
     def testAddObserversOnce(self):
         class MyObservable(Observable):
@@ -678,11 +678,11 @@ class ObservableTest(TestCase):
                     (o5, helix)
                  )
         root = be(dna)
-        self.assertEquals([o2], o1._observers)
-        self.assertEquals([], o2._observers)
-        self.assertEquals([o1, o4, o5], o3._observers)
-        self.assertEquals([], o4._observers)
-        self.assertEquals([o1], o5._observers)
+        self.assertEqual([o2], o1._observers)
+        self.assertEqual([], o2._observers)
+        self.assertEqual([o1, o4, o5], o3._observers)
+        self.assertEqual([], o4._observers)
+        self.assertEqual([o1], o5._observers)
 
     def testOnceAndOnlyOnce(self):
         class MyObserver(Observable):
@@ -700,7 +700,7 @@ class ObservableTest(TestCase):
         collector = []
         methodOnlyCalledOnce = root.once.methodOnlyCalledOnce
         consume(methodOnlyCalledOnce(collector))
-        self.assertEquals(['once'], collector)
+        self.assertEqual(['once'], collector)
         self.assertTrue(once in methodOnlyCalledOnce.seen)
         self.assertTrue(once in methodOnlyCalledOnce.called)
 
@@ -727,24 +727,24 @@ class ObservableTest(TestCase):
             )
         root = be(dna)
         list(compose(root.once.noGeneratorFunction()))
-        self.assertEquals(['function called'], callLog)
+        self.assertEqual(['function called'], callLog)
 
         try:
             list(compose(root.once.valueReturningFunction()))
             self.fail("Should have gotten AssertionError because of unexpected return value")
-        except AssertionError, e:
-            self.assertEquals("<bound method MyObserver.valueReturningFunction of MyObserver(name=None)> returned '42'", str(e))
+        except AssertionError as e:
+            self.assertEqual("<bound method MyObserver.valueReturningFunction of MyObserver(name=None)> returned '42'", str(e))
 
         try:
             result = list(compose(root.once.composedGenerator()))
-            self.assertEquals(['a'], result)
-        except AssertionError, e:
+            self.assertEqual(['a'], result)
+        except AssertionError as e:
             self.fail('Should not fail: %s' % e)
 
         try:
             result = list(compose(root.once.generatorReturningCallable()))
-            self.assertEquals(['a'], result)
-        except AssertionError, e:
+            self.assertEqual(['a'], result)
+        except AssertionError as e:
             self.fail('Should not fail: %s' % e)
 
     def testOnceInDiamondWithTransparent(self):
@@ -773,9 +773,9 @@ class ObservableTest(TestCase):
         self.assertTrue(once in methodOnlyCalledOnce.seen)
         self.assertTrue(t2 in methodOnlyCalledOnce.seen)
         self.assertTrue(t3 in methodOnlyCalledOnce.seen)
-        self.assertEquals(3, len(methodOnlyCalledOnce.seen))
-        self.assertEquals(set([once]), methodOnlyCalledOnce.called)
-        self.assertEquals(['once'], collector)
+        self.assertEqual(3, len(methodOnlyCalledOnce.seen))
+        self.assertEqual(set([once]), methodOnlyCalledOnce.called)
+        self.assertEqual(['once'], collector)
 
     def testPropagateThroughAllObservablesInDiamondWithNONTransparentObservablesWithoutUnknownMethodDelegatingUnknownCalls(self):
         class MyObserver(Observable):
@@ -796,7 +796,7 @@ class ObservableTest(TestCase):
         root = be(diamond)
         collector = []
         list(compose(root.once.methodOnlyCalledOnce(collector)))
-        self.assertEquals(['once'], collector)
+        self.assertEqual(['once'], collector)
 
     def testNonObservableInTreeWithOnce(self):
         class MyObserver(object):
@@ -811,7 +811,7 @@ class ObservableTest(TestCase):
         root = be(dna)
         collector = []
         list(compose(root.once.methodOnNonObservableSubclass(collector)))
-        self.assertEquals(['once'], collector)
+        self.assertEqual(['once'], collector)
 
     def testOnceAndOnlyOnceForMutuallyObservingObservables(self):
         class MyObserver(Observable):
@@ -831,7 +831,7 @@ class ObservableTest(TestCase):
         root = be(dna)
         collector = []
         list(compose(root.once.methodOnlyCalledOnce(collector)))
-        self.assertEquals([ownobserverobserver], collector)
+        self.assertEqual([ownobserverobserver], collector)
 
     def testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce(self):
         class OnceRaiser(object):
@@ -884,7 +884,7 @@ class ObservableTest(TestCase):
 
         # Verify traceback's and wrapped-exception text is ok
         try: root.call.stopIter()
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertTrue(str(e).startswith('Non-Generator <bound method OddObject.stopIter of <core.observabletest.OddObject object at 0x'), str(e))
             expected = ignoreLineNumbers('''>> should not have raised Generator-Exception:
 Traceback (most recent call last):
@@ -900,7 +900,7 @@ StopIteration: Stop!
         else: self.fail('Should not happen')
 
         try: root.call.genExit()
-        except AssertionError, e:
+        except AssertionError as e:
             self.assertTrue(str(e).startswith('Non-Generator <bound method OddObject.genExit of <core.observabletest.OddObject object at 0x'), str(e))
             expected = ignoreLineNumbers('''>> should not have raised Generator-Exception:
 Traceback (most recent call last):
@@ -930,7 +930,7 @@ GeneratorExit: Exit!
                 _ = getattr(getattr(root, observableCallName), failMethod)()
                 if observableCallName != 'do':
                     list(compose(_))
-            except AssertionError, e:
+            except AssertionError as e:
                 self.assertTrue('should not have raised Generator-Exception:' in str(e), str(e))
                 expected = [
                     'testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages',
@@ -947,8 +947,8 @@ GeneratorExit: Exit!
                 yield 'response'
         obs = Observable()
         obs.addObserver(Responder())
-        result = compose(obs.all.message()).next()
-        self.assertEquals('response',result)
+        result = next(compose(obs.all.message()))
+        self.assertEqual('response',result)
         del obs
 
     def testNoLeakingGeneratorsInMultiTransparents(self):
@@ -962,7 +962,7 @@ GeneratorExit: Exit!
         t1.addObserver(t2)
         t2.addObserver(Responder())
         result = obs.call.message()
-        self.assertEquals('response', result)
+        self.assertEqual('response', result)
         del obs, t1, t2, result
 
     def testMatchingBasedOnDefaultArgs(self):
@@ -973,22 +973,22 @@ GeneratorExit: Exit!
                 yield
         a = A()
         func = a.a
-        code = func.func_code
-        func_defaults = func.func_defaults
-        self.assertEquals((10,11), func_defaults)
+        code = func.__code__
+        func_defaults = func.__defaults__
+        self.assertEqual((10,11), func_defaults)
         argcount = code.co_argcount
-        self.assertEquals(3, argcount)
+        self.assertEqual(3, argcount)
         varnames = code.co_varnames
-        self.assertEquals(('x', 'y', 'z', 'p', 'q'), varnames)
+        self.assertEqual(('x', 'y', 'z', 'p', 'q'), varnames)
         argnames = varnames[:argcount]
-        self.assertEquals(('x','y','z'), argnames)
+        self.assertEqual(('x','y','z'), argnames)
         kwargsnames = argnames[-len(func_defaults):]
-        self.assertEquals(('y','z'), kwargsnames)
-        kwargdefaults = dict(zip(kwargsnames, func_defaults))
-        self.assertEquals({'y':10, 'z':11}, kwargdefaults)
-        self.assertEquals({'z':11, 'y':10}, kwargdefaults)
+        self.assertEqual(('y','z'), kwargsnames)
+        kwargdefaults = dict(list(zip(kwargsnames, func_defaults)))
+        self.assertEqual({'y':10, 'z':11}, kwargdefaults)
+        self.assertEqual({'z':11, 'y':10}, kwargdefaults)
         func.__dict__['kwargdefaults'] = kwargdefaults
-        self.assertEquals({'z':11, 'y':10}, func.kwargdefaults)
+        self.assertEqual({'z':11, 'y':10}, func.kwargdefaults)
 
         class Wildcard(object):
             def __eq__(self, other):
@@ -1006,15 +1006,15 @@ GeneratorExit: Exit!
             (Responder(42),),
         ))
 
-        self.assertEquals(42, root.call.m())
+        self.assertEqual(42, root.call.m())
 
         try:
             g = compose(root.any.m())
-            self.assertEquals(42, g.next())
-            g.next()
+            self.assertEqual(42, next(g))
+            next(g)
             self.fail("Should have raised StopIteration")
-        except StopIteration, e:
-            self.assertEquals((42,), e.args)
+        except StopIteration as e:
+            self.assertEqual((42,), e.args)
 
     def testObserverAttributeErrorNotIgnored(self):
         class GetAttr(object):
@@ -1036,14 +1036,14 @@ GeneratorExit: Exit!
         try:
             result = root.call.someMessage()
             self.fail("should not get here: %s" % result)
-        except AttributeError, e:
-            self.assertEquals("'GetAttr' object has no attribute 'doesnotexist'", str(e))
+        except AttributeError as e:
+            self.assertEqual("'GetAttr' object has no attribute 'doesnotexist'", str(e))
 
         try:
             list(compose(root.any.someMessage()))
             self.fail("should not get here")
-        except AttributeError, e:
-            self.assertEquals("'GetAttr' object has no attribute 'doesnotexist'", str(e))
+        except AttributeError as e:
+            self.assertEqual("'GetAttr' object has no attribute 'doesnotexist'", str(e))
 
     def testThrow(self):
         class A(Observable):
@@ -1060,9 +1060,9 @@ GeneratorExit: Exit!
         root.addObserver(A())
         root.addObserver(B())
         g = compose(root.all.f1())
-        g.next()
+        next(g)
         r = g.throw(DeclineMessage)
-        self.assertEquals("B:f1-1", r)
+        self.assertEqual("B:f1-1", r)
 
     def testRaisingDeclineMessageResultsInCallOnNextObservable(self):
         class SemiTransparent(Observable):
@@ -1084,8 +1084,8 @@ GeneratorExit: Exit!
             (Responder(42),)
         ))
 
-        self.assertEquals([42], list(compose(root.any.message())))
-        self.assertEquals(42, root.call.anotherMessage())
+        self.assertEqual([42], list(compose(root.any.message())))
+        self.assertEqual(42, root.call.anotherMessage())
 
     def testRaisingDeclineMessageFromAllMakesNoDifference(self):
         class SemiTransparent(Observable):
@@ -1101,8 +1101,8 @@ GeneratorExit: Exit!
             (Responder(42),)
         ))
 
-        self.assertEquals([41, 42], list(compose(root.all.theMessage())))
-        self.assertEquals([42], list(compose(root.all.message())))
+        self.assertEqual([41, 42], list(compose(root.all.theMessage())))
+        self.assertEqual([42], list(compose(root.all.message())))
 
     def testRaisingDeclineMessageFromDoMakesNoDifference(self):
         class SemiTransparent(Observable):
@@ -1121,14 +1121,14 @@ GeneratorExit: Exit!
         ))
 
         root.do.theMessage()
-        self.assertEquals(['theMessage'], [m.name for m in observer1.calledMethods])
-        self.assertEquals(['theMessage'], [m.name for m in observer2.calledMethods])
+        self.assertEqual(['theMessage'], [m.name for m in observer1.calledMethods])
+        self.assertEqual(['theMessage'], [m.name for m in observer2.calledMethods])
 
         observer1.calledMethods.reset()
         observer2.calledMethods.reset()
         root.do.message()
-        self.assertEquals([], [m.name for m in observer1.calledMethods])
-        self.assertEquals(['message'], [m.name for m in observer2.calledMethods])
+        self.assertEqual([], [m.name for m in observer1.calledMethods])
+        self.assertEqual(['message'], [m.name for m in observer2.calledMethods])
 
     def testDeferredObjectsAreCached(self):
         class A(object):
@@ -1138,7 +1138,7 @@ GeneratorExit: Exit!
         observable.addObserver(A())
         f1 = observable.all.f
         f2 = observable.all.f
-        self.assertEquals(f1, f2)
+        self.assertEqual(f1, f2)
 
     def testRebuildDefersAfterAddObserver(self):
         observable = Observable()
@@ -1155,11 +1155,11 @@ GeneratorExit: Exit!
                 yield
         observable.addObserver(A())
         list(compose(observable.all.method()))
-        self.assertEquals(['A'], called)
+        self.assertEqual(['A'], called)
         del called[:]
         observable.addObserver(B())
         list(compose(observable.all.method()))
-        self.assertEquals(['A', 'B'], called)
+        self.assertEqual(['A', 'B'], called)
 
     def xxtestRelativeSpeedOfAll(self):
         from time import time
@@ -1178,20 +1178,20 @@ GeneratorExit: Exit!
         connector.addObserver(A())
         connector.addObserver(A())
         t = 0.0
-        for _ in xrange(10000):
+        for _ in range(10000):
             g = compose(root.all.f())
             t0 = time()
             for _ in g:
-                g.next()
+                next(g)
             t1 = time()
             t += t1 - t0
-        print t
+        print(t)
 
         def f():
-            for _ in xrange(10000):
+            for _ in range(10000):
                 g = compose(root.all.f())
                 for _ in g:
-                    g.next()
+                    next(g)
         #from hotshot import Profile
         #p = Profile("profile.prof", lineevents=1, linetimings=1)
         #p.runcall(f)
@@ -1199,9 +1199,9 @@ GeneratorExit: Exit!
     def assertFunctionsOnTraceback(self, *args):
         na, na, tb = exc_info()
         for functionName in args:
-            self.assertEquals(functionName, tb.tb_frame.f_code.co_name)
+            self.assertEqual(functionName, tb.tb_frame.f_code.co_name)
             tb = tb.tb_next
-        self.assertEquals(None, tb, format_tb(tb))
+        self.assertEqual(None, tb, format_tb(tb))
 
     def get_tracked_objects(self):
         return [o for o in gc.get_objects() if type(o) in 
@@ -1223,13 +1223,13 @@ GeneratorExit: Exit!
                 return repr(o)
         gc.collect()
         diff = set(self.get_tracked_objects()) - set(self._baseline)
-        self.assertEquals(set(), diff)
+        self.assertEqual(set(), diff)
         for obj in diff:
-            print "Leak:"
-            print tostr(obj)
-            print "Referrers:"
+            print("Leak:")
+            print(tostr(obj))
+            print("Referrers:")
             for o in gc.get_referrers(obj):
-                print tostr(o)
+                print(tostr(o))
         del self._baseline
         gc.collect()
         TestCase.tearDown(self)

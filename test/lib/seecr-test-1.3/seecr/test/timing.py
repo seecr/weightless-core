@@ -44,7 +44,7 @@ while len(path) > 0:
         del path[0]
     
 T, p = pystones(loops=50000)
-print 'T=%.1fs' % T
+print('T=%.1fs' % T)
 
 for temp in reversed(temppath):
     path.insert(0, temp)

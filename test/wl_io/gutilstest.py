@@ -34,7 +34,7 @@ def collector(basket, responses):
     responses = iter(responses)
     try:
         while True:
-            basket.append((yield responses.next()))
+            basket.append((yield next(responses)))
     except StopIteration:
         pass
     yield
@@ -51,14 +51,14 @@ class GutilsTest(TestCase):
         basket = []
         restbasket = []
         def helper():
-            c1 = collector(basket, responses); c1.next()
+            c1 = collector(basket, responses); next(c1)
             yield copyBytes(bytes, c1)
             while True:
                 restbasket.append((yield))
         responsesResult = feed([None]+messages, compose(helper()))
-        self.assertEquals(responses, responsesResult) # I still don't know if this is relevant and how it must work
-        self.assertEquals(slice, basket)
-        self.assertEquals(remainder, restbasket)
+        self.assertEqual(responses, responsesResult) # I still don't know if this is relevant and how it must work
+        self.assertEqual(slice, basket)
+        self.assertEqual(remainder, restbasket)
 
     def testMessagesOfSizeOne(self):
         self.assertCopy(bytes=10, messages=['a','b','c'], responses=[None,None,None,None], slice=['a','b','c'], remainder=[])
@@ -80,19 +80,19 @@ class GutilsTest(TestCase):
             basket = []
             restbasket = []
             def helper():
-                c1 = collector(basket,[None for x in range(99999)]); c1.next()
+                c1 = collector(basket,[None for x in range(99999)]); next(c1)
                 yield copyBytes(sliceLen, c1)
                 while True:
                     restbasket.append((yield))
             g = compose(helper())
-            g.next()
+            next(g)
             totalLen = 0
             while totalLen < sliceLen:
                 s = ''.join(choice(ascii_letters) for i in range(randint(0,100)))
                 g.send(s)
                 totalLen += len(s)
-            self.assertEquals(sliceLen, len(''.join(basket)))
-            self.assertEquals(totalLen-sliceLen, len(''.join(restbasket)))
+            self.assertEqual(sliceLen, len(''.join(basket)))
+            self.assertEqual(totalLen-sliceLen, len(''.join(restbasket)))
 
     def testStopIterationBoundariesCollide(self):
         data = []
@@ -103,16 +103,16 @@ class GutilsTest(TestCase):
             except StopIteration:
                 data.append('done')
         def helper():
-            t = target(); t.next()
+            t = target(); next(t)
             yield copyBytes(2, t)
             try:
                 yield t.throw(StopIteration)
             except:
                 pass
             while True: yield
-        g = compose(helper()); g.next()
+        g = compose(helper()); next(g)
         feed(['a','b','c'], g)
-        self.assertEquals(['a','b', 'done'], data)
+        self.assertEqual(['a','b', 'done'], data)
 
     def testStopIteration(self):
         data = []
@@ -123,23 +123,23 @@ class GutilsTest(TestCase):
             except StopIteration:
                 data.append('done')
         def helper():
-            t = target(); t.next()
+            t = target(); next(t)
             yield copyBytes(2, t)
             try:
                 yield t.throw(StopIteration)
             except StopIteration:
                 pass
             while True: yield
-        g = compose(helper()); g.next()
+        g = compose(helper()); next(g)
         feed(['a','bc','d'], g)
-        self.assertEquals(['a','b', 'done'], data)
+        self.assertEqual(['a','b', 'done'], data)
 
     def testDoNotDitchResponse(self):
         def application():
             data = yield readAll()
-            self.assertEquals('a', data)
+            self.assertEqual('a', data)
             yield 'A'
-        appl = compose(application()); appl.next()
+        appl = compose(application()); next(appl)
         def protocol():
             yield copyBytes(1, appl)
             yield appl.throw(StopIteration)
@@ -147,18 +147,18 @@ class GutilsTest(TestCase):
             b = yield
             yield b
         g = compose(protocol()); 
-        self.assertEquals(None, g.next())
-        self.assertEquals('A', g.send('a'))
-        self.assertEquals('B', g.send(None))
-        self.assertEquals(None, g.send(None))
-        self.assertEquals('b', g.send('b'))
+        self.assertEqual(None, next(g))
+        self.assertEqual('A', g.send('a'))
+        self.assertEqual('B', g.send(None))
+        self.assertEqual(None, g.send(None))
+        self.assertEqual('b', g.send('b'))
 
     def testDoNotDitchResponseInCaseOfSplitMessages(self):
         def application():
             data = yield readAll()
-            self.assertEquals('a', data)
+            self.assertEqual('a', data)
             yield 'A'
-        appl = compose(application()); appl.next()
+        appl = compose(application()); next(appl)
         def protocol():
             yield copyBytes(1, appl)
             try:
@@ -169,37 +169,37 @@ class GutilsTest(TestCase):
             yield 'C'
             b = yield
             yield b
-        g = compose(protocol()); g.next()
-        self.assertEquals('A', g.send('ab'))
-        self.assertEquals('B', g.send(None))
-        self.assertEquals('C', g.send(None))
-        self.assertEquals('b', g.send(None))
+        g = compose(protocol()); next(g)
+        self.assertEqual('A', g.send('ab'))
+        self.assertEqual('B', g.send(None))
+        self.assertEqual('C', g.send(None))
+        self.assertEqual('b', g.send(None))
 
     def testReadRe(self):
         x = readRe(compile('(?P<ape>xyz)'))
-        x.next()
+        next(x)
         try:
             x.send('xyz') # fail
             self.fail('must not come here')
-        except StopIteration, s:
-            self.assertEquals(({'ape': 'xyz'},), s.args)
+        except StopIteration as s:
+            self.assertEqual(({'ape': 'xyz'},), s.args)
 
     def testReadReWithMaximumBytes(self):
         x = readRe(compile('xyz'), 5)
-        x.next()
+        next(x)
         x.send('abc')
         try:
             x.send('abc') # fail
             self.fail('must not come here')
-        except OverflowError, e:
-            self.assertEquals('no match after 6 bytes', str(e))
+        except OverflowError as e:
+            self.assertEqual('no match after 6 bytes', str(e))
 
     def testReadReEndOfStream(self):
         x = readRe(compile('.*'), 10)
-        x.next()
+        next(x)
         try:
             x.send(None)
             self.fail('must raise Exception')
-        except Exception, e:
-            self.assertEquals("no match at eof: ''", str(e))
+        except Exception as e:
+            self.assertEqual("no match at eof: ''", str(e))
 

@@ -24,7 +24,7 @@
 #
 ## end license ##
 
-from _acceptor import Acceptor
+from ._acceptor import Acceptor
 from weightless.core import identify, Yield, compose
 from weightless.http import REGEXP, parseHeaders, parseHeaderFieldvalue
 
@@ -149,7 +149,7 @@ def updateResponseHeaders(headers, match, addHeaders=None, removeHeaders=None, r
             _removeHeaderReCache[header] = headerRe
         _headers = headerRe.sub(CRLF, _headers, count=1)
 
-    for header, value in addHeaders.items():
+    for header, value in list(addHeaders.items()):
         _headers += '%s: %s\r\n' % (header, value)
 
     return _statusLine + _headers + CRLF, _body
@@ -385,7 +385,7 @@ class HttpHandler(object):
         if self._timer:
             self._reactor.removeTimer(self._timer)
         self._reactor.removeReader(self._sok)
-        self._reactor.addWriter(self._sok, self._writeResponse(encoding=encoding).next, prio=self._prio)
+        self._reactor.addWriter(self._sok, self._writeResponse(encoding=encoding).__next__, prio=self._prio)
 
     def finalize(self):
         self._finalize(self._generatorFactory)
@@ -413,7 +413,7 @@ class HttpHandler(object):
             except StopIteration:
                 pass
             self._closeConnection()
-            raise original_exc[0], original_exc[1], original_exc[2]
+            raise original_exc[0](original_exc[1]).with_traceback(original_exc[2])
 
     @identify
     @compose
@@ -439,7 +439,7 @@ class HttpHandler(object):
                 data = self._rest
             else:
                 try:
-                    data = self._handler.next()
+                    data = next(self._handler)
                 except (AssertionError, SystemExit, KeyboardInterrupt):
                     raise
                 except StopIteration:
@@ -471,11 +471,11 @@ class HttpHandler(object):
                 if data is Yield:
                     continue
                 if callable(data):
-                    data(self._reactor, this.next)
+                    data(self._reactor, this.__next__)
                     yield
                     data.resumeWriter()
                     continue
-                if type(data) is unicode:
+                if type(data) is str:
                     data = data.encode(self._defaultEncoding)
 
             if encodeResponseBody is not None:
@@ -511,7 +511,7 @@ class HttpHandler(object):
 
         try:
             self._sok.shutdown(SHUT_RDWR)
-        except SocketError, e:
+        except SocketError as e:
             code, message = e.args
             if code == 107:
                 pass # KVS: not well understood, not tested. It seems some quick (local) servers close the connection before this point is reached. It may happen more generally. In any case, it is based on a truely existing phenomenon
