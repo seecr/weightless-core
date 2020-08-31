@@ -19,7 +19,7 @@ PyObject* py_is_generator(PyObject* _, PyObject* o) {
 
 PyObject* MyErr_Format(PyObject* exc, const char* f, PyObject* o) {
     PyObject* str = PyObject_Str(o);
-    PyErr_Format(exc, f, PyString_AsString(str));
+    PyErr_Format(exc, f, PyBytes_AsString(str));
     Py_DECREF(str);
     return NULL;
 }
@@ -36,19 +36,32 @@ static PyMethodDef core_functionslist[] = {
     {NULL} 
 };
 
-PyMODINIT_FUNC initext(void) {
+PyMODINIT_FUNC PyInit_ext(void) {
+    static struct PyModuleDef moduledef = {
+        PyModuleDef_HEAD_INIT,
+        "ext",     /* m_name */
+        "c compose and observable",  /* m_doc */
+        -1,                  /* m_size */
+        core_functionslist,  /* m_methods */
+        NULL,                /* m_reload */
+        NULL,                /* m_traverse */
+        NULL,                /* m_clear */
+        NULL,                /* m_free */
+    };
 
-    PyObject* module = Py_InitModule3("ext", core_functionslist,
-            "c compose and observable");
+
+    PyObject* module = PyModule_Create(&moduledef);
 
     if(!module) {
         PyErr_Print();
-        return;
+        return NULL;
     }
 
     if(init_compose(module))
-        return;
+        return NULL;
 
     if(init_observable(module))
-        return;
+        return NULL;
+
+    return module;
 }

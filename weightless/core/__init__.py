@@ -54,7 +54,7 @@ try:
     from os import getenv
     if getenv('WEIGHTLESS_COMPOSE_TEST') == 'PYTHON':
         raise ImportError('Python compose for testing purposes')
-    from ext import compose as _compose, local, tostring, Yield, is_generator, DeclineMessage
+    from .ext import compose as _compose, local, tostring, Yield, is_generator, DeclineMessage
     cextension = True
     ComposeType = _compose
 except ImportError as e:
@@ -64,9 +64,9 @@ except ImportError as e:
         return type(o) is GeneratorType
     class DeclineMessage(Exception):
         pass
-    from _compose_py import compose as _compose, Yield
-    from _local_py import local
-    from _tostring_py import tostring
+    from ._compose_py import compose as _compose, Yield
+    from ._local_py import local
+    from ._tostring_py import tostring
     cextension = False
     ComposeType = GeneratorType
 
