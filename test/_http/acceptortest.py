@@ -45,37 +45,47 @@ class AcceptorTest(TestCase):
         acceptor = Acceptor(reactor, self.port, None)
         self.assertEqual('addReader', reactor.calledMethods[0].name)
         sok = reactor.calledMethods[0].args[0]
-        out = Popen(['netstat', '--numeric', '--listening', '--tcp'], stdout=PIPE, stderr=PIPE).communicate()[0]
+        try:
+            with Popen(['netstat', '--numeric', '--listening', '--tcp'], stdout=PIPE, stderr=PIPE) as p:
+                out, _ = p.communicate()
+        finally:
+            sok.close()
         self.assertTrue(str(self.port).encode() in out, out)
-        sok.close()
         callback = reactor.calledMethods[0].args[1]
         self.assertTrue(callable(callback))
 
     def testConnect(self):
         reactor = CallTrace()
-        acceptor = Acceptor(reactor, self.port, lambda sok: None)
-        self.assertEqual('addReader', reactor.calledMethods[0].name)
-        acceptCallback = reactor.calledMethods[0].args[1]
-        sok = socket()
-        sok.connect(('localhost', self.port))
-        acceptCallback()
-        self.assertEqual(['addReader'], reactor.calledMethodNames())
-        reactor.calledMethods[0].args[0].close()
-        sok.close()
+        socketCatcher = []
+        acceptor = Acceptor(reactor, self.port, socketCatcher.append)
+        try:
+            self.assertEqual('addReader', reactor.calledMethods[0].name)
+            acceptCallback = reactor.calledMethods[0].args[1]
+            with socket() as sok:
+                sok.connect(('localhost', self.port))
+                acceptCallback()
+                self.assertEqual(['addReader'], reactor.calledMethodNames())
+                reactor.calledMethods[0].args[0].close()
+        finally:
+            [sok.close() for sok in socketCatcher]
+            acceptor.close()
 
     def testCreateSink(self):
         reactor = CallTrace('reactor')
         class sinkFactory(object):
             def __init__(inner, *args, **kwargs): self.args, self.kwargs = args, kwargs
         acceptor = Acceptor(reactor, self.port, sinkFactory)
-        acceptCallback = reactor.calledMethods[0].args[1]
-        sok = socket()
-        sok.connect(('localhost', self.port))
-        acceptCallback()
-        self.assertEqual('addReader', reactor.calledMethods[1].name)
-        sink = reactor.calledMethods[1].args[1]
-        self.assertEqual(socket, type(self.args[0]))
-        reactor.calledMethods[0].args[0].close()
+        try:
+            acceptCallback = reactor.calledMethods[0].args[1]
+            with socket() as sok:
+                sok.connect(('localhost', self.port))
+                acceptCallback()
+                self.assertEqual('addReader', reactor.calledMethods[1].name)
+                sink = reactor.calledMethods[1].args[1]
+                self.assertEqual(socket, type(self.args[0]))
+                reactor.calledMethods[0].args[0].close()
+        finally:
+            acceptor.close()
 
     def testReadData(self):
         reactor = CallTrace('reactor')
@@ -85,40 +95,59 @@ class AcceptorTest(TestCase):
             def __next__(inner):
                 self.next = True
         acceptor = Acceptor(reactor, self.port, sinkFactory)
-        acceptCallback = reactor.calledMethods[0].args[1]
-        sok = socket()
-        sok.connect(('localhost', self.port))
-        acceptCallback()
-        sink = reactor.calledMethods[1].args[1]
-        self.next = False
-        next(sink)
-        self.assertTrue(self.__next__)
-        reactor.calledMethods[0].args[0].close()
+        try:
+            acceptCallback = reactor.calledMethods[0].args[1]
+            with socket() as sok:
+                sok.connect(('localhost', self.port))
+                acceptCallback()
+                sink = reactor.calledMethods[1].args[1]
+                self.next = False
+                next(sink)
+                self.assertTrue(self.next)
+                reactor.calledMethods[0].args[0].close()
+        finally:
+            acceptor.close()
 
     def testReuseAddress(self):
         reactor = CallTrace()
-        acceptor = Acceptor(reactor, self.port, lambda sok: None)
-        client = socket()
-        client.connect(('127.0.0.1', self.port))
-        acceptor._accept()
-        acceptor.close()
-        acceptor = Acceptor(reactor, self.port, lambda sok: None)
+        socketCatcher = []
+        acceptor = Acceptor(reactor, self.port, socketCatcher.append)
+        try:
+            with socket() as client:
+                client.connect(('127.0.0.1', self.port))
+                acceptor._accept()
+                acceptor.close()
+                acceptor = Acceptor(reactor, self.port, lambda sok: None)
+                acceptor.close()
+        finally:
+            [sok.close() for sok in socketCatcher]
 
     def testAcceptorWithPrio(self):
         reactor = CallTrace()
-        acceptor = Acceptor(reactor, self.port, lambda sok: None, prio=5)
-        client = socket()
-        client.connect(('127.0.0.1', self.port))
-        acceptor._accept()
-        self.assertEqual(5, reactor.calledMethods[0].kwargs['prio'])
+        socketCatcher = []
+        acceptor = Acceptor(reactor, self.port, socketCatcher.append, prio=5)
+        try:
+            with socket() as client:
+                client.connect(('127.0.0.1', self.port))
+                acceptor._accept()
+                self.assertEqual(5, reactor.calledMethods[0].kwargs['prio'])
+        finally:
+            [sok.close() for sok in socketCatcher]
+            acceptor.close()
 
     def testBindAddress_DefaultsTo_0_0_0_0(self):
         reactor = CallTrace()
         acceptor = Acceptor(reactor, self.port, lambda sok: None, prio=5)
-        self.assertEqual(('0.0.0.0', self.port), acceptor._sok.getsockname())
+        try:
+            self.assertEqual(('0.0.0.0', self.port), acceptor._sok.getsockname())
+        finally:
+            acceptor.close()
 
     def testBindAddressCustom(self):
         reactor = CallTrace()
         acceptor = Acceptor(reactor, self.port, lambda sok: None, bindAddress='127.0.0.1', prio=5)
-        self.assertEqual(('127.0.0.1', self.port), acceptor._sok.getsockname())
+        try:
+            self.assertEqual(('127.0.0.1', self.port), acceptor._sok.getsockname())
+        finally:
+            acceptor.close()
 
