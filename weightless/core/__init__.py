@@ -80,6 +80,11 @@ def compose(X, *args, **kwargs):
         return _compose(X, *args, **kwargs)
     raise TypeError("compose() expects generator, got %s" % repr(X))
 
+class value_with_pushback(object):
+    def __init__(self, value, *pushback):
+        self.value = value
+        self.pushback = pushback
+
 #from compose import compose, local, tostring, Yield
 from .utils import identify, autostart, retval, consume, asList, asString, return_
 from ._observable import Observable, Transparent, be, methodOrMethodPartialStr, NoneOfTheObserversRespond
