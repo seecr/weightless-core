@@ -31,6 +31,7 @@ from functools import partial
 
 from weightless.core import is_generator, DeclineMessage, cextension
 
+
 if cextension:
     from weightless.core.ext import AllGenerator
 
@@ -74,12 +75,12 @@ class Defer(defaultdict):
         try:
             return method(*args, **kwargs)
         except:
-            c, v, t = exc_info(); raise c(v).with_traceback(t.tb_next)
+            c, v, t = exc_info(); raise v.with_traceback(t.tb_next)
 
 
 def handleNonGeneratorGeneratorExceptions(method, clazz, value, traceback):
     excStr = ''.join(format_exception(clazz, value, traceback))
-    raise AssertionError("Non-Generator %s should not have raised Generator-Exception:\n%s" % (methodOrMethodPartialStr(method), excStr))
+    raise AssertionError("Non-Generator %s should not have raised Generator-Exception:\n%s" % (methodOrMethodPartialStr(method), excStr)) from None
 
 class MessageBase(object):
     def __init__(self, observers, message, observable):
@@ -116,25 +117,27 @@ class MessageBase(object):
                 except DeclineMessage:
                     continue
                 except:
-                    c, v, t = exc_info(); raise c(v).with_traceback(t.tb_next)
-                assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
+                    c, v, t = exc_info(); raise v.with_traceback(t.tb_next)
+                if _ is not None:
+                    raise AssertionError("%s returned '%s'" % (methodOrMethodPartialStr(method), _)) from None
 
     def any(self, *args, **kwargs):
         try:
             for r in self.all(*args, **kwargs):
                 try:
                     result = yield r
-                    raise StopIteration(result)
+                    return result
                 except DeclineMessage:
                     continue
         except:
-            c, v, t = exc_info(); raise c(v).with_traceback(t.tb_next)
+            c, v, t = exc_info(); raise v.with_traceback(t.tb_next)
         raise NoneOfTheObserversRespond(
                 unansweredMessage=self._message,
                 nrOfObservers=len(list(self._observers)))
 
     def verifyMethodResult(self, method, result):
-        assert is_generator(result), "%s should have resulted in a generator." % methodOrMethodPartialStr(method)
+        if not is_generator(result):
+            raise AssertionError("%s should have resulted in a generator." % methodOrMethodPartialStr(method)) from None
 
 class AllMessage(MessageBase):
     altname = 'all_unknown'
@@ -158,7 +161,7 @@ class CallMessage(MessageBase):
             except DeclineMessage:
                 continue
             except:
-                c, v, t = exc_info(); raise c(v).with_traceback(t.tb_next)
+                c, v, t = exc_info(); raise v.with_traceback(t.tb_next)
         raise NoneOfTheObserversRespond(
                 unansweredMessage=self._message,
                 nrOfObservers=len(list(self._observers)))
@@ -173,11 +176,12 @@ class DoMessage(MessageBase):
             for _ in self.all(*args, **kwargs):
                 pass
         except:
-            c, v, t = exc_info(); raise c(v).with_traceback(t.tb_next)
+            c, v, t = exc_info(); raise v.with_traceback(t.tb_next)
     __call__ = do
 
     def verifyMethodResult(self, method, result):
-        assert result is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), result)
+        if result is not None:
+            raise AssertionError("%s returned '%s'" % (methodOrMethodPartialStr(method), result)) from None
 
 class OnceMessage(MessageBase):
     def once(self, *args, **kwargs):
@@ -204,14 +208,16 @@ class OnceMessage(MessageBase):
                     if is_generator(methodResult):
                         _ = yield methodResult
                 except:
-                    c, v, t = exc_info(); raise c(v).with_traceback(t.tb_next)
-                assert _ is None, "%s returned '%s'" % (methodOrMethodPartialStr(method), _)
+                    c, v, t = exc_info(); raise v.with_traceback(t.tb_next)
+                if _ is not None:
+                    raise AssertionError("%s returned '%s'" % (methodOrMethodPartialStr(method), _)) from None
             if isinstance(observer, Observable):
                 try:
                     _ = yield self._callonce(observer._observers, args, kwargs, seen)
                 except:
-                    c, v, t = exc_info(); raise c(v).with_traceback(t.tb_next)
-                assert _ is None, "OnceMessage of %s returned '%s', but must always be None" % (self._observable, _)
+                    c, v, t = exc_info(); raise v.with_traceback(t.tb_next)
+                if _ is not None:
+                    raise AssertionError("OnceMessage of %s returned '%s', but must always be None" % (self._observable, _)) from None
 
 
 class Observable(object):
@@ -267,15 +273,15 @@ class Transparent(Observable):
         try:
             response = yield self.any.unknown(message, *args, **kwargs)
         except NoneOfTheObserversRespond:
-            raise DeclineMessage
-        raise StopIteration(response)
+            raise DeclineMessage from None
+        return response
     def do_unknown(self, message, *args, **kwargs):
         self.do.unknown(message, *args, **kwargs)
     def call_unknown(self, message, *args, **kwargs):
         try:
             return self.call.unknown(message, *args, **kwargs)
         except NoneOfTheObserversRespond:
-            raise DeclineMessage
+            raise DeclineMessage from None
 
 def be(strand):
     helicesDone = set()
