@@ -48,6 +48,7 @@ class LocalTest(TestCase):
             pass
 
     def testNotFoundStacktraceCleanNormalFunctions(self):
+        names = []
         def a():
             b()
         def b():
@@ -58,13 +59,14 @@ class LocalTest(TestCase):
         except AttributeError:
             c, v, t = exc_info()
             self.assertEqual("no_such_thing", str(v))
-            names = []
             while t:
                 names.append(t.tb_frame.f_code.co_name)
                 t = t.tb_next
-            self.assertEqual(['testNotFoundStacktraceCleanNormalFunctions', 'a', 'b'] + ([] if cextension else ['local']), names)
+        self.assertEqual(['testNotFoundStacktraceCleanNormalFunctions', 'a', 'b'] + ([] if cextension else ['local']), names)
 
     def testNotFoundStacktraceCleanGeneratorFunctions(self):
+        # Py3: hiding of _compose not working anymore
+        names = []
         def a():
             yield b()
         def b():
@@ -78,11 +80,10 @@ class LocalTest(TestCase):
         except AttributeError:
             c, v, t = exc_info()
             self.assertEqual("no_such_thing", str(v))
-            names = []
             while t:
                 names.append(t.tb_frame.f_code.co_name)
                 t = t.tb_next
-            self.assertEqual(['testNotFoundStacktraceCleanGeneratorFunctions', 'consume', 'a', 'b', 'c'] + ([] if cextension else ['local']), names)
+        self.assertEqual(['testNotFoundStacktraceCleanGeneratorFunctions', 'consume', '_compose', 'a', 'b', 'c'] + ([] if cextension else ['local']), names)
 
     def testVariousTypes(self):
         strArgument = 'string'
