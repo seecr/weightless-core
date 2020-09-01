@@ -37,7 +37,7 @@ class Gio(object):
         self._generator = compose(generator)
         self._contextstack = []
         self._callback2generator = compose(self.callback2generator())
-        next(self._callback2generator)
+        self._callback2generator.__next__()
 
     def __repr__(self):
         return repr(self._generator)
@@ -161,7 +161,7 @@ class FdContext(Context):
             message = os.read(self._fd, self.readBufSize)
         finally:
             self.gio.removeReader(self)
-        raise StopIteration(message)
+        return message
 
 class SocketContext(FdContext):
 
