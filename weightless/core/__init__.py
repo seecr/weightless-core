@@ -64,7 +64,7 @@ except ImportError as e:
         return type(o) is GeneratorType
     class DeclineMessage(Exception):
         pass
-    from ._compose_py import compose as _compose, Yield
+    from ._compose_py import compose as _compose, Yield, value_with_pushback
     from ._local_py import local
     from ._tostring_py import tostring
     cextension = False
@@ -79,11 +79,6 @@ def compose(X, *args, **kwargs):
     elif is_generator(X):
         return _compose(X, *args, **kwargs)
     raise TypeError("compose() expects generator, got %s" % repr(X))
-
-class value_with_pushback(object):
-    def __init__(self, value, *pushback):
-        self.value = value
-        self.pushback = pushback
 
 #from compose import compose, local, tostring, Yield
 from .utils import identify, autostart, retval, consume, asList, asString, return_

@@ -55,6 +55,8 @@ elif [ "$option" == "--c" ]; then
 else
     tests="C PYTHON"
 fi
+
+tests="PYTHON"
 echo Performing tests: $tests
 
 for t in $tests; do
