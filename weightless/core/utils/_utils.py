@@ -25,16 +25,9 @@
 
 from functools import wraps
 from re import compile
-from weightless.core import compose
+from weightless.core import compose, value_with_pushback
 
-try:
-    from inspect import isgeneratorfunction
-except ImportError:
-    def isgeneratorfunction(func):
-        try:
-            return bool(func.__code__.co_flags & 0x20)
-        except AttributeError:
-            return False
+from inspect import isgeneratorfunction
 
 def return_(*args):
     raise StopIteration(*args)
@@ -43,9 +36,9 @@ def retval(generator):
     g = compose(generator)
     try:
         while True:
-            next(g)
+            g.__next__()
     except StopIteration as e:
-        return e.args[0] if e.args else None
+        return e.value
 
 def consume(generator):
     for _ in compose(generator):
@@ -61,7 +54,7 @@ def identify(generatorFunction):
     @wraps(generatorFunction)
     def helper(*args, **kwargs):
         g = generatorFunction(*args, **kwargs)
-        next(g)
+        g.__next__()
         g.send(g)
         return g
     return helper
@@ -70,7 +63,7 @@ def autostart(generatorFunction):
     @wraps(generatorFunction)
     def helper(*args, **kwargs):
         g = generatorFunction(*args, **kwargs)
-        next(g)
+        g.__next__()
         return g
     return helper
 
@@ -91,9 +84,7 @@ def readRe(regexp, maximum=None):
         raise Exception("no match at eof: '%s'" % message)
     args = match.groupdict()
     rest = message[match.end():]
-    if rest:
-        raise StopIteration(args, rest)
-    raise StopIteration(args)
+    return value_with_pushback(args, rest) if rest else args
 
 def readAll():
     data = []
@@ -110,19 +101,15 @@ def copyBytes(tosend, target):
         head, tail = message[:tosend], message[tosend:]
         response = target.send(head)
         tosend -= len(head)
-    #try:
-    #    response = target.throw(StopIteration())
-    #except StopIteration:
-    #    pass
+
     if response:
         message = yield response
         if message and tail:
-            raise StopIteration(None, tail, message)
+            return value_with_pushback(None, tail, message)
         if message and not tail:
-            raise StopIteration(None, message)
+            return value_with_pushback(None, message)
         if tail and not message:
-            raise StopIteration(None, tail)
-        raise StopIteration()
+            return value_with_pushback(None, tail)
+        return
     if tail:
-        raise StopIteration(None, tail)
-
+        return value_with_pushback(None, tail)
