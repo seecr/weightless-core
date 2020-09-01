@@ -41,7 +41,7 @@ class ObservableDirectedMessagingTest(TestCase):
         list(compose(observable.all["name"].method()))
         list(compose(observable.all["name"].method()))
         
-        self.assertEquals(["A", "A"], called)
+        self.assertEqual(["A", "A"], called)
 
     def testDeferredObjectsAreCached(self):
         observable = Observable()
@@ -50,7 +50,7 @@ class ObservableDirectedMessagingTest(TestCase):
         observable.addObserver(A("name"))
         d1 = observable.all["name"]
         d2 = observable.all["name"]
-        self.assertEquals(d1, d2) 
+        self.assertEqual(d1, d2) 
 
     def testDirectedObserverMessagingIgnoresNonObservableObservers(self):
         observable = Observable()
@@ -64,11 +64,11 @@ class ObservableDirectedMessagingTest(TestCase):
 
         list(compose(observable.all["name"].method()))
         
-        self.assertEquals([], called)
+        self.assertEqual([], called)
 
         list(compose(observable.all.method()))
 
-        self.assertEquals(["Z"], called)
+        self.assertEqual(["Z"], called)
 
     def testDirectedMessagesCanAlsoBeAcceptedByObjects(self):
         observable = Observable()
@@ -90,19 +90,19 @@ class ObservableDirectedMessagingTest(TestCase):
 
         list(compose(observable.all["name"].method()))
         
-        self.assertEquals(['Y'], called)
+        self.assertEqual(['Y'], called)
 
         del called[:]
 
         list(compose(observable.all.method()))
 
-        self.assertEquals(['Y', "Z"], called)
+        self.assertEqual(['Y', "Z"], called)
 
         del called[:]
 
         list(compose(observable.all["other"].method()))
 
-        self.assertEquals([], called)
+        self.assertEqual([], called)
 
 
     def testUndirectedObserverMessagingIsUnaffectedByObserverName(self):
@@ -127,16 +127,16 @@ class ObservableDirectedMessagingTest(TestCase):
 
         list(compose(observable.all.method()))
         
-        self.assertEquals([("A", "name"), 
+        self.assertEqual([("A", "name"), 
             ("A", "anothername"), 
             ("B", "anothername"), 
             ("B", None)], called)
         del called[:]
 
         list(compose(observable.all["name"].method()))
-        self.assertEquals([("A", "name")], called)
+        self.assertEqual([("A", "name")], called)
 
     def testSetName(self):
         observable = Observable().observable_setName('name')
-        self.assertEquals('name', observable.observable_name())
+        self.assertEqual('name', observable.observable_name())
 
