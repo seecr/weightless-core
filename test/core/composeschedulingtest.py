@@ -1,26 +1,26 @@
 ## begin license ##
-# 
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io 
-# 
+#
+# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+#
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
 # Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
-# 
+#
 # This file is part of "Weightless"
-# 
+#
 # "Weightless" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
-# 
+#
 # "Weightless" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with "Weightless"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-# 
+#
 ## end license ##
 
 from unittest import TestCase
@@ -113,17 +113,17 @@ class _ComposeSchedulingTest(TestCase):
         def gen():
             number = yield
             yield nextNr(number)
-         
+
         composed = compose(gen(), stepping=True)
         result = next(composed)
         self.assertEqual(None, result)
-         
+
         result = composed.send(41)
         self.assertEqual(Yield, result)
-         
+
         result = next(composed)
         self.assertEqual(42, result)
-         
+
         try:
             next(composed)
         except StopIteration:
@@ -189,6 +189,7 @@ class _ComposeSchedulingTest(TestCase):
             self.assertEqual('Cannot accept data when stepping. First send None.', str(e))
 
     def testExceptionOnSendData_TransparentStepping(self):
+        # Py3: _compose back in stacktrace
         fLine = __NEXTLINE__(offset=1)
         def f():
             yield Yield  # second Yield
@@ -207,6 +208,8 @@ class _ComposeSchedulingTest(TestCase):
 Traceback (most recent call last):
   File "%%(__file__)s", line %(cLine)s, in testExceptionOnSendData_TransparentStepping
     c.send('data')
+  File "../weightless/core/_compose_py.py", line 143, in _compose
+    raise exception[1].with_traceback(exception[2])
   File "%%(__file__)s", line %(gLine)s, in g
     yield f()  # first Yield
   File "%%(__file__)s", line %(fLine)s, in f
@@ -222,6 +225,7 @@ AssertionError: Cannot accept data. First send None.\n""" % {
             self.fail("Should not happen.")
 
     def testExceptionThrownInCompose_TransparentStepping(self):
+        # Py3: _compose back in stacktrace
         fLine = __NEXTLINE__(offset=1)
         def f():
             yield Yield  # second Yield
@@ -240,6 +244,8 @@ AssertionError: Cannot accept data. First send None.\n""" % {
 Traceback (most recent call last):
   File "%%(__file__)s", line %(cLine)s, in testExceptionThrownInCompose_TransparentStepping
     c.throw(Exception("tripping compose"))
+  File "../weightless/core/_compose_py.py", line 143, in _compose
+    raise exception[1].with_traceback(exception[2])
   File "%%(__file__)s", line %(gLine)s, in g
     yield f()  # first Yield
   File "%%(__file__)s", line %(fLine)s, in f
@@ -270,13 +276,14 @@ Exception: tripping compose\n""" % {
     yield f()
   File "%(__file__)s", line %(fLine)s, in f
     def f():""" % {
-            '__file__': fileDict['__file__'], 
+            '__file__': fileDict['__file__'],
             'fLine': fLine, 'gYieldLine': gYieldLine
         }
         trace = tostring(composed)
         self.assertEqual(stackText, trace, trace)
 
     def testUnsuitableGeneratorTracebackBeforeStepping(self):
+        # Py3: _compose back in stacktrace
         def f():
             yield "alreadyStarted"
             yield "will_not_get_here"
@@ -287,17 +294,19 @@ Exception: tripping compose\n""" % {
             yield genF
 
         composed = compose(gen(), stepping=True)
-        
+
         try:
             cLine = __NEXTLINE__()
             next(composed)
         except AssertionError as e:
             self.assertEqual('Generator already used.', str(e))
-        
+
             stackText = """\
 Traceback (most recent call last):
   File "%(__file__)s", line %(cLine)s, in testUnsuitableGeneratorTracebackBeforeStepping
-    composed.next()
+    next(composed)
+  File "../weightless/core/_compose_py.py", line 143, in _compose
+    raise exception[1].with_traceback(exception[2])
   File "%(__file__)s", line %(genYieldLine)s, in gen
     yield genF
 AssertionError: Generator already used.\n""" % {
@@ -311,6 +320,7 @@ AssertionError: Generator already used.\n""" % {
             self.fail("Should not happen.")
 
     def testExceptionThrownInCompose(self):
+        # Py3: _compose back in stacktrace
         fLine = __NEXTLINE__()
         def f():
             yield 10
@@ -327,6 +337,8 @@ AssertionError: Generator already used.\n""" % {
 Traceback (most recent call last):
   File "%(__file__)s", line %(cLine)s, in testExceptionThrownInCompose
     c.throw(Exception("tripping compose"))
+  File "../weightless/core/_compose_py.py", line 143, in _compose
+    raise exception[1].with_traceback(exception[2])
   File "%(__file__)s", line %(gLine)s, in g
     yield f()
   File "%(__file__)s", line %(fLine)s, in f
