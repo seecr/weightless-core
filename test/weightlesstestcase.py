@@ -61,7 +61,7 @@ class WeightlessTestCase(TestCase):
         fd, self.tempfile = mkstemp()
         os.close(fd)
         self.reactor = Reactor()
-        self.port = next(PortNumberGenerator)
+        self.port = PortNumberGenerator.next()
 
     def tearDown(self):
         t0 = time()
