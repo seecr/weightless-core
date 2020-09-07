@@ -52,7 +52,7 @@ def server(port, response, expectedrequest, delay=0, loop=50):
         newSok, addr = serverSok.accept()
         newSok.settimeout(1)
 
-        msg = ''
+        msg = b''
         for i in range(loop):
             if expectedrequest:
                 try:
@@ -60,18 +60,18 @@ def server(port, response, expectedrequest, delay=0, loop=50):
                     if msg == expectedrequest:
                         break
                     if len(msg) >= len(expectedrequest):
-                        print("hihi")
+                        print("hihi", msg, expectedrequest)
                         raise timeout
                 except timeout:
                     print("Received:", repr(msg))
                     print("expected:", repr(expectedrequest))
                     return
         if response:
-            if hasattr(response, 'next'):
+            if hasattr(response, '__next__'):
                 for r in response:
-                    newSok.send(r)
+                    newSok.send(r.encode())
             else:
-                newSok.send(response)
+                newSok.send(response.encode())
             sleep(delay)
             newSok.close()
         else:

@@ -208,7 +208,7 @@ class HttpHandler(object):
         self._reactor = reactor
         self._sok = sok
         self._generatorFactory = generatorFactory
-        self._dataBuffer = ''
+        self._dataBuffer = b''
         self._rest = None
         self._timeout = timeout
         self._timer = None
@@ -413,6 +413,7 @@ class HttpHandler(object):
             except StopIteration:
                 pass
             self._closeConnection()
+            print("HIER")
             raise original_exc[0](original_exc[1]).with_traceback(original_exc[2])
 
     @identify
@@ -426,7 +427,7 @@ class HttpHandler(object):
         data = None
 
         def _no_response_500(msg):
-            self._rest = 'HTTP/1.0 500 Internal Server Error\r\n\r\n'
+            self._rest = b'HTTP/1.0 500 Internal Server Error\r\n\r\n'
             while self._rest:
                 yield
                 data = self._rest

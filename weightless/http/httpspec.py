@@ -65,32 +65,32 @@ class HTTP:
             #yield CRLF
         #Headers = classmethod(_Headers)
 
-    SP = ' '
-    CRLF = '\r\n'
+    SP = b' '
+    CRLF = b'\r\n'
     # http://www.w3.org/Protocols/rfc2616/rfc2616-sec2.html#sec2.2
-    token =  r"([!#$%&'*+\-.0-9A-Z^_`a-z|~]+){1}"
-    quoted_string = r'(?s)".*?(?:(?<!\\)")'
+    token =  b"([!#$%&'*+\-.0-9A-Z^_`a-z|~]+){1}"
+    quoted_string = r'(?s)".*?(?:(?<!\\)")'.encode()
     field_name = token
-    field_value = '.*'
-    named_field_name = '(?P<fieldname>' + field_name + ')'
-    named_field_value = '(?P<fieldvalue>' + field_value + ")"
+    field_value = b'.*'
+    named_field_name = b'(?P<fieldname>' + field_name + b')'
+    named_field_value = b'(?P<fieldvalue>' + field_value + b")"
 
-    message_header = field_name + ":" + field_value + CRLF
-    named_message_header = named_field_name + ':' + named_field_value + CRLF
+    message_header = field_name + b":" + field_value + CRLF
+    named_message_header = named_field_name + b':' + named_field_value + CRLF
 
-    Headers = "(?P<_headers>(" + message_header + ')*)'
+    Headers = b"(?P<_headers>(" + message_header + b')*)'
 
-    Method = r'(?P<Method>' + token + ')'
-    Request_URI = r'(?P<RequestURI>.+)'
-    HTTP_Version = r'HTTP/(?P<HTTPVersion>\d\.\d)'
-    ignoredCRLFs = '(' + CRLF + ')*'
+    Method = b'(?P<Method>' + token + b')'
+    Request_URI = b'(?P<RequestURI>.+)'
+    HTTP_Version = b'HTTP/(?P<HTTPVersion>\d\.\d)'
+    ignoredCRLFs = b'(' + CRLF + b')*'
     Request_Line = ignoredCRLFs + Method + SP + Request_URI + SP + HTTP_Version + CRLF
 
-    Chunk_Size = '(?P<ChunkSize>[0-9a-fA-F]+)'
+    Chunk_Size = b'(?P<ChunkSize>[0-9a-fA-F]+)'
     Chunk_Size_Line = Chunk_Size + CRLF  # FIXME: TS: incomplete, missing chunk-extensions (at least match & ignore).
 
-    Status_Code = r'(?P<StatusCode>[0-9]{3})'
-    Reason_Phrase = r'(?P<ReasonPhrase>[^\r\n].+)'
+    Status_Code = b'(?P<StatusCode>[0-9]{3})'
+    Reason_Phrase = b'(?P<ReasonPhrase>[^\r\n].+)'
     Status_Line = HTTP_Version + SP + Status_Code + SP + Reason_Phrase + CRLF
 
     Request = Request_Line + Headers + CRLF
@@ -104,12 +104,12 @@ class REGEXP:
     HEADER = compile(HTTP.named_message_header)
     CHUNK_SIZE_LINE = compile(HTTP.Chunk_Size_Line)
     CRLF = compile(HTTP.CRLF)
-    FIELDVALUE = compile(HTTP.named_field_name + "=" + "(?P<fieldvalue>(" + HTTP.token + "|" + HTTP.quoted_string + "))")
+    FIELDVALUE = compile(HTTP.named_field_name + b"=" + b"(?P<fieldvalue>(" + HTTP.token + b"|" + HTTP.quoted_string + b"))")
 
 class FORMAT:
-    RequestLine = '%(Method)s %(Request_URI)s HTTP/%(HTTPVersion)s' + HTTP.CRLF
-    HostHeader = 'Host: %(Host)s' + HTTP.CRLF
-    Header = '%s: %s' + HTTP.CRLF
-    UserAgentHeader = 'User-Agent: Weightless/v' + VERSION + HTTP.CRLF
-    StatusLine = 'HTTP/%(version)s %(status)s %(reason)s' + HTTP.CRLF
+    RequestLine = b'%(Method)s %(Request_URI)s HTTP/%(HTTPVersion)s' + HTTP.CRLF
+    HostHeader = b'Host: %(Host)s' + HTTP.CRLF
+    Header = b'%s: %s' + HTTP.CRLF
+    UserAgentHeader = b'User-Agent: Weightless/v' + VERSION.encode() + HTTP.CRLF
+    StatusLine = b'HTTP/%(version)s %(status)s %(reason)s' + HTTP.CRLF
 

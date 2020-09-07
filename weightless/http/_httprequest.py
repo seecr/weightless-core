@@ -49,7 +49,7 @@ def httprequest(host, port, request, body=None, headers=None, proxyServer=None, 
     s = Suspend(doNext=g.send, **kw)
     yield s
     result = s.getResult()
-    raise StopIteration(result)
+    return result
 
 httpget = httprequest
 httppost = partial(httprequest, method='POST')
@@ -65,7 +65,7 @@ class HttpRequest(object):
     @staticmethod
     def httprequest(**kwargs):
         result = yield httprequest(**kwargs)
-        raise StopIteration(result)
+        return result
 
 def _createSocket():
     sok = socket()
@@ -93,8 +93,8 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
 
     try:
         sok.connect((host, port))
-    except SocketError as xxx_todo_changeme:
-        (errno, msg) = xxx_todo_changeme.args
+    except SocketError as e:
+        (errno, msg) = e.args
         if errno != EINPROGRESS:
             raise
 
@@ -109,23 +109,23 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
             suspend._reactor.removeWriter(sok)
 
         if proxyServer:
-            sok.sendall(  # hotfix EG d.d. 1/3/14
-                ("CONNECT %s:%d HTTP/1.0\r\n" +
-                "Host: %s:%d\r\n\r\n") % (origHost, origPort, origHost, origPort))
+            # hotfix EG d.d. 1/3/14
+            sok.sendall("CONNECT {host} HTTP/1.0\r\nHost: {host}\r\n\r\n".format(
+                    host='{}:{}'.format(origHost, origPort)).encode())
             suspend._reactor.addReader(sok, this.__next__, prio=prio)
             try:
                 # hotfix EG d.d. 1/3/14
-                response = ''
+                response = b''
                 while True:
                     yield
                     fragment = sok.recv(4096)
-                    if fragment == '':
+                    if fragment == b'':
                         break
                     response += fragment
-                    if "\r\n\r\n" in response:
+                    if b"\r\n\r\n" in response:
                         break
                 status = response.split()[:2]
-                if not "200" in status:
+                if not b"200" in status:
                     raise ValueError("Failed to connect through proxy")
                 # end hotfix
             finally:
@@ -160,7 +160,7 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
                     if e.errno != SSL_ERROR_WANT_READ:
                         raise
                     continue
-                if response == '':
+                if response == b'':
                     break
                 size += len(response)
                 if not maxResponseSize is None and size > maxResponseSize:
@@ -172,9 +172,13 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
                     responses.append(response)
         finally:
             suspend._reactor.removeReader(sok)
-            sok.shutdown(SHUT_RDWR)
+            try:
+                sok.shutdown(SHUT_RDWR)
+            except OSError as e:
+                if e.errno != 107:
+                    raise
             sok.close()
-        suspend.resume(None if handlePartialResponse else ''.join(responses))
+        suspend.resume(None if handlePartialResponse else b''.join(responses))
     except (AssertionError, KeyboardInterrupt, SystemExit):
         raise
     except TimeoutException:
@@ -205,10 +209,11 @@ def _sslHandshake(sok, this, suspend, prio):
                 raise
     if count == 254:
         raise ValueError("SSL handshake failed.")
-    raise StopIteration(sok)
+    return sok
 
 def _asyncSend(sok, data):
-    while data != "":
+    data = data if type(data) is bytes else data.encode()
+    while data != b"":
         size = sok.send(data)
         data = data[size:]
         yield

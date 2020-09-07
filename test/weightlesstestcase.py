@@ -167,6 +167,7 @@ class WeightlessTestCase(TestCase):
         finally:
             sys.stdout = oldstdout
 
+    @contextmanager
     def referenceHttpServer(self, port, request, ssl=False, streamingData=None):
         def server(httpd):
             httpd.serve_forever()
@@ -181,15 +182,17 @@ class WeightlessTestCase(TestCase):
                     'headers': self.headers})
                 self.send_response(200, "OK")
                 self.end_headers()
-
                 if not streamingData:
-                    self.wfile.write('GET RESPONSE')
+                    self.wfile.write('GET RESPONSE'.encode())
                     self.wfile.flush()
                     return
 
                 for dataFragment in streamingData:
-                    self.wfile.write(dataFragment)
-                    self.wfile.flush()
+                    try:
+                        self.wfile.write(dataFragment.encode())
+                        self.wfile.flush()
+                    except BrokenPipeError:
+                        pass
 
             def do_POST(self, *args, **kwargs):
                 request.append({
@@ -199,7 +202,7 @@ class WeightlessTestCase(TestCase):
                     'body': self.rfile.read(int(self.headers["Content-Length"]))})
                 self.send_response(200, "OK")
                 self.end_headers()
-                self.wfile.write('POST RESPONSE')
+                self.wfile.write('POST RESPONSE'.encode())
                 self.wfile.flush()
 
         if ssl:
@@ -209,7 +212,9 @@ class WeightlessTestCase(TestCase):
         thread=Thread(None, lambda: server(httpd))
         thread.daemon = True
         thread.start()
+        yield httpd
 
+    @contextmanager
     def proxyServer(self, port, request):
         def server(httpd):
             httpd.serve_forever()
@@ -221,7 +226,7 @@ class WeightlessTestCase(TestCase):
                 request.append({'command': self.command, 'path': self.path, 'headers': self.headers})
                 self.send_response(200, "Connection established")
                 self.end_headers()
-                origRequest = self.connection.recv(4096)
+                origRequest = self.connection.recv(4096).decode()
                 path = "http://" + self.path + origRequest.split()[1]
                 self.wfile.write(urlopen(path).read())
                 self.wfile.flush()
@@ -231,6 +236,7 @@ class WeightlessTestCase(TestCase):
         thread=Thread(None, lambda: server(httpd))
         thread.daemon = True
         thread.start()
+        yield httpd
 
 class MatchAll(object):
     def __eq__(self, other):

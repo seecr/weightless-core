@@ -556,5 +556,5 @@ _ALLOWED_OPTIONAL_ADAPTER_ARGUMENTS = set(['body', 'headers', 'method', 'prio', 
 _noop = lambda *a, **kw: None
 _CRLF_LEN = len(CRLF)
 _CHUNK_RE = re.compile(r'([0-9a-fA-F]+)(?:;[^\r\n]+|)\r\n')  # Ignores chunk-extensions
-_TRAILERS_RE = re.compile("(?:(?P<_trailers>(?:" + HTTP.message_header + ')+)' + CRLF + '|' + CRLF + ')')
+_TRAILERS_RE = re.compile(b"(?:(?P<_trailers>(?:" + HTTP.message_header + b')+)' + CRLF + b'|' + CRLF + b')')
 _CLOSED = type('CLOSED', (object,), {})()
