@@ -31,7 +31,7 @@ from seecr.test.portnumbergenerator import PortNumberGenerator
 from contextlib import contextmanager
 from operator import xor
 from socket import socket, AF_INET, SOCK_STREAM
-from time import time
+from time import time, sleep
 
 from os.path import join, dirname, abspath
 from io import StringIO
@@ -61,7 +61,7 @@ class WeightlessTestCase(TestCase):
         fd, self.tempfile = mkstemp()
         os.close(fd)
         self.reactor = Reactor()
-        self.port = PortNumberGenerator.next()
+        self.port = self.newPortNumber()
 
     def tearDown(self):
         t0 = time()
@@ -80,6 +80,9 @@ class WeightlessTestCase(TestCase):
         rmtree(self.tempdir)
         os.remove(self.tempfile)
         TestCase.tearDown(self)
+
+    def newPortNumber(self):
+        return PortNumberGenerator.next()
 
     def select(self, aString, index):
         while index < len(aString):
@@ -168,10 +171,19 @@ class WeightlessTestCase(TestCase):
             sys.stdout = oldstdout
 
     @contextmanager
-    def referenceHttpServer(self, port, request, ssl=False, streamingData=None):
+    def referenceHttpServer(self, port, request, ssl=False, streamingData=None, getResponse=b"GET RESPONSE", postResponse=b'POST RESPONSE', rawResponse=None, rawPostResponse=None, stallTime=0, stallAfterHeaders=0):
         def server(httpd):
             httpd.serve_forever()
         class Handler(BaseHTTPRequestHandler):
+            def handle_one_request(this):
+                if stallTime > 0:
+                    sleep(stallTime*10)
+                if rawResponse is None:
+                    return BaseHTTPRequestHandler.handle_one_request(this)
+                request.append(this.rfile.readline(65537))
+                this.wfile.write(rawResponse)
+                this.wfile.flush()
+
             def log_message(*args, **kwargs):
                 pass
 
@@ -182,8 +194,10 @@ class WeightlessTestCase(TestCase):
                     'headers': self.headers})
                 self.send_response(200, "OK")
                 self.end_headers()
+                if stallAfterHeaders > 0:
+                    sleep(stallAfterHeaders)
                 if not streamingData:
-                    self.wfile.write('GET RESPONSE'.encode())
+                    self.wfile.write(getResponse)
                     self.wfile.flush()
                     return
 
@@ -195,23 +209,24 @@ class WeightlessTestCase(TestCase):
                         pass
 
             def do_POST(self, *args, **kwargs):
+                contentLength = self.headers.get("Content-Length", None)
                 request.append({
                     'command': self.command,
                     'path': self.path,
                     'headers': self.headers,
-                    'body': self.rfile.read(int(self.headers["Content-Length"]))})
+                    'body': self.rfile.read() if contentLength is None else self.rfile.read(int(contentLength))
+                })
                 self.send_response(200, "OK")
                 self.end_headers()
-                self.wfile.write('POST RESPONSE'.encode())
+                print("postResponse", postResponse)
+                self.wfile.write(postResponse)
                 self.wfile.flush()
 
         if ssl:
             httpd = MySSLTCPServer(("", port), Handler)
         else:
             httpd = TCPServer(("", port), Handler)
-        thread=Thread(None, lambda: server(httpd))
-        thread.daemon = True
-        thread.start()
+        Thread(target=httpd.serve_forever, name="HTTP Server", daemon=True).start()
         yield httpd
 
     @contextmanager

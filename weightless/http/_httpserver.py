@@ -41,16 +41,15 @@ from zlib import Z_DEFAULT_COMPRESSION, DEFLATED, MAX_WBITS, DEF_MEM_LEVEL, Z_DE
 from sys import getdefaultencoding, exc_info
 import sys
 
-
 RECVSIZE = 4096
-CRLF = '\r\n'
+CRLF = b'\r\n'
 CRLF_LEN = 2
 
 
 class HttpServer(object):
     """Factory that creates a HTTP server listening on port, calling generatorFactory for each new connection.  When a client does not send a valid HTTP request, it is disconnected after timeout seconds. The generatorFactory is called with the HTTP Status and Headers as arguments.  It is expected to return a generator that produces the response -- including the Status line and Headers -- to be send to the client."""
 
-    def __init__(self, reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, compressResponse=False, bindAddress=None):
+    def __init__(self, reactor, port, generatorFactory, timeout=1, recvSize=RECVSIZE, prio=None, sok=None, maxConnections=None, errorHandler=None, compressResponse=False, bindAddress=None, socketWrapper=None):
         self._reactor = reactor
         self._port = port
         self._bindAddress = bindAddress
@@ -62,6 +61,7 @@ class HttpServer(object):
         self._maxConnections = maxConnections
         self._errorHandler = errorHandler
         self._compressResponse = compressResponse
+        self._socketWrapper = socketWrapper 
 
     def listen(self):
         self._acceptor = Acceptor(
@@ -69,7 +69,7 @@ class HttpServer(object):
             port=self._port,
             sinkFactory=lambda sok: HttpHandler(
                 reactor=self._reactor,
-                sok=sok,
+                sok=sok if self._socketWrapper is None else self._socketWrapper(sok),
                 generatorFactory=self._generatorFactory,
                 timeout=self._timeout,
                 recvSize=self._recvSize,
@@ -98,23 +98,23 @@ def defaultErrorHandler(**kwargs):
     yield 'HTTP/1.0 503 Service Unavailable\r\n\r\n<html><head></head><body><h1>Service Unavailable</h1></body></html>'
 
 def parseContentEncoding(headerValue):
-    return [x.strip().lower() for x in headerValue.split(',')]
+    return [x.strip().lower() for x in headerValue.split(b',')]
 
 def parseAcceptEncoding(headerValue):
     result = []
-    for encodingMaybeQValue in (v.strip() for v in headerValue.split(',') if v):
-        _splitted = encodingMaybeQValue.split(';')
+    for encodingMaybeQValue in (v.strip() for v in headerValue.split(b',') if v):
+        _splitted = encodingMaybeQValue.split(b';')
         encoding = _splitted[0]
         if len(_splitted) == 1:
             qvalue = 1.0
         else:
             for acceptParam in _splitted[1:]:
-                pName, pValue = acceptParam.split('=', 1)
-                if pName == 'q':
+                pName, pValue = acceptParam.split(b'=', 1)
+                if pName == b'q':
                     qvalue = float(pValue)
                     break
                 else:
-                    encoding += ';' + acceptParam  # media-range
+                    encoding += b';' + acceptParam  # media-range
 
         if qvalue > 0.0001:
             result.append((encoding, qvalue))
@@ -124,13 +124,12 @@ def parseAcceptEncoding(headerValue):
 
 
 _removeHeaderReCache = {}
-CONTENT_LENGTH_RE = re.compile(r'\r\nContent-Length:.*?\r\n', flags=re.I)
+#CONTENT_LENGTH_RE = re.compile(r'\r\nContent-Length:.*?\r\n', flags=re.I)
 def updateResponseHeaders(headers, match, addHeaders=None, removeHeaders=None, requireAbsent=None):
     requireAbsent = set(requireAbsent or [])
     addHeaders = addHeaders or {}
     removeHeaders = removeHeaders or []
     headersDict = parseHeaders(match.groupdict()['_headers'])
-
     matchStartHeaders = match.start('_headers')
     matchEnd = match.end()
     _statusLine = headers[:matchStartHeaders - CRLF_LEN]
@@ -139,19 +138,17 @@ def updateResponseHeaders(headers, match, addHeaders=None, removeHeaders=None, r
 
     notAbsents = requireAbsent.intersection(set(headersDict.keys()))
     if notAbsents:
-        raise ValueError('Response headers contained disallowed items: %s' % ', '.join(notAbsents))
+        raise ValueError('Response headers contained disallowed items: {}'.format(', '.join(each.decode() for each in notAbsents)))
 
     for header in removeHeaders:
         headerRe = _removeHeaderReCache.get(header, None)
         if headerRe is None:
-
-            headerRe = re.compile(r'\r\n%s:.*?\r\n' % re.escape(header), flags=re.I)
+            headerRe = re.compile(b'\r\n' + re.escape(header) + b':.*?\r\n', flags=re.I)
             _removeHeaderReCache[header] = headerRe
         _headers = headerRe.sub(CRLF, _headers, count=1)
 
     for header, value in list(addHeaders.items()):
-        _headers += '%s: %s\r\n' % (header, value)
-
+        _headers += header+b": "+value + CRLF
     return _statusLine + _headers + CRLF, _body
 
 
@@ -185,19 +182,19 @@ class GzipDeCompress(object):
 
 # (De)compression-objects must support: compress / decompress and argumentless flush
 SUPPORTED_COMPRESSION_CONTENT_ENCODINGS = {
-    'deflate': {
+    b'deflate': {
         'encode': deflateCompress,
         'decode': deflateDeCompress,
      },
-    'x-deflate': {
+    b'x-deflate': {
         'encode': deflateCompress,
         'decode': deflateDeCompress,
      },
-    'gzip': {
+    b'gzip': {
         'encode': GzipCompress,
         'decode': GzipDeCompress,
     },
-    'x-gzip': {
+    b'x-gzip': {
         'encode': GzipCompress,
         'decode': GzipDeCompress,
     },
@@ -248,21 +245,21 @@ class HttpHandler(object):
         self.request['Headers'] = parseHeaders(self.request['_headers'])
         matchEnd = match.end()
         self._dataBuffer = self._dataBuffer[matchEnd:]
-        if 'Content-Type' in self.request['Headers']:
-            cType, pDict = parseHeaderFieldvalue(self.request['Headers']['Content-Type'])
+        if b'Content-Type' in self.request['Headers']:
+            cType, pDict = parseHeaderFieldvalue(self.request['Headers'][b'Content-Type'])
             if cType.startswith('multipart/form-data'):
                 self._tempfile = TemporaryFile('w+b')
                 #self._tempfile = open('/tmp/mimetest', 'w+b')
-                self._tempfile.write('Content-Type: %s\r\n\r\n' % self.request['Headers']['Content-Type'])
+                self._tempfile.write('Content-Type: %s\r\n\r\n' % self.request['Headers'][b'Content-Type'])
                 self.setCallDealer(lambda: self._readMultiForm(pDict['boundary']))
                 return
-        if 'Expect' in self.request['Headers']:
-            self._sok.send('HTTP/1.1 100 Continue\r\n\r\n')
+        if b'Expect' in self.request['Headers']:
+            self._sok.send(b'HTTP/1.1 100 Continue\r\n\r\n')
 
         if self._reactor.getOpenConnections() > self._maxConnections:
             self.request['ResponseCode'] = 503
             return self._finalize(self._errorHandler)
-        if self.request['Method'] in ['POST', 'PUT']:
+        if self.request['Method'] in [b'POST', b'PUT']:
             self.setCallDealer(self._readBody)
         else:
             self.finalize()
@@ -311,8 +308,8 @@ class HttpHandler(object):
 
     def _readBody(self):
         # Determine Content-Encoding in request, if any.
-        if self._decodeRequestBody is None and 'Content-Encoding' in self.request['Headers']:
-            contentEncoding = parseContentEncoding(self.request['Headers']['Content-Encoding'])
+        if self._decodeRequestBody is None and b'Content-Encoding' in self.request['Headers']:
+            contentEncoding = parseContentEncoding(self.request['Headers'][b'Content-Encoding'])
             if len(contentEncoding) != 1 or contentEncoding[0] not in SUPPORTED_COMPRESSION_CONTENT_ENCODINGS:
                 self._badRequest()
                 return
@@ -321,14 +318,14 @@ class HttpHandler(object):
             self._decodeRequestBody = SUPPORTED_COMPRESSION_CONTENT_ENCODINGS[contentEncoding]['decode']()
 
         # Chunked - means HTTP/1.1
-        if 'Transfer-Encoding' in self.request['Headers'] and self.request['Headers']['Transfer-Encoding'] == 'chunked':
+        if b'Transfer-Encoding' in self.request['Headers'] and self.request['Headers'][b'Transfer-Encoding'] == b'chunked':
             return self.setCallDealer(self._readChunk)
 
         # Not chunked
-        if 'Content-Length' not in self.request['Headers']:
+        if b'Content-Length' not in self.request['Headers']:
             return self.finalize()
 
-        contentLength = int(self.request['Headers']['Content-Length'])
+        contentLength = int(self.request['Headers'][b'Content-Length'])
 
         if len(self._dataBuffer) < contentLength:
             return
@@ -365,9 +362,9 @@ class HttpHandler(object):
         self.setCallDealer(self._readChunk)
 
     def _determineContentEncoding(self):
-        if 'Accept-Encoding' not in self.request['Headers']:
+        if b'Accept-Encoding' not in self.request['Headers']:
             return None
-        acceptEncodings = parseAcceptEncoding(self.request['Headers']['Accept-Encoding'])
+        acceptEncodings = parseAcceptEncoding(self.request['Headers'][b'Accept-Encoding'])
         for encoding in acceptEncodings:
             if encoding in SUPPORTED_COMPRESSION_CONTENT_ENCODINGS:
                 return encoding
@@ -375,7 +372,6 @@ class HttpHandler(object):
 
     def _finalize(self, finalizeMethod):
         del self.request['_headers']
-
         encoding = None
         if self._compressResponse == True:
             encoding = self._determineContentEncoding()
@@ -391,12 +387,14 @@ class HttpHandler(object):
         self._finalize(self._generatorFactory)
 
     def _badRequest(self):
-        self._sok.send('HTTP/1.0 400 Bad Request\r\n\r\n')
+        self._sok.send(b'HTTP/1.0 400 Bad Request\r\n\r\n')
         self._reactor.removeReader(self._sok)
         self._sok.shutdown(SHUT_RDWR)
         self._sok.close()
 
     def _send(self, data):
+        if type(data) != bytes:
+            data = data.encode()
         try:
             sent = self._sok.send(data, MSG_DONTWAIT)
             if sent < len(data):
@@ -413,7 +411,6 @@ class HttpHandler(object):
             except StopIteration:
                 pass
             self._closeConnection()
-            print("HIER")
             raise original_exc[0](original_exc[1]).with_traceback(original_exc[2])
 
     @identify
@@ -422,8 +419,9 @@ class HttpHandler(object):
         this = yield
         endHeader = False
         responseStarted = False
-        headers = ''
+        headers = b''
         encodeResponseBody = SUPPORTED_COMPRESSION_CONTENT_ENCODINGS[encoding]['encode']() if encoding is not None else None
+
         data = None
 
         def _no_response_500(msg):
@@ -488,9 +486,9 @@ class HttpHandler(object):
                         try:
                             _statusLineAndHeaders, _bodyStart = updateResponseHeaders(
                                     headers, match,
-                                    addHeaders={'Content-Encoding': encoding},
-                                    removeHeaders=['Content-Length'],
-                                    requireAbsent=['Content-Encoding'])
+                                    addHeaders={b'Content-Encoding': encoding},
+                                    removeHeaders=[b'Content-Length'],
+                                    requireAbsent=[b'Content-Encoding'])
                         except ValueError:
                             # Don't interfere with an existing content-encoding
                             encodeResponseBody = None
@@ -501,7 +499,6 @@ class HttpHandler(object):
                         continue
                 elif not self._rest:
                     data = encodeResponseBody.compress(data)
-
             if data:
                 responseStarted = True
                 self._send(data)

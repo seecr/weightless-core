@@ -202,7 +202,6 @@ class Reactor(object):
         self._callbacks(fdEvents, self._fds, READ_INTENT)
         self._callbacks(fdEvents, self._fds, WRITE_INTENT)
         self._processCallbacks(self._processes)
-
         return self
 
     def getOpenConnections(self):
@@ -229,7 +228,6 @@ class Reactor(object):
                 raise ValueError('fd already registered')
             if fd in self._suspended:
                 raise ValueError('Socket is suspended')
-
             eventmask = EPOLLIN if intent is READ_INTENT else EPOLLOUT  # Change iff >2 intents exist.
             self._epollRegister(fd=fd, eventmask=eventmask)
         except _HandleEBADFError:
@@ -375,10 +373,10 @@ class Reactor(object):
     def _writeProcessPipe(self):
         while True:
             try:
-                write(self._processWritePipe, 'x')
+                write(self._processWritePipe, b'x')
                 break
-            except (IOError, OSError) as xxx_todo_changeme1:
-                (errno, description) = xxx_todo_changeme1.args
+            except (IOError, OSError) as e:
+                (errno, description) = e.args
                 if errno == EINTR:
                     _printException()
                 else:

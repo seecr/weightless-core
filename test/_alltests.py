@@ -59,8 +59,8 @@ from core.utilstest import UtilsTest
 
 from _http.acceptortest import AcceptorTest
 from _http.asyncreadertest import AsyncReaderTest
-#from _http.httpreadertest import HttpReaderTest
-#from _http.httpservertest import HttpServerTest
+from _http.httpreadertest import HttpReaderTest
+from _http.httpservertest import HttpServerTest
 #from _http.httpspectest import HttpSpecTest
 #from _http.httprequest1_1test import HttpRequest1_1Test
 #from _http.socketpooltest import SocketPoolTest
