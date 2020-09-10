@@ -31,7 +31,7 @@ from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_RDWR
 from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
 from sys import exc_info, getdefaultencoding
 
-from weightless.core import compose, identify, Observable, autostart, Yield
+from weightless.core import compose, identify, Observable, autostart, Yield, value_with_pushback
 from weightless.io import Suspend, TimeoutException
 from weightless.http import REGEXP, HTTP, FORMAT, parseHeaders
 
@@ -43,7 +43,7 @@ class HttpRequest1_1(Observable):
     Uses minimal HTTP/1.1 implementation for Persistent Connections.
     """
 
-    def httprequest1_1(self, host, port, request, body=None, headers=None, secure=False, prio=None, method='GET', timeout=None, bodyMaxSize=None):
+    def httprequest1_1(self, host, port, request, body=None, headers=None, secure=False, prio=None, method=b'GET', timeout=None, bodyMaxSize=None):
         g = _do(method=method, host=host, port=port, request=request, headers=headers, body=body, bodyMaxSize=bodyMaxSize, secure=secure, prio=prio, observable=self)
         kw = {}
         if timeout is not None:
@@ -58,7 +58,7 @@ class HttpRequest1_1(Observable):
         s = Suspend(doNext=g.send, **kw)
         yield s
         result = s.getResult()
-        raise StopIteration(result)
+        return result
 
 
 class HttpRequestAdapter(Observable):
@@ -85,7 +85,7 @@ class HttpRequestAdapter(Observable):
                 for h, v in
                 sorted(statusAndHeaders['Headers'].items())
             )
-        raise StopIteration(_statusAndHeaders + CRLF + body)
+        return _statusAndHeaders + CRLF + body
 
 
 @identify
@@ -131,8 +131,8 @@ def _do(observable, method, host, port, request, body=None, headers=None, bodyMa
                             #   - Having Content-Length or Transfer-Encoding specified on request, detemines wether a body exists;
                             #     see: https://tools.ietf.org/html/rfc7230#section-3.3 (paragraphs 2 & 3).
                             #   - Cannot handle Content-Length or Transfer-Encoding set in headers!
-                            headers.update({'Content-Length': len(data)})
-                        yield _sendHttpHeaders(sok, method, request, headers, host)
+                            headers.update({b'Content-Length': len(data)})
+                        yield _sendHttpHeaders(sok, method, request.encode(), headers, host)
                         if body:
                             yield _asyncSend(sok, data)
                     finally:
@@ -218,7 +218,7 @@ def _createSocket(host, port, secure, this, suspend, prio):
     if secure:
         sok = yield _sslHandshake(sok, this, suspend, prio)
     sok = SocketWrapper(sok)
-    raise StopIteration(sok)
+    return sok
 
 def _shutAndCloseOnce(sok):
     state = []
@@ -241,14 +241,14 @@ def _shutAndCloseOnce(sok):
 
 def _sendHttpHeaders(sok, method, request, headers, host):
     data = _requestLine(method, request)
-    if 'host' not in [k.lower() for k in list(headers.keys())]:
+    if b'host' not in [k.lower() for k in list(headers.keys())]:
         headers['Host'] = host
-    data += ''.join('%s: %s\r\n' % i for i in list(headers.items()))
-    data += '\r\n'
+    data += b''.join(k.encode()+b': '+v.encode()+b'\r\n' for (k,v) in list(headers.items()))
+    data += b'\r\n'
     yield _asyncSend(sok, data)
 
 def _asyncSend(sok, data):
-    while data != "":
+    while data != b"":
         size = sok.send(data)
         data = data[size:]
         yield Yield
@@ -257,11 +257,11 @@ def _readHeaderAndBody(sok, method, requestHeaders, bodyMaxSize):
     statusAndHeaders, rest = yield _readHeader(sok)
     readStrategy, doClose = _determineBodyReadStrategy(statusAndHeaders=statusAndHeaders, method=method, requestHeaders=requestHeaders, bodyMaxSize=bodyMaxSize)
     body = yield readStrategy(sok, rest)
-    raise StopIteration((statusAndHeaders, body, doClose))
+    return (statusAndHeaders, body, doClose)
 
-def _readHeader(sok, rest=''):
+def _readHeader(sok, rest=b''):
     responses = rest
-    rest = ''
+    rest = b''
     while True:
         response = yield _asyncRead(sok)
         if response is _CLOSED:
@@ -286,7 +286,7 @@ def _readHeader(sok, rest=''):
         # 100 Continue response, eaten it - and then read the real response.
         statusAndHeaders, rest = yield _readHeader(sok, rest=rest)
 
-    raise StopIteration((statusAndHeaders, rest))
+    return (statusAndHeaders, rest)
 
 def _determineBodyReadStrategy(statusAndHeaders, method, requestHeaders, bodyMaxSize=None):
     doClose = False
@@ -325,21 +325,21 @@ def _bodyDisallowed(method, statusCode):
     #   - 1XX:
     #       * 100 (continue) already handled.
     #       * 101 (switching protocols) not supported - just don't send the "Upgrade" request header.
-    if statusCode.startswith('1'):
+    if statusCode[0] == ord('1'):
         raise ValueError('1XX status code recieved.')
     return method == 'HEAD' or statusCode in ['204', '304']
 
 def _readAssertNoBody(sok, rest):
     if rest:
         raise ValueError('Body not empty.')
-    raise StopIteration('')
+    return b''
     yield
 
 def _bodyMaxSize(fn):
     def _setMaxSize(bodyMaxSize):
         def _maxSized(*a, **kw):
             g = compose(fn(*a, **kw))
-            responses = ''
+            responses = b''
             try:
                 while True:
                     v = next(g)
@@ -351,9 +351,9 @@ def _bodyMaxSize(fn):
 
                     if (bodyMaxSize is not None) and len(responses) >= bodyMaxSize:
                         g.close()
-                        raise StopIteration(responses[:bodyMaxSize])
+                        return responses[:bodyMaxSize]
             except StopIteration:
-                raise StopIteration(responses if (bodyMaxSize is None) else responses[:bodyMaxSize])
+                return responses if (bodyMaxSize is None) else responses[:bodyMaxSize]
 
         return _maxSized
 
@@ -438,12 +438,14 @@ def _sslHandshake(sok, this, suspend, prio):
                 raise
     if count == 254:
         raise ValueError("SSL handshake failed.")
-    raise StopIteration(sok)
+    return sok
 
 def _requestLine(method, request):
-    if request == '':
-        request = '/'
-    return "%s %s HTTP/1.1\r\n" % (method, request)
+    assert type(method) is bytes
+    assert type(request) is bytes
+    if request == b'':
+        request = b'/'
+    return b"%b %b HTTP/1.1\r\n" % (method, request)
 
 def _determineDoCloseFromConnection(headers):
     connectionHeaderValue = headers.get('Connection')
@@ -488,7 +490,7 @@ def _trailers():
     trailersStr = match.groupdict()['_trailers']  # Unparsed trailers or None
     end = match.end()
     rest = data[end:]
-    raise StopIteration((trailersStr, rest))
+    return (trailersStr, rest)
 
 def _oneChunk():
     data = ''
@@ -504,7 +506,7 @@ def _oneChunk():
 
     if size == 0:
         pushback = (data,) if data else ()
-        raise StopIteration(None, *pushback)
+        return value_with_pushback(None, *pushback)
 
     while (len(data) - _CRLF_LEN) < size:
         _in = yield
@@ -513,7 +515,7 @@ def _oneChunk():
     chunk = data[:size]
     data = data[(size + _CRLF_LEN):]
     pushback = (data,) if data else ()
-    raise StopIteration(chunk, *pushback)
+    return value_with_pushback(chunk, *pushback)
 
 def _asyncRead(sok):
     while True:
@@ -527,9 +529,9 @@ def _asyncRead(sok):
             sok.setsockopt(SOL_TCP, TCP_QUICKACK, 1)
             continue
 
-        if response == '':
-            raise StopIteration(_CLOSED)
-        raise StopIteration(response)
+        if response == b'':
+            return _CLOSED
+        return response
 
 class SocketWrapper(object):
     def __init__(self, sok):

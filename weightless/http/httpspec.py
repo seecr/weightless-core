@@ -39,12 +39,12 @@ def parseHeaders(headerString):
     return headers
 
 def unquote(s):
-    if s and len(s) > 1 and s[0] == s[-1] == '"':
+    if s and len(s) > 1 and s[0] == s[-1] == ord('"'):
         return s[1:-1]
     return s
 
 def parseHeaderFieldvalue(fieldvalue):
-    parts = fieldvalue.split(';', 1)
+    parts = fieldvalue.split(b';', 1)
     cType = parts[0]
     pDict = {}
     if len(parts) != 1:

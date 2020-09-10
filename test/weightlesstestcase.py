@@ -171,7 +171,7 @@ class WeightlessTestCase(TestCase):
             sys.stdout = oldstdout
 
     @contextmanager
-    def referenceHttpServer(self, port, request, ssl=False, streamingData=None, getResponse=b"GET RESPONSE", postResponse=b'POST RESPONSE', rawResponse=None, rawPostResponse=None, stallTime=0, stallAfterHeaders=0):
+    def referenceHttpServer(self, port, request, ssl=False, streamingData=None, getResponse=b"GET RESPONSE", postResponse=b'POST RESPONSE', rawResponse=None, stallTime=0, stallAfterHeaders=0):
         def server(httpd):
             httpd.serve_forever()
         class Handler(BaseHTTPRequestHandler):
@@ -218,14 +218,11 @@ class WeightlessTestCase(TestCase):
                 })
                 self.send_response(200, "OK")
                 self.end_headers()
-                print("postResponse", postResponse)
                 self.wfile.write(postResponse)
                 self.wfile.flush()
 
-        if ssl:
-            httpd = MySSLTCPServer(("", port), Handler)
-        else:
-            httpd = TCPServer(("", port), Handler)
+        httpd = MySSLTCPServer(("", port), Handler) if ssl else TCPServer(("", port), Handler)
+
         Thread(target=httpd.serve_forever, name="HTTP Server", daemon=True).start()
         yield httpd
 

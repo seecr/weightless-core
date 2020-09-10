@@ -33,7 +33,7 @@ from resource import getrlimit, RLIMIT_NOFILE
 from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
 from tempfile import TemporaryFile
 from traceback import print_exception
-from email import message_from_file as parse_mime_message
+from email import message_from_binary_file as parse_mime_message
 from zlib import compressobj as deflateCompress
 from zlib import decompressobj as deflateDeCompress
 from zlib import Z_DEFAULT_COMPRESSION, DEFLATED, MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY
@@ -213,7 +213,7 @@ class HttpHandler(object):
         self.request = None
         self._dealWithCall = self._readHeaders
         self._prio = prio
-        self._window = ''
+        self._window = b''
         self._maxConnections = maxConnections if maxConnections else maxFileDescriptors()
         self._errorHandler = errorHandler if errorHandler else defaultErrorHandler
         self._defaultEncoding = getdefaultencoding()
@@ -241,17 +241,17 @@ class HttpHandler(object):
         if not match:
             return # for more data
         self.request = match.groupdict()
-        self.request['Body'] = ''
+        self.request['Body'] = b''
         self.request['Headers'] = parseHeaders(self.request['_headers'])
         matchEnd = match.end()
         self._dataBuffer = self._dataBuffer[matchEnd:]
         if b'Content-Type' in self.request['Headers']:
             cType, pDict = parseHeaderFieldvalue(self.request['Headers'][b'Content-Type'])
-            if cType.startswith('multipart/form-data'):
+            if cType.startswith(b'multipart/form-data'):
                 self._tempfile = TemporaryFile('w+b')
                 #self._tempfile = open('/tmp/mimetest', 'w+b')
-                self._tempfile.write('Content-Type: %s\r\n\r\n' % self.request['Headers'][b'Content-Type'])
-                self.setCallDealer(lambda: self._readMultiForm(pDict['boundary']))
+                self._tempfile.write(b'Content-Type: %s\r\n\r\n' % self.request['Headers'][b'Content-Type'])
+                self.setCallDealer(lambda: self._readMultiForm(pDict[b'boundary']))
                 return
         if b'Expect' in self.request['Headers']:
             self._sok.send(b'HTTP/1.1 100 Continue\r\n\r\n')
@@ -271,20 +271,20 @@ class HttpHandler(object):
         self._window += self._dataBuffer
         self._window = self._window[-2*self._recvSize:]
 
-        if self._window.endswith("\r\n--%s--\r\n" % boundary):
+        if self._window.endswith(b"\r\n--%s--\r\n" % boundary):
             self._tempfile.seek(0)
 
             form = {}
             for msg in parse_mime_message(self._tempfile).get_payload():
-                cType, pDict = parseHeaderFieldvalue(msg['Content-Disposition'])
+                cType, pDict = parseHeaderFieldvalue(msg['Content-Disposition'].encode())
                 contentType = msg.get_content_type()
-                fieldName = pDict['name']
+                fieldName = pDict[b'name']
                 if not fieldName in form:
                     form[fieldName] = []
 
-                if 'filename' in pDict:
-                    filename = self._processFilename(pDict['filename'])
-                    form[fieldName].append((filename, contentType, msg.get_payload()))
+                if b'filename' in pDict:
+                    filename = self._processFilename(pDict[b'filename'])
+                    form[fieldName].append((filename, contentType.encode(), msg.get_payload()))
                 else:
                     form[fieldName].append(msg.get_payload())
 
@@ -293,10 +293,10 @@ class HttpHandler(object):
             self.finalize()
             return
 
-        self._dataBuffer= ''
+        self._dataBuffer= b''
 
     def _processFilename(self, filename):
-        parts = filename.split('\\')
+        parts = filename.split(b'\\')
         if len(parts) == 1:
             return filename
         return parts[-1]
@@ -326,10 +326,8 @@ class HttpHandler(object):
             return self.finalize()
 
         contentLength = int(self.request['Headers'][b'Content-Length'])
-
         if len(self._dataBuffer) < contentLength:
             return
-
         if self._decodeRequestBody is not None:
             self.request['Body'] = self._decodeRequestBody.decompress(self._dataBuffer)
             self.request['Body'] += self._decodeRequestBody.flush()
@@ -403,7 +401,7 @@ class HttpHandler(object):
                 self._rest = None
         except Exception:
             original_exc = exc_info()
-            if data and type(data) is str:
+            if data and type(data) is bytes:
                 sys.stderr.write('Error while sending data "{0} ..."\n'.format(data[:120]))
                 sys.stderr.flush()
             try:

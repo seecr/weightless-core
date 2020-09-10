@@ -119,7 +119,8 @@ class HttpReader(object):
 
     def _createChunk(self, data):
         data = data.encode()
-        return hex(len(data))[len('0x'):].upper().encode() + HTTP.CRLF + data + HTTP.CRLF
+        length = hex(len(data))[len('0x'):].upper().encode()
+        return length + HTTP.CRLF + data + HTTP.CRLF
 
     def _sendChunk(self, data):
         self._sok.sendall(self._createChunk(data))

@@ -192,6 +192,8 @@ class Reactor(object):
             else:
                 raise
             return self
+        except Exception as e:
+            raise
         except KeyboardInterrupt:
             self.shutdown()  # For testing purposes; normally loop's finally does this.
             raise
@@ -245,7 +247,6 @@ class Reactor(object):
         except _HandleEBADFError:
             self._cleanFdsByFileObj(fileOrFd)
             return
-
         del self._fds[fd]
         self._epollUnregister(fd=fd)
 
@@ -293,7 +294,6 @@ class Reactor(object):
 
             if context.intent is not intent:
                 continue
-
             if context.prio <= self._prio:
                 self.currenthandle = fd
                 self.currentcontext = context

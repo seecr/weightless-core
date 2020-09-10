@@ -40,54 +40,7 @@ from weightless.http._httpreader import HttpReaderFacade, Connector, HandlerFaca
 import sys
 from io import StringIO
 
-def server(port, response, expectedrequest, delay=0, loop=50):
-    isListening = Event()
-    def serverProcess():
-        print("port", port)
-        serverSok = socket()
-        serverSok.bind(('0.0.0.0', port))
-        serverSok.listen(1)
-        isListening.set()
-        newSok, addr = serverSok.accept()
-        newSok.settimeout(1)
-        print(newSok)
-
-        try:
-            msg = b''
-            for i in range(loop):
-                if expectedrequest:
-                    try:
-                        msg += newSok.recv(4096)
-                        if msg == expectedrequest:
-                            break
-                        if len(msg) >= len(expectedrequest):
-                            print("Received:", repr(msg))
-                            print("expected:", repr(expectedrequest))
-                            raise ValueError("received something different than expected") #timeout
-                    except timeout:
-                        print("Timeout!")
-                        print("Received:", repr(msg))
-                        print("expected:", repr(expectedrequest))
-                        return
-            if response:
-                if hasattr(response, '__next__'):
-                    for r in response:
-                        newSok.send(r.encode())
-                else:
-                    newSok.send(response.encode())
-                sleep(delay)
-                newSok.close()
-            else:
-                sleep(0.5)
-        finally:
-            newSok.close()
-            serverSok.close()
-
-    thread = Thread(None, serverProcess)
-    thread.daemon = True
-    thread.start()
-    isListening.wait()
-    return thread
+from .testutils import server
 
 class HttpReaderTest(WeightlessTestCase):
 
@@ -233,10 +186,10 @@ class HttpReaderTest(WeightlessTestCase):
                 self.assertEqual(b"response", b"".join(sentData[-3:]))
 
     def testPost(self):
-        assert False, "This test needs fixed"
         requests = []
-        request = "POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nSOAPAction: blah\r\nUser-Agent: Weightless/v%s\r\n\r\n1\r\nA\r\n1\r\nB\r\n1\r\nC\r\n0\r\n\r\n" % WlVersion
-        with self.referenceHttpServer(self.port, requests, postResponse=b"response"):
+        with Reactor() as reactor:
+            request = "POST / HTTP/1.1\r\nHost: localhost\r\nSOAPAction: blah\r\nTransfer-Encoding: chunked\r\nUser-Agent: Weightless/v%s\r\n\r\n1\r\nA\r\n1\r\nB\r\n1\r\nC\r\n0\r\n\r\n" % WlVersion
+            serverThread = server(self.port, "HTTP/1.1 200 OK\r\n\r\nresponse", request.encode(), loop=9)
             sentData = []
             done = []
             def send(data):
@@ -244,7 +197,7 @@ class HttpReaderTest(WeightlessTestCase):
 
             def throw(exception):
                 if isinstance(exception, StopIteration):
-                    self.done = True
+                    done.append(exception)
 
             def bodyHandler():
                 yield "A"
@@ -252,25 +205,22 @@ class HttpReaderTest(WeightlessTestCase):
                 yield "C"
                 yield None
 
-            reader = HttpReaderFacade(self.reactor,
+            reader = HttpReaderFacade(reactor,
                 "http://localhost:%s" % self.port,
                 send,
                 errorHandler=throw,
-                timeout=5,
+                timeout=.5,
                 headers={'SOAPAction': 'blah'},
                 bodyHandler=bodyHandler)
 
-            self.reactor.addTimer(3.0, lambda: self.fail("Test Stuck"))
-            while done != [True]:
-                self.reactor.step()
-
-            self.assertEqual(['response'], sentData)
-            self.assertEqual('200', sentData[0]['StatusCode'])
-            expected = 'POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nSOAPAction: blah\r\nUser-Agent: Weightless/v%s\r\n\r\n' % WlVersion + '1\r\nA\r\n' + '1\r\nB\r\n' + '1\r\nC\r\n' + '0\r\n\r\n'
-            self.assertEqual(expected, "".join(request))
+            reactor.addTimer(3.0, lambda: self.fail("Test Stuck"))
+            while not done:
+                reactor.step()
+            self.assertEqual([b'response'], sentData[1:])
+            self.assertEqual(b'200', sentData[0]['StatusCode'])
 
     def testWriteChunks(self):
-        reader  = HttpReader(CallTrace("reactor"), CallTrace("socket"), HandlerFacade(None, None, None), '', '', '')
+        reader = HttpReader(CallTrace("reactor"), CallTrace("socket"), HandlerFacade(None, None, None), '', '', '')
         self.assertEqual(b'1\r\nA\r\n', reader._createChunk('A'))
         self.assertEqual(b'A\r\n' + 10*b'B' + b'\r\n', reader._createChunk(10*'B'))
 

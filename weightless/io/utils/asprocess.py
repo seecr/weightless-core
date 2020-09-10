@@ -44,8 +44,7 @@ def asProcess(g):
         try:
             reactor.loop()
         except StopIteration as e:
-            if e.args:
-                return e.args[0]
+            return e.value
 
     @identify
     def wrapper(generator, reactor):
@@ -63,6 +62,8 @@ def asProcess(g):
                     yield
                     _response.resumeProcess()
                 yield
+        except StopIteration as e:
+            return e.value
         finally:
             reactor.removeProcess(process=this.__next__)
 
