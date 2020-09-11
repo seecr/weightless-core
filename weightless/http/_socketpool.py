@@ -82,7 +82,7 @@ class SocketPool(Observable):
         try:
             s = socks.pop()[0]
             self._poolSize -= 1
-            raise StopIteration(s)
+            return s
         except IndexError:
             del self._pool[key]
             return
@@ -108,7 +108,7 @@ class SocketPool(Observable):
 
         if (self._limitTotalSize is not None) and self._poolSize >= self._limitTotalSize:
             while True:
-                host, port = choice(self._pool.keys())
+                host, port = choice(list(self._pool.keys()))
                 sock = yield self.getPooledSocket(host=host, port=port)
                 if sock:
                     _shutAndCloseIgnorant(sock)
@@ -122,13 +122,13 @@ class SocketPool(Observable):
             this = yield
             try:
                 while True:
-                    self._reactor.addTimer(seconds=self._unusedTimeout, callback=this.next)
+                    self._reactor.addTimer(seconds=self._unusedTimeout, callback=this.__next__)
                     yield  # Wait for timer
 
                     # Purge idle sockets
                     now = time()
                     unusedTimeout = self._unusedTimeout
-                    for (host, port), _list in self._pool.items():
+                    for (host, port), _list in list(self._pool.items()):
                         for t in _list[:]:
                             sock, putTime = t
                             if now > (putTime + unusedTimeout):

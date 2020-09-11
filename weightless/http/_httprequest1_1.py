@@ -43,7 +43,7 @@ class HttpRequest1_1(Observable):
     Uses minimal HTTP/1.1 implementation for Persistent Connections.
     """
 
-    def httprequest1_1(self, host, port, request, body=None, headers=None, secure=False, prio=None, method=b'GET', timeout=None, bodyMaxSize=None):
+    def httprequest1_1(self, host, port, request, body=None, headers=None, secure=False, prio=None, method='GET', timeout=None, bodyMaxSize=None):
         g = _do(method=method, host=host, port=port, request=request, headers=headers, body=body, bodyMaxSize=bodyMaxSize, secure=secure, prio=prio, observable=self)
         kw = {}
         if timeout is not None:
@@ -74,13 +74,12 @@ class HttpRequestAdapter(Observable):
             translated['secure'] = kwargs.pop('ssl')
 
         adapteeKwargs = dict(kwargs, **translated)
-
         statusAndHeaders, body = yield self.any.httprequest1_1(host=host, port=port, request=request, **adapteeKwargs)
         _statusAndHeaders = (FORMAT.StatusLine % {
-                'version': statusAndHeaders['HTTPVersion'],
-                'status': statusAndHeaders['StatusCode'],
-                'reason': statusAndHeaders['ReasonPhrase'],
-            }) + ''.join(
+                b'version': statusAndHeaders['HTTPVersion'],
+                b'status': statusAndHeaders['StatusCode'],
+                b'reason': statusAndHeaders['ReasonPhrase'],
+            }) + b''.join(
                 FORMAT.Header % (h, v)
                 for h, v in
                 sorted(statusAndHeaders['Headers'].items())
@@ -91,6 +90,8 @@ class HttpRequestAdapter(Observable):
 @identify
 @compose
 def _do(observable, method, host, port, request, body=None, headers=None, bodyMaxSize=None, secure=False, prio=None):
+    method = method if type(method) is bytes else method.encode()
+    request = request if type(request) is bytes else request.encode()
     _assertSupportedMethod(method)
     headers = headers or {}
     retryOnce = False
@@ -131,8 +132,8 @@ def _do(observable, method, host, port, request, body=None, headers=None, bodyMa
                             #   - Having Content-Length or Transfer-Encoding specified on request, detemines wether a body exists;
                             #     see: https://tools.ietf.org/html/rfc7230#section-3.3 (paragraphs 2 & 3).
                             #   - Cannot handle Content-Length or Transfer-Encoding set in headers!
-                            headers.update({b'Content-Length': len(data)})
-                        yield _sendHttpHeaders(sok, method, request.encode(), headers, host)
+                            headers.update({'Content-Length': len(data)})
+                        yield _sendHttpHeaders(sok, method, request, headers, host)
                         if body:
                             yield _asyncSend(sok, data)
                     finally:
@@ -187,7 +188,7 @@ def _do(observable, method, host, port, request, body=None, headers=None, bodyMa
 
 
 def _assertSupportedMethod(method):
-    if method == 'CONNECT':
+    if method == b'CONNECT':
         raise ValueError('CONNECT method unsupported.')
 
 def _createSocket(host, port, secure, this, suspend, prio):
@@ -241,9 +242,9 @@ def _shutAndCloseOnce(sok):
 
 def _sendHttpHeaders(sok, method, request, headers, host):
     data = _requestLine(method, request)
-    if b'host' not in [k.lower() for k in list(headers.keys())]:
+    if 'host' not in [k.lower() for k in list(headers.keys())]:
         headers['Host'] = host
-    data += b''.join(k.encode()+b': '+v.encode()+b'\r\n' for (k,v) in list(headers.items()))
+    data += b''.join(k.encode()+b': '+str(v).encode()+b'\r\n' for (k,v) in list(headers.items()))
     data += b'\r\n'
     yield _asyncSend(sok, data)
 
@@ -282,7 +283,7 @@ def _readHeader(sok, rest=b''):
     del statusAndHeaders['_headers']
     statusAndHeaders['Headers'] = headers
 
-    if statusAndHeaders['StatusCode'] == '100':
+    if statusAndHeaders['StatusCode'] == b'100':
         # 100 Continue response, eaten it - and then read the real response.
         statusAndHeaders, rest = yield _readHeader(sok, rest=rest)
 
@@ -293,14 +294,14 @@ def _determineBodyReadStrategy(statusAndHeaders, method, requestHeaders, bodyMax
     if _determineDoCloseFromConnection(requestHeaders) or _determineDoCloseFromConnection(statusAndHeaders['Headers']) or (bodyMaxSize is not None):
         doClose = True
     statusCode = statusAndHeaders['StatusCode']
-    contentLength = statusAndHeaders['Headers'].get('Content-Length')
+    contentLength = statusAndHeaders['Headers'].get(b'Content-Length')
     if contentLength:
         contentLength = int(contentLength.strip())
 
     transferEncoding = _parseTransferEncoding(statusAndHeaders['Headers'])
 
     ## HTTP/1.0
-    if statusAndHeaders['HTTPVersion'] != '1.1':
+    if statusAndHeaders['HTTPVersion'] != b'1.1':
         doClose = True
         if _bodyDisallowed(method, statusCode):
             return _readAssertNoBody, doClose
@@ -312,7 +313,7 @@ def _determineBodyReadStrategy(statusAndHeaders, method, requestHeaders, bodyMax
     if _bodyDisallowed(method, statusCode):
         return _readAssertNoBody, doClose
 
-    if transferEncoding and transferEncoding[-1:] == ['chunked']:
+    if transferEncoding and transferEncoding[-1:] == [b'chunked']:
         return _readChunkedDelimitedBody(bodyMaxSize), doClose
     elif contentLength is not None:
         return partial(_readContentLengthDelimitedBody(bodyMaxSize), contentLength=contentLength), doClose
@@ -327,7 +328,7 @@ def _bodyDisallowed(method, statusCode):
     #       * 101 (switching protocols) not supported - just don't send the "Upgrade" request header.
     if statusCode[0] == ord('1'):
         raise ValueError('1XX status code recieved.')
-    return method == 'HEAD' or statusCode in ['204', '304']
+    return method == b'HEAD' or statusCode in [b'204', b'304']
 
 def _readAssertNoBody(sok, rest):
     if rest:
@@ -342,7 +343,7 @@ def _bodyMaxSize(fn):
             responses = b''
             try:
                 while True:
-                    v = next(g)
+                    v = g.__next__()
                     if v is Yield or callable(v):
                         yield v
                         continue
@@ -457,10 +458,10 @@ def _determineDoCloseFromConnection(headers):
     return False
 
 def _parseTransferEncoding(responseHeaders):
-    transferEncoding = responseHeaders.get('Transfer-Encoding')
+    transferEncoding = responseHeaders.get(b'Transfer-Encoding')
     if transferEncoding:
         # transfer-extension's should be parsed differently (see: https://tools.ietf.org/html/rfc7230#section-4 ) - but not important here.
-        transferEncoding = [v.strip() for v in transferEncoding.lower().strip().split(',')]
+        transferEncoding = [v.strip() for v in transferEncoding.lower().strip().split(b',')]
         return transferEncoding
 
 @autostart
@@ -479,7 +480,7 @@ def _deChunk():
         raise ValueError('Data after last chunk')
 
 def _trailers():
-    data = ''
+    data = b''
     while True:
         _in = yield
         data += _in
@@ -493,7 +494,7 @@ def _trailers():
     return (trailersStr, rest)
 
 def _oneChunk():
-    data = ''
+    data = b''
     while True:
         _in = yield
         data += _in
@@ -528,7 +529,6 @@ def _asyncRead(sok):
                 raise
             sok.setsockopt(SOL_TCP, TCP_QUICKACK, 1)
             continue
-
         if response == b'':
             return _CLOSED
         return response
@@ -557,6 +557,6 @@ class SocketWrapper(object):
 _ALLOWED_OPTIONAL_ADAPTER_ARGUMENTS = set(['body', 'headers', 'method', 'prio', 'ssl', 'timeout', 'bodyMaxSize'])
 _noop = lambda *a, **kw: None
 _CRLF_LEN = len(CRLF)
-_CHUNK_RE = re.compile(r'([0-9a-fA-F]+)(?:;[^\r\n]+|)\r\n')  # Ignores chunk-extensions
+_CHUNK_RE = re.compile(r'([0-9a-fA-F]+)(?:;[^\r\n]+|)\r\n'.encode())  # Ignores chunk-extensions
 _TRAILERS_RE = re.compile(b"(?:(?P<_trailers>(?:" + HTTP.message_header + b')+)' + CRLF + b'|' + CRLF + b')')
 _CLOSED = type('CLOSED', (object,), {})()

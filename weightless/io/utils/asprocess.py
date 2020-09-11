@@ -54,7 +54,7 @@ def asProcess(g):
             yield
             g = compose(generator)
             while True:
-                _response = next(g)
+                _response = g.__next__()
                 if _response is Yield:
                     continue
                 if callable(_response):

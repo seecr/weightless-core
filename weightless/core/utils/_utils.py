@@ -92,7 +92,7 @@ def readAll():
         while True:
             data.append((yield))
     except StopIteration:
-        raise StopIteration(''.join(data))
+        return ''.join(data)
 
 def copyBytes(tosend, target):
     response, message, tail = None, None, None

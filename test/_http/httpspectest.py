@@ -29,25 +29,25 @@ from weightless.http import httpspec
 
 class HttpSpecTest(TestCase):
     def testParseHeader(self):
-        self.assertEquals(('aap', {}), httpspec.parseHeaderFieldvalue('aap'))
-        self.assertEquals(('aap', {'noot': 'mies'}), httpspec.parseHeaderFieldvalue('aap; noot=mies'))
-        self.assertEquals(('aap', {'noot': 'mies', 'vis': 'vuur'}), httpspec.parseHeaderFieldvalue('aap; noot=mies; vis=vuur'))
+        self.assertEqual((b'aap', {}), httpspec.parseHeaderFieldvalue(b'aap'))
+        self.assertEqual((b'aap', {b'noot': b'mies'}), httpspec.parseHeaderFieldvalue(b'aap; noot=mies'))
+        self.assertEqual((b'aap', {b'noot': b'mies', b'vis': b'vuur'}), httpspec.parseHeaderFieldvalue(b'aap; noot=mies; vis=vuur'))
 
     def testParseContentDispositionValues(self):
-        self.assertEquals(('attachment', {}), httpspec.parseHeaderFieldvalue('attachment'))
-        self.assertEquals(('attachment', {'filename': 'document.pdf'}),
-            httpspec.parseHeaderFieldvalue('attachment; filename=document.pdf'))
+        self.assertEqual((b'attachment', {}), httpspec.parseHeaderFieldvalue(b'attachment'))
+        self.assertEqual((b'attachment', {b'filename': b'document.pdf'}),
+            httpspec.parseHeaderFieldvalue(b'attachment; filename=document.pdf'))
 
-        self.assertEquals(('attachment', {'filename': 'with a ;.pdf'}),
-            httpspec.parseHeaderFieldvalue('attachment; filename="with a ;.pdf"'))
+        self.assertEqual((b'attachment', {b'filename': b'with a ;.pdf'}),
+            httpspec.parseHeaderFieldvalue(b'attachment; filename="with a ;.pdf"'))
 
-        self.assertEquals(('attachment', {'filename': 'document.pdf', 'filename*': 'another document.pdf'}),
-            httpspec.parseHeaderFieldvalue('attachment; filename=document.pdf; filename*="another document.pdf"'))
+        self.assertEqual((b'attachment', {b'filename': b'document.pdf', b'filename*': b'another document.pdf'}),
+            httpspec.parseHeaderFieldvalue(b'attachment; filename=document.pdf; filename*="another document.pdf"'))
 
-        self.assertEquals(('attachment', {'filename': r'with a \".pdf'}),
-            httpspec.parseHeaderFieldvalue(r'attachment; filename="with a \".pdf"'))
+        self.assertEqual((b'attachment', {b'filename': r'with a \".pdf'.encode()}),
+            httpspec.parseHeaderFieldvalue(r'attachment; filename="with a \".pdf"'.encode()))
 
     def testBoundary(self):
-        self.assertEqual(('multipart/form-data', {'boundary': '-=-=-=-=-=-=-=-=TestBoundary1234567890'}),
-                httpspec.parseHeaderFieldvalue('multipart/form-data; boundary="-=-=-=-=-=-=-=-=TestBoundary1234567890"'))
+        self.assertEqual((b'multipart/form-data', {b'boundary': b'-=-=-=-=-=-=-=-=TestBoundary1234567890'}),
+                httpspec.parseHeaderFieldvalue(b'multipart/form-data; boundary="-=-=-=-=-=-=-=-=TestBoundary1234567890"'))
 

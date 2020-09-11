@@ -184,16 +184,14 @@ class Reactor(object):
 
         try:
             fdEvents = self._epoll.poll(timeout=timeout)
-        except IOError as xxx_todo_changeme2:
-            (errno, description) = xxx_todo_changeme2.args
+        except IOError as e:
+            (errno, description) = e.args
             _printException()
             if errno == EINTR:
                 pass
             else:
                 raise
             return self
-        except Exception as e:
-            raise
         except KeyboardInterrupt:
             self.shutdown()  # For testing purposes; normally loop's finally does this.
             raise
@@ -204,6 +202,7 @@ class Reactor(object):
         self._callbacks(fdEvents, self._fds, READ_INTENT)
         self._callbacks(fdEvents, self._fds, WRITE_INTENT)
         self._processCallbacks(self._processes)
+
         return self
 
     def getOpenConnections(self):
@@ -230,6 +229,7 @@ class Reactor(object):
                 raise ValueError('fd already registered')
             if fd in self._suspended:
                 raise ValueError('Socket is suspended')
+
             eventmask = EPOLLIN if intent is READ_INTENT else EPOLLOUT  # Change iff >2 intents exist.
             self._epollRegister(fd=fd, eventmask=eventmask)
         except _HandleEBADFError:
@@ -247,8 +247,10 @@ class Reactor(object):
         except _HandleEBADFError:
             self._cleanFdsByFileObj(fileOrFd)
             return
-        del self._fds[fd]
-        self._epollUnregister(fd=fd)
+
+        if fd in self._fds:
+            del self._fds[fd]
+            self._epollUnregister(fd=fd)
 
     def _lastCallbacks(self):
         while self._badFdsLastCallback:
@@ -294,6 +296,7 @@ class Reactor(object):
 
             if context.intent is not intent:
                 continue
+
             if context.prio <= self._prio:
                 self.currenthandle = fd
                 self.currentcontext = context
@@ -325,8 +328,8 @@ class Reactor(object):
     def _epollRegister(self, fd, eventmask):
         try:
             self._epoll.register(fd=fd, eventmask=eventmask)
-        except IOError as xxx_todo_changeme3:
-            (errno, description) = xxx_todo_changeme3.args
+        except IOError as e:
+            (errno, description) = e.args
             _printException()
             if errno == EBADF:
                 raise _HandleEBADFError()
@@ -336,8 +339,8 @@ class Reactor(object):
         self._removeFdsInCurrentStep.add(fd)
         try:
             self._epoll.unregister(fd)
-        except IOError as xxx_todo_changeme4:
-            (errno, description) = xxx_todo_changeme4.args
+        except IOError as e:
+            (errno, description) = e.args
             _printException()
             if errno == ENOENT or errno == EBADF:  # Already gone (epoll's EBADF automagical cleanup); not reproducable in Python's epoll binding - but staying on the safe side.
                 pass
@@ -348,10 +351,11 @@ class Reactor(object):
         "Ignores the expected (ENOENT & EBADF) and unexpected exceptions from epoll_ctl / unregister"
         self._removeFdsInCurrentStep.add(fd)
         try:
-            self._epoll.unregister(fd)
-        except IOError as xxx_todo_changeme5:
+            if fd != -1:
+                self._epoll.unregister(fd)
+        except IOError as e:
             # If errno is either ENOENT or EBADF than the fd is already gone (epoll's EBADF automagical cleanup); not reproducable in Python's epoll binding - but staying on the safe side.
-            (errno, description) = xxx_todo_changeme5.args
+            (errno, description) = e.args
             # If errno is either ENOENT or EBADF than the fd is already gone (epoll's EBADF automagical cleanup); not reproducable in Python's epoll binding - but staying on the safe side.
             if errno == ENOENT or errno == EBADF:
                 pass
@@ -363,8 +367,8 @@ class Reactor(object):
             try:
                 read(self._processReadPipe, 1)
                 break
-            except (IOError, OSError) as xxx_todo_changeme:
-                (errno, description) = xxx_todo_changeme.args
+            except (IOError, OSError) as e:
+                (errno, description) = e.args
                 if errno == EINTR:
                     _printException()
                 else:
@@ -454,9 +458,13 @@ class _ProcessContext(object):
 def _fdNormalize(fd):
     if hasattr(fd, 'fileno'):
         try:
-            return fd.fileno()
-        except (IOError, OSError, socket_error) as xxx_todo_changeme6:
-            (errno, description) = xxx_todo_changeme6.args
+            fileno = fd.fileno()
+            if fileno == -1:
+                print("Bad file descriptor {}".format(fd), file=sys.stderr, flush=True)
+                raise _HandleEBADFError()
+            return fileno
+        except (IOError, OSError, socket_error) as e:
+            (errno, description) = e.args
             _printException()
             if errno == EBADF:
                 raise _HandleEBADFError()
@@ -468,7 +476,8 @@ def _fdOrNone(fd):
     "Only use for info/debugging - supresses errors without logging."
     if hasattr(fd, 'fileno'):
         try:
-            return fd.fileno()
+            fileno = fd.fileno()
+            return None if fileno == -1 else fileno
         except (IOError, OSError, socket_error):
             return None
     return fd
@@ -476,14 +485,11 @@ def _fdOrNone(fd):
 def _closeAndIgnoreFdErrors(obj):
     try:
         obj.close()
-    except (IOError, OSError, socket_error) as xxx_todo_changeme7:
+    except (IOError, OSError, socket_error) as e:
         # EBADF, EIO or EINTR -- non of which are really relevant in our shutdown.
         # For why re-trying after EINTR is not a good idea for close(), see:
         #   http://lwn.net/Articles/576478/
-        (errno, description) = xxx_todo_changeme7.args
-        # EBADF, EIO or EINTR -- non of which are really relevant in our shutdown.
-        # For why re-trying after EINTR is not a good idea for close(), see:
-        #   http://lwn.net/Articles/576478/
+        (errno, description) = e.args
         _printException()
 
 def _shutdownMessage(message, thing, context):

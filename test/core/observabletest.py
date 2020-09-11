@@ -182,7 +182,7 @@ class ObservableTest(TestCase):
                 yield
 
         root = be(
-        (Observable(), 
+        (Observable(),
             (AnObject(),),
             (AnObservable(),),
         ))
@@ -958,7 +958,7 @@ GeneratorExit: Exit!
                     expected[1:1] = '%s_unknown' % observableCallName,  # From Transparent, is supposed to be on the stack to aid retracing the path taken for a messages.
                 # Py3: Not what we expected but due to traceback being busted it is what it is
                 functionsOnTraceback = self.getFunctionsOnTraceback()
-                self.assertEqual("testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages", functionsOnTraceback[0]) 
+                self.assertEqual("testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages", functionsOnTraceback[0])
                 self.assertEqual("handleNonGeneratorGeneratorExceptions", functionsOnTraceback[-1])
                 #self.assertFunctionsOnTraceback(*expected)
             else: self.fail('Should not happen')
@@ -1054,7 +1054,7 @@ GeneratorExit: Exit!
             ),
             (GetAttr('__class__'),)
         ))
-    
+
         try:
             result = root.call.someMessage()
             self.fail("should not get here: %s" % result)
@@ -1098,7 +1098,7 @@ GeneratorExit: Exit!
                     value = yield self.any.unknown(message, *args, **kwargs)
                     return value
                 raise DeclineMessage
-        
+
         root = be((Observable(),
             (SemiTransparent(),
                 (Responder(41),)
@@ -1115,7 +1115,7 @@ GeneratorExit: Exit!
                 if message == 'theMessage':
                     yield self.all.unknown(message, *args, **kwargs)
                 raise DeclineMessage
-        
+
         root = be((Observable(),
             (SemiTransparent(),
                 (Responder(41),)
@@ -1132,7 +1132,7 @@ GeneratorExit: Exit!
                 if message == 'theMessage':
                     self.do.unknown(message, *args, **kwargs)
                 raise DeclineMessage
-        
+
         observer1 = CallTrace('observer1')
         observer2 = CallTrace('observer2')
         root = be((Observable(),
@@ -1207,7 +1207,6 @@ GeneratorExit: Exit!
                 next(g)
             t1 = time()
             t += t1 - t0
-        print(t)
 
         def f():
             for _ in range(10000):
@@ -1220,7 +1219,7 @@ GeneratorExit: Exit!
 
     def printFunctionsOnTraceback(self):
         print(", ".join(["'{}'".format(each) for each in self.getFunctionsOnTraceback()]))
-    
+
     def getFunctionsOnTraceback(self):
         names = []
         _, _, tb = exc_info()
@@ -1234,10 +1233,10 @@ GeneratorExit: Exit!
         self.assertEqual(list(args), names, names)
 
     def get_tracked_objects(self):
-        return [o for o in gc.get_objects() if type(o) in 
+        return [o for o in gc.get_objects() if type(o) in
                 (compose, GeneratorType, Exception,
                     AllMessage, AnyMessage, DoMessage, OnceMessage)]
- 
+
     def setUp(self):
         TestCase.setUp(self)
         gc.collect()
