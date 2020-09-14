@@ -38,7 +38,7 @@ class ServerTest(WeightlessTestCase):
 
     def testListen(self):
         server = Server(self.reactor, self.port)
-        self.send('localhost', self.port, 'are you listening?')
+        self.send('localhost', self.port, 'are you listening?').close()
         server.stop()
 
     def testConnect(self):
@@ -75,9 +75,9 @@ class ServerTest(WeightlessTestCase):
         connection = self.send('localhost', self.port, 'a message')
         while connection not in select([connection],[],[],0)[0]:
             self.reactor.step()
-        self.assertEqual('over en uit', connection.recv(99))
+        self.assertEqual(b'over en uit', connection.recv(99))
         try:
-            connection.send('aap')
+            connection.send(b'aap')
             self.fail('connection is closed, this must raise an io error')
         except socket.error as e:
             pass
@@ -98,7 +98,7 @@ class ServerTest(WeightlessTestCase):
         finally:
             sys.stderr = sys.__stderr__
         try:
-            connection.send('aap')
+            connection.send(b'aap')
             self.fail('connection is closed, this must raise an io error')
         except socket.error as e:
             pass
