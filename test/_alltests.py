@@ -68,7 +68,7 @@ from _http.suspendtest import SuspendTest
 
 from udp.acceptortest import UdpAcceptorTest
 
-#from wl_io.reactortest import ReactorTest
+from wl_io.reactortest import ReactorTest
 #from wl_io.giotest import GioTest
 #from wl_io.gutilstest import GutilsTest
 #from wl_io.servertest import ServerTest
