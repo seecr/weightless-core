@@ -110,7 +110,7 @@ class WeightlessTestCase(TestCase):
     def send(self, host, port, message):
         sok = socket()
         sok.connect((host, port))
-        sok.sendall(message)
+        sok.sendall(message.encode())
         return sok
 
     def httpGet(self, host, port, path):

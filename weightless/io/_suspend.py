@@ -95,8 +95,7 @@ class Suspend(object):
     def getResult(self):
         if self._exception:
             c, v, t = self._exception
-            #print(t.tb_frame.f_code.co_name)
-            #print(t.tb_frame.tb_next)
+            v = v if v else c()
             raise v.with_traceback(t)
         return self._response
 
@@ -109,5 +108,5 @@ class Suspend(object):
         except Exception:
             sys.stderr.write("Unexpected exception raised on Suspend's onTimeout callback (ignored):\n")
             print_exc()
-        self.throw(TimeoutException(TimeoutException()).with_traceback(None))
+        self.throw(TimeoutException, TimeoutException(), None)
 

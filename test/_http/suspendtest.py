@@ -35,7 +35,6 @@ from traceback import format_exc
 
 from seecr.test import CallTrace
 from seecr.test.io import stderr_replaced, stdout_replaced
-from seecr.test.portnumbergenerator import PortNumberGenerator
 
 from testutils import readAndWritable
 from weightlesstestcase import WeightlessTestCase
@@ -94,19 +93,19 @@ class SuspendTest(WeightlessTestCase):
             self.assertEqual('Suspend already settled.', str(e))
         else: self.fail()
         self.assertEqual('whatever', suspend.getResult())
-        self.assertRaises(AssertionError, lambda: suspend.throw(exc_type=Exception(exc_value=Exception('Very')).with_traceback(exc_traceback=None)))
+        self.assertRaises(AssertionError, lambda: suspend.throw(Exception('Very')).with_traceback(exc_traceback=None))
         self.assertEqual('whatever', suspend.getResult())
         self.assertEqual([], trace.calledMethodNames())
 
         suspend = getSuspend()
-        suspend.throw(RuntimeError(RuntimeError('Very')).with_traceback(None))
+        suspend.throw(RuntimeError, RuntimeError('Very'), None)
         self.assertEqual(['whenDone'], trace.calledMethodNames())
         trace.calledMethods.reset()
         # Below no change of result, no side-effects
         self.assertRaises(RuntimeError, lambda: suspend.getResult())
         self.assertRaises(AssertionError, lambda: suspend.resume(response='whatever'))
         self.assertRaises(RuntimeError, lambda: suspend.getResult())
-        self.assertRaises(AssertionError, lambda: suspend.throw(exc_type=Exception(exc_value=Exception('Very')).with_traceback(exc_traceback=None)))
+        self.assertRaises(AssertionError, lambda: suspend.throw(Exception('Very')).with_traceback(exc_traceback=None))
         self.assertRaises(RuntimeError, lambda: suspend.getResult())
         self.assertEqual([], trace.calledMethodNames())
 
@@ -247,7 +246,7 @@ class SuspendTest(WeightlessTestCase):
                 yield "result = %s" % suspend.getResult()
                 yield 'after suspend'
             listener = MyMockSocket()
-            port = next(PortNumberGenerator)
+            port = self.newPortNumber()
             httpserver = HttpServer(reactor, port, handler, sok=listener)
             httpserver.listen()
             reactor.removeReader(listener) # avoid new connections
@@ -267,7 +266,7 @@ class SuspendTest(WeightlessTestCase):
             reactor.step()
             reactor.step()
             reactor.step()
-            self.assertEqual(['before suspend', 'result = RESPONSE', 'after suspend'], listener.data)
+            self.assertEqual([b'before suspend', b'result = RESPONSE', b'after suspend'], listener.data)
             self.assertEqual(0, len(reactor._fds))
 
             # cleanup (most) fd's
@@ -287,7 +286,7 @@ class SuspendTest(WeightlessTestCase):
                     yield "result = %s" % tbstring
                 yield 'after suspend'
             listener = MyMockSocket()
-            port = next(PortNumberGenerator)
+            port = self.newPortNumber()
             httpserver = HttpServer(reactor, port, handler, sok=listener)
             httpserver.listen()
             reactor.removeReader(listener) # avoid new connections
@@ -303,13 +302,15 @@ class SuspendTest(WeightlessTestCase):
                 raiser()
             except ValueError as e:
                 exc_type, exc_value, exc_traceback = exc_info()
-                suspend.throw(exc_type(exc_value).with_traceback(exc_traceback))
+                suspend.throw(exc_type, exc_value, exc_traceback)
             reactor.step()
             reactor.step()
             reactor.step()
             expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
   File "%(__file__)s", line 152, in handler
     suspend.getResult()
+  File "../weightless/io/_suspend.py", line [#], in getResult
+    raise v.with_traceback(t)
   File "%(__file__)s", line 172, in testSuspendProtocolWithThrow
     raiser()
   File "%(__file__)s", line 170, in raiser
@@ -317,9 +318,9 @@ class SuspendTest(WeightlessTestCase):
 ValueError: BAD VALUE
             """ % fileDict)
             self.assertEqual(3, len(listener.data))
-            self.assertEqual('before suspend', listener.data[0])
-            self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
-            self.assertEqual('after suspend', listener.data[2])
+            self.assertEqual(b'before suspend', listener.data[0])
+            self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1].decode()))
+            self.assertEqual(b'after suspend', listener.data[2])
             self.assertEqual(0, len(reactor._fds))
 
             # cleanup (most) fd's
@@ -522,7 +523,7 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
                 result = s.getResult()
                 if expectTimeout:
                     self.fail('Should not have come here')
-                raise StopIteration(result)
+                return result
 
             try:
                 result = yield suspendWrap()
@@ -551,7 +552,7 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
         reactor0 = self.reactor
         self.reactor = reactor1 = Reactor()
         del testRun[:]
-        port = next(PortNumberGenerator)
+        port = self.newPortNumber()
         def reqHandler(**whatever):
             def inner():
                 yield test(expectTimeout=True)
@@ -562,18 +563,19 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
         servert.listen()
         with self.loopingReactor():
             sok = self.httpGet(host='127.42.42.42', port=port, path='/ignored')
-            allData = ''
+            allData = b''
             try:
-                while allData != 'HTTP/1.0 200 OK\r\n\r\n':
+                while allData != b'HTTP/1.0 200 OK\r\n\r\n':
                     allData += sok.recv(4096)
             finally:
+                sok.close()
                 servert.shutdown()
         self.assertEqual(True, bool(testRun))
 
         # http server - not timing out
         self.reactor = reactor2 = Reactor()
         del testRun[:]
-        port = next(PortNumberGenerator)
+        port = self.newPortNumber()
         def reqHandler(**whatever):
             def inner():
                 yield test(expectTimeout=False)
@@ -584,11 +586,12 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
         servert.listen()
         with self.loopingReactor():
             sok = self.httpGet(host='127.42.42.42', port=port, path='/ignored')
-            allData = ''
+            allData = b''
             try:
-                while allData != 'HTTP/1.0 200 OK\r\n\r\n':
+                while allData != b'HTTP/1.0 200 OK\r\n\r\n':
                     allData += sok.recv(4096)
             finally:
+                sok.close()
                 servert.shutdown()
         self.assertEqual(True, bool(testRun))
 
@@ -609,21 +612,23 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
             sys.stderr = olderr
         try:
             suspend.getResult()
-        except:
+        except Exception as e:
+            receivedTraceback = format_exc()
             exc_type, exc_value, exc_traceback = exc_info()
-
 
         expectedTraceback = ignoreLineNumbers("""Traceback (most recent call last):
   File "%(__file__)s", line 200, in testDoNextErrorReRaisedOnGetResult
     suspend.getResult()
+  File "%(suspend.py)s", line 42, in getResult
+    raise v.with_traceback(t)
   File "%(suspend.py)s", line 40, in __call__
     self._doNext(self)
   File "%(__file__)s", line 196, in razor
     1/0  # Division by zero exception
-ZeroDivisionError: integer division or modulo by zero
+ZeroDivisionError: division by zero
         """ % fileDict)
         self.assertEqual(ZeroDivisionError, exc_type)
-        self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(format_exc(exc_traceback)))
+        self.assertEqualsWS(expectedTraceback, ignoreLineNumbers(receivedTraceback))
 
     def testDoNextThrowsImmediatelyOnFatalExceptions(self):
         def suspendWithDoNextException(exception):
@@ -650,7 +655,7 @@ ZeroDivisionError: integer division or modulo by zero
                     yield "result = %s" % tbstring
                 yield 'after suspend'
             listener = MyMockSocket()
-            port = next(PortNumberGenerator)
+            port = self.newPortNumber()
             httpserver = HttpServer(reactor, port, handler, sok=listener)
             httpserver.listen()
             reactor.removeReader(listener) # avoid new connections
@@ -676,13 +681,13 @@ ZeroDivisionError: integer division or modulo by zero
       File "%(__file__)s", line 201, in handler
         suspend.getResult()
       File "%(suspend.py)s", line 62, in getResult
-        raise self._exception[0], self._exception[1], self._exception[2]
+        raise v.with_traceback(t)
     ValueError: BAD VALUE
             """ % fileDict)
             self.assertEqual(3, len(listener.data))
-            self.assertEqual('before suspend', listener.data[0])
-            self.assertEqualsWS("result = %s" % expectedTraceback, ignoreLineNumbers(listener.data[1]))
-            self.assertEqual('after suspend', listener.data[2])
+            self.assertEqual(b'before suspend', listener.data[0])
+            self.assertEqualsWS("result = "+expectedTraceback, ignoreLineNumbers(listener.data[1].decode()))
+            self.assertEqual(b'after suspend', listener.data[2])
             self.assertEqual(0, len(reactor._fds))
 
             # cleanup (most) fd's
@@ -747,7 +752,7 @@ class MyMockSocket(object):
         pass
 
     def recv(self, *args):
-        return 'GET / HTTP/1.0\r\n\r\n'
+        return b'GET / HTTP/1.0\r\n\r\n'
 
     def getpeername(self):
         return 'itsme'
