@@ -66,7 +66,7 @@ from _http.httprequest1_1test import HttpRequest1_1Test
 from _http.socketpooltest import SocketPoolTest
 from _http.suspendtest import SuspendTest
 
-#from udp.acceptortest import UdpAcceptorTest
+from udp.acceptortest import UdpAcceptorTest
 
 #from wl_io.reactortest import ReactorTest
 #from wl_io.giotest import GioTest
