@@ -41,7 +41,7 @@ from weightless.io._gio import Context, SocketContext, Timer, TimeoutException
 class GioTest(WeightlessTestCase):
 
     def testOpenReturnsContextManager(self):
-        result = giopen('http/data/testdata5kb')
+        result = giopen('_http/data/testdata5kb')
         self.assertTrue(hasattr(result, '__enter__'))
         self.assertTrue(hasattr(result, '__exit__'))
 
@@ -197,7 +197,7 @@ class GioTest(WeightlessTestCase):
                 self.assertEqual(messageSize, len(''.join(messages)))
 
     def testHowToCreateAHttpServer(self):
-        port = next(PortNumberGenerator)
+        port = self.newPortNumber()
         # SERVER
         class HttpServer:
             def __init__(self, reactor, port):

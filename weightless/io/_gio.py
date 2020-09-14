@@ -144,12 +144,12 @@ class FdContext(Context):
     def write(self,response):
         self.gio.addWriter(self)
         self.onExit(curry(self.gio.removeWriter, self))
-        buff = response
+        buff = memoryview(response.encode())
         try:
             while len(buff) > 0:
                 yield
                 written = os.write(self._fd, buff)
-                buff = buffer(buff, written)
+                buff = buff[written:]
         finally:
             self.gio.removeWriter(self)
 
@@ -161,12 +161,12 @@ class FdContext(Context):
             message = os.read(self._fd, self.readBufSize)
         finally:
             self.gio.removeReader(self)
-        return message
+        return message.decode()
 
 class SocketContext(FdContext):
 
     def __init__(self, sok):
-        self.readBufSize = sok.getsockopt(SOL_SOCKET, SO_RCVBUF) / 2
+        self.readBufSize = int(sok.getsockopt(SOL_SOCKET, SO_RCVBUF) / 2)
         sok.setblocking(0)
         FdContext.__init__(self, sok.fileno())
         self._save_sok_from_gc = sok
