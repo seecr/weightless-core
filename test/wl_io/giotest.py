@@ -26,7 +26,7 @@
 ## end license ##
 
 from weightlesstestcase import WeightlessTestCase
-from seecr.test.io import stdout_replaced
+from seecr.test.io import stdout_replaced, stderr_replaced
 from seecr.test.portnumbergenerator import PortNumberGenerator
 
 from socket import socket, SOL_SOCKET, SO_REUSEADDR, SO_LINGER, SOL_TCP, TCP_CORK, TCP_NODELAY
@@ -162,22 +162,25 @@ class GioTest(WeightlessTestCase):
     def testSocketHandshake(self):
         with Reactor() as reactor:
             lhs, rhs = socketpair()
-            def peter(channel):
-                with channel:
-                    message = yield
-                    yield 'Hello ' + message[-4:]
-            def jack(channel):
-                with channel:
-                    x = yield 'My name is Jack'
-                    self.assertEqual(None, x)
-                    self.response = yield
-            Gio(reactor, jack(SocketContext(lhs)))
-            Gio(reactor, peter(SocketContext(rhs)))
-            reactor.step().step().step().step()
-            self.assertEqual('Hello Jack', self.response)
+            try:
+                def peter(channel):
+                    with channel:
+                        message = yield
+                        yield 'Hello ' + message[-4:]
+                def jack(channel):
+                    with channel:
+                        x = yield 'My name is Jack'
+                        self.assertEqual(None, x)
+                        self.response = yield
+                Gio(reactor, jack(SocketContext(lhs)))
+                Gio(reactor, peter(SocketContext(rhs)))
+                reactor.step().step().step().step()
+                self.assertEqual('Hello Jack', self.response)
+            finally:
+                rhs.close(); lhs.close();
 
     def testLargeBuffers(self):
-        with stdout_replaced():
+        with stdout_replaced(), stderr_replaced():
             with Reactor() as reactor:
                 lhs, rhs = socketpair()
                 messages = []
@@ -219,6 +222,8 @@ class GioTest(WeightlessTestCase):
                 yield 'HTTP/1.1 200 Ok\r\n\r\nGoodbye'
             def stop(self):
                 self._reactor.removeReader(self._ear)
+                self._ear.close()
+
         server = HttpServer(self.reactor, port)
         #CLIENT
         responses = []
