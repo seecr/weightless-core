@@ -25,7 +25,7 @@
 from functools import wraps
 from types import FunctionType
 
-from weightless.core import compose, Yield, identify, is_generator
+from weightless.core import compose, Yield, identify, is_generator, value_with_pushback
 from weightless.io import Reactor
 
 
@@ -44,7 +44,7 @@ def asProcess(g):
         try:
             reactor.loop()
         except StopIteration as e:
-            return e.value
+            return e.value.value if isinstance(e.value, value_with_pushback) else e.value
 
     @identify
     def wrapper(generator, reactor):

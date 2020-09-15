@@ -27,7 +27,7 @@ from seecr.test.io import stdout_replaced
 
 from functools import partial
 
-from weightless.core import identify, local
+from weightless.core import identify, local, value_with_pushback
 from weightless.io import Reactor, reactor, Suspend
 
 from weightless.io.utils import asProcess
@@ -51,13 +51,13 @@ class AsProcessTest(SeecrTestCase):
         # decorator
         @asProcess
         def genFDecor():
-            raise StopIteration('ok')
+            return 'ok'
             yield
         self.assertEqual('ok', genFDecor())
 
         # arguments passed into and returned as retval (normal and as decorator)
         def genF(a, b):
-            raise StopIteration((a, b))
+            return (a, b)
             yield
         self.assertEqual((1, 2), asProcess(genF)(1, b=2))
         self.assertEqual((1, 2), asProcess(genF(1, b=2)))
@@ -65,7 +65,7 @@ class AsProcessTest(SeecrTestCase):
     def testDecorator(self):
         @asProcess
         def g():
-            raise StopIteration(1)
+            return 1
             yield
         self.assertEqual(1, g())
 
@@ -73,12 +73,12 @@ class AsProcessTest(SeecrTestCase):
             @staticmethod
             @asProcess
             def g():
-                raise StopIteration(3)
+                return 3
                 yield
         self.assertEqual(3, A.g())
 
         def g(a):
-            raise StopIteration(a)
+            return a
             yield
         # Below does not work; because partials' output does not look like
         # a normal function.
@@ -98,16 +98,16 @@ class AsProcessTest(SeecrTestCase):
                 events.append('1 yielded')
                 result = yield one_2()
                 events.append('1 delegated')
-                raise StopIteration(result)
+                return result
             def one_2():
                 events.append('1-2 called')
-                raise StopIteration(1)
+                return 1
                 yield
             def two():
                 events.append('2 start')
                 yield '/dev/null (2)'
                 events.append('2 yielded')
-                raise StopIteration(2)
+                return 2
 
             res1 = asProcess(one())
             res2 = asProcess(two())
@@ -131,16 +131,16 @@ class AsProcessTest(SeecrTestCase):
         @asProcess
         def a():
             retval = b()
-            raise StopIteration(retval)
+            return retval
             yield
         @asProcess
         def b():
             retval = c()
-            raise StopIteration(retval)
+            return retval
             yield
         @asProcess
         def c():
-            raise StopIteration('c')
+            return 'c'
             yield
 
         self.assertEqual('c', a())
@@ -160,10 +160,10 @@ class AsProcessTest(SeecrTestCase):
         realReactor.addTimer = mockReactor.addTimer
 
         def a():
-            raise StopIteration((yield b()))
+            return (yield b())
             yield
         def b():
-            raise StopIteration('retval')
+            return "retval"
             yield
 
         @identify
@@ -195,19 +195,19 @@ class AsProcessTest(SeecrTestCase):
             return
             yield
         def noneRetval():
-            raise StopIteration(None)
+            return None
             yield
         def oneRetval():
-            raise StopIteration(1)
+            return 1
             yield
         def oneRetvalWithIgnoredPushback():
-            raise StopIteration(1, 'p', 'u', 's', 'h')
+            return value_with_pushback(1, 'p', 'u', 's', 'h')
             yield
         def retvalDependantOnPushbackEval():
             one_ = yield oneRetvalWithIgnoredPushback()
             for _ in ['p', 'u', 's']:
                 _ = yield
-            raise StopIteration((yield))
+            return (yield)
         self.assertEqual(None, asProcess(noRetval()))
         self.assertEqual(None, asProcess(noneRetval()))
         self.assertEqual(1, asProcess(oneRetval()))
@@ -261,7 +261,7 @@ class AsProcessTest(SeecrTestCase):
             currentReactor.addTimer(1.0, lambda: neverCalled.append(True))
             yield 'async work...'
             currentReactor.addProcess(lambda: neverCalled.append(True))
-            raise StopIteration(42)
+            return 42
 
         with stdout_replaced() as out:
             result = asProcess(timeAfterFinished())
@@ -281,9 +281,9 @@ class AsProcessTest(SeecrTestCase):
         def suspending():
             s = Suspend(whileSuspended().send)
             yield s
-            raise StopIteration(s.getResult())
+            return s.getResult()
         def thisAndThat():
             this = '42'
             that = yield suspending()
-            raise StopIteration((this, that))
+            return (this, that)
         self.assertEqual(('42', 'whileSuspended'), asProcess(thisAndThat()))
