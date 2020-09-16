@@ -1283,7 +1283,7 @@ class HttpServerTest(WeightlessTestCase):
                 statusAndHeaders)
             self.assertEqual(b'', body)
             self.assertEqual([True, True], called)
-            self.assertEqual('Error in handler - no response sent, 500 given.\n', err_val)
+            self.assertTrue('Error in handler - no response sent, 500 given.\n' in err_val, err_val)
 
             h.shutdown()
 
@@ -1304,7 +1304,7 @@ class HttpServerTest(WeightlessTestCase):
                 statusAndHeaders)
             self.assertEqual(b'', body)
             self.assertEqual([True], called)
-            self.assertEqual('Error in handler - no response sent, 500 given.\n', err_val)
+            self.assertTrue('Error in handler - no response sent, 500 given.\n' in err_val, err_val)
 
             h.shutdown()
 
