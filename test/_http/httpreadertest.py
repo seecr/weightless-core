@@ -38,7 +38,6 @@ from weightless.http import HttpReader
 from weightless.core import VERSION as WlVersion
 from weightless.http._httpreader import HttpReaderFacade, Connector, HandlerFacade, _httpParseUrl
 import sys
-from io import StringIO
 
 from .testutils import server
 

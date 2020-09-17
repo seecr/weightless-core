@@ -27,6 +27,7 @@ from unittest import TestCase
 
 from sys import stdout, exc_info, getrecursionlimit, version_info
 from types import GeneratorType
+from seecr.test.utils import ignoreLineNumbers
 
 from weightless.core import autostart, cpython
 from weightless.core._compose_py import __file__ as  _compose_py_module_file
@@ -220,7 +221,7 @@ AssertionError: Cannot accept data. First send None.\n""" % {
                 'gLine': gLine,
             } % fileDict
             tbString = format_exc()
-            self.assertEqual(stackText, tbString)
+            self.assertEqual(ignoreLineNumbers(stackText), ignoreLineNumbers(tbString))
         else:
             self.fail("Should not happen.")
 
@@ -256,7 +257,7 @@ Exception: tripping compose\n""" % {
                 'gLine': gLine,
             } % fileDict
             tbString = format_exc()
-            self.assertEqual(stackText, tbString)
+            self.assertEqual(ignoreLineNumbers(stackText), ignoreLineNumbers(tbString))
         else:
             self.fail("Should not happen.")
 
@@ -280,7 +281,7 @@ Exception: tripping compose\n""" % {
             'fLine': fLine, 'gYieldLine': gYieldLine
         }
         trace = tostring(composed)
-        self.assertEqual(stackText, trace, trace)
+        self.assertEqual(ignoreLineNumbers(stackText), ignoreLineNumbers(trace), trace)
 
     def testUnsuitableGeneratorTracebackBeforeStepping(self):
         # Py3: _compose back in stacktrace
@@ -315,7 +316,7 @@ AssertionError: Generator already used.\n""" % {
                 'genYieldLine': genYieldLine,
             }
             tbString = format_exc()
-            self.assertEqual(stackText, tbString)
+            self.assertEqual(ignoreLineNumbers(stackText), ignoreLineNumbers(tbString))
         else:
             self.fail("Should not happen.")
 
@@ -351,7 +352,7 @@ Exception: tripping compose\n""" % {
                 'compose_py': fileDict['compose_py'],
             }
             tbString = format_exc()
-            self.assertEqual(stackText, tbString)
+            self.assertEqual(ignoreLineNumbers(stackText), ignoreLineNumbers(tbString))
         else:
             self.fail("Should not happen.")
 

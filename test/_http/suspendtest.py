@@ -28,12 +28,12 @@
 
 import sys
 from io import StringIO
-from re import sub
 from sys import exc_info
 from time import sleep
 from traceback import format_exc
 
 from seecr.test import CallTrace
+from seecr.test.utils import ignoreLineNumbers
 from seecr.test.io import stderr_replaced, stdout_replaced
 
 from testutils import readAndWritable
@@ -771,7 +771,3 @@ class MyMockSocket(object):
     def send(self, chunk, options):
         self.data.append(chunk)
         return len(chunk)
-
-
-def ignoreLineNumbers(s):
-    return sub("line \d+,", "line [#],", s)

@@ -25,7 +25,7 @@
 ## end license ##
 
 from sys import exc_info
-from weightless.core import cpython, is_generator
+from weightless.core import cpython, is_generator, value_with_pushback
 
 """
 Wrt exceptions, see http://www.python.org/doc/2.5.4/lib/module-exceptions.html for Python 2.5:
@@ -62,11 +62,6 @@ class Yield(object):
     """Sentinel for compose stepping"""
     def __new__(self):
         raise TypeError("cannot create 'Yield' instances")
-
-class value_with_pushback(object):
-    def __init__(self, value, *pushback):
-        self.value = value
-        self.pushback = pushback
 
 def compose(initial, stepping=False):
     if not is_generator(initial):

@@ -44,6 +44,7 @@ except ImportError:
 from weightless.core import is_generator
 from inspect import currentframe
 from traceback import format_exc
+from seecr.test.utils import ignoreLineNumbers
 
 fileDict = {
     '__file__' : __file__.replace(".pyc", ".py").replace("$py.class", ".py"),
@@ -1168,7 +1169,7 @@ AssertionError: Generator already used.\n""" % {
                 'genYieldLine': genYieldLine,
             }
             tbString = format_exc()
-            self.assertEqual(stackText, tbString)
+            self.assertEqual(ignoreLineNumbers(stackText), ignoreLineNumbers(tbString))
         else:
             self.fail("Should not happen.")
 

@@ -25,7 +25,7 @@
 from os import getpid, listdir
 from signal import setitimer, ITIMER_REAL, signal, SIGALRM
 from socket import socket
-
+from contextlib import contextmanager
 
 def nrOfOpenFds():
     pid = getpid()
@@ -55,9 +55,18 @@ def _signalHandler(signum, frame):
 def _default_handler():
     raise BlockedCallTimedOut()
 
-
 class BlockedCallTimedOut(Exception):
     pass
 
-_current_handler = [_default_handler]
+@contextmanager
+def clientget(host, port, path):
+    client = socket()
+    client.connect((host,  port))
+    request = 'GET {} HTTP/1.1\r\n\r\n'.format(path)
+    client.send(request.encode())
+    try:
+        yield client
+    finally:
+        client.close()
 
+_current_handler = [_default_handler]

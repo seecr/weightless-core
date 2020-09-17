@@ -40,6 +40,7 @@ from weightless.core._observable import AllMessage, AnyMessage, DoMessage, OnceM
 from weightless.core import consume
 from unittest import TestCase
 from seecr.test import CallTrace
+from seecr.test.utils import ignoreLineNumbers
 
 fileDict = {
     '__file__' : __file__.replace(".pyc", ".py")
@@ -1277,9 +1278,3 @@ class Responder(Observable):
         return self._value
     def all_unknown(self, message, *args, **kwargs):
         yield self._value
-
-
-from re import sub
-def ignoreLineNumbers(s):
-    return sub("line \d+,", "line [#],", s)
-

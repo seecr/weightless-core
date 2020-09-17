@@ -39,8 +39,6 @@ for path in glob('../deps.d/*'):                  #DO_NOT_DISTRIBUTE
     sysPath.insert(0, path)                       #DO_NOT_DISTRIBUTE
 sysPath.insert(0,'..')                            #DO_NOT_DISTRIBUTE
 
-print(sysPath)
-
 from unittest import main
 from types import GeneratorType
 

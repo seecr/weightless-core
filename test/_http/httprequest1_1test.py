@@ -51,6 +51,7 @@ from weightless.http import HttpRequest1_1, HttpRequestAdapter
 from weightless.http._httprequest1_1 import _requestLine, _shutAndCloseOnce, _CHUNK_RE, _deChunk, _TRAILERS_RE, SocketWrapper
 
 from wl_io.utils.testutils import dieAfter
+from seecr.test.utils import ignoreLineNumbers
 
 
 httprequest1_1 = be(
@@ -2326,11 +2327,8 @@ class AbortException(Exception):
 
 _Connection = namedtuple('Connection', ['value', 'log'])
 
-def ignoreLineNumbers(s):
-    return sub("line \d+,", "line [#],", s)
-
 fileDict = {
-    '__file__': ignoreLineNumbers.__code__.co_filename,
+    '__file__': __file__,
     '_suspend.py': Suspend.__call__.__code__.co_filename,
     '_httprequest1_1.py': _requestLine.__code__.co_filename,
 }

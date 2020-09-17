@@ -26,8 +26,7 @@
 ## end license ##
 
 
-from re import sub
-from socket import socket, gaierror as SocketGaiError
+from socket import gaierror as SocketGaiError
 from sys import exc_info, version_info
 from time import sleep
 from traceback import format_exception
@@ -43,6 +42,8 @@ from seecr.test.io import stderr_replaced, stdout_replaced
 from seecr.test.portnumbergenerator import PortNumberGenerator
 from weightlesstestcase import WeightlessTestCase, StreamingData
 from .httpreadertest import server as testserver
+from testutils import clientget
+from seecr.test.utils import ignoreLineNumbers
 
 
 PYVERSION = '%s.%s' % version_info[:2]
@@ -492,19 +493,3 @@ class AsyncReaderTest(WeightlessTestCase):
         with self.loopingReactor():
             while not self.done:
                 sleep(0.01)
-
-from contextlib import contextmanager
-
-@contextmanager
-def clientget(host, port, path):
-    client = socket()
-    client.connect((host,  port))
-    request = 'GET {} HTTP/1.1\r\n\r\n'.format(path)
-    client.send(request.encode())
-    try:
-        yield client
-    finally:
-        client.close()
-
-def ignoreLineNumbers(s):
-    return sub("line \d+,", "line [#],", s)

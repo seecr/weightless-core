@@ -50,6 +50,11 @@ elif hasattr(platform, 'system'):
 else:
     cpython = False
 
+class value_with_pushback(object):
+    def __init__(self, value, *pushback):
+        self.value = value
+        self.pushback = pushback
+
 try:
     from os import getenv
     if getenv('WEIGHTLESS_COMPOSE_TEST') == 'PYTHON':
@@ -64,7 +69,7 @@ except ImportError as e:
         return type(o) is GeneratorType
     class DeclineMessage(Exception):
         pass
-    from ._compose_py import compose as _compose, Yield, value_with_pushback
+    from ._compose_py import compose as _compose, Yield
     from ._local_py import local
     from ._tostring_py import tostring
     cextension = False
