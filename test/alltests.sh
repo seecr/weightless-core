@@ -56,7 +56,7 @@ else
     tests="C PYTHON"
 fi
 
-tests="PYTHON"
+tests="C"
 echo Performing tests: $tests
 
 for t in $tests; do

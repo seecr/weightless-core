@@ -54,11 +54,12 @@ Weightless presents a way to implement data-processing programs, such as web-ser
     license='GNU Public License',
     platforms=['cpython'],
     ext_modules=[
-        Extension("weightless.core.ext", [
+        Extension("weightless.core.ext", sources=[
             "weightless/core/_core.c",
             "weightless/core/_compose.c",
             "weightless/core/_observable.c"
             ],
+            extra_compile_args=["-g3", "-O0"],
         )
     ],
     classifiers=[

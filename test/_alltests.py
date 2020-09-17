@@ -48,29 +48,29 @@ if ComposeType == GeneratorType:
     from core.composeschedulingtest import ComposeSchedulingPyTest
 else:
     from core.composetest import ComposeCTest
-    from core.composeschedulingtest import ComposeSchedulingCTest
-    from core.observable_c_test import Observable_C_Test
-from core.localtest import LocalTest
-from core.observabletest import ObservableTest
-from core.observabledirectedmessagingtest import ObservableDirectedMessagingTest
-from core.utilstest import UtilsTest
+    #from core.composeschedulingtest import ComposeSchedulingCTest
+    #from core.observable_c_test import Observable_C_Test
+#from core.localtest import LocalTest
+#from core.observabletest import ObservableTest
+#from core.observabledirectedmessagingtest import ObservableDirectedMessagingTest
+#from core.utilstest import UtilsTest
 
-from _http.acceptortest import AcceptorTest
-from _http.asyncreadertest import AsyncReaderTest
-from _http.httpreadertest import HttpReaderTest
-from _http.httpservertest import HttpServerTest
-from _http.httpspectest import HttpSpecTest
-from _http.httprequest1_1test import HttpRequest1_1Test
-from _http.socketpooltest import SocketPoolTest
-from _http.suspendtest import SuspendTest
+#from _http.acceptortest import AcceptorTest
+#from _http.asyncreadertest import AsyncReaderTest
+#from _http.httpreadertest import HttpReaderTest
+#from _http.httpservertest import HttpServerTest
+#from _http.httpspectest import HttpSpecTest
+#from _http.httprequest1_1test import HttpRequest1_1Test
+#from _http.socketpooltest import SocketPoolTest
+#from _http.suspendtest import SuspendTest
 
-from udp.acceptortest import UdpAcceptorTest
+#from udp.acceptortest import UdpAcceptorTest
 
-from wl_io.reactortest import ReactorTest
-from wl_io.giotest import GioTest
-from wl_io.gutilstest import GutilsTest
-from wl_io.servertest import ServerTest
-from wl_io.utils.asprocesstest import AsProcessTest
+#from wl_io.reactortest import ReactorTest
+#from wl_io.giotest import GioTest
+#from wl_io.gutilstest import GutilsTest
+#from wl_io.servertest import ServerTest
+#from wl_io.utils.asprocesstest import AsProcessTest
 
 #from httpng.httpprotocolintegrationtest import HttpProtocolIntegrationTest
 #from httpng.httpprotocoltest import HttpProtocolTest

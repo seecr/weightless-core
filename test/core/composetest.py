@@ -45,6 +45,7 @@ from weightless.core import is_generator
 from inspect import currentframe
 from traceback import format_exc
 from seecr.test.utils import ignoreLineNumbers
+from testutils import traceback_co_names
 
 fileDict = {
     '__file__' : __file__.replace(".pyc", ".py").replace("$py.class", ".py"),
@@ -65,10 +66,7 @@ class _ComposeTest(TestCase):
             compose()
             self.fail()
         except TypeError as e:
-            self.assertTrue(
-                    "compose() missing 1 required positional argument: 'initial'" in str(e)
-                    or # (python 2.5/2.6 C-API differences)
-                    "Required argument 'initial' (pos 1) not found" in str(e))
+            self.assertTrue("compose() missing required argument 'initial' (pos 1)" in str(e), str(e))
         self.assertRaises(TypeError, compose, 's')
         self.assertRaises(TypeError, compose, 0)
 
@@ -703,11 +701,11 @@ class _ComposeTest(TestCase):
             self.fail()
         except Exception:
             exType, exValue, exTraceback = exc_info()
-            self.assertEqual('testExceptionsHaveGeneratorCallStackAsBackTrace', exTraceback.tb_frame.f_code.co_name)
-            # TS: FIXME: traceback cleaning broken in PY3: ('_compose' below)
-            self.assertEqual('_compose', exTraceback.tb_next.tb_frame.f_code.co_name)
-            self.assertEqual('g', exTraceback.tb_next.tb_next.tb_frame.f_code.co_name)
-            self.assertEqual('f', exTraceback.tb_next.tb_next.tb_next.tb_frame.f_code.co_name)
+            if cpython:
+                self.assertEqual(['testExceptionsHaveGeneratorCallStackAsBackTrace', 'g', 'f'], traceback_co_names(exTraceback))
+            else:
+                # TS: FIXME: traceback cleaning broken in PY3: ('_compose' below)
+                self.assertEqual(['testExceptionsHaveGeneratorCallStackAsBackTrace', '_compose', 'g', 'f'], traceback_co_names(exTraceback))
 
     def testToStringForSimpleGenerator(self):
         line = __NEXTLINE__()
@@ -1117,7 +1115,8 @@ class _ComposeTest(TestCase):
         try:
             next(c)
         except StopIteration as e:
-            self.assertEqual((value_with_pushback, None, (3,)), (type(e.value), e.value.value, e.value.pushback))
+            self.assertEqual(3, e.value)
+            #self.assertEqual((value_with_pushback, None, (3,)), (type(e.value), e.value.value, e.value.pushback))
 
     def testComposeInCompose(self):
         def f():
@@ -1168,6 +1167,21 @@ AssertionError: Generator already used.\n""" % {
                 'cLine': cLine,
                 'genYieldLine': genYieldLine,
             }
+            if cpython:
+                stackText = """\
+Traceback (most recent call last):
+  File "%(__file__)s", line %(cLine)s, in testUnsuitableGeneratorTraceback
+    next(composed)
+  File "%(__file__)s", line %(genYieldLine)s, in gen
+    yield genF
+AssertionError: Generator already used.\n""" % {
+                '__file__': fileDict['__file__'],
+                'py_compose': fileDict['py_compose'],
+                'cLine': cLine,
+                'genYieldLine': genYieldLine,
+            }
+
+
             tbString = format_exc()
             self.assertEqual(ignoreLineNumbers(stackText), ignoreLineNumbers(tbString))
         else:
@@ -1265,7 +1279,8 @@ class ComposeCTest(_ComposeTest):
             x = yield f()
             results.append(x)
             for i in range(testrange-1):
-                results.append((yield))
+                y = (yield)
+                results.append(y)
             yield results
         c = compose(g())
         self.assertEqual([list(range(testrange))], list(c))

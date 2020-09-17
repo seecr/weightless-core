@@ -69,4 +69,13 @@ def clientget(host, port, path):
     finally:
         client.close()
 
+def traceback_co_names(tb):
+    names = []
+    cursor = tb
+    while not cursor is None:
+        names.append(cursor.tb_frame.f_code.co_name)
+        cursor = cursor.tb_next
+    return names
+
+
 _current_handler = [_default_handler]
