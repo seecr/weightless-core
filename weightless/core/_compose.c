@@ -288,32 +288,35 @@ static PyObject* compose_new(PyObject* type, PyObject* args, PyObject* kwargs) {
 
 
 static int _compose_handle_stopiteration(PyComposeObject* self, PyObject* exc_value) {
-
-    if (exc_value != NULL) {
-        if (PyObject_HasAttrString(exc_value, "pushback")) {
-            PyObject* pushback =PyObject_GetAttrString(exc_value, "pushback"); // new ref
-
-            if(pushback && PyTuple_CheckExact(pushback) && PyObject_IsTrue(pushback)) {
-                int i;
-
-                for(i = PyTuple_Size(pushback) - 1; i >= 0; i--)
-                    if(!messages_insert(self, PyTuple_GET_ITEM(pushback, i))) {
-                        Py_CLEAR(pushback);
-                        return 0;
-                    }
-            }
-            PyObject* value = PyObject_GetAttrString(exc_value, "value"); //new ref
-            if (!messages_insert(self, value)) {
-                Py_CLEAR(value);
-                return 0;
-            }
-            Py_CLEAR(value);
-            Py_CLEAR(pushback);
-        } else {
-            if (!messages_insert(self, exc_value)) {
-                return 0;
-            }
+    if (exc_value != NULL && !PyObject_HasAttrString(exc_value, "args")) {
+        if (!messages_insert(self, exc_value)) {
+            return 0;
         }
+        return 1;
+    }
+
+    PyObject* args = (exc_value && PyObject_HasAttrString(exc_value, "args"))
+                     ? PyObject_GetAttrString(exc_value, "args") // new ref
+                     : NULL;
+
+    if (args && PyTuple_Size(args) == 1) {
+        PyObject* firstElement = PyTuple_GET_ITEM(args, 0);
+        if (PyTuple_CheckExact(firstElement)) {
+            args = firstElement;
+        }
+    }
+
+    if(args && PyTuple_CheckExact(args) && PyObject_IsTrue(args)) {
+        int i;
+
+        for(i = PyTuple_Size(args) - 1; i >= 0; i--)
+            if(!messages_insert(self, PyTuple_GET_ITEM(args, i))) {
+                Py_CLEAR(args);
+                return 0;
+            }
+
+        Py_CLEAR(args);
+
     } else if(!generators_empty(self))
         messages_insert(self, Py_None);
 
@@ -451,18 +454,17 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
     int n = _messages_size(self);
 
     if(n) {
+
         PyObject* args = PyTuple_New(n); // new ref
         int i;
 
         for(i = 0; i < n; i++) {
             PyTuple_SetItem(args, i, messages_next(self)); // steals ref
         }
-
         PyObject* sie = PyObject_Call(PyExc_StopIteration, args, NULL); // new ref
         PyErr_SetObject(PyExc_StopIteration, sie);
         Py_DECREF(sie);
         Py_DECREF(args);
-
     } else
         PyErr_SetNone(PyExc_StopIteration);
     return NULL;

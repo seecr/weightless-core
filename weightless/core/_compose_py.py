@@ -124,17 +124,18 @@ def _compose(initial, stepping):
         except StopIteration as returnValue:
             exception = None
             generators.pop()
-            retval = returnValue.value
-            if isinstance(retval, value_with_pushback):
-                messages[0:0] = retval.pushback
-                messages.insert(0, retval.value)
+            retval = returnValue.args
+            if type(retval) is tuple and len(retval) == 1 and type(retval[0]) is tuple:
+                retval = retval[0]
+            if retval:
+                messages[0:0] = retval
             else:
-                messages.insert(0, retval)
+                generators and messages.insert(0, None)
+
         except BaseException:
             generators.pop()
             exType, exValue, exTraceback = exc_info()
             exception = (exType, exValue, exTraceback.tb_next)
     if exception:
         raise exception[1].with_traceback(exception[2])
-
-    return value_with_pushback(*messages) if len(messages) > 1 else messages[0]
+    return messages[0] if len(messages) == 1 else tuple(messages)

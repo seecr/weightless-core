@@ -30,7 +30,7 @@ from sys import stdout, exc_info, getrecursionlimit, version_info
 from types import GeneratorType
 from weakref import ref
 import gc
-from weightless.core import autostart, cpython, value_with_pushback
+from weightless.core import autostart, cpython, cextension
 from weightless.core._local_py import local as pyLocal
 from weightless.core._compose_py import compose as pyCompose
 import weightless.core._compose_py as _compose_py_module
@@ -66,7 +66,10 @@ class _ComposeTest(TestCase):
             compose()
             self.fail()
         except TypeError as e:
-            self.assertTrue("compose() missing required argument 'initial' (pos 1)" in str(e), str(e))
+            if cextension:
+                self.assertTrue("compose() missing required argument 'initial' (pos 1)" in str(e), str(e))
+            else:
+                self.assertTrue("compose() missing 1 required positional argument: 'initial'" in str(e), str(e))
         self.assertRaises(TypeError, compose, 's')
         self.assertRaises(TypeError, compose, 0)
 
@@ -216,7 +219,7 @@ class _ComposeTest(TestCase):
     def testReturnThree(self):
         data = []
         def child():
-            return value_with_pushback('result', 'remainingData1', 'other2')
+            return 'result', 'remainingData1', 'other2'
             yield
         def parent():
             result = yield child()
@@ -235,7 +238,7 @@ class _ComposeTest(TestCase):
         messages = []
         responses = []
         def child1():
-            return value_with_pushback('result', 'remainingData0', 'remainingData1')
+            return 'result', 'remainingData0', 'remainingData1'
             yield
         def child2():
             messages.append((yield 'A'))                # I want to 'send' and do not accept data
@@ -259,7 +262,7 @@ class _ComposeTest(TestCase):
 
     def testStopIterationWithReturnValue(self):
         def f():
-            return value_with_pushback('return value')
+            return 'return value'
             yield 'something'
         def g():
             self.retval = yield f()
@@ -271,11 +274,11 @@ class _ComposeTest(TestCase):
         def ding1():
             dataIn = yield None     # receive 'dataIn'
             self.assertEqual('dataIn', dataIn)
-            return value_with_pushback('ding1retval', 'rest('+dataIn+')')
+            return 'ding1retval', 'rest('+dataIn+')'
         def ding2():
             dataIn = yield None     # receive 'rest(dataIn)'
             #retval = RETURN, 'ding2retval', 'rest('+dataIn+')'
-            return value_with_pushback('ding2retval', 'rest('+dataIn+')')
+            return 'ding2retval', 'rest('+dataIn+')'
         def child():
             ding1retval = yield ding1()
             r.append('child-1:' + str(ding1retval))
@@ -365,7 +368,7 @@ class _ComposeTest(TestCase):
         def f():
             x = yield
             data.append(x)
-            return value_with_pushback(*tuple(x))
+            return tuple(x)
         def g():
             r = yield f()
             data.append(r)
@@ -481,7 +484,7 @@ class _ComposeTest(TestCase):
         def f1(arg):
             r = yield None
             yield arg
-            return value_with_pushback('aap', 'rest')
+            return 'aap', 'rest'
         def f2(arg):
             r1 = yield f1('noot')
             r2 = yield f1('mies')
@@ -529,7 +532,7 @@ class _ComposeTest(TestCase):
             except GeneratorExit:
                 raise
             except Exception as e:
-                return value_with_pushback(e, 'more')
+                return e, 'more'
         def f3(arg):
             e = yield f2('aa')
             more = yield None
@@ -629,7 +632,7 @@ class _ComposeTest(TestCase):
     def testAdhereToYieldNoneMeansReadAndYieldValueMeansWriteWhenMessagesAreBuffered(self):
         done = []
         def bufferSome():
-            return value_with_pushback('retval', 'rest1', 'rest2')
+            return 'retval', 'rest1', 'rest2'
             yield
         def writeSome():
             yield 'write this'
@@ -649,7 +652,7 @@ class _ComposeTest(TestCase):
     def testAdhereToYieldNoneMeansReadAndYieldValueMeansWriteWhenMessagesAreBuffered2(self):
         done = []
         def bufferSome():
-            return value_with_pushback('retval', 'rest1', 'rest2')
+            return 'retval', 'rest1', 'rest2'
             yield
         def writeSome():
             data = yield 'write this'
@@ -701,7 +704,7 @@ class _ComposeTest(TestCase):
             self.fail()
         except Exception:
             exType, exValue, exTraceback = exc_info()
-            if cpython:
+            if cextension:
                 self.assertEqual(['testExceptionsHaveGeneratorCallStackAsBackTrace', 'g', 'f'], traceback_co_names(exTraceback))
             else:
                 # TS: FIXME: traceback cleaning broken in PY3: ('_compose' below)
@@ -1061,23 +1064,23 @@ class _ComposeTest(TestCase):
             return 1
             yield
         def f2():
-            return value_with_pushback(2,3)
+            return 2,3
             yield
         def f3():
-            return value_with_pushback(4,5,6)
+            return 4,5,6
             yield
         try: next(f0())
-        except StopIteration as e: self.assertEqual(None, e.value)
+        except StopIteration as e: self.assertEqual((), e.args)
         try: next(f1())
-        except StopIteration as e: self.assertEqual(1, e.value)
+        except StopIteration as e: self.assertEqual((1,), e.args)
         try: next(f2())
-        except StopIteration as e: self.assertEqual((value_with_pushback, 2, (3,)), (type(e.value), e.value.value, e.value.pushback))
+        except StopIteration as e: self.assertEqual(((2,3,), ), e.args)
         try: next(f3())
-        except StopIteration as e: self.assertEqual((value_with_pushback, 4, (5,6)), (type(e.value), e.value.value, e.value.pushback))
+        except StopIteration as e: self.assertEqual(((4,5,6), ), e.args)
 
     def testRaisStopIterationWithTupleValue(self):
         def f0():
-            return value_with_pushback((1, 2))
+            return ((1, 2), )
             yield
         def f1():
             result = yield f0()
@@ -1088,7 +1091,7 @@ class _ComposeTest(TestCase):
     def testConcurrentFlow(self):
         def f():
             first_msg = yield
-            return value_with_pushback(*first_msg.split())
+            return tuple(first_msg.split())
         def g():
             first = yield f()
             yield "response" # in between receiving msgs
@@ -1104,7 +1107,7 @@ class _ComposeTest(TestCase):
 
     def testRaiseRemainingMessages(self):
         def f():
-            return value_with_pushback(1,2,3)
+            return 1,2,3
             yield
         def g():
             one = yield f()
@@ -1116,7 +1119,6 @@ class _ComposeTest(TestCase):
             next(c)
         except StopIteration as e:
             self.assertEqual(3, e.value)
-            #self.assertEqual((value_with_pushback, None, (3,)), (type(e.value), e.value.value, e.value.pushback))
 
     def testComposeInCompose(self):
         def f():
@@ -1167,7 +1169,7 @@ AssertionError: Generator already used.\n""" % {
                 'cLine': cLine,
                 'genYieldLine': genYieldLine,
             }
-            if cpython:
+            if cextension:
                 stackText = """\
 Traceback (most recent call last):
   File "%(__file__)s", line %(cLine)s, in testUnsuitableGeneratorTraceback
@@ -1272,7 +1274,7 @@ class ComposeCTest(_ComposeTest):
     def testQueueSize(self):
         testrange = 9 #QUEUE SIZE = 10
         def f():
-            return value_with_pushback(*range(testrange))
+            return tuple(range(testrange))
             yield 'f done'
         def g():
             results = []
@@ -1288,7 +1290,7 @@ class ComposeCTest(_ComposeTest):
     def testQueueSizeExceeded(self):
         testrange = 10 #QUEUE SIZE = 10
         def f():
-            return value_with_pushback(*range(testrange))
+            return tuple(range(testrange))
             yield
         def g():
             x = yield f()
@@ -1318,7 +1320,7 @@ class ComposeCTest(_ComposeTest):
         DECREF(<temporary>) in compose_clear()"""
         def f():
             msg = yield
-            return value_with_pushback(*msg.split())
+            return tuple(msg.split())
 
         r = compose(f())
         next(r)
