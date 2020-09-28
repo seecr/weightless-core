@@ -138,7 +138,7 @@ class ObservableTest(TestCase):
             next(g)
             self.fail("Should not happen")
         except AssertionError as e:
-            self.assertTrue("> returned '2'" in str(e), str(e))
+            self.assertTrue(str(e).endswith(" returned '2'"), str(e))
             if not cextension:
                 self.assertTrue("<bound method ObservableTest.testAllAssertsNoneReturnValues.<locals>.A.all_unknown of <core.observabletest.ObservableTest.testAllAssertsNoneReturnValues.<locals>.A object at 0x" in str(e), str(e))
 
@@ -308,12 +308,12 @@ class ObservableTest(TestCase):
     def testAnyViaUnknown(self):
         class A(object):
             def any_unknown(self, message, *args, **kwargs):
-                return (message, args, kwargs)
+                return [message, args, kwargs]
                 yield
         root = be((Observable(), (A(),)))
         try: next(compose(root.any.f(1, a=2)))
-        except StopIteration as e: r = e.args[0]
-        self.assertEqual(('f', (1,), {'a': 2}), r)
+        except StopIteration as e: r = e.args
+        self.assertEqual((['f', (1,), {'a': 2}], ), r)
 
     def testCallViaUnknown(self):
         class A(object):
