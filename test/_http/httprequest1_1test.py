@@ -1423,7 +1423,7 @@ RuntimeError: Boom!\n""" % fileDict)
 
     def testHttpRequestAdapterWithMock(self):
         def httprequestMessageMock(**kwargs):
-            return (
+            return [
                 {
                     'HTTPVersion': b'1.7',  # Ofcouse.., but fun.
                     'StatusCode': b'200',
@@ -1435,7 +1435,7 @@ RuntimeError: Boom!\n""" % fileDict)
                     },
                 },
                 b'Body'
-            )
+            ]
             yield
         trace = CallTrace('HttpRequest1_1Mock', methods={'httprequest1_1': httprequestMessageMock})
         top = be((Observable(),

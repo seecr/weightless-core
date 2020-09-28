@@ -31,7 +31,7 @@ from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_RDWR
 from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
 from sys import exc_info, getdefaultencoding
 
-from weightless.core import compose, identify, Observable, autostart, Yield, value_with_pushback
+from weightless.core import compose, identify, Observable, autostart, Yield
 from weightless.io import Suspend, TimeoutException
 from weightless.http import REGEXP, HTTP, FORMAT, parseHeaders
 
@@ -58,7 +58,7 @@ class HttpRequest1_1(Observable):
         s = Suspend(doNext=g.send, **kw)
         yield s
         result = s.getResult()
-        return result
+        return list(result)
 
 
 class HttpRequestAdapter(Observable):
@@ -258,7 +258,7 @@ def _readHeaderAndBody(sok, method, requestHeaders, bodyMaxSize):
     statusAndHeaders, rest = yield _readHeader(sok)
     readStrategy, doClose = _determineBodyReadStrategy(statusAndHeaders=statusAndHeaders, method=method, requestHeaders=requestHeaders, bodyMaxSize=bodyMaxSize)
     body = yield readStrategy(sok, rest)
-    return (statusAndHeaders, body, doClose)
+    return [statusAndHeaders, body, doClose]
 
 def _readHeader(sok, rest=b''):
     responses = rest
@@ -287,7 +287,7 @@ def _readHeader(sok, rest=b''):
         # 100 Continue response, eaten it - and then read the real response.
         statusAndHeaders, rest = yield _readHeader(sok, rest=rest)
 
-    return (statusAndHeaders, rest)
+    return [statusAndHeaders, rest]
 
 def _determineBodyReadStrategy(statusAndHeaders, method, requestHeaders, bodyMaxSize=None):
     doClose = False
@@ -491,7 +491,7 @@ def _trailers():
     trailersStr = match.groupdict()['_trailers']  # Unparsed trailers or None
     end = match.end()
     rest = data[end:]
-    return (trailersStr, rest)
+    return [trailersStr, rest]
 
 def _oneChunk():
     data = b''
@@ -506,8 +506,7 @@ def _oneChunk():
     data = data[match.end():]
 
     if size == 0:
-        pushback = (data,) if data else ()
-        return value_with_pushback(None, *pushback)
+        return None, data
 
     while (len(data) - _CRLF_LEN) < size:
         _in = yield
@@ -515,8 +514,7 @@ def _oneChunk():
 
     chunk = data[:size]
     data = data[(size + _CRLF_LEN):]
-    pushback = (data,) if data else ()
-    return value_with_pushback(chunk, *pushback)
+    return chunk, data
 
 def _asyncRead(sok):
     while True:
