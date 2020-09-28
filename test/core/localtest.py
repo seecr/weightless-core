@@ -82,7 +82,12 @@ class LocalTest(TestCase):
             while t:
                 names.append(t.tb_frame.f_code.co_name)
                 t = t.tb_next
-        self.assertEqual(['testNotFoundStacktraceCleanGeneratorFunctions', 'consume', '_compose', 'a', 'b', 'c'] + ([] if cextension else ['local']), names)
+
+        expectedNames = ['testNotFoundStacktraceCleanGeneratorFunctions', 'consume', '_compose', 'a', 'b', 'c', 'local']
+        if cextension:
+            expectedNames.remove("_compose")
+            expectedNames.remove("local")
+        self.assertEqual(expectedNames, names)
 
     def testVariousTypes(self):
         strArgument = 'string'
