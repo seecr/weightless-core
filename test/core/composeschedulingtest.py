@@ -29,7 +29,7 @@ from sys import stdout, exc_info, getrecursionlimit, version_info
 from types import GeneratorType
 from seecr.test.utils import ignoreLineNumbers
 
-from weightless.core import autostart, cpython
+from weightless.core import autostart, cextension
 from weightless.core._compose_py import __file__ as  _compose_py_module_file
 from weightless.core._compose_py import compose as pyCompose
 from weightless.core._compose_py import Yield as pyYield
@@ -220,6 +220,10 @@ AssertionError: Cannot accept data. First send None.\n""" % {
                 'fLine': fLine,
                 'gLine': gLine,
             } % fileDict
+            if cextension:
+                stackText = stackText.replace("""
+  File "../weightless/core/_compose_py.py", line 143, in _compose
+    raise exception[1].with_traceback(exception[2])""", "")
             tbString = format_exc()
             self.assertEqual(ignoreLineNumbers(stackText), ignoreLineNumbers(tbString))
         else:
@@ -256,6 +260,10 @@ Exception: tripping compose\n""" % {
                 'fLine': fLine,
                 'gLine': gLine,
             } % fileDict
+            if cextension:
+                stackText = stackText.replace("""
+  File "../weightless/core/_compose_py.py", line 143, in _compose
+    raise exception[1].with_traceback(exception[2])""", "")
             tbString = format_exc()
             self.assertEqual(ignoreLineNumbers(stackText), ignoreLineNumbers(tbString))
         else:
@@ -315,6 +323,10 @@ AssertionError: Generator already used.\n""" % {
                 'cLine': cLine,
                 'genYieldLine': genYieldLine,
             }
+            if cextension:
+                stackText = stackText.replace("""
+  File "../weightless/core/_compose_py.py", line 143, in _compose
+    raise exception[1].with_traceback(exception[2])""", "")
             tbString = format_exc()
             self.assertEqual(ignoreLineNumbers(stackText), ignoreLineNumbers(tbString))
         else:
@@ -351,6 +363,10 @@ Exception: tripping compose\n""" % {
                 'fLine': fLine,
                 'compose_py': fileDict['compose_py'],
             }
+            if cextension:
+                stackText = stackText.replace("""
+  File "../weightless/core/_compose_py.py", line 143, in _compose
+    raise exception[1].with_traceback(exception[2])""", "")
             tbString = format_exc()
             self.assertEqual(ignoreLineNumbers(stackText), ignoreLineNumbers(tbString))
         else:
@@ -367,7 +383,7 @@ class ComposeSchedulingCTest(_ComposeSchedulingTest):
     def testYieldSentinel_C(self):
         self.assertTrue(Yield is Yield)
         self.assertTrue(Yield == Yield)
-        self.assertEqual("<type 'Yield'>", repr(Yield))
+        self.assertEqual("<class 'Yield'>", repr(Yield))
         self.assertEqual(type, type(Yield))
         try:
             Yield()

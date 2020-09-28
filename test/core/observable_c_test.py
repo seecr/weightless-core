@@ -1,6 +1,6 @@
 from unittest import TestCase
 from types import GeneratorType
-from weightless.core import Observable, compose, local
+from weightless.core import Observable, compose, local, cextension
 from weightless.core.ext import AllGenerator, DeclineMessage
 
 
@@ -24,7 +24,10 @@ class Observable_C_Test(TestCase):
     def testCreateAllGeneratorWithWrongArgs(self):
         try: AllGenerator(); self.fail()
         except TypeError as e:
-            self.assertEqual("Required argument 'methods' (pos 1) not found", str(e))
+            if not cextension:
+                self.assertEqual("Required argument 'methods' (pos 1) not found", str(e))
+            else:
+                self.assertEqual("__new__() missing required argument 'methods' (pos 1)", str(e))
 
         try: AllGenerator({}); self.fail()
         except TypeError as e:
@@ -32,7 +35,10 @@ class Observable_C_Test(TestCase):
 
         try: AllGenerator(()); self.fail()
         except TypeError as e:
-            self.assertEqual("Required argument 'args' (pos 2) not found", str(e))
+            if not cextension:
+                self.assertEqual("Required argument 'args' (pos 2) not found", str(e))
+            else:
+                self.assertEqual("__new__() missing required argument 'args' (pos 2)", str(e))
 
         try: AllGenerator((), {}); self.fail()
         except TypeError as e:
@@ -40,7 +46,10 @@ class Observable_C_Test(TestCase):
 
         try: AllGenerator((), ()); self.fail()
         except TypeError as e:
-            self.assertEqual("Required argument 'kwargs' (pos 3) not found", str(e))
+            if not cextension:
+                self.assertEqual("Required argument 'kwargs' (pos 3) not found", str(e))
+            else:
+                self.assertEqual("__new__() missing required argument 'kwargs' (pos 3)", str(e))
 
         try: AllGenerator((), (), ()); self.fail()
         except TypeError as e:
