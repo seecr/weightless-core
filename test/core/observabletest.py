@@ -443,7 +443,7 @@ class ObservableTest(TestCase):
             self.fail('should raise NoneOfTheObserversRespond')
         except NoneOfTheObserversRespond as e:
             # broken traceback cleaning: _compose
-            self.assertFunctionsOnTraceback("testProperErrorMessage", "_compose", "any")
+            self.assertFunctionsOnTraceback(*expected("testProperErrorMessage", "_compose", "any", exclude=['_compose']))
             self.assertEqual('None of the 0 observers respond to gimmeAnswer(...)', str(e))
 
     def testProperErrorMessageWhenArgsDoNotMatch(self):
@@ -572,19 +572,19 @@ class ObservableTest(TestCase):
             next(compose(root.any.aAny()))
             self.fail('Should not happen')
         except RuntimeError:
-            self.assertFunctionsOnTraceback('testTransparentUnknownImplementationIsVisibleOnTraceback', '_compose', 'any', 'any_unknown', 'any', 'aAny', 'lookBusy')
+            self.assertFunctionsOnTraceback(*expected('testTransparentUnknownImplementationIsVisibleOnTraceback', '_compose', 'any', 'any_unknown', 'any', 'aAny', 'lookBusy', exclude=['_compose']))
 
         try:
             next(compose(root.all.aAll()))
             self.fail('Should not happen')
         except RuntimeError:
-            self.assertFunctionsOnTraceback('testTransparentUnknownImplementationIsVisibleOnTraceback', '_compose', 'all', 'all_unknown', 'all', 'aAll')
+            self.assertFunctionsOnTraceback(*expected('testTransparentUnknownImplementationIsVisibleOnTraceback', '_compose', 'all', 'all_unknown', 'all', 'aAll', exclude=['_compose', "all"]))
 
         try:
             root.do.aDo()
             self.fail('Should not happen')
         except RuntimeError:
-            self.assertFunctionsOnTraceback('testTransparentUnknownImplementationIsVisibleOnTraceback', 'do', 'all', 'do_unknown', 'unknown', 'do', 'all', 'aDo')
+            self.assertFunctionsOnTraceback(*expected('testTransparentUnknownImplementationIsVisibleOnTraceback', 'do', 'all', 'do_unknown', 'unknown', 'do', 'all', 'aDo', exclude=['all']))
 
     def testFixUpExceptionTraceBack(self):
         # Py3: Tracebacks dont hide unwanted function calls anymore
@@ -598,21 +598,21 @@ class ObservableTest(TestCase):
         try:
             list(compose(observable.any.a()))
         except Exception as e:
-            self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "_compose", "any", "all", "a")
+            self.assertFunctionsOnTraceback(*expected("testFixUpExceptionTraceBack", "_compose", "any", "all", "a", exclude=['_compose', "all"]))
         else:
             self.fail('Should not happen.')
 
         try:
             list(compose(observable.all.a()))
         except Exception:
-            self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "_compose", "all", "a")
+            self.assertFunctionsOnTraceback(*expected("testFixUpExceptionTraceBack", "_compose", "all", "a", exclude=['_compose' , 'all']))
         else:
             self.fail('Should not happen.')
 
         try:
             observable.do.a()
         except Exception:
-            self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "do", "all", "a")
+            self.assertFunctionsOnTraceback(*expected("testFixUpExceptionTraceBack", "do", "all", "a", exclude=['all']))
         else:
             self.fail('Should not happen.')
 
@@ -626,14 +626,14 @@ class ObservableTest(TestCase):
         try:
             list(compose(observable.any.unknown('a')))
         except Exception:
-            self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "_compose", "any", "all", "a")
+            self.assertFunctionsOnTraceback(*expected("testFixUpExceptionTraceBack", "_compose", "any", "all", "a", exclude=['_compose', 'all']))
         else:
             self.fail('Should not happen.')
 
         try:
             list(compose(observable.any.somethingNotThereButHandledByUnknown('a')))
         except Exception:
-            self.assertFunctionsOnTraceback("testFixUpExceptionTraceBack", "_compose", "any", "any_unknown", "a")
+            self.assertFunctionsOnTraceback(*expected("testFixUpExceptionTraceBack", "_compose", "any", "any_unknown", "a", exclude=['_compose']))
         else:
             self.fail('Should not happen.')
 
@@ -867,7 +867,7 @@ class ObservableTest(TestCase):
         try:
             list(compose(root.once.raisesOnCallGenerator()))
         except BaseException:
-            self.assertFunctionsOnTraceback('testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce', '_compose', '_callonce', '_callonce', '_callonce', '_callonce', 'raisesOnCallGenerator')
+            self.assertFunctionsOnTraceback(*expected('testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce', '_compose', '_callonce', '_callonce', '_callonce', '_callonce', 'raisesOnCallGenerator', exclude=['_compose']))
             #self.assertFunctionsOnTraceback('testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce', 'raisesOnCallGenerator')
         else:
             self.fail('Should not happen')
@@ -875,7 +875,7 @@ class ObservableTest(TestCase):
         try:
             list(compose(root.once.raisesOnCall()))
         except BaseException:
-            self.assertFunctionsOnTraceback('testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce', '_compose', '_callonce', '_callonce', '_callonce', '_callonce', 'raisesOnCall')
+            self.assertFunctionsOnTraceback(*expected('testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce', '_compose', '_callonce', '_callonce', '_callonce', '_callonce', 'raisesOnCall', exclude=['_compose']))
             #self.assertFunctionsOnTraceback('testOnceInternalsNotOnTracebackUnlessAssertsAndThenOnlyOnce', 'raisesOnCall')
         else:
             self.fail('Should not happen')
@@ -1278,3 +1278,7 @@ class Responder(Observable):
         return self._value
     def all_unknown(self, message, *args, **kwargs):
         yield self._value
+
+def expected(*args, exclude=None):
+    return list(filter(lambda x: x not in exclude, args)) if cextension else args
+

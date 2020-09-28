@@ -40,7 +40,7 @@ class ObservableDirectedMessagingTest(TestCase):
 
         list(compose(observable.all["name"].method()))
         list(compose(observable.all["name"].method()))
-        
+
         self.assertEqual(["A", "A"], called)
 
     def testDeferredObjectsAreCached(self):
@@ -50,7 +50,7 @@ class ObservableDirectedMessagingTest(TestCase):
         observable.addObserver(A("name"))
         d1 = observable.all["name"]
         d2 = observable.all["name"]
-        self.assertEqual(d1, d2) 
+        self.assertEqual(d1, d2)
 
     def testDirectedObserverMessagingIgnoresNonObservableObservers(self):
         observable = Observable()
@@ -63,7 +63,7 @@ class ObservableDirectedMessagingTest(TestCase):
         observable.addObserver(Z())
 
         list(compose(observable.all["name"].method()))
-        
+
         self.assertEqual([], called)
 
         list(compose(observable.all.method()))
@@ -89,7 +89,7 @@ class ObservableDirectedMessagingTest(TestCase):
         observable.addObserver(Z())
 
         list(compose(observable.all["name"].method()))
-        
+
         self.assertEqual(['Y'], called)
 
         del called[:]
@@ -113,7 +113,7 @@ class ObservableDirectedMessagingTest(TestCase):
                 called.append(("A", this.observable_name()))
                 return
                 yield
-        
+
         class B(Observable):
             def method(this):
                 called.append(("B", this.observable_name()))
@@ -126,10 +126,10 @@ class ObservableDirectedMessagingTest(TestCase):
         observable.addObserver(B())
 
         list(compose(observable.all.method()))
-        
-        self.assertEqual([("A", "name"), 
-            ("A", "anothername"), 
-            ("B", "anothername"), 
+
+        self.assertEqual([("A", "name"),
+            ("A", "anothername"),
+            ("B", "anothername"),
             ("B", None)], called)
         del called[:]
 

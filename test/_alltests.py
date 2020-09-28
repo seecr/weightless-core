@@ -52,7 +52,7 @@ else:
     from core.observable_c_test import Observable_C_Test
 from core.localtest import LocalTest
 from core.observabletest import ObservableTest
-#from core.observabledirectedmessagingtest import ObservableDirectedMessagingTest
+from core.observabledirectedmessagingtest import ObservableDirectedMessagingTest
 #from core.utilstest import UtilsTest
 
 #from _http.acceptortest import AcceptorTest
