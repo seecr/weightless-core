@@ -50,15 +50,6 @@ elif hasattr(platform, 'system'):
 else:
     cpython = False
 
-class value_with_pushback(object):
-    def __init__(self, value, *pushback):
-        self.value = value
-        self.pushback = pushback
-
-    @property
-    def args(self):
-        return (self.value,) + self.pushback
-
 try:
     from os import getenv
     if getenv('WEIGHTLESS_COMPOSE_TEST') == 'PYTHON':

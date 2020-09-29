@@ -25,7 +25,7 @@
 ## end license ##
 
 from sys import exc_info
-from weightless.core import cpython, is_generator, value_with_pushback
+from weightless.core import cpython, is_generator
 
 """
 Wrt exceptions, see http://www.python.org/doc/2.5.4/lib/module-exceptions.html for Python 2.5:
@@ -73,7 +73,7 @@ def _compose(initial, stepping):
     The method compose() allows program (de)composition with generators.  It enables calls like:
         retvat = yield otherGenerator(args)
     The otherGenerator may return values by:
-        return value_with_pushback(retval, remaining data)
+        return retval, remaining data
     Remaining data might be present if the otherGenerator consumes less than it get gets.  It must
     make this remaining data available to the calling generator by yielding it as shown.
     Most notably, compose enables catching exceptions:

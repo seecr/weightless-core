@@ -25,7 +25,7 @@
 
 from functools import wraps
 from re import compile
-from weightless.core import compose, value_with_pushback
+from weightless.core import compose
 
 from inspect import isgeneratorfunction
 
@@ -84,7 +84,7 @@ def readRe(regexp, maximum=None):
         raise Exception("no match at eof: '%s'" % message)
     args = match.groupdict()
     rest = message[match.end():]
-    return value_with_pushback(args, rest) if rest else args
+    return (args, rest) if rest else args
 
 def readAll():
     data = []
@@ -105,11 +105,11 @@ def copyBytes(tosend, target):
     if response:
         message = yield response
         if message and tail:
-            return value_with_pushback(None, tail, message)
+            return None, tail, message
         if message and not tail:
-            return value_with_pushback(None, message)
+            return None, message
         if tail and not message:
-            return value_with_pushback(None, tail)
+            return None, tail
         return
     if tail:
-        return value_with_pushback(None, tail)
+        return None, tail
