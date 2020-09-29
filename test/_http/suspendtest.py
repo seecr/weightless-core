@@ -564,9 +564,11 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
         with self.loopingReactor():
             sok = self.httpGet(host='127.42.42.42', port=port, path='/ignored')
             allData = b''
+            attempts = 0
             try:
-                while allData != b'HTTP/1.0 200 OK\r\n\r\n':
+                while allData != b'HTTP/1.0 200 OK\r\n\r\n' and attempts < 2:
                     allData += sok.recv(4096)
+                    attempts += 1
             finally:
                 sok.close()
                 servert.shutdown()
