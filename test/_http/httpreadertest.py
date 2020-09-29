@@ -229,7 +229,7 @@ class HttpReaderTest(WeightlessTestCase):
             done = []
             expectedrequest = "GET / HTTP/1.1\r\nHost: localhost\r\nUser-Agent: Weightless/v%s\r\n\r\n" % WlVersion
             requests = []
-            with self.referenceHttpServer(self.port, requests, rawResponse=("\r\n".join("""HTTP/1.1 302 Found
+            rawResponse=("\r\n".join("""HTTP/1.1 302 Found
 Date: Fri, 26 Oct 2007 07:23:26 GMT
 Server: Apache/2.2.3 (Debian) mod_python/3.2.10 Python/2.4.4 mod_ssl/2.2.3 OpenSSL/0.9.8c
 Location: /page/softwarestudio.page/show
@@ -242,7 +242,8 @@ Content-Type: text/html; charset=utf-8
 0
 
 
-""".split("\n"))).encode()):
+""".split("\n"))).encode()
+            with self.referenceHttpServer(self.port, requests, rawResponse=rawResponse):
                 class Handler:
                     def send(self, data):
                         sentData.append(data)
