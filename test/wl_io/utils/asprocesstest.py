@@ -27,7 +27,7 @@ from seecr.test.io import stdout_replaced
 
 from functools import partial
 
-from weightless.core import identify, local, value_with_pushback
+from weightless.core import identify, local
 from weightless.io import Reactor, reactor, Suspend
 
 from weightless.io.utils import asProcess
@@ -57,10 +57,10 @@ class AsProcessTest(SeecrTestCase):
 
         # arguments passed into and returned as retval (normal and as decorator)
         def genF(a, b):
-            return (a, b)
+            return [a, b]
             yield
-        self.assertEqual((1, 2), asProcess(genF)(1, b=2))
-        self.assertEqual((1, 2), asProcess(genF(1, b=2)))
+        self.assertEqual([1, 2], asProcess(genF)(1, b=2))
+        self.assertEqual([1, 2], asProcess(genF(1, b=2)))
 
     def testDecorator(self):
         @asProcess
@@ -201,7 +201,7 @@ class AsProcessTest(SeecrTestCase):
             return 1
             yield
         def oneRetvalWithIgnoredPushback():
-            return value_with_pushback(1, 'p', 'u', 's', 'h')
+            return 1, 'p', 'u', 's', 'h'
             yield
         def retvalDependantOnPushbackEval():
             one_ = yield oneRetvalWithIgnoredPushback()
@@ -285,5 +285,5 @@ class AsProcessTest(SeecrTestCase):
         def thisAndThat():
             this = '42'
             that = yield suspending()
-            return (this, that)
-        self.assertEqual(('42', 'whileSuspended'), asProcess(thisAndThat()))
+            return [this, that]
+        self.assertEqual(['42', 'whileSuspended'], asProcess(thisAndThat()))
