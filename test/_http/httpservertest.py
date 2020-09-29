@@ -318,7 +318,7 @@ class HttpServerTest(WeightlessTestCase):
         compressed_response = response.split(b'\r\n\r\n', 1)[1]
         decompressed_response = GzipFile(None, fileobj=BytesIO(compressed_response)).read()
         self.assertEqual(rawBody.encode(), decompressed_response)
-        self.assertTrue(6 <= len(sokSends) <= 20, len(sokSends))
+        self.assertTrue(6 <= len(sokSends) <= 24, len(sokSends))
 
     def testCompressLargerBuggerToTriggerCompressionBuffersToFlush(self):
         rawHeaders = 'HTTP/1.1 200 OK\r\nSome: Header\r\nAnother: Header\r\n\r\n'
