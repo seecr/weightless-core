@@ -227,5 +227,5 @@ def sleepWheel(seconds, callback=None, interval=0.2):
     return False
 
 def ignoreLineNumbers(s):
-    return sub("line \d+,", "line [#],", s)
+    return sub('File "[^"].*",', 'File [x],', sub("line \d+,", "line [#],", s))
 
