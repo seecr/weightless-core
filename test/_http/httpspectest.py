@@ -33,6 +33,10 @@ class HttpSpecTest(TestCase):
         self.assertEqual((b'aap', {b'noot': b'mies'}), httpspec.parseHeaderFieldvalue(b'aap; noot=mies'))
         self.assertEqual((b'aap', {b'noot': b'mies', b'vis': b'vuur'}), httpspec.parseHeaderFieldvalue(b'aap; noot=mies; vis=vuur'))
 
+    def testParseHeadersfdsfdsfdsfds(self):
+        self.assertEqual({b'Aap': b'noot'}, httpspec.parseHeaders(b"aap: noot\r\n"))
+        self.assertEqual({'Aap': 'noot'}, httpspec.parseHeadersString("aap: noot\r\n"))
+
     def testParseContentDispositionValues(self):
         self.assertEqual((b'attachment', {}), httpspec.parseHeaderFieldvalue(b'attachment'))
         self.assertEqual((b'attachment', {b'filename': b'document.pdf'}),

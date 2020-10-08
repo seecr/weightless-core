@@ -32,16 +32,16 @@ from weightless.core import VERSION
     http://www.w3.org/Protocols/rfc2616/rfc2616.html
 """
 
-def parseHeaders(headerString):
-    headers = {}
-    for (groupname, fieldname, fieldvalue) in REGEXP.HEADER.findall(headerString):
-        headers[fieldname.title()] = fieldvalue.strip()
-    return headers
+def parseHeadersString(headerString):
+    return {k.decode():v.decode() for k,v in parseHeaders(headerString.encode()).items()}
 
-def unquote(s):
-    if s and len(s) > 1 and s[0] == s[-1] == ord('"'):
-        return s[1:-1]
-    return s
+def parseHeaders(headerBytes):
+    return {fieldname.title():fieldvalue.strip() for (groupname, fieldname, fieldvalue) in REGEXP.HEADER.findall(headerBytes)}
+
+def unquote(b):
+    if b and len(b) > 1 and b[0] == b[-1] == ord('"'):
+        return b[1:-1]
+    return b
 
 def parseHeaderFieldvalue(fieldvalue):
     parts = fieldvalue.split(b';', 1)

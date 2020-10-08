@@ -24,7 +24,7 @@
 #
 ## end license ##
 
-from .httpspec import parseHeaders, parseHeader, parseHeaderFieldvalue, HTTP, REGEXP, FORMAT
+from .httpspec import parseHeaders, parseHeader, parseHeaderFieldvalue, HTTP, REGEXP, FORMAT, parseHeadersString
 
 from ._httpreader import HttpReader
 from ._httpserver import HttpServer, SUPPORTED_COMPRESSION_CONTENT_ENCODINGS, parseContentEncoding
