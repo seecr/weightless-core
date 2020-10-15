@@ -2,7 +2,7 @@
 #
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
-# Copyright (C) 2011-2012 Seecr (Seek You Too B.V.) http://seecr.nl
+# Copyright (C) 2011-2012, 2020 Seecr (Seek You Too B.V.) https://seecr.nl
 #
 # This file is part of "Weightless"
 #
