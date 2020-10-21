@@ -1,3 +1,1 @@
-python-openssl
-python-six
-python-cryptography
+python3-six
