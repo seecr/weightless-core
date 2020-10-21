@@ -26,25 +26,8 @@
 
 export LANG=en_US.UTF-8
 export PYTHONPATH=.:"$PYTHONPATH"
+export PYTHONWARNINGS=default
 
-option=$1
-pyversions=""
-for pythonVersion in python3.7
-do
-    if command -v ${pythonVersion} > /dev/null; then
-        pyversions="${pyversions} ${pythonVersion}"
-    fi
-done
-if [ -z pyversions ]; then
-    echo "No suitable python version found"
-    exit 1
-fi
-
-if [ "${option:0:10}" == "--python2." ]; then
-    shift
-    pyversions="${option:2}"
-fi
-echo Found Python versions: $pyversions
 option=$1
 if [ "$option" == "--python" ]; then
         shift
@@ -59,9 +42,7 @@ fi
 echo Performing tests: $tests
 
 for t in $tests; do
-    for pycmd in $pyversions; do
-        echo "================ $t with $pycmd _alltests.py $@ ================"
-        #WEIGHTLESS_COMPOSE_TEST=$t gdb --args $pycmd _alltests.py "$@"
-        WEIGHTLESS_COMPOSE_TEST=$t $pycmd _alltests.py "$@"
-    done
+    echo "================ $t with python3 _alltests.py $@ ================"
+    #WEIGHTLESS_COMPOSE_TEST=$t gdb --args python3 _alltests.py "$@"
+    WEIGHTLESS_COMPOSE_TEST=$t python3 _alltests.py "$@"
 done
