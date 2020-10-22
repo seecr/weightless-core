@@ -73,6 +73,7 @@ class UdpAcceptorTest(TestCase):
     def testAcceptorWithPrio(self):
         reactor = CallTrace()
         port = PortNumberGenerator.next()
-        Acceptor(reactor, port, lambda sok: None, prio=5)
+        acc = Acceptor(reactor, port, lambda sok: None, prio=5)
         self.assertEqual('addReader', reactor.calledMethods[0].name)
         self.assertEqual(5, reactor.calledMethods[0].kwargs['prio'])
+        acc.close()
