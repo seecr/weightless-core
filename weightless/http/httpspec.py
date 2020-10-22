@@ -24,7 +24,7 @@
 #
 ## end license ##
 
-from re import compile
+import re
 from weightless.core import VERSION
 
 """
@@ -68,8 +68,8 @@ class HTTP:
     SP = b' '
     CRLF = b'\r\n'
     # http://www.w3.org/Protocols/rfc2616/rfc2616-sec2.html#sec2.2
-    token =  b"([!#$%&'*+\-.0-9A-Z^_`a-z|~]+){1}"
-    quoted_string = r'(?s)".*?(?:(?<!\\)")'.encode()
+    token =  b"([!#$%&'*+\\-.0-9A-Z^_`a-z|~]+){1}"
+    quoted_string = r'".*?(?:(?<!\\)")'.encode()
     field_name = token
     field_value = b'.*'
     named_field_name = b'(?P<fieldname>' + field_name + b')'
@@ -82,7 +82,7 @@ class HTTP:
 
     Method = b'(?P<Method>' + token + b')'
     Request_URI = b'(?P<RequestURI>.+)'
-    HTTP_Version = b'HTTP/(?P<HTTPVersion>\d\.\d)'
+    HTTP_Version = b'HTTP/(?P<HTTPVersion>\\d\\.\\d)'
     ignoredCRLFs = b'(' + CRLF + b')*'
     Request_Line = ignoredCRLFs + Method + SP + Request_URI + SP + HTTP_Version + CRLF
 
@@ -98,13 +98,13 @@ class HTTP:
 
 
 class REGEXP:
-    RESPONSE = compile(HTTP.Response)
-    REQUEST = compile(HTTP.Request)
-    REQUESTLINE = compile(HTTP.Request_Line)
-    HEADER = compile(HTTP.named_message_header)
-    CHUNK_SIZE_LINE = compile(HTTP.Chunk_Size_Line)
-    CRLF = compile(HTTP.CRLF)
-    FIELDVALUE = compile(HTTP.named_field_name + b"=" + b"(?P<fieldvalue>(" + HTTP.token + b"|" + HTTP.quoted_string + b"))")
+    RESPONSE = re.compile(HTTP.Response)
+    REQUEST = re.compile(HTTP.Request)
+    REQUESTLINE = re.compile(HTTP.Request_Line)
+    HEADER = re.compile(HTTP.named_message_header)
+    CHUNK_SIZE_LINE = re.compile(HTTP.Chunk_Size_Line)
+    CRLF = re.compile(HTTP.CRLF)
+    FIELDVALUE = re.compile(HTTP.named_field_name + b"=" + b"(?P<fieldvalue>(" + HTTP.token + b"|" + HTTP.quoted_string + b"))", re.DOTALL)
 
 class FORMAT:
     RequestLine = b'%(Method)s %(Request_URI)s HTTP/%(HTTPVersion)s' + HTTP.CRLF

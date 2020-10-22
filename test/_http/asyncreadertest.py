@@ -154,7 +154,7 @@ class AsyncReaderTest(WeightlessTestCase):
                 stacktrace = ignoreLineNumbers(''.join(format_exception(*self.error)))
                 methodTrace = ([each.split("\n")[0].rsplit(' ',1)[-1] for each in format_exception(*self.error) if '  File "' in each])
                 self.assertEqual(
-                    ['handle', 'failingserver', 'httprequest', 'getResult', '_do', '_sendHttpHeaders', 'requestLine'], 
+                    ['handle', 'failingserver', 'httprequest', 'getResult', '_do', '_sendHttpHeaders', 'requestLine'],
                     methodTrace)
                 self.assertTrue(stacktrace.strip().endswith("RuntimeError: Boom!"), stacktrace)
 
