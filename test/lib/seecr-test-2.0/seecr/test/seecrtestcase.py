@@ -1,33 +1,33 @@
 # -*- coding: utf-8 -*-
 ## begin license ##
 #
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+# "Seecr Test" provides test tools.
 #
 # Copyright (C) 2005-2009 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2012-2013, 2020 Seecr (Seek You Too B.V.) https://seecr.nl
+# Copyright (C) 2012-2014, 2016, 2020 Seecr (Seek You Too B.V.) https://seecr.nl
 #
-# This file is part of "Weightless"
+# This file is part of "Seecr Test"
 #
-# "Weightless" is free software; you can redistribute it and/or modify
+# "Seecr Test" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 #
-# "Weightless" is distributed in the hope that it will be useful,
+# "Seecr Test" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with "Weightless"; if not, write to the Free Software
+# along with "Seecr Test"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
 
 from unittest import TestCase
-from io import StringIO
+from io import StringIO, BytesIO
 from functools import partial
-from itertools import chain
+from itertools import chain, zip_longest
 from os import getenv, close as osClose, remove, getpid
 from os.path import join, isfile, realpath, abspath
 from shutil import rmtree
@@ -37,9 +37,11 @@ from tempfile import mkdtemp, mkstemp
 from .timing import T
 
 import pprint
-import difflib
+from difflib import unified_diff, ndiff
 
-from lxml.etree import tostring, parse, Comment, PI, Entity
+from lxml.etree import tostring, parse, Comment, PI, Entity, XMLParser
+
+XPATH_IS_ONE_BASED = 1
 
 
 class SeecrTestCase(TestCase):
@@ -89,6 +91,16 @@ class SeecrTestCase(TestCase):
         )
         compare.compare()
 
+    def assertEqualText(self, expected, result):
+        diff = '\n'.join(unified_diff(
+                expected.split('\n'),
+                result.split('\n'),
+                fromfile='expected',
+                tofile='result',
+                lineterm=''
+            ))
+        self.assertEqual('', diff, diff)
+
     def assertDictEqual(self, d1, d2, msg=None):
         # 'borrowed' from python2.7's unittest.
         self.assertTrue(isinstance(d1, dict), 'First argument is not a dictionary')
@@ -96,7 +108,7 @@ class SeecrTestCase(TestCase):
 
         if d1 != d2:
             standardMsg = '%s != %s' % (safe_repr(d1, True), safe_repr(d2, True))
-            diff = ('\n' + '\n'.join(difflib.ndiff(
+            diff = ('\n' + '\n'.join(ndiff(
                        pprint.pformat(dict(d1)).splitlines(),
                        pprint.pformat(dict(d2)).splitlines())))
             standardMsg += diff
@@ -105,18 +117,15 @@ class SeecrTestCase(TestCase):
 
     assertDictEquals = assertDictEqual
 
-    def _getVmSize(self):
-        with open('/proc/%d/status' % getpid()) as fp:
-            status = fp.read()
-        i = status.find('VmSize:') + len('VmSize:')
-        j = status.find('kB', i)
-        vmsize = int(status[i:j].strip())
-        return vmsize
-
     def assertNoMemoryLeaks(self, bandwidth=0.8):
         vmsize = self._getVmSize()
         self.assertTrue(self.vmsize*bandwidth < vmsize < self.vmsize/bandwidth,
                 "memory leaking: before: %d, after: %d" % (self.vmsize, vmsize))
+
+    def assertXmlEquals(self, expected, value, expectedName='expected', valueName='result'):
+        d = diffXml(expected, value, firstName=expectedName, secondName=valueName)
+        self.assertEqual('', d, d)
+    assertXmlEqual = assertXmlEquals
 
     @staticmethod
     def binPath(executable, binDirs=None):
@@ -130,6 +139,39 @@ class SeecrTestCase(TestCase):
             if isfile(executablePath):
                 return realpath(abspath(executablePath))
         raise ValueError("No executable found for '%s'" % executable)
+
+    def _getVmSize(self):
+        with open('/proc/%d/status' % getpid()) as fp:
+            status = fp.read()
+        i = status.find('VmSize:') + len('VmSize:')
+        j = status.find('kB', i)
+        vmsize = int(status[i:j].strip())
+        return vmsize
+
+
+def diffXml(first, second, firstName='expected', secondName='result'):
+    def canonical(xml):
+        if isinstance(xml, str):
+            xml = xml.encode()
+        elif isinstance(xml, (bytes, bytearray)):
+            xml = xml
+        else:
+            xml = tostring(xml, encoding='utf-8')
+
+        xml = parse(BytesIO(xml), XMLParser(remove_blank_text=True))
+        xml = parse(BytesIO(tostring(xml, pretty_print=True, encoding='utf-8')))
+        bio = BytesIO()
+        xml.write_c14n(bio)
+        return bio.getvalue().decode()
+
+    first = canonical(first)
+    second = canonical(second)
+    return '\n'.join(unified_diff(
+        first.split('\n'),
+        second.split('\n'),
+        fromfile=firstName,
+        tofile=secondName,
+        lineterm=''))
 
 
 class CompareXml(object):
@@ -176,7 +218,7 @@ class CompareXml(object):
         except AssertionError:
             c, v, t = exc_info()
             v = c(str(v) + self._contextStr(expectedNode, resultNode))
-            raise c(v).with_traceback(t.tb_next)
+            raise v.with_traceback(t.tb_next)
 
     def _contextStr(self, expectedNode, resultNode):
         if not hasattr(self, '_context'):
@@ -185,9 +227,9 @@ class CompareXml(object):
         def reparseAndFindNode(root, node):
             refind = refindLxmlNodeCallback(root, node)
             text = tostring(root.getroottree() if isRootNode(root) else root, encoding='UTF-8')  # pretty_print input if you want to have pretty output.
-            newTree = parse(StringIO(text))
+            newTree = parse(BytesIO(text))
             newNode = refind(newTree)
-            return newTree, newNode, text
+            return newTree, newNode, text.decode()
 
         def formatTextForNode(node, originalNode, label, colorCode, text):
             diffLines = []
@@ -266,14 +308,14 @@ class CompareXml(object):
         if diff:
             raise AssertionError("Missing attributes %s at location: '%s'" % (
                     ', '.join(
-                        (("'%s'" % a) for a in diff)),
+                        (("'%s'" % a) for a in sorted(diff))),
                         self.xpathToHere(expectedNode, includeCurrent=True)
                 ))
         diff = resultAttrsSet.difference(expectedAttrsSet)
         if diff:
             raise AssertionError("Unexpected attributes %s at location: '%s'" % (
                     ', '.join(
-                        (("'%s'" % a) for a in diff)),
+                        (("'%s'" % a) for a in sorted(diff))),
                         self.xpathToHere(expectedNode, includeCurrent=True)
                 ))
 
@@ -447,46 +489,6 @@ def elementAsRepresentation(el):
     return tagName
 
 
-XPATH_IS_ONE_BASED = 1
-
-
-try:
-    from itertools import zip_longest
-except ImportError:
-    # Added for Python 2.5 compatibility
-    from itertools import repeat, chain
-    _SENTINEL = object()
-    def next(iterable, default=_SENTINEL):
-        try:
-            retval = iterable.__next__()
-        except StopIteration:
-            if default is _SENTINEL:
-                raise
-            retval = default
-        return retval
-
-    # izip_longest code below from:
-    #    http://docs.python.org/2/library/itertools.html#itertools.izip_longest
-    #    For it's license see: http://docs.python.org/2/license.html#history-and-license
-    class ZipExhausted(Exception):
-        pass
-
-    def izip_longest(*args, **kwds):
-        # izip_longest('ABCD', 'xy', fillvalue='-') --> Ax By C- D-
-        fillvalue = kwds.get('fillvalue')
-        counter = [len(args) - 1]
-        def sentinel():
-            if not counter[0]:
-                raise ZipExhausted
-            counter[0] -= 1
-            yield fillvalue
-        fillers = repeat(fillvalue)
-        iterators = [chain(it, sentinel(), fillers) for it in args]
-        try:
-            while iterators:
-                yield tuple(map(next, iterators))
-        except ZipExhausted:
-            pass
 
 
 _MAX_LENGTH = 80
@@ -498,4 +500,3 @@ def safe_repr(obj, short=False):
     if not short or len(result) < _MAX_LENGTH:
         return result
     return result[:_MAX_LENGTH] + ' [truncated]...'
-

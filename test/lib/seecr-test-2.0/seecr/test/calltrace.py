@@ -1,24 +1,24 @@
 ## begin license ##
 #
-# "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
+# "Seecr Test" provides test tools.
 #
 # Copyright (C) 2005-2009 Seek You Too (CQ2) http://www.cq2.nl
 # Copyright (C) 2012, 2020 Seecr (Seek You Too B.V.) https://seecr.nl
 #
-# This file is part of "Weightless"
+# This file is part of "Seecr Test"
 #
-# "Weightless" is free software; you can redistribute it and/or modify
+# "Seecr Test" is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 #
-# "Weightless" is distributed in the hope that it will be useful,
+# "Seecr Test" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with "Weightless"; if not, write to the Free Software
+# along with "Seecr Test"; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #
 ## end license ##
@@ -57,7 +57,7 @@ class CallTrace:
         return list(map(str, self.calledMethods))
 
     def __bool__(self):
-        return 1
+        return True
 
     def __repr__(self):
         #TODO: __repr__ ook terug laten komen in calltrace
@@ -111,6 +111,13 @@ class TracedCall:
 
         return returnValue
 
+    def asDict(self):
+        return {
+            'name': self.name,
+            'args': self.args,
+            'kwargs': self.kwargs
+        }
+
     def represent(self, something):
         """
         <calltracetest.NonObject instance at 0x2b02ba1075a8>
@@ -125,24 +132,23 @@ class TracedCall:
         objectsRe = compile(r'|'.join([instanceRe, objectRe]))
         classesRe = compile(r'|'.join([classRe, objectOnlyRe]))
 
+        strSomething = str(something)
+
         if something == None:
             return 'None'
-
-        if isinstance(something, str):
+        elif isinstance(something, str):
             return "'%s'" % something
-        if type(something) == int or type(something) == float:
-            return str(something)
-
-        typeName = str(something)
-        match = objectsRe.match(typeName)
-        if match:
-            return "<%s>" % filter(None, match.groups())[0]
-
-        match = classesRe.match(typeName)
-        if match:
-            return "<class %s>" % filter(None, match.groups())[0]
-
-        return typeName
+        elif isinstance(something, (int, float)):
+            return strSomething
+        elif isinstance(something, (bytes, bytearray)):
+            return strSomething
+        elif isinstance(something, type): # a Class
+            return "<class %s>" % getattr(something, ("__qualname__" if self._callTrace._verbose else "__name__"))
+        elif isinstance(type(something), type) and (" object " in strSomething or
+                                                    " instance " in strSomething): # object (instance) of some class
+            return "<%s>" % getattr(type(something), ("__qualname__" if self._callTrace._verbose else "__name__"))
+        else:
+            return strSomething
 
     def __repr__(self):
         return '%s(%s)' % (self.name, ", ".join(list(map(self.represent, self.args))+['%s=%s' % (key, self.represent(value)) for key, value in list(self.kwargs.items())]))
@@ -152,4 +158,3 @@ class CalledMethods(list):
     def reset(self):
         del self[:]
         return self
-
