@@ -2,7 +2,7 @@
 #
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
-# Copyright (C) 2011-2012, 2020 Seecr (Seek You Too B.V.) https://seecr.nl
+# Copyright (C) 2011-2012, 2020-2021 Seecr (Seek You Too B.V.) https://seecr.nl
 # Copyright (C) 2011 Seek You Too (CQ2) http://www.cq2.nl
 #
 # This file is part of "Weightless"
@@ -23,4 +23,4 @@
 #
 ## end license ##
 
-from ._utils import return_, identify, autostart, retval, consume, asList, asString, copyBytes, readRe, readAll, isgeneratorfunction
+from ._utils import *

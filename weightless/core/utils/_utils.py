@@ -3,7 +3,7 @@
 # "Weightless" is a High Performance Asynchronous Networking Library. See http://weightless.io
 #
 # Copyright (C) 2006-2011 Seek You Too (CQ2) http://www.cq2.nl
-# Copyright (C) 2011-2012, 2015, 2020 Seecr (Seek You Too B.V.) https://seecr.nl
+# Copyright (C) 2011-2012, 2015, 2020-2021 Seecr (Seek You Too B.V.) https://seecr.nl
 #
 # This file is part of "Weightless"
 #
@@ -49,6 +49,9 @@ def asList(g):
 
 def asString(g):
     return ''.join(compose(g))
+
+def asBytes(g):
+    return b''.join(compose(g))
 
 def identify(generatorFunction):
     @wraps(generatorFunction)
@@ -113,3 +116,5 @@ def copyBytes(tosend, target):
         return
     if tail:
         return None, tail
+
+__all__ = ['return_', 'identify', 'autostart', 'retval', 'consume', 'asList', 'asString', 'asBytes', 'copyBytes', 'readRe', 'readAll', 'isgeneratorfunction']
