@@ -138,6 +138,4 @@ def _compose(initial, stepping):
             exception = (exType, exValue, exTraceback.tb_next)
     if exception:
         raise exception[1].with_traceback(exception[2])
-    if len(messages) == 0:
-        return None
-    return messages[0] if len(messages) == 1 else tuple(messages)
+    return None if len(messages) == 0 else messages[0]

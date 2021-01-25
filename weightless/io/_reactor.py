@@ -93,8 +93,9 @@ class Reactor(object):
     def removeProcess(self, process=None):
         if process is None:
             process = self.currentcontext.callback
-        del self._processes[process]
-        self._readProcessPipe()
+        if process in self._processes:
+            del self._processes[process]
+            self._readProcessPipe()
 
     def removeTimer(self, token):
         self._timers.remove(token)

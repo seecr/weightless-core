@@ -53,6 +53,9 @@ def asString(g):
 def asBytes(g):
     return b''.join(compose(g))
 
+def generatorToString(g):
+    return ''.join(i.decode('utf-8') if isinstance(i, bytes) else i for i in compose(g))
+
 def identify(generatorFunction):
     @wraps(generatorFunction)
     def helper(*args, **kwargs):
@@ -117,4 +120,4 @@ def copyBytes(tosend, target):
     if tail:
         return None, tail
 
-__all__ = ['return_', 'identify', 'autostart', 'retval', 'consume', 'asList', 'asString', 'asBytes', 'copyBytes', 'readRe', 'readAll', 'isgeneratorfunction']
+__all__ = ['return_', 'identify', 'autostart', 'retval', 'consume', 'asList', 'asString', 'asBytes', 'generatorToString', 'copyBytes', 'readRe', 'readAll', 'isgeneratorfunction']
