@@ -72,8 +72,5 @@ from wl_io.gutilstest import GutilsTest
 from wl_io.servertest import ServerTest
 from wl_io.utils.asprocesstest import AsProcessTest
 
-#from httpng.httpprotocolintegrationtest import HttpProtocolIntegrationTest
-#from httpng.httpprotocoltest import HttpProtocolTest
-
 if __name__ == '__main__':
     main()
