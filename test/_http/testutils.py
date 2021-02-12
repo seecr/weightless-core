@@ -57,9 +57,9 @@ def server(port, response, expectedrequest, delay=0, loop=50):
             else:
                 newSok.send(response.encode())
             sleep(delay)
-            newSok.close()
         else:
             sleep(0.5)
+        newSok.close()
         serverSok.close()
 
     thread = Thread(None, serverProcess)

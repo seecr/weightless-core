@@ -96,7 +96,11 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
     except SocketError as e:
         (errno, msg) = e.args
         if errno != EINPROGRESS:
+            sok.close() # deze moet echt
             raise
+    except Exception:
+        sok.close() # deze moet echt
+        raise
 
     try:
         suspend._reactor.addWriter(sok, this.__next__, prio=prio)
@@ -182,10 +186,11 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
     except (AssertionError, KeyboardInterrupt, SystemExit):
         raise
     except TimeoutException:
-        pass
+        sok.close()
     except Exception:
         suspend.throw(*exc_info())
-    # Uber finally: sok.close() from line 108
+    finally:
+        sok.close() # deze lijkt echt nodig te zijn
     yield
 
 def _sslHandshake(sok, this, suspend, prio):

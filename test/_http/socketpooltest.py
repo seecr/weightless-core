@@ -36,6 +36,8 @@ from weightless.io.utils import asProcess, sleep
 
 from weightless.http import SocketPool, EmptySocketPool
 
+#import gc
+#gc.set_debug(gc.DEBUG_UNCOLLECTABLE)
 
 class SocketPoolTest(SeecrTestCase):
     ##

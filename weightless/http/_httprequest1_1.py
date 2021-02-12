@@ -180,10 +180,14 @@ def _do(observable, method, host, port, request, body=None, headers=None, bodyMa
     except (AssertionError, KeyboardInterrupt, SystemExit):
         raise
     except TimeoutException:
+        #sok.close() # recycle iso close
         # print_exc()   # Enable for debugging timeouts.
         pass
     except Exception:
         suspend.throw(*exc_info())
+    finally:
+        pass
+        #sok.close() # recycle iso close
     yield  # wait for GC
 
 
@@ -205,7 +209,11 @@ def _createSocket(host, port, secure, this, suspend, prio):
     except SocketError as xxx_todo_changeme:
         (errno, msg) = xxx_todo_changeme.args
         if errno != EINPROGRESS:
+            #sok.close() # recycle iso close
             raise
+    except Exception:
+        #sok.close() # recycle iso close
+        raise
 
     suspend._reactor.addWriter(sok, this.__next__, prio=prio)
     try:

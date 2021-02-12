@@ -25,7 +25,7 @@
 
 from functools import partial as curry
 import os
-from socket import SOL_SOCKET, SO_RCVBUF
+from socket import SOL_SOCKET, SO_RCVBUF, SHUT_RDWR
 
 from weightless.core import compose, local
 from . import TimeoutException
@@ -127,6 +127,7 @@ class Context(object):
     def close(self):
         self.gio.close()
 
+
 class FdContext(Context):
 
     def __init__(self, fd):
@@ -171,6 +172,11 @@ class SocketContext(FdContext):
         FdContext.__init__(self, sok.fileno())
         self._save_sok_from_gc = sok
         self.shutdown = sok.shutdown
+
+    def close(self):
+        Context.close(self)            # Skip FdContext (os.close)
+        self.shutdown(SHUT_RDWR)
+        self._save_sok_from_gc.close() # os.close is not enough appearantly
 
 class FileContext(FdContext):
 
