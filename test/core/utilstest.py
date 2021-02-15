@@ -23,7 +23,7 @@
 ## end license ##
 
 from unittest import TestCase
-from weightless.core.utils import isgeneratorfunction
+from weightless.core.utils import isgeneratorfunction, asBytes
 from functools import partial
 
 class UtilsTest(TestCase):
@@ -80,3 +80,8 @@ class UtilsTest(TestCase):
         self.assertFalse(isgeneratorfunction(e))
         self.assertFalse(isgeneratorfunction(f))
 
+    def testAsBytes(self):
+        self.assertEqual(b'ab', asBytes(_ for _ in [b'a', b'b']))
+        self.assertEqual(b'ab', asBytes(_ for _ in ['a', 'b']))
+        self.assertEqual(b'\xc2\xba\xe2\x82\xac', asBytes(_ for _ in ['º', '€']))
+        self.assertEqual('º€', b'\xc2\xba\xe2\x82\xac'.decode())
