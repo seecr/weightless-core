@@ -47,14 +47,13 @@ def consume(generator):
 def asList(g):
     return list(compose(g))
 
-def asString(g):
-    return ''.join(compose(g))
-
 def asBytes(g):
     return b''.join(x.encode('utf-8') if isinstance(x, str) else x for x in compose(g))
 
-def generatorToString(g):
+def asString(g):
     return ''.join(i.decode('utf-8') if isinstance(i, bytes) else i for i in compose(g))
+
+generatorToString = asString
 
 def identify(generatorFunction):
     @wraps(generatorFunction)
