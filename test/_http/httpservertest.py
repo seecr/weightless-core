@@ -895,14 +895,20 @@ class HttpServerTest(WeightlessTestCase):
                         reactor.step()
                     form = self.requestData['Form']
                     self.assertEqual(4, len(form))
-                    self.assertEqual(['SOME ID'], form[b'id'])
+                    self.assertEqual(['SOME ID'], form['id'])
+                    filename, mimetype, data = form['somename'][0]
+                    self.assertEqual('midget.png', filename)
+                    self.assertEqual('image/png', mimetype)
+                    self.assertEqual(bytes, type(data))
+                    self.assertEqual(b'\x89PNG\n', data[:5])
 
                 # cleanup
                 server.shutdown()
 
     def XXX_testPostMultipartFormCompressed(self):
         """Not yet"""
-        httpRequest = open(inmydir('data/multipart-data-01-compressed')).read()
+        with open(inmydir('data/multipart-data-01-compressed'), 'rb') as fp:
+            httpRequest = fp.read()
         self.requestData = {}
         def handler(**kwargs):
             self.requestData = kwargs
@@ -948,11 +954,12 @@ class HttpServerTest(WeightlessTestCase):
                         reactor.step()
                     form = self.requestData['Form']
                     self.assertEqual(4, len(form))
-                    self.assertEqual(['SOME ID'], form[b'id'])
-                    self.assertEqual(1, len(form[b'somename']))
-                    filename, mimetype, data = form[b'somename'][0]
-                    self.assertEqual(b'Bank Gothic Medium BT.ttf', filename)
-                    self.assertEqual(b'application/octet-stream', mimetype)
+                    self.assertEqual(['SOME ID'], form['id'])
+                    self.assertEqual(1, len(form['somename']))
+                    filename, mimetype, data = form['somename'][0]
+                    self.assertEqual('Bank Gothic Medium BT.ttf', filename)
+                    self.assertEqual('application/octet-stream', mimetype)
+                    self.assertEqual(bytes, type(data))
 
                 # cleanup
                 server.shutdown()
@@ -978,11 +985,12 @@ class HttpServerTest(WeightlessTestCase):
                         reactor.step()
                     form = self.requestData['Form']
                     self.assertEqual(4, len(form))
-                    self.assertEqual(['SOME ID'], form[b'id'])
-                    self.assertEqual(1, len(form[b'somename']))
-                    filename, mimetype, data = form[b'somename'][0]
-                    self.assertEqual(b'hello.bas', filename)
-                    self.assertEqual(b'text/plain', mimetype)
+                    self.assertEqual(['SOME ID'], form['id'])
+                    self.assertEqual(1, len(form['somename']))
+                    filename, mimetype, data = form['somename'][0]
+                    self.assertEqual('hello.bas', filename)
+                    self.assertEqual('text/plain', mimetype)
+                    self.assertEqual(bytes, type(data))
 
                 # cleanup
                 server.shutdown()
@@ -1008,7 +1016,7 @@ class HttpServerTest(WeightlessTestCase):
                         reactor.step()
                     form = self.requestData['Form']
                     self.assertEqual(1, len(form))
-                    self.assertEqual(3521*'X', form[b'id'][0])
+                    self.assertEqual(3521*'X', form['id'][0])
 
                 # cleanup
                 server.shutdown()
@@ -1034,7 +1042,7 @@ class HttpServerTest(WeightlessTestCase):
                         reactor.step()
                     form = self.requestData['Form']
                     self.assertEqual(1, len(form))
-                    self.assertEqual((b'some filename.extension', b'text/plain', 3521*'X'), form[b'name with ; semicolon'][0])
+                    self.assertEqual(('some filename.extension', 'text/plain', 3521*b'X'), form['name with ; semicolon'][0])
 
                 # cleanup
                 server.shutdown()

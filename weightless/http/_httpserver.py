@@ -33,7 +33,7 @@ from resource import getrlimit, RLIMIT_NOFILE
 from socket import SHUT_RDWR, error as SocketError, MSG_DONTWAIT
 from tempfile import TemporaryFile
 from traceback import print_exception
-from email import message_from_binary_file as parse_mime_message
+from email import message_from_binary_file
 from zlib import compressobj as deflateCompress
 from zlib import decompressobj as deflateDeCompress
 from zlib import Z_DEFAULT_COMPRESSION, DEFLATED, MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY
@@ -61,7 +61,7 @@ class HttpServer(object):
         self._maxConnections = maxConnections
         self._errorHandler = errorHandler
         self._compressResponse = compressResponse
-        self._socketWrapper = socketWrapper 
+        self._socketWrapper = socketWrapper
 
     def listen(self):
         self._acceptor = Acceptor(
@@ -275,18 +275,15 @@ class HttpHandler(object):
             self._tempfile.seek(0)
 
             form = {}
-            for msg in parse_mime_message(self._tempfile).get_payload():
+            for msg in message_from_binary_file(self._tempfile).get_payload():
                 cType, pDict = parseHeaderFieldvalue(msg['Content-Disposition'].encode())
                 contentType = msg.get_content_type()
-                fieldName = pDict[b'name']
-                if not fieldName in form:
-                    form[fieldName] = []
-
+                fieldName = str(pDict[b'name'], encoding='utf-8')
                 if b'filename' in pDict:
                     filename = self._processFilename(pDict[b'filename'])
-                    form[fieldName].append((filename, contentType.encode(), msg.get_payload()))
+                    form.setdefault(fieldName, []).append((filename, contentType, msg.get_payload(decode=True)))
                 else:
-                    form[fieldName].append(msg.get_payload())
+                    form.setdefault(fieldName, []).append(msg.get_payload())
 
             self.request['Form'] = form
             self._tempfile.close()
@@ -297,9 +294,7 @@ class HttpHandler(object):
 
     def _processFilename(self, filename):
         parts = filename.split(b'\\')
-        if len(parts) == 1:
-            return filename
-        return parts[-1]
+        return str(filename if len(parts) == 1 else parts[-1], encoding='utf-8')
 
     def _resetTimer(self):
         if self._timer:
