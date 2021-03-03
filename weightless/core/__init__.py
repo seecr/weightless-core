@@ -81,6 +81,6 @@ def compose(X, *args, **kwargs):
     raise TypeError("compose() expects generator, got %s" % repr(X))
 
 #from compose import compose, local, tostring, Yield
-from .utils import identify, autostart, retval, consume, asList, asString, return_
+from .utils import identify, autostart, retval, consume, asList, asString, asBytes, return_
 from ._observable import Observable, Transparent, be, methodOrMethodPartialStr, NoneOfTheObserversRespond
 
