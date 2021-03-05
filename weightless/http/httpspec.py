@@ -105,6 +105,7 @@ class REGEXP:
     CHUNK_SIZE_LINE = re.compile(HTTP.Chunk_Size_Line)
     CRLF = re.compile(HTTP.CRLF)
     FIELDVALUE = re.compile(HTTP.named_field_name + b"=" + b"(?P<fieldvalue>(" + HTTP.token + b"|" + HTTP.quoted_string + b"))", re.DOTALL)
+    STATUS_LINE = re.compile(HTTP.Status_Line)
 
 class FORMAT:
     RequestLine = b'%(Method)s %(Request_URI)s HTTP/%(HTTPVersion)s' + HTTP.CRLF
