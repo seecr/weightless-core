@@ -35,7 +35,13 @@ class HttpSpecTest(TestCase):
 
     def testParseHeadersfdsfdsfdsfds(self):
         self.assertEqual({b'Aap': b'noot'}, httpspec.parseHeaders(b"aap: noot\r\n"))
+        self.assertEqual({b'Aap': b'noot', b'Vis': b'vuur'}, httpspec.parseHeaders(b"aap: noot\r\nvis: vuur\r\n"))
+        self.assertEqual({b'Aap': [b'noot', b'vuur']}, httpspec.parseHeaders(b"aap: noot\r\naap: vuur\r\n"))
         self.assertEqual({'Aap': 'noot'}, httpspec.parseHeadersString("aap: noot\r\n"))
+
+    def testSetCookieAlwaysAsList(self):
+        self.assertEqual({b'Set-Cookie': [b'noot']}, httpspec.parseHeaders(b"Set-Cookie: noot\r\n"))
+        self.assertEqual({b'Set-Cookie': [b'noot', b'vuur']}, httpspec.parseHeaders(b"Set-Cookie: noot\r\nSet-Cookie: vuur\r\n"))
 
     def testParseContentDispositionValues(self):
         self.assertEqual((b'attachment', {}), httpspec.parseHeaderFieldvalue(b'attachment'))

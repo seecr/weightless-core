@@ -36,7 +36,18 @@ def parseHeadersString(headerString):
     return {k.decode():v.decode() for k,v in parseHeaders(headerString.encode()).items()}
 
 def parseHeaders(headerBytes):
-    return {fieldname.title():fieldvalue.strip() for (groupname, fieldname, fieldvalue) in REGEXP.HEADER.findall(headerBytes)}
+    headers = {}
+    for (groupname, fieldname, fieldvalue) in REGEXP.HEADER.findall(headerBytes):
+        key = fieldname.title()
+        value = fieldvalue.strip()
+        if key in headers:
+            if not type(headers[key]) is list:
+                headers[key] = [headers[key]]
+            headers[key].append(value)
+        else:
+            headers[key] = [value] if key == b'Set-Cookie' else value
+    return headers
+
 
 def unquote(b):
     if b and len(b) > 1 and b[0] == b[-1] == ord('"'):

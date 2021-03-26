@@ -467,7 +467,7 @@ class HttpHandler(object):
                     yield
                     data.resumeWriter()
                     continue
-                if type(data) is str:
+                if isinstance(data, str):
                     data = data.encode(self._defaultEncoding)
 
             if encodeResponseBody is not None:
