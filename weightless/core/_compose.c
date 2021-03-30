@@ -715,10 +715,10 @@ PyTypeObject PyCompose_Type = {
     0,                                      /* tp_itemsize */
     /* methods */
     (destructor)compose_dealloc,            /* tp_dealloc */
-    0,                                      /* tp_print */
+    0,                                      /* tp_vectorcall_offset */
     0,                                      /* tp_getattr */
     0,                                      /* tp_setattr */
-    0,                                      /* tp_compare */
+    0,                                      /* tp_as_async */
     0,                                      /* tp_repr */
     0,                                      /* tp_as_number */
     0,                                      /* tp_as_sequence */
@@ -729,7 +729,7 @@ PyTypeObject PyCompose_Type = {
     PyObject_GenericGetAttr,                /* tp_getattro */
     0,                                      /* tp_setattro */
     0,                                      /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,/* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |Py_TPFLAGS_HAVE_FINALIZE,/* tp_flags */
     0,                                      /* tp_doc */
     (traverseproc)compose_traverse,         /* tp_traverse */
     (inquiry)compose_clear,                 /* tp_clear */
@@ -755,7 +755,10 @@ PyTypeObject PyCompose_Type = {
     0,                                      /* tp_cache */
     0,                                      /* tp_subclasses */
     0,                                      /* tp_weaklist */
-    compose_del,                            /* tp_del */
+    0,                                      /* tp_del */
+    0,                                      /* tp_version_tag */
+    compose_del                             /* tp_finalize */
+    /* 0                                      in 3.9  tp_vector_call */
 };
 
 
