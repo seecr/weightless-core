@@ -37,7 +37,6 @@ from inspect import getsourcelines, getsourcefile
 from sys import stderr
 from traceback import print_exc
 
-
 class Reactor(object):
     """This Reactor allows applications to be notified of read, write or time events.  The callbacks being executed can contain instructions to modify the reader, writers and timers in the reactor.  Additions of new events are effective with the next step() call, removals are effective immediately, even if the actual event was already trigger, but the handler wat not called yet."""
 
@@ -82,6 +81,7 @@ class Reactor(object):
         timer = Timer(seconds, callback)
         self._timers.append(timer)
         self._timers.sort(key=_timeKey)
+        self._writeProcessPipe()
         return timer
 
     def removeReader(self, sok):
@@ -178,10 +178,9 @@ class Reactor(object):
             return self
 
         self._prio = (self._prio + 1) % Reactor.MAXPRIO
+        timeout = -1
         if self._timers:
             timeout = min(max(0, self._timers[0].time - time()), MAX_TIMEOUT_EPOLL)
-        else:
-            timeout = -1
 
         try:
             fdEvents = self._epoll.poll(timeout=timeout)
