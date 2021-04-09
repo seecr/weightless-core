@@ -50,6 +50,8 @@ from urllib.request import urlopen
 from select import select
 from urllib.parse import urlunparse, urlparse
 
+import gc
+
 mydir = dirname(abspath(__file__))
 sslDir = join(mydir, 'ssl')
 
@@ -79,6 +81,9 @@ class WeightlessTestCase(TestCase):
         self.reactor.shutdown()
         rmtree(self.tempdir)
         os.remove(self.tempfile)
+        # forcing collect helps finding ResourceWarnings because when the GC finds a collectable socket and it is not closed, it issues a warning immediately
+        # otherwise, the warnings come asynchrously, unrelated to the test being run. Now the warning comes right after the test which caused it.
+        gc.collect()
         TestCase.tearDown(self)
 
     def newPortNumber(self):

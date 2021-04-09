@@ -219,6 +219,7 @@ class GioTest(WeightlessTestCase):
             def handleConnection(self, connection):
                 with connection:
                     yield self.handleRequest()
+                connection.close() # with connection: does not close, it only add/removes from the reactor on enter/exit
             def handleRequest(self):
                 msg = yield
                 yield 'HTTP/1.1 200 Ok\r\n\r\nGoodbye'
@@ -234,10 +235,11 @@ class GioTest(WeightlessTestCase):
             connection.connect((host, port))
             return SocketContext(connection)
         def httpClient():
-            with connection('localhost', port):
+            with connection('localhost', port) as c:
                 yield 'GET %s HTTP/1.0\r\n\r\n' % '/'
                 response = yield
                 responses.append(response)
+                c.close()
         Gio(self.reactor, httpClient())
         while not responses:
             self.reactor.step()

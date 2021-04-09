@@ -1029,6 +1029,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
                 yield zleep(0.02)
 
                 self.assertEqual(None, mss.state.connections.get(2).value)
+                pooledSocket.close()
             finally:
                 for s in getLog: s.close()
                 mss.close()
@@ -1211,6 +1212,7 @@ RuntimeError: Boom!\n""" % fileDict)
                 self.assertEqual(None, mss.state.connections.get(2).value)
                 pooledSocket = yield socketPool.getPooledSocket(host='localhost', port=mss.port)
                 self.assertTrue(bool(pooledSocket.fileno()))
+                pooledSocket.close()
             finally:
                 mss.close()
 
@@ -1330,6 +1332,7 @@ RuntimeError: Boom!\n""" % fileDict)
                 self.assertEqual(None, mss.state.connections.get(2).value)
                 pooledSocket = yield socketPool.getPooledSocket(host='localhost', port=mss.port)
                 self.assertTrue(bool(pooledSocket.fileno()))
+                pooledSocket.close()
             finally:
                 mss.close()
 
@@ -1372,6 +1375,7 @@ RuntimeError: Boom!\n""" % fileDict)
                 self.assertEqual(None, mss.state.connections.get(1).value)
                 pooledSocket = yield socketPool.getPooledSocket(host='localhost', port=mss.port)
                 self.assertTrue(bool(pooledSocket.fileno()))
+                pooledSocket.close()
             finally:
                 mss.close()
 
