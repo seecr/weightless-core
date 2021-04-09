@@ -154,12 +154,12 @@ def _do(observable, method, host, port, request, body=None, headers=None, bodyMa
                     # - KeyError:
                     #   * suspend._reactor.remove(Reader|Writer) after a "bad file descriptor" removal;
                     #     (reactor oddness).
+                    shutAndCloseOnce(ignoreExceptions=True)
                     if (not retryOnce) or sok.recievedData:
                         raise
 
                     retryOnce = False
                     observable.do.log(message="[HttpRequest1_1] Error when reusing socket for %s:%d. Trying again. Error was: %s\n" % (host, port, str(e)))
-                    shutAndCloseOnce(ignoreExceptions=True)
                     continue
 
                 break
@@ -209,20 +209,22 @@ def _createSocket(host, port, secure, this, suspend, prio):
     except SocketError as xxx_todo_changeme:
         (errno, msg) = xxx_todo_changeme.args
         if errno != EINPROGRESS:
-            #sok.close() # recycle iso close
+            sok.close() # utter failure so close
             raise
     except Exception:
-        #sok.close() # recycle iso close
+        sok.close() # utter failure so close
         raise
 
     suspend._reactor.addWriter(sok, this.__next__, prio=prio)
     try:
         yield Yield
+        suspend._reactor.removeWriter(sok)
         err = sok.getsockopt(SOL_SOCKET, SO_ERROR)
         if err != 0:    # connection created succesfully?
+            sok.close() # utter failure so close
             raise IOError(err)
     finally:
-        suspend._reactor.removeWriter(sok)
+        pass
 
     if secure:
         sok = yield _sslHandshake(sok, this, suspend, prio)

@@ -198,6 +198,8 @@ class GioTest(WeightlessTestCase):
                     reactor.step()
                 self.assertTrue(len(messages) > 1) # test is only sensible when multiple parts are sent
                 self.assertEqual(messageSize, len(''.join(messages)))
+                lhs.close()
+                rhs.close()
 
     def testHowToCreateAHttpServer(self):
         port = self.newPortNumber()
@@ -277,7 +279,7 @@ class GioTest(WeightlessTestCase):
                 except TimeoutException:
                     done.append(False)
                 finally:
-                    lhs.close; rhs.close()
+                    lhs.close(); rhs.close()
                 yield
             g = Gio(reactor(), handler())
             while not done:

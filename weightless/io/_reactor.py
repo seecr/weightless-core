@@ -461,7 +461,7 @@ def _fdNormalize(fd):
         try:
             fileno = fd.fileno()
             if fileno == -1:
-                print("Bad file descriptor {}".format(fd), file=sys.stderr, flush=True)
+                print("Reactor: Bad file descriptor {}".format(fd), file=sys.stderr, flush=True)
                 raise _HandleEBADFError()
             return fileno
         except (IOError, OSError, socket_error) as e:

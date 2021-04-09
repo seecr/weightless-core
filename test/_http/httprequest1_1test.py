@@ -1030,6 +1030,7 @@ class HttpRequest1_1Test(WeightlessTestCase):
 
                 self.assertEqual(None, mss.state.connections.get(2).value)
             finally:
+                for s in getLog: s.close()
                 mss.close()
 
         asProcess(test())

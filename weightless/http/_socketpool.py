@@ -144,6 +144,12 @@ class SocketPool(Observable):
 
         unusedTimeout()
 
+    def __del__(self):
+        for socktime in self._pool.values():
+            for s, t in socktime:
+                if hasattr(s, 'close'):
+                    _shutAndCloseIgnorant(s)
+
 
 def _shutAndCloseIgnorant(sock):
     try:
