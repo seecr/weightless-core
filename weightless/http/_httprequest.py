@@ -39,7 +39,7 @@ def httprequest(host, port, request, body=None, headers=None, proxyServer=None, 
     kw = {}
     if timeout is not None:
         def onTimeout():
-            g.throw(TimeoutException(TimeoutException()).with_traceback(None))
+            g.throw(TimeoutException().with_traceback(None))
 
         kw = {
             'timeout': timeout,

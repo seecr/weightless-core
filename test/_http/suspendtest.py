@@ -513,7 +513,7 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
                 def doNext(suspend):
                     g.send(suspend)
                 def onTimeout():
-                    g.throw(TimeoutException(TimeoutException()).with_traceback(None))
+                    g.throw(TimeoutException().with_traceback(None))
                 return doNext, onTimeout
 
             def suspendWrap():

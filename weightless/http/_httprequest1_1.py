@@ -48,7 +48,7 @@ class HttpRequest1_1(Observable):
         kw = {}
         if timeout is not None:
             def onTimeout():
-                g.throw(TimeoutException(TimeoutException()).with_traceback(None))
+                g.throw(TimeoutException().with_traceback(None))
 
             kw = {
                 'timeout': timeout,

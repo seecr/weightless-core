@@ -2092,7 +2092,7 @@ class _ExactExpectationHandler(object):
         for handler in list(self.busy):
             if handler == exclude:
                 continue  # If set, excluded itself is initiating the close because of a fatal error.
-            handler.throw(AbortException(AbortException('Closing MockSocketServer connections')).with_traceback(None))
+            handler.throw(AbortException('Closing MockSocketServer connections').with_traceback(None))
 
     def _startAndTrackCompletion(self, gf, sok, remoteAddress, connectionNr):
         @identify
@@ -2227,7 +2227,7 @@ def _readOnce(timeout):
     sok = local('__sok__')
     g = _readOnceGF(sok=sok)
     def onTimeout():
-        g.throw(TimeoutException(TimeoutException()).with_traceback(None))
+        g.throw(TimeoutException().with_traceback(None))
     s = Suspend(doNext=g.send, timeout=timeout, onTimeout=onTimeout)
     yield s
     result = s.getResult()
@@ -2293,7 +2293,7 @@ def _writeOnce(data, timeout):
 
     g = _writeOnceGF(sok=sok, data=data)
     def onTimeout():
-        g.throw(TimeoutException(TimeoutException()).with_traceback(None))
+        g.throw(TimeoutException().with_traceback(None))
     s = Suspend(doNext=g.send, timeout=timeout, onTimeout=onTimeout)
     yield s
     result = s.getResult()
