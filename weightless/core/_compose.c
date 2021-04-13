@@ -337,7 +337,7 @@ static int generator_invalid(PyObject* gen) {
         started = frame && frame->f_lasti != -1;
 
     } else { // AllGenerator
-        frame = 0x1; // fake
+        frame = (PyFrameObject*) 0x1; // fake
         started = 0; // ((PyAllGeneratorObject*)gen)->_i > -1;
     }
 
@@ -755,10 +755,7 @@ PyTypeObject PyCompose_Type = {
     0,                                      /* tp_cache */
     0,                                      /* tp_subclasses */
     0,                                      /* tp_weaklist */
-    0,                                      /* tp_del */
-    0,                                      /* tp_version_tag */
-    compose_del                             /* tp_finalize */
-    /* 0                                      in 3.9  tp_vector_call */
+    .tp_finalize = compose_del,             /* was tp_del */
 };
 
 

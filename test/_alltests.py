@@ -24,6 +24,11 @@
 #
 ## end license ##
 
+
+import gc
+gc.set_debug(gc.DEBUG_UNCOLLECTABLE)
+
+
 from os import getuid
 assert getuid() != 0, "Do not run tests as 'root'"
 
@@ -71,6 +76,7 @@ from wl_io.giotest import GioTest
 from wl_io.gutilstest import GutilsTest
 from wl_io.servertest import ServerTest
 from wl_io.utils.asprocesstest import AsProcessTest
+
 
 if __name__ == '__main__':
     main()
