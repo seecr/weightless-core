@@ -710,52 +710,20 @@ static PyMethodDef compose_methods[] = {
 
 PyTypeObject PyCompose_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
-    "compose",                              /* tp_name */
-    sizeof(PyComposeObject),                /* tp_basicsize */
-    0,                                      /* tp_itemsize */
-    /* methods */
-    (destructor)compose_dealloc,            /* tp_dealloc */
-    0,                                      /* tp_vectorcall_offset */
-    0,                                      /* tp_getattr */
-    0,                                      /* tp_setattr */
-    0,                                      /* tp_as_async */
-    0,                                      /* tp_repr */
-    0,                                      /* tp_as_number */
-    0,                                      /* tp_as_sequence */
-    0,                                      /* tp_as_mapping */
-    0,                                      /* tp_hash */
-    0,                                      /* tp_call */
-    0,                                      /* tp_str */
-    PyObject_GenericGetAttr,                /* tp_getattro */
-    0,                                      /* tp_setattro */
-    0,                                      /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |Py_TPFLAGS_HAVE_FINALIZE,/* tp_flags */
-    0,                                      /* tp_doc */
-    (traverseproc)compose_traverse,         /* tp_traverse */
-    (inquiry)compose_clear,                 /* tp_clear */
-    0,                                      /* tp_richcompare */
-    offsetof(PyComposeObject, weakreflist), /* tp_weaklistoffset */
-    PyObject_SelfIter,                      /* tp_iter */
-    (iternextfunc)compose_iternext,         /* tp_iternext */
-    compose_methods,                        /* tp_methods */
-    0,                                      /* tp_members */
-    0,                                      /* tp_getset */
-    0,                                      /* tp_base */
-    0,                                      /* tp_dict */
-    0,                                      /* tp_descr_get */
-    0,                                      /* tp_descr_set */
-    0,                                      /* tp_dictoffset */
-    0,                                      /* tp_init */
-    0,                                      /* tp_alloc */
-    (newfunc)compose_new,                   /* tp_new */
-    0,                                      /* tp_free */
-    0,                                      /* tp_is_gc */
-    0,                                      /* tp_bases */
-    0,                                      /* tp_mro */
-    0,                                      /* tp_cache */
-    0,                                      /* tp_subclasses */
-    0,                                      /* tp_weaklist */
-    .tp_finalize = compose_del,             /* was tp_del */
+    .tp_name = "compose",
+    .tp_basicsize = sizeof(PyComposeObject),
+    .tp_itemsize = 0,
+    .tp_dealloc = (destructor)compose_dealloc,
+    .tp_getattro = PyObject_GenericGetAttr,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |Py_TPFLAGS_HAVE_FINALIZE,
+    .tp_traverse = (traverseproc)compose_traverse,
+    .tp_clear = (inquiry)compose_clear,
+    .tp_weaklistoffset = offsetof(PyComposeObject, weakreflist),
+    .tp_iter = PyObject_SelfIter,
+    .tp_iternext = (iternextfunc)compose_iternext,
+    .tp_methods = compose_methods,
+    .tp_new = (newfunc)compose_new,
+    .tp_finalize = compose_del,
 };
 
 
