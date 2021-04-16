@@ -1047,6 +1047,7 @@ class ReactorTest(WeightlessTestCase):
             reactor.addProcess(callback)
             reactor.addProcess(lambda: reactor.removeProcess())
             reactor.step()
+            reactor.step()
             self.assertEqual([callback], list(reactor._suspended.keys()))
             self.assertEqual([callback, 'suspending'], trace)
 

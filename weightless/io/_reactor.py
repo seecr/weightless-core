@@ -74,7 +74,7 @@ class Reactor(object):
         if process in self._processes:
             raise ValueError('Process is already in processes')
         self._processes[process] = _ProcessContext(process, prio)
-        self._wake_epoll()
+        self._maybe_wake_event_loop()
 
     def addTimer(self, seconds, callback):
         """Add a timer that calls callback() after the specified number of seconds. Afterwards, the timer is deleted.  It returns a token for removeTimer()."""
@@ -94,7 +94,6 @@ class Reactor(object):
             process = self.currentcontext.callback
         if process in self._processes:
             del self._processes[process]
-            self._clear_epoll_ctrl()
             return True
 
     def removeTimer(self, token):
@@ -135,7 +134,7 @@ class Reactor(object):
 
     def resumeProcess(self, handle):
         self._processes[handle] = self._suspended.pop(handle)
-        self._wake_epoll()
+        self._maybe_wake_event_loop()
 
     def shutdown(self):
         # Will be called exactly once; in testing situations 1..n times.
@@ -178,9 +177,12 @@ class Reactor(object):
             return self
 
         self._prio = (self._prio + 1) % Reactor.MAXPRIO
-        timeout = -1
-        if self._timers:
+        if self._processes:
+            timeout = 0
+        elif self._timers:
             timeout = min(max(0, self._timers[0].time - time()), MAX_TIMEOUT_EPOLL)
+        else:
+            timeout = -1
 
         try:
             fdEvents = self._epoll.poll(timeout=timeout)
@@ -195,6 +197,9 @@ class Reactor(object):
         except KeyboardInterrupt:
             self.shutdown()  # For testing purposes; normally loop's finally does this.
             raise
+
+        if (self._epoll_ctrl_read, EPOLLIN) in fdEvents:
+            self._clear_epoll_ctrl()
 
         self._removeFdsInCurrentStep = set([self._epoll_ctrl_read])
 
@@ -372,7 +377,7 @@ class Reactor(object):
                 else:
                     raise
 
-    def _wake_epoll(self):
+    def _maybe_wake_event_loop(self):
         while True:
             try:
                 write(self._epoll_ctrl_write, b'x')
