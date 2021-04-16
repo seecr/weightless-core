@@ -51,8 +51,8 @@ class Reactor(object):
         self._processes = {}
         self._timers = []
         self._prio = -1
-        self._processReadPipe, self._processWritePipe = pipe()
-        self._epoll.register(fd=self._processReadPipe, eventmask=EPOLLIN)
+        self._epoll_ctrl_read, self._epoll_ctrl_write = pipe()
+        self._epoll.register(fd=self._epoll_ctrl_read, eventmask=EPOLLIN)
 
         # per (part-of) step relevent state
         self.currentcontext = None
@@ -74,14 +74,13 @@ class Reactor(object):
         if process in self._processes:
             raise ValueError('Process is already in processes')
         self._processes[process] = _ProcessContext(process, prio)
-        self._writeProcessPipe()
+        self._wake_epoll()
 
     def addTimer(self, seconds, callback):
         """Add a timer that calls callback() after the specified number of seconds. Afterwards, the timer is deleted.  It returns a token for removeTimer()."""
         timer = Timer(seconds, callback)
         self._timers.append(timer)
         self._timers.sort(key=_timeKey)
-        self._writeProcessPipe()
         return timer
 
     def removeReader(self, sok):
@@ -95,7 +94,8 @@ class Reactor(object):
             process = self.currentcontext.callback
         if process in self._processes:
             del self._processes[process]
-            self._readProcessPipe()
+            self._clear_epoll_ctrl()
+            return True
 
     def removeTimer(self, token):
         self._timers.remove(token)
@@ -118,8 +118,8 @@ class Reactor(object):
 
         if self.currenthandle in self._fds:
             self._removeFD(fileOrFd=self.currenthandle)
-        elif self._processes.pop(self.currenthandle, None) is not None:
-            self._readProcessPipe()
+        elif self.removeProcess(self.currenthandle):
+            pass
         else:
             raise RuntimeError('Current context not found!')
         self._suspended[self.currenthandle] = self.currentcontext
@@ -135,7 +135,7 @@ class Reactor(object):
 
     def resumeProcess(self, handle):
         self._processes[handle] = self._suspended.pop(handle)
-        self._writeProcessPipe()
+        self._wake_epoll()
 
     def shutdown(self):
         # Will be called exactly once; in testing situations 1..n times.
@@ -196,7 +196,7 @@ class Reactor(object):
             self.shutdown()  # For testing purposes; normally loop's finally does this.
             raise
 
-        self._removeFdsInCurrentStep = set([self._processReadPipe])
+        self._removeFdsInCurrentStep = set([self._epoll_ctrl_read])
 
         self._timerCallbacks(self._timers)
         self._callbacks(fdEvents, self._fds, READ_INTENT)
@@ -320,9 +320,7 @@ class Reactor(object):
                 try:
                     context.callback()
                 except:
-                    if self.currenthandle in processes:
-                        del processes[self.currenthandle]
-                        self._readProcessPipe()
+                    self.removeProcess(self.currenthandle)
                     raise
 
     def _epollRegister(self, fd, eventmask):
@@ -362,10 +360,10 @@ class Reactor(object):
             else:
                 _printException()
 
-    def _readProcessPipe(self):
+    def _clear_epoll_ctrl(self):
         while True:
             try:
-                read(self._processReadPipe, 1)
+                read(self._epoll_ctrl_read, 1)
                 break
             except (IOError, OSError) as e:
                 (errno, description) = e.args
@@ -374,10 +372,10 @@ class Reactor(object):
                 else:
                     raise
 
-    def _writeProcessPipe(self):
+    def _wake_epoll(self):
         while True:
             try:
-                write(self._processWritePipe, b'x')
+                write(self._epoll_ctrl_write, b'x')
                 break
             except (IOError, OSError) as e:
                 (errno, description) = e.args
@@ -405,15 +403,15 @@ class Reactor(object):
     def _closeProcessPipe(self):
         # Will be called exactly once; in testing situations 1..n times.
         try:
-            close(self._processReadPipe)
+            close(self._epoll_ctrl_read)
         except Exception:
             pass
         try:
-            close(self._processWritePipe)
+            close(self._epoll_ctrl_write)
         except Exception:
             pass
-        self._processReadPipe = None
-        self._processWritePipe = None
+        self._epoll_ctrl_read = None
+        self._epoll_ctrl_write = None
 
 def _printException():
     print_exc()

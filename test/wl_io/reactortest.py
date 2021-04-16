@@ -431,7 +431,7 @@ class ReactorTest(WeightlessTestCase):
                 self.assertEqual(1, len(r._timers))
 
                 # asProcesses' process(pipe) is expected
-                self.assertEqual(set([r._processReadPipe]), fdsReadyFromReactorEpoll(r))
+                self.assertEqual(set([r._epoll_ctrl_read]), fdsReadyFromReactorEpoll(r))
 
         with stderr_replaced() as err:
             asProcess(test(addFn=addWriter))
@@ -1050,12 +1050,12 @@ class ReactorTest(WeightlessTestCase):
             self.assertEqual([callback], list(reactor._suspended.keys()))
             self.assertEqual([callback, 'suspending'], trace)
 
-            readers, _, _ = select([reactor._processReadPipe], [], [], 0.01)
+            readers, _, _ = select([reactor._epoll_ctrl_read], [], [], 0.01)
             self.assertEqual([], readers)
 
             reactor.resumeProcess(handle=callback)
-            readers, _, _ = select([reactor._processReadPipe], [], [], 0.01)
-            self.assertEqual([reactor._processReadPipe], readers)
+            readers, _, _ = select([reactor._epoll_ctrl_read], [], [], 0.01)
+            self.assertEqual([reactor._epoll_ctrl_read], readers)
 
             reactor.step()
             self.assertEqual([], list(reactor._suspended.keys()))
@@ -1093,7 +1093,7 @@ class ReactorTest(WeightlessTestCase):
             reactor.addProcess(p)
             self.assertEqual([p], list(reactor._processes.keys()))
             self.assertEqual(0, fdsLenFromReactor(reactor))
-            self.assertEqual(set([reactor._processReadPipe]), fdsReadyFromReactorEpoll(reactor))
+            self.assertEqual(set([reactor._epoll_ctrl_read]), fdsReadyFromReactorEpoll(reactor))
             try:
                 reactor.step()
                 self.fail('Should not come here.')
@@ -1295,6 +1295,28 @@ class ReactorTest(WeightlessTestCase):
             reactor.step()
             self.assertEqual([True], processCallback)
             self.assertEqual([True], timerCallback)
+
+    def XXXtestAddTimerFromOtherThreadWhileReactorIsWaiting(self):
+        trace = []
+        with Reactor() as reactor:
+            def go_to_sleep():
+                trace.append('zzzz')
+                reactor.step() # nothing todo
+                trace.append('woke')
+                reactor.step() # timeout
+                trace.append('done')
+            thread_with_sleeping_reactor = Thread(target=go_to_sleep)
+            thread_with_sleeping_reactor.start()
+
+            def on_timeout():
+                trace.append('timeout')
+            reactor.addTimer(0.05, on_timeout)
+
+            while len(trace) < 4:
+                sleep(0.01)
+
+            thread_with_sleeping_reactor.join()
+            self.assertEqual(['zzzz', 'woke', 'timeout', 'done'], trace)
 
     def testTimerWithSecondsSmallerThanGranularityNotExecutedImmediately(self):
         noop = lambda: None

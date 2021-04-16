@@ -188,7 +188,7 @@ class AsProcessTest(SeecrTestCase):
         except Exception as e:
             self.assertEqual(('Stop', 'retval'), e.args[0])
 
-        self.assertEqual(['addTimer', 'addProcess', 'removeProcess'], mockReactor.calledMethodNames())
+        self.assertEqual(['addTimer', 'addProcess', 'removeProcess', 'removeProcess'], mockReactor.calledMethodNames())
 
     def testAsyncReturnValuePassing(self):
         def noRetval():
