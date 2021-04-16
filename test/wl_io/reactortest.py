@@ -427,11 +427,8 @@ class ReactorTest(WeightlessTestCase):
                 self.assertEqual(0, len(r._fds))
                 self.assertEqual(0, len(r._badFdsLastCallback))
                 self.assertEqual(0, len(r._suspended))
-                self.assertEqual(1, len(r._processes))
+                self.assertEqual(1, len(r._running))
                 self.assertEqual(1, len(r._timers))
-
-                # asProcesses' process(pipe) is expected
-                self.assertEqual(set([r._epoll_ctrl_read]), fdsReadyFromReactorEpoll(r))
 
         with stderr_replaced() as err:
             asProcess(test(addFn=addWriter))
@@ -1047,7 +1044,6 @@ class ReactorTest(WeightlessTestCase):
             reactor.addProcess(callback)
             reactor.addProcess(lambda: reactor.removeProcess())
             reactor.step()
-            reactor.step()
             self.assertEqual([callback], list(reactor._suspended.keys()))
             self.assertEqual([callback, 'suspending'], trace)
 
@@ -1055,8 +1051,6 @@ class ReactorTest(WeightlessTestCase):
             self.assertEqual([], readers)
 
             reactor.resumeProcess(handle=callback)
-            readers, _, _ = select([reactor._epoll_ctrl_read], [], [], 0.01)
-            self.assertEqual([reactor._epoll_ctrl_read], readers)
 
             reactor.step()
             self.assertEqual([], list(reactor._suspended.keys()))
@@ -1069,11 +1063,11 @@ class ReactorTest(WeightlessTestCase):
         reactor = Reactor()
         lambdaFunc = lambda: None
         reactor.addProcess(lambdaFunc)
-        self.assertEqual([lambdaFunc], list(reactor._processes.keys()))
+        self.assertEqual([lambdaFunc], list(reactor._running.keys()))
         with stdout_replaced() as out:
             reactor.shutdown()
             self.assertEqual(1, out.getvalue().count('Reactor shutdown: terminating - active: %s (process) with callback: %s at: ' % (lambdaFunc, lambdaFunc)), out.getvalue())
-        self.assertEqual([], list(reactor._processes.keys()))
+        self.assertEqual([], list(reactor._running.keys()))
 
         reactor = Reactor()
         lambdaFunc = lambda: reactor.suspend()
@@ -1092,9 +1086,8 @@ class ReactorTest(WeightlessTestCase):
                 raise RuntimeError('The Error')
 
             reactor.addProcess(p)
-            self.assertEqual([p], list(reactor._processes.keys()))
+            self.assertEqual([p], list(reactor._running.keys()))
             self.assertEqual(0, fdsLenFromReactor(reactor))
-            self.assertEqual(set([reactor._epoll_ctrl_read]), fdsReadyFromReactorEpoll(reactor))
             try:
                 reactor.step()
                 self.fail('Should not come here.')
@@ -1102,7 +1095,7 @@ class ReactorTest(WeightlessTestCase):
                 self.assertEqual('The Error', str(e))
 
             # cleanup your administration on the way out
-            self.assertEqual([], list(reactor._processes.keys()))
+            self.assertEqual([], list(reactor._running.keys()))
             self.assertEqual(0, fdsLenFromReactor(reactor))
             self.assertEqual(set(), fdsReadyFromReactorEpoll(reactor))
 
@@ -1297,7 +1290,7 @@ class ReactorTest(WeightlessTestCase):
             self.assertEqual([True], processCallback)
             self.assertEqual([True], timerCallback)
 
-    def XXXtestAddTimerFromOtherThreadWhileReactorIsWaiting(self):
+    def testAddTimerFromOtherThreadWhileReactorIsWaiting(self):
         trace = []
         with Reactor() as reactor:
             def go_to_sleep():
@@ -1401,7 +1394,7 @@ class ReactorTest(WeightlessTestCase):
 
                 self.assertEqual(0, len(reactor._badFdsLastCallback))
                 self.assertEqual(0, len(reactor._fds))
-                self.assertEqual(0, len(reactor._processes))
+                self.assertEqual(0, len(reactor._running))
                 self.assertEqual(0, len(reactor._suspended))
                 self.assertEqual(4, len(log))
 

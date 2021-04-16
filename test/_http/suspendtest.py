@@ -185,7 +185,7 @@ class SuspendTest(WeightlessTestCase):
                 reactor.resumeProcess(handle[0])
                 reactor.step()
                 self.assertFalse(handle[0] in reactor._fds)
-                self.assertTrue(handle[0] in reactor._processes)
+                self.assertTrue(handle[0] in reactor._running)
                 self.assertRaises(KeyError, reactor.resumeProcess, handle[0])
 
                 # cleanup

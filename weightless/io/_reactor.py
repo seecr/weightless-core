@@ -26,6 +26,7 @@
 
 import sys
 
+import threading
 from select import epoll
 from select import EPOLLIN, EPOLLOUT, EPOLLPRI, EPOLLERR, EPOLLHUP, EPOLLET, EPOLLONESHOT, EPOLLRDNORM, EPOLLRDBAND, EPOLLWRNORM, EPOLLWRBAND, EPOLLMSG
 from socket import error as socket_error
@@ -48,7 +49,7 @@ class Reactor(object):
         self._fds = {}
         self._badFdsLastCallback = []
         self._suspended = {}
-        self._processes = {}
+        self._running = {}
         self._timers = []
         self._prio = -1
         self._epoll_ctrl_read, self._epoll_ctrl_write = pipe()
@@ -58,6 +59,7 @@ class Reactor(object):
         self.currentcontext = None
         self.currenthandle = None
         self._removeFdsInCurrentStep = set()
+        self._listening = threading.Lock()
 
     def addReader(self, sok, sink, prio=None):
         """Adds a socket and calls sink() when the socket becomes readable."""
@@ -71,16 +73,17 @@ class Reactor(object):
         """Adds a process and calls it repeatedly."""
         if process in self._suspended:
             raise ValueError('Process is suspended')
-        if process in self._processes:
+        if process in self._running:
             raise ValueError('Process is already in processes')
-        self._processes[process] = _ProcessContext(process, prio)
-        self._maybe_wake_event_loop()
+        self._running[process] = _ProcessContext(process, prio)
+        self._wake_up()
 
     def addTimer(self, seconds, callback):
         """Add a timer that calls callback() after the specified number of seconds. Afterwards, the timer is deleted.  It returns a token for removeTimer()."""
         timer = Timer(seconds, callback)
         self._timers.append(timer)
         self._timers.sort(key=_timeKey)
+        self._wake_up()
         return timer
 
     def removeReader(self, sok):
@@ -92,8 +95,8 @@ class Reactor(object):
     def removeProcess(self, process=None):
         if process is None:
             process = self.currentcontext.callback
-        if process in self._processes:
-            del self._processes[process]
+        if process in self._running:
+            del self._running[process]
             return True
 
     def removeTimer(self, token):
@@ -133,8 +136,8 @@ class Reactor(object):
         self._addFD(fileOrFd=context.fileOrFd, callback=context.callback, intent=WRITE_INTENT, prio=context.prio, fdContext=context)
 
     def resumeProcess(self, handle):
-        self._processes[handle] = self._suspended.pop(handle)
-        self._maybe_wake_event_loop()
+        self._running[handle] = self._suspended.pop(handle)
+        self._wake_up()
 
     def shutdown(self):
         # Will be called exactly once; in testing situations 1..n times.
@@ -151,15 +154,15 @@ class Reactor(object):
                 else:
                     print(_shutdownMessage(message='terminating - %s' % info, thing=handle, context=context))
 
-        for handle, context in list(self._processes.items()):
-            self._processes.pop(handle)
+        for handle, context in list(self._running.items()):
+            self._running.pop(handle)
             if hasattr(handle, 'close'):
                 print(_shutdownMessage(message='closing - active', thing=handle, context=context))
                 _closeAndIgnoreFdErrors(handle)
             else:
                 print(_shutdownMessage(message='terminating - active', thing=handle, context=context))
         del self._badFdsLastCallback[:]
-        self._closeProcessPipe()
+        self._close_epoll_ctrl()
         _closeAndIgnoreFdErrors(self._epoll)
 
     def loop(self):
@@ -177,7 +180,8 @@ class Reactor(object):
             return self
 
         self._prio = (self._prio + 1) % Reactor.MAXPRIO
-        if self._processes:
+
+        if self._running:
             timeout = 0
         elif self._timers:
             timeout = min(max(0, self._timers[0].time - time()), MAX_TIMEOUT_EPOLL)
@@ -185,7 +189,8 @@ class Reactor(object):
             timeout = -1
 
         try:
-            fdEvents = self._epoll.poll(timeout=timeout)
+            with self._listening:
+                fdEvents = self._epoll.poll(timeout=timeout)
         except IOError as e:
             (errno, description) = e.args
             _printException()
@@ -198,15 +203,14 @@ class Reactor(object):
             self.shutdown()  # For testing purposes; normally loop's finally does this.
             raise
 
-        if (self._epoll_ctrl_read, EPOLLIN) in fdEvents:
-            self._clear_epoll_ctrl()
+        self._clear_epoll_ctrl(fdEvents)
 
         self._removeFdsInCurrentStep = set([self._epoll_ctrl_read])
 
         self._timerCallbacks(self._timers)
         self._callbacks(fdEvents, self._fds, READ_INTENT)
         self._callbacks(fdEvents, self._fds, WRITE_INTENT)
-        self._processCallbacks(self._processes)
+        self._processCallbacks(self._running)
 
         return self
 
@@ -365,8 +369,9 @@ class Reactor(object):
             else:
                 _printException()
 
-    def _clear_epoll_ctrl(self):
-        while True:
+    def _clear_epoll_ctrl(self, fdEvents):
+        if (self._epoll_ctrl_read, EPOLLIN) in fdEvents:
+          while True:
             try:
                 read(self._epoll_ctrl_read, 1)
                 break
@@ -377,8 +382,9 @@ class Reactor(object):
                 else:
                     raise
 
-    def _maybe_wake_event_loop(self):
-        while True:
+    def _wake_up(self):
+        if self._listening.locked():
+          while True:
             try:
                 write(self._epoll_ctrl_write, b'x')
                 break
@@ -405,7 +411,7 @@ class Reactor(object):
             if hasattr(context, 'fileOrFd') and context.fileOrFd == obj:
                 del self._suspended[handle]
 
-    def _closeProcessPipe(self):
+    def _close_epoll_ctrl(self):
         # Will be called exactly once; in testing situations 1..n times.
         try:
             close(self._epoll_ctrl_read)

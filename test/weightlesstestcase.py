@@ -69,16 +69,16 @@ class WeightlessTestCase(TestCase):
         t0 = time()
         if hasattr(self, 'httpd') and hasattr(self.httpd, 'shutdown'):
             self.httpd.shutdown()
+        self.reactor.shutdown()
         self.assertEqual({}, self.reactor._fds)
         self.assertEqual({}, self.reactor._suspended)
-        self.assertEqual({}, self.reactor._processes)
+        self.assertEqual({}, self.reactor._running)
         for t in self.reactor._timers:
             cb = t.callback
             code = cb.__code__
             print('WARNING: dangling timer in reactor. Remaining timout: %s with callback to %s() in %s at line %s.' \
                 % (t.time-t0, cb.__name__, code.co_filename, code.co_firstlineno))
         self.assertEqual([], self.reactor._timers)
-        self.reactor.shutdown()
         rmtree(self.tempdir)
         os.remove(self.tempfile)
         # forcing collect helps finding ResourceWarnings because when the GC finds a collectable socket and it is not closed, it issues a warning immediately
