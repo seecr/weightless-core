@@ -181,27 +181,27 @@ class Reactor(object):
 
         self._prio = (self._prio + 1) % Reactor.MAXPRIO
 
-        if self._running:
-            timeout = 0
-        elif self._timers:
-            timeout = min(max(0, self._timers[0].time - time()), MAX_TIMEOUT_EPOLL)
-        else:
-            timeout = -1
-
-        try:
-            with self._listening:
-                fdEvents = self._epoll.poll(timeout=timeout)
-        except IOError as e:
-            (errno, description) = e.args
-            _printException()
-            if errno == EINTR:
-                pass
+        with self._listening:
+            if self._running:
+                timeout = 0
+            elif self._timers:
+                timeout = min(max(0, self._timers[0].time - time()), MAX_TIMEOUT_EPOLL)
             else:
+                timeout = -1
+
+            try:
+                fdEvents = self._epoll.poll(timeout=timeout)
+            except IOError as e:
+                (errno, description) = e.args
+                _printException()
+                if errno == EINTR:
+                    pass
+                else:
+                    raise
+                return self
+            except KeyboardInterrupt:
+                self.shutdown()  # For testing purposes; normally loop's finally does this.
                 raise
-            return self
-        except KeyboardInterrupt:
-            self.shutdown()  # For testing purposes; normally loop's finally does this.
-            raise
 
         self._clear_epoll_ctrl(fdEvents)
 
