@@ -60,6 +60,7 @@ class Reactor(object):
         self.currenthandle = None
         self._removeFdsInCurrentStep = set()
         self._listening = threading.Lock()
+        self._loop = True
 
     def addReader(self, sok, sink, prio=None):
         """Adds a socket and calls sink() when the socket becomes readable."""
@@ -165,9 +166,12 @@ class Reactor(object):
         self._close_epoll_ctrl()
         _closeAndIgnoreFdErrors(self._epoll)
 
+    def request_shutdown(self):
+        self._loop = False
+
     def loop(self):
         try:
-            while True:
+            while self._loop:
                 self.step()
         finally:
             self.shutdown()
