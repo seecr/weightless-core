@@ -475,7 +475,7 @@ static PyObject* _compose_go_with_frame(PyComposeObject* self, PyObject* exc_typ
     PyThreadState* tstate = PyThreadState_GET();
     PyFrameObject* tstate_frame = tstate->frame;
     self->frame->f_back = tstate_frame;
-    Py_INCREF(self->frame->f_back);
+    Py_XINCREF(self->frame->f_back); /* can be NULL during GC */
     tstate->frame = self->frame;
     *(self->frame->f_stacktop++) = (PyObject*) self;
     Py_INCREF(self);

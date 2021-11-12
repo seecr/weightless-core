@@ -29,8 +29,8 @@ from functools import wraps
 from types import GeneratorType, FunctionType
 
 from os.path import dirname, abspath, isdir, join            #DO_NOT_DISTRIBUTE
-from sys import version_info                                 #DO_NOT_DISTRIBUTE
-pycmd = "python%s.%s" % version_info[:2]                     #DO_NOT_DISTRIBUTE
+from sys import executable                                   #DO_NOT_DISTRIBUTE
+pycmd = executable                                           #DO_NOT_DISTRIBUTE
 _mydir = abspath(dirname(__file__))                          #DO_NOT_DISTRIBUTE
 _projectdir = dirname(dirname(_mydir))                       #DO_NOT_DISTRIBUTE
 if isdir(join(_mydir, '.svn')) or isdir(join(_projectdir, '.git')):  #DO_NOT_DISTRIBUTE
