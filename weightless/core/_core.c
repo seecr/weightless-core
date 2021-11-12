@@ -35,7 +35,6 @@ int is_generator(PyObject* o) {
 }
 
 PyObject* py_is_generator(PyObject* _, PyObject* o) {
-    assert(_ == NULL);
     if(is_generator(o))
         Py_RETURN_TRUE;
     Py_RETURN_FALSE;
@@ -57,7 +56,7 @@ static PyMethodDef core_functionslist[] = {
             "True if o is generator, compose or all."},
     {"Compose_selftest",   compose_selftest, METH_NOARGS,
             "Runs self test"},
-    {NULL} 
+    {NULL}
 };
 
 PyMODINIT_FUNC PyInit_ext(void) {

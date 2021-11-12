@@ -43,6 +43,6 @@ echo Performing tests: $tests
 
 for t in $tests; do
     echo "================ $t with python3 _alltests.py $@ ================"
-    #WEIGHTLESS_COMPOSE_TEST=$t gdb --args python3 _alltests.py "$@"
+    #WEIGHTLESS_COMPOSE_TEST=$t gdb --ex run --args python3-dbg _alltests.py "$@"
     WEIGHTLESS_COMPOSE_TEST=$t python3 _alltests.py "$@"
 done

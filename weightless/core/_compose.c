@@ -135,7 +135,7 @@ static int _messages_size(PyComposeObject* self) {
 }
 
 
-static PyObject* messages_next(PyComposeObject* self) {
+static PyObject* messages_pop(PyComposeObject* self) {
     if(messages_empty(self)) {
         PyErr_SetString(PyExc_RuntimeError, "internal error: empty messages queue (compose)");
         return NULL;
@@ -207,7 +207,7 @@ static int compose_clear(PyComposeObject* self) {
     self->generators_base = NULL;
 
     while(self->messages_base && !messages_empty(self)) {
-        PyObject* p = messages_next(self);
+        PyObject* p = messages_pop(self);
         Py_DECREF(p);
     }
 
@@ -302,7 +302,9 @@ static int _compose_handle_stopiteration(PyComposeObject* self, PyObject* exc_va
     if (args && PyTuple_Size(args) == 1) {
         PyObject* firstElement = PyTuple_GET_ITEM(args, 0);
         if (PyTuple_CheckExact(firstElement)) {
+            Py_DECREF(args);
             args = firstElement;
+            Py_INCREF(args);
         }
     }
 
@@ -392,7 +394,7 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
             Py_CLEAR(exc_tb);
 
         } else { // normal message
-            message = messages_next(self); // new ref
+            message = messages_pop(self); // ref transfered to me
             response = PyObject_CallMethod(generator, "send", "(O)", message); // new ref
             Py_CLEAR(message);
         }
@@ -459,7 +461,7 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
         int i;
 
         for(i = 0; i < n; i++) {
-            PyTuple_SetItem(args, i, messages_next(self)); // steals ref
+            PyTuple_SetItem(args, i, messages_pop(self)); // steals ref
         }
         PyObject* sie = PyObject_Call(PyExc_StopIteration, args, NULL); // new ref
         PyErr_SetObject(PyExc_StopIteration, sie);
@@ -847,15 +849,15 @@ PyObject* compose_selftest(PyObject* self, PyObject* null) {
     assertTrue(1 == _messages_size(&c), "now queue size must be 1");
     assertTrue(Py_None->ob_refcnt == refcount + 1, "messages_append did not increase ref count");
     assertTrue(!messages_empty(&c), "messages must not be empty");
-    assertTrue(Py_None == messages_next(&c), "incorrect value from queue");
+    assertTrue(Py_None == messages_pop(&c), "incorrect value from queue");
     // test next on messages queue
     assertTrue(0 == _messages_size(&c), "now queue size must be 0 again");
     assertTrue(messages_empty(&c), "messages must be empty again");
     messages_append(&c, PyLong_FromLong(5));
     messages_append(&c, PyLong_FromLong(6));
     assertTrue(2 == _messages_size(&c), "now queue size must be 2");
-    assertTrue(PyLong_AsLong(messages_next(&c)) == 5, "incorrect value from queue");
-    assertTrue(PyLong_AsLong(messages_next(&c)) == 6, "incorrect value from queue");
+    assertTrue(PyLong_AsLong(messages_pop(&c)) == 5, "incorrect value from queue");
+    assertTrue(PyLong_AsLong(messages_pop(&c)) == 6, "incorrect value from queue");
     // test wrap around on append
     compose_clear(&c);
     _compose_initialize(&c);
@@ -897,19 +899,38 @@ PyObject* compose_selftest(PyObject* self, PyObject* null) {
     // test wrap around on next
     compose_clear(&c);
     _compose_initialize(&c);
-    messages_insert(&c, PyLong_FromLong(1000)); // wrap backward
-    messages_append(&c, PyLong_FromLong(1001)); // wrap forward
-    PyObject* o = messages_next(&c);           // end
+    PyObject* l0 = PyLong_FromLong(1000); // new ref
+    PyObject* l1 = PyLong_FromLong(1001); //# new ref
+    assertTrue(1 == l0->ob_refcnt, "initial refcount of l0  must be 1");
+    assertTrue(1 == l1->ob_refcnt, "initial refcount of l1  must be 1");
+
+    messages_insert(&c, l0); // wrap backward
+    messages_append(&c, l1); // wrap forward
+    assertTrue(2 == l0->ob_refcnt, "after store, refcount of l0  must be 2");
+    assertTrue(2 == l1->ob_refcnt, "after store, refcount of l1  must be 2");
+
+    PyObject* o = messages_pop(&c);           // end
     assertTrue(1000 == PyLong_AsLong(o), "expected 1000");
-    assertTrue(2 == o->ob_refcnt, "refcount on next must be 2");
-    o = messages_next(&c);                     // wrap
+    assertTrue(2 == o->ob_refcnt, "refcount of l0 from next must be 2");
+    Py_DECREF(o);
+
+    o = messages_pop(&c);                     // wrap
     assertTrue(1001 == PyLong_AsLong(o), "expected 1001");
-    assertTrue(2 == o->ob_refcnt, "refcount on next must be 2");
-    o = messages_next(&c);
+    assertTrue(2 == o->ob_refcnt, "refcount of l1 from next must be 2");
+    Py_DECREF(o);
+
+    o = messages_pop(&c);
     assertTrue(NULL == o, "error condition on next: empty");
     assertTrue(PyExc_RuntimeError == PyErr_Occurred(), "no runtime exception no next on empty queue");
     PyErr_Clear();
+
     compose_clear(&c);
+    assertTrue(1 == l0->ob_refcnt, "remaining refcount of l0  must be 1");
+    assertTrue(1 == l1->ob_refcnt, "remaining refcount of l1  must be 1");
+
+    Py_DECREF(l0);
+    Py_DECREF(l1);
+
     Py_RETURN_NONE;
 }
 
