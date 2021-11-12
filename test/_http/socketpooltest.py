@@ -25,7 +25,8 @@
 #
 ## end license ##
 
-from seecr.test import SeecrTestCase, CallTrace
+from seecr.test import CallTrace
+from unittest import TestCase
 from seecr.test.io import stderr_replaced
 
 from socket import SHUT_RDWR
@@ -39,7 +40,7 @@ from weightless.http import SocketPool, EmptySocketPool
 #import gc
 #gc.set_debug(gc.DEBUG_UNCOLLECTABLE)
 
-class SocketPoolTest(SeecrTestCase):
+class SocketPoolTest(TestCase):
     ##
     ## Get & Put'ing
     def testGetOnEmptyPool(self):

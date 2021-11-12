@@ -22,7 +22,8 @@
 #
 ## end license ##
 
-from seecr.test import SeecrTestCase, CallTrace
+from seecr.test import CallTrace
+from unittest import TestCase
 from seecr.test.io import stdout_replaced
 
 from functools import partial
@@ -33,7 +34,7 @@ from weightless.io import Reactor, reactor, Suspend
 from weightless.io.utils import asProcess
 
 
-class AsProcessTest(SeecrTestCase):
+class AsProcessTest(TestCase):
     def testOnlyAcceptsAGeneratorOrGeneratorFunction(self):
         self.assertRaises(TypeError, lambda: asProcess())
         self.assertRaises(TypeError, lambda: asProcess(object()))

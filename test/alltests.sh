@@ -41,8 +41,10 @@ fi
 
 echo Performing tests: $tests
 
-for t in $tests; do
-    echo "================ $t with python3 _alltests.py $@ ================"
-    #WEIGHTLESS_COMPOSE_TEST=$t gdb --args python3 _alltests.py "$@"
-    WEIGHTLESS_COMPOSE_TEST=$t python3 _alltests.py "$@"
-done
+# for t in $tests; do
+#     echo "================ $t with python3 _alltests.py $@ ================"
+#     WEIGHTLESS_COMPOSE_TEST=$t pdb _alltests.py "$@"
+    # WEIGHTLESS_COMPOSE_TEST=$t python3 _alltests.py "$@"
+# done
+
+WEIGHTLESS_COMPOSE_TEST=C pdb _alltests.py
