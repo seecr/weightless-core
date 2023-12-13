@@ -28,6 +28,7 @@
  */
 
 #include <Python.h>
+#include <internal/pycore_frame.h>
 #include <frameobject.h>
 #include <structmember.h>
 
@@ -252,7 +253,7 @@ static void _compose_initialize(PyComposeObject* cmps) {
     cmps->messages_end = cmps->messages_base;
     cmps->weakreflist = NULL;
     cmps->frame = PyFrame_New(PyThreadState_GET(), py_code, PyEval_GetGlobals(), NULL);
-    Py_CLEAR(cmps->frame->f_back);
+    //Py_CLEAR(cmps->frame->f_back); Nieuwe is lazy dus hoeft niet te clearen.
 }
 
 
@@ -327,23 +328,29 @@ static int _compose_handle_stopiteration(PyComposeObject* self, PyObject* exc_va
 
 
 static int generator_invalid(PyObject* gen) {
-    PyFrameObject* frame;
     int started;
+    bool has_frame = false;
 
     if(PyCompose_Check(gen)) {
-        frame = ((PyComposeObject*)gen)->frame;
+        printf("compose_check\n");
+        PyFrameObject* frame = ((PyComposeObject*)gen)->frame;
         started = ((PyComposeObject*)gen)->started;
+        has_frame = frame != NULL;
 
     } else if(PyGen_Check(gen)) {
-        frame = ((PyGenObject*)gen)->gi_frame;
-        started = frame && frame->f_lasti != -1;
+        printf("Gen_check\n");
+        struct _PyInterpreterFrame *_frame = (struct _PyInterpreterFrame *)((PyGenObject*)gen)->gi_iframe;
+        int lasti = _PyInterpreterFrame_LASTI(_frame);
+
+        printf("last i: %d\n", lasti);
+        started = _frame->frame_obj && lasti != -1;
+        has_frame = true;
 
     } else { // AllGenerator
-        frame = (PyFrameObject*) 0x1; // fake
         started = 0; // ((PyAllGeneratorObject*)gen)->_i > -1;
     }
 
-    if(!frame) {
+    if(!has_frame) {
         PyErr_SetString(PyExc_AssertionError, "Generator is exhausted.");
         return 1;
     }
@@ -474,10 +481,13 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
 
 
 static PyObject* _compose_go_with_frame(PyComposeObject* self, PyObject* exc_type, PyObject* exc_value, PyObject* exc_tb) {
+    /*
     PyThreadState* tstate = PyThreadState_GET();
-    PyFrameObject* tstate_frame = tstate->frame;
+    PyFrameObject* tstate_frame = PyThreadState_GetFrame(tstate);
+
     self->frame->f_back = tstate_frame;
-    Py_XINCREF(self->frame->f_back); /* can be NULL during GC */
+    Py_XINCREF(self->frame->f_back); // can be NULL during GC 
+
     tstate->frame = self->frame;
     *(self->frame->f_stacktop++) = (PyObject*) self;
     Py_INCREF(self);
@@ -487,6 +497,15 @@ static PyObject* _compose_go_with_frame(PyComposeObject* self, PyObject* exc_typ
     Py_CLEAR(self->frame->f_back);
     tstate->frame = tstate_frame;
     return response;
+    */
+
+    Py_INCREF(self);
+    _PyFrame_StackPush(self->frame->f_frame, (PyObject *)self);
+    PyObject* response = _compose_go(self, exc_type, exc_value, exc_tb);
+    _PyFrame_StackPop(self->frame->f_frame);
+    Py_DECREF(self);
+    return response;
+
 }
 
 
@@ -557,7 +576,8 @@ PyObject* find_local_in_compose(PyComposeObject* cmps, PyObject* name) {
         if(PyAllGenerator_Check(*generator))
             continue;
         if(PyGen_Check(*generator)) {
-            PyObject* result = find_local_in_locals(((PyGenObject*) * generator)->gi_frame, name);
+            struct _PyInterpreterFrame *_IF = (struct _PyInterpreterFrame *)((PyGenObject*) * generator)->gi_iframe;
+            PyObject* result = find_local_in_locals(_IF->frame_obj, name);
 
             if(result != NULL)
                 return result;
@@ -577,11 +597,14 @@ PyObject* find_local_in_compose(PyComposeObject* cmps, PyObject* name) {
 PyObject* find_local_in_locals(PyFrameObject* frame, PyObject* name) {
     int i;
 
-    for(i = 0; i < PyTuple_Size(frame->f_code->co_varnames); i++) {
-        PyObject* localVar = frame->f_localsplus[i];
+    PyCodeObject *_code = PyFrame_GetCode(frame);
+    PyObject *_co_varnames = PyCode_GetVarnames(_code);
+
+    for(i = 0; i < PyTuple_Size(_co_varnames); i++) {
+        PyObject* localVar = frame->f_frame->localsplus[i];
 
         if(localVar) {
-            PyObject* localName = PyTuple_GetItem(frame->f_code->co_varnames, i);
+            PyObject* localName = PyTuple_GetItem(_co_varnames, i);
 
             if(PyUnicode_Compare(name, localName) == 0) {
                 Py_INCREF(localVar);
@@ -590,9 +613,8 @@ PyObject* find_local_in_locals(PyFrameObject* frame, PyObject* name) {
         }
     }
 
-    if(frame->f_stacktop > frame->f_valuestack) {
-        PyObject* o = frame->f_stacktop[-1];
-
+    if(frame->f_frame->stacktop > frame->f_frame->f_code->co_nlocalsplus) {
+        PyObject* o = _PyFrame_StackPeek(frame->f_frame);
         if(Py_TYPE(o) == &PyCompose_Type) {
             return find_local_in_compose((PyComposeObject*) o, name);
         }
@@ -610,7 +632,8 @@ PyObject* find_local_in_frame(PyFrameObject* frame, PyObject* name) {
     if(result)
         return result;
 
-    return find_local_in_frame(frame->f_back, name);
+    PyFrameObject *back = PyFrame_GetBack(frame);
+    return find_local_in_frame(back, name);
 }
 
 
@@ -636,15 +659,19 @@ PyObject* py_getline;
 
 PyObject* tostring(PyObject* self, PyObject* gen) {
     if(PyGen_Check(gen)) {
-        PyFrameObject* frame = ((PyGenObject*)gen)->gi_frame;
+        struct _PyInterpreterFrame *_IF = (struct _PyInterpreterFrame *)((PyGenObject*) gen)->gi_iframe;
+        PyFrameObject* frame = _IF->frame_obj;
+
 
         if(!frame)
             return PyUnicode_FromString("<no frame>");
 
-        int ilineno = PyCode_Addr2Line(frame->f_code, frame->f_lasti);
+        int ilineno = PyFrame_GetLineNumber(frame);
         PyObject* lineno = PyLong_FromLong(ilineno); // new ref
+
+        PyCodeObject *_code = PyFrame_GetCode(frame);
         PyObject* codeline = PyObject_CallFunctionObjArgs(py_getline,
-                             frame->f_code->co_filename, lineno, NULL); // new ref
+                             _code->co_filename, lineno, NULL); // new ref
         Py_CLEAR(lineno);
 
         if(!codeline) return NULL;
@@ -654,8 +681,8 @@ PyObject* tostring(PyObject* self, PyObject* gen) {
 
         if(!codeline_stripped) return NULL;
 
-        PyObject* filename_ascii = PyUnicode_AsASCIIString(frame->f_code->co_filename);
-        PyObject* function_ascii = PyUnicode_AsASCIIString(frame->f_code->co_name);
+        PyObject* filename_ascii = PyUnicode_AsASCIIString(_code->co_filename);
+        PyObject* function_ascii = PyUnicode_AsASCIIString(_code->co_name);
         PyObject* codeline_ascii = PyUnicode_AsASCIIString(codeline_stripped);
 
         PyObject* result
@@ -735,6 +762,7 @@ PyTypeObject PyCompose_Type = {
 static PyCodeObject* create_empty_code(void) {
     PyObject* py_srcfile = PyUnicode_FromString(__FILE__);
     PyObject* py_funcname = PyUnicode_FromString("compose");
+    PyObject* py_qualname = PyUnicode_FromString("compose.compose");
     PyObject* empty_string = PyBytes_FromString("");
     PyObject* empty_tuple = PyTuple_New(0);
     PyCodeObject* code = PyCode_New(
@@ -751,8 +779,10 @@ static PyCodeObject* create_empty_code(void) {
                              empty_tuple,       // cellvars
                              py_srcfile,        // filename
                              py_funcname,       // name
+                             py_qualname,       // qualname
                              __LINE__,          // firstlineno
-                             empty_string       // lnotab
+                             empty_string,      // lnotab
+                             empty_string       // exceptiontable
                              );
     return code;
 }
