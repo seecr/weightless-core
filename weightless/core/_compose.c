@@ -253,6 +253,7 @@ static void _compose_initialize(PyComposeObject* cmps) {
     cmps->messages_end = cmps->messages_base;
     cmps->weakreflist = NULL;
     cmps->frame = PyFrame_New(PyThreadState_GET(), py_code, PyEval_GetGlobals(), NULL);
+    cmps->frame->f_frame->owner = FRAME_OWNED_BY_GENERATOR;
     //Py_CLEAR(cmps->frame->f_back); Nieuwe is lazy dus hoeft niet te clearen.
 }
 
@@ -482,6 +483,11 @@ static PyObject* _compose_go(PyComposeObject* self, PyObject* exc_type, PyObject
 
 static PyObject* _compose_go_with_frame(PyComposeObject* self, PyObject* exc_type, PyObject* exc_value, PyObject* exc_tb) {
     /*
+     *
+     * https://github.com/python/cpython/blob/57b7e52790ae56309832497a1ce17e3e731b920e/Objects/genobject.c#L457
+     *
+     */
+    /*
     PyThreadState* tstate = PyThreadState_GET();
     PyFrameObject* tstate_frame = PyThreadState_GetFrame(tstate);
 
@@ -489,21 +495,40 @@ static PyObject* _compose_go_with_frame(PyComposeObject* self, PyObject* exc_typ
     Py_XINCREF(self->frame->f_back); // can be NULL during GC 
 
     tstate->frame = self->frame;
-    *(self->frame->f_stacktop++) = (PyObject*) self;
-    Py_INCREF(self);
-    PyObject* response = _compose_go(self, exc_type, exc_value, exc_tb);
-    self->frame->f_stacktop--;
-    Py_DECREF(self);
+
+      *(self->frame->f_stacktop++) = (PyObject*) self;
+      Py_INCREF(self);
+
+        PyObject* response = _compose_go(self, exc_type, exc_value, exc_tb);
+
+      self->frame->f_stacktop--;
+      Py_DECREF(self);
+
     Py_CLEAR(self->frame->f_back);
     tstate->frame = tstate_frame;
     return response;
     */
 
-    Py_INCREF(self);
-    _PyFrame_StackPush(self->frame->f_frame, (PyObject *)self);
-    PyObject* response = _compose_go(self, exc_type, exc_value, exc_tb);
-    _PyFrame_StackPop(self->frame->f_frame);
-    Py_DECREF(self);
+    PyFrameObject *frame = self->frame;
+    _PyInterpreterFrame *f_frame = frame->f_frame;
+
+    PyThreadState *tstate = PyThreadState_GET();
+    _PyInterpreterFrame *prev = tstate->cframe->current_frame;
+    assert(f_frame->previous == NULL);
+    f_frame->previous = prev;
+    Py_XINCREF(prev);
+    tstate->cframe->current_frame = f_frame;
+
+        Py_INCREF(self);
+        _PyFrame_StackPush(f_frame, (PyObject *)self);
+            PyObject* response = _compose_go(self, exc_type, exc_value, exc_tb);
+        _PyFrame_StackPop(f_frame);
+        Py_DECREF(self);
+
+    tstate->cframe->current_frame = prev;
+    Py_DECREF(prev);
+    f_frame->previous = NULL;
+
     return response;
 
 }
