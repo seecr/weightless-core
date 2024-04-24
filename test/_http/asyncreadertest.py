@@ -109,7 +109,7 @@ class AsyncReaderTest(WeightlessTestCase):
 
             self.assertEqual(TypeError, self.error[0])
             stacktrace = ignoreLineNumbers(''.join(format_exception(*self.error)))
-            self.assertTrue("TypeError: an integer is required (got type str)" in stacktrace, stacktrace)
+            self.assertTrue("TypeError: 'str' object cannot be interpreted as an integer" in stacktrace, stacktrace)
 
         target = ('localhost', 87, '/') # invalid port
         with clientget('localhost', self.port, '/') as client:

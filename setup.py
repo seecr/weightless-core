@@ -25,10 +25,9 @@
 ## end license ##
 
 from distutils.core import setup
-from distutils.extension import Extension
 from os import walk
 
-version = '$Version: 0.9.x$'[9:-1].strip()
+version = '$Version: 0$'[9:-1].strip()
 
 packages = []
 for path, dirs, files in walk('weightless'):
@@ -53,15 +52,6 @@ Weightless presents a way to implement data-processing programs, such as web-ser
 """,
     license='GNU Public License',
     platforms=['cpython'],
-    ext_modules=[
-        Extension("weightless.core.ext", sources=[
-            "weightless/core/_core.c",
-            "weightless/core/_compose.c",
-            "weightless/core/_observable.c"
-            ],
-            extra_compile_args=["-g3", "-O0"],
-        )
-    ],
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Environment :: Web Environment',

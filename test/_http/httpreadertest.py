@@ -38,6 +38,7 @@ from weightless.http import HttpReader
 from weightless.core import VERSION as WlVersion
 from weightless.http._httpreader import HttpReaderFacade, Connector, HandlerFacade, _httpParseUrl
 import sys
+import platform
 
 from .testutils import server
 
@@ -50,7 +51,7 @@ class HttpReaderTest(WeightlessTestCase):
                 dataReceived.append(data)
 
         requests = []
-        recvSize = 7
+        recvSize = 4
         with stdout_replaced():
             with self.referenceHttpServer(self.port, requests, getResponse=b"Hello World!"):
                 with Reactor() as reactor:
@@ -75,7 +76,7 @@ class HttpReaderTest(WeightlessTestCase):
                             'ReasonPhrase': b'OK',
                             'Headers': {
                                 b'Date': MATCHALL,
-                                b'Server': b'BaseHTTP/0.6 Python/3.7.3',
+                                b'Server': bytes('BaseHTTP/0.6 Python/{}'.format(platform.python_version()), encoding='utf-8')
                             },
                             'Client': ('127.0.0.1', MATCHALL)}, dataReceived[0])
                     finally:
@@ -139,6 +140,9 @@ class HttpReaderTest(WeightlessTestCase):
                 self.assertEqual('timeout while receiving data', str(errorArgs[0]))
 
     def testTimeoutOnServerGoingSilentAfterHeaders(self):
+        import platform
+        python_version = platform.python_version().encode(encoding="utf-8")
+
         with Reactor() as reactor:
             requests = []
             with self.referenceHttpServer(self.port, requests, stallAfterHeaders=1):
@@ -160,7 +164,7 @@ class HttpReaderTest(WeightlessTestCase):
                     'StatusCode': b'200',
                     'ReasonPhrase': b'OK',
                     'Headers': {
-                        b'Server': b'BaseHTTP/0.6 Python/3.7.3',
+                        b'Server': b'BaseHTTP/0.6 Python/'+python_version,
                         b'Date': MATCHALL},
                     'Client': ('127.0.0.1', MATCHALL)}, receivedData[0])
 
@@ -182,7 +186,7 @@ class HttpReaderTest(WeightlessTestCase):
                 sleep(0.02) # 2 * timeout, just to be sure
 
                 self.assertTrue(isinstance(self.exception, StopIteration), self.exception)
-                self.assertEqual(b"response", b"".join(sentData[-3:]))
+                self.assertEqual(b"response", b"".join(sentData[-4:]))
 
     def testPost(self):
         requests = []

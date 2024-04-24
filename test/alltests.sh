@@ -28,21 +28,4 @@ export LANG=en_US.UTF-8
 export PYTHONPATH=.:"$PYTHONPATH"
 export PYTHONWARNINGS=default
 
-option=$1
-if [ "$option" == "--python" ]; then
-        shift
-        tests=PYTHON
-elif [ "$option" == "--c" ]; then
-        shift
-        tests=C
-else
-    tests="C PYTHON"
-fi
-
-echo Performing tests: $tests
-
-for t in $tests; do
-    echo "================ $t with python3 _alltests.py $@ ================"
-    #WEIGHTLESS_COMPOSE_TEST=$t gdb --ex run --args python3-dbg _alltests.py "$@"
-    WEIGHTLESS_COMPOSE_TEST=$t python3 _alltests.py "$@"
-done
+python3 _alltests.py "$@"

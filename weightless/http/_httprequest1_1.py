@@ -28,7 +28,7 @@ import re
 from errno import EINPROGRESS
 from functools import partial
 from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_RDWR, SOL_TCP, TCP_KEEPINTVL, TCP_KEEPIDLE, TCP_KEEPCNT, SO_KEEPALIVE, TCP_QUICKACK, TCP_NODELAY
-from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
+from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError, SSLContext, PROTOCOL_TLS_CLIENT, CERT_NONE
 from sys import exc_info, getdefaultencoding
 
 from weightless.core import compose, identify, Observable, autostart, Yield
@@ -428,7 +428,11 @@ def _readChunkedDelimitedBody(sok, rest):
         pass
 
 def _sslHandshake(sok, this, suspend, prio):
-    sok = wrap_socket(sok, do_handshake_on_connect=False)
+    ssl_context = SSLContext(PROTOCOL_TLS_CLIENT)
+    ssl_context.check_hostname=False
+    ssl_context.verify_mode = CERT_NONE
+    sok = ssl_context.wrap_socket(sok, do_handshake_on_connect=False)
+
     count = 0
     while count < 254:
         count += 1

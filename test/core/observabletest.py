@@ -35,7 +35,7 @@ from traceback import format_tb
 from inspect import isframe, getframeinfo
 from types import GeneratorType
 from functools import partial
-from weightless.core import compose, Yield, Observable, Transparent, be, tostring, NoneOfTheObserversRespond, DeclineMessage, cextension
+from weightless.core import compose, Yield, Observable, Transparent, be, tostring, NoneOfTheObserversRespond, DeclineMessage
 from weightless.core._observable import AllMessage, AnyMessage, DoMessage, OnceMessage
 from weightless.core import consume
 from unittest import TestCase
@@ -139,10 +139,8 @@ class ObservableTest(TestCase):
             self.fail("Should not happen")
         except AssertionError as e:
             self.assertTrue(str(e).endswith(" returned '2'"), str(e))
-            if not cextension:
-                self.assertTrue("<bound method ObservableTest.testAllAssertsNoneReturnValues.<locals>.A.all_unknown of <core.observabletest.ObservableTest.testAllAssertsNoneReturnValues.<locals>.A object at 0x" in str(e), str(e))
+            self.assertTrue("<bound method ObservableTest.testAllAssertsNoneReturnValues.<locals>.A.all_unknown of <core.observabletest.ObservableTest.testAllAssertsNoneReturnValues.<locals>.A object at 0x" in str(e), str(e))
 
-    @skip_if(cextension)
     def testAllAssertsResultOfCallIsGeneratorOrComposed(self):
         #Py3: traceback have _compose, all etc.. in them again
         class A(object):
@@ -283,7 +281,6 @@ class ObservableTest(TestCase):
         except StopIteration as e:
             self.assertEqual(('retval',), e.args)
 
-    @skip_if(cextension)
     def testAnyAssertsResultOfCallIsGeneratorOrComposed(self):
         class A(object):
             def f(self):
@@ -349,7 +346,6 @@ class ObservableTest(TestCase):
         root.do.f()
         self.assertEqual([('f', (), {})], called)
 
-    @skip_if(cextension)
     def testDoAssertsIndividualCallsReturnNone(self):
         class A(object):
             def f(self):
@@ -455,7 +451,7 @@ class ObservableTest(TestCase):
             answer = observable.call.yes()
             self.fail('should raise TypeError')
         except TypeError as e:
-            self.assertEqual("yes() missing 1 required positional argument: 'oneArg'", str(e))
+            self.assertEqual("ObservableTest.testProperErrorMessageWhenArgsDoNotMatch.<locals>.YesObserver.yes() missing 1 required positional argument: 'oneArg'", str(e))
 
     def testWhatItIs(self):
         def anAction():
@@ -880,7 +876,6 @@ class ObservableTest(TestCase):
         else:
             self.fail('Should not happen')
 
-    @skip_if(cextension)
     def testNonGeneratorMethodMayNeverRaiseGeneratorExceptionsOnMessages(self):
         # Py3: broken tracebacks
         # any, all, do, call and once
@@ -1280,5 +1275,5 @@ class Responder(Observable):
         yield self._value
 
 def expected(*args, exclude=None):
-    return list(filter(lambda x: x not in exclude, args)) if cextension else args
+    return args
 

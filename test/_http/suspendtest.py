@@ -452,6 +452,7 @@ Traceback (most recent call last):
     self._onTimeout()
   File "%(__file__)s", line 382, in onTimeoutTraced
     return _onTimeout()
+           ^^^^^^^^^^^^
   File "%(__file__)s", line 398, in onTimeout
     raise Exception("This Should Never Happen But Don't Expose Exception If It Does Anyway !")
 Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway !
@@ -627,6 +628,7 @@ Exception: This Should Never Happen But Don't Expose Exception If It Does Anyway
     self._doNext(self)
   File "%(__file__)s", line 196, in razor
     1/0  # Division by zero exception
+    ~^~
 ZeroDivisionError: division by zero
         """ % fileDict)
         self.assertEqual(ZeroDivisionError, exc_type)

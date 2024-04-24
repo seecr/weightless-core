@@ -45,12 +45,12 @@ from weightless.io import Reactor
 from http.server import BaseHTTPRequestHandler
 from socketserver import TCPServer, ThreadingMixIn, BaseServer
 from http.server import SimpleHTTPRequestHandler
-from ssl import wrap_socket
 from urllib.request import urlopen
 from select import select
 from urllib.parse import urlunparse, urlparse
 
 import gc
+import ssl
 
 mydir = dirname(abspath(__file__))
 sslDir = join(mydir, 'ssl')
@@ -271,13 +271,12 @@ class MySSLTCPServer(ThreadingMixIn, TCPServer):
         pem = join(sslDir, 'server.pkey')
         cert = join(sslDir, 'server.cert')
 
+        sslctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        sslctx.check_hostname = False # If set to True, only the hostname that matches the certificate will be accepted
+        sslctx.load_cert_chain(certfile=cert, keyfile=pem)
+
         BaseServer.__init__(self, server_address, RequestHandlerClass)
-        self.socket = wrap_socket(
-                    socket(self.address_family, self.socket_type),
-                    server_side=True,
-                    certfile=cert,
-                    keyfile=pem,
-                )
+        self.socket = sslctx.wrap_socket(socket(self.address_family, self.socket_type), server_side=True)
 
         if bind_and_activate:
             self.server_bind()

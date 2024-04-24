@@ -47,14 +47,8 @@ sysPath.insert(0,'..')                            #DO_NOT_DISTRIBUTE
 from unittest import main
 from types import GeneratorType
 
-from weightless.core import ComposeType
-if ComposeType == GeneratorType:
-    from core.composetest import ComposePyTest
-    from core.composeschedulingtest import ComposeSchedulingPyTest
-else:
-    from core.composetest import ComposeCTest
-    from core.composeschedulingtest import ComposeSchedulingCTest
-    from core.observable_c_test import Observable_C_Test
+from core.composetest import ComposePyTest
+from core.composeschedulingtest import ComposeSchedulingPyTest
 from core.localtest import LocalTest
 from core.observabletest import ObservableTest
 from core.observabledirectedmessagingtest import ObservableDirectedMessagingTest

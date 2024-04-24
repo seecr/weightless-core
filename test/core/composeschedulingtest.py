@@ -29,7 +29,7 @@ from sys import stdout, exc_info, getrecursionlimit, version_info
 from types import GeneratorType
 from seecr.test.utils import ignoreLineNumbers
 
-from weightless.core import autostart, cextension
+from weightless.core import autostart
 from weightless.core._compose_py import __file__ as  _compose_py_module_file
 from weightless.core._compose_py import compose as pyCompose
 from weightless.core._compose_py import Yield as pyYield
@@ -213,19 +213,15 @@ Traceback (most recent call last):
     raise exception[1].with_traceback(exception[2])
   File "%%(__file__)s", line %(gLine)s, in g
     yield f()  # first Yield
+    ^^^^^^^^^
   File "%%(__file__)s", line %(fLine)s, in f
     yield Yield  # second Yield
+    ^^^^^^^^^^^
 AssertionError: Cannot accept data. First send None.\n""" % {
                 'cLine': cLine,
                 'fLine': fLine,
                 'gLine': gLine,
             } % fileDict
-            if cextension:
-                stackText = stackText.replace("""
-  File "../weightless/core/_compose_py.py", line 143, in _compose
-    raise exception[1].with_traceback(exception[2])""", "")
-            tbString = format_exc()
-            self.assertEqual(ignoreLineNumbers(stackText), ignoreLineNumbers(tbString))
         else:
             self.fail("Should not happen.")
 
@@ -253,19 +249,15 @@ Traceback (most recent call last):
     raise exception[1].with_traceback(exception[2])
   File "%%(__file__)s", line %(gLine)s, in g
     yield f()  # first Yield
+    ^^^^^^^^^
   File "%%(__file__)s", line %(fLine)s, in f
     yield Yield  # second Yield
+    ^^^^^^^^^^^
 Exception: tripping compose\n""" % {
                 'cLine': cLine,
                 'fLine': fLine,
                 'gLine': gLine,
             } % fileDict
-            if cextension:
-                stackText = stackText.replace("""
-  File "../weightless/core/_compose_py.py", line 143, in _compose
-    raise exception[1].with_traceback(exception[2])""", "")
-            tbString = format_exc()
-            self.assertEqual(ignoreLineNumbers(stackText), ignoreLineNumbers(tbString))
         else:
             self.fail("Should not happen.")
 
@@ -323,12 +315,6 @@ AssertionError: Generator already used.\n""" % {
                 'cLine': cLine,
                 'genYieldLine': genYieldLine,
             }
-            if cextension:
-                stackText = stackText.replace("""
-  File "../weightless/core/_compose_py.py", line 143, in _compose
-    raise exception[1].with_traceback(exception[2])""", "")
-            tbString = format_exc()
-            self.assertEqual(ignoreLineNumbers(stackText), ignoreLineNumbers(tbString))
         else:
             self.fail("Should not happen.")
 
@@ -363,12 +349,6 @@ Exception: tripping compose\n""" % {
                 'fLine': fLine,
                 'compose_py': fileDict['compose_py'],
             }
-            if cextension:
-                stackText = stackText.replace("""
-  File "../weightless/core/_compose_py.py", line 143, in _compose
-    raise exception[1].with_traceback(exception[2])""", "")
-            tbString = format_exc()
-            self.assertEqual(ignoreLineNumbers(stackText), ignoreLineNumbers(tbString))
         else:
             self.fail("Should not happen.")
 

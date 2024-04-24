@@ -29,11 +29,7 @@ from sys import exc_info
 from traceback import format_exception
 from functools import partial
 
-from weightless.core import is_generator, DeclineMessage, cextension
-
-
-if cextension:
-    from weightless.core.ext import AllGenerator
+from weightless.core import is_generator, DeclineMessage
 
 from collections import defaultdict
 
@@ -99,27 +95,22 @@ class MessageBase(object):
             methods.append(method)
         self.methods = tuple(methods)
 
-    if cextension:
-        def all(self, *args, **kwargs):
-            return AllGenerator(self.methods, args, kwargs)
-
-    else:
-        def all(self, *args, **kwargs):
-            for method in self.methods:
+    def all(self, *args, **kwargs):
+        for method in self.methods:
+            try:
                 try:
-                    try:
-                        result = method(*args, **kwargs)
-                    except (StopIteration, GeneratorExit):
-                        c, v, t = exc_info()
-                        handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
-                    self.verifyMethodResult(method, result)
-                    _ = yield result
-                except DeclineMessage:
-                    continue
-                except:
-                    c, v, t = exc_info(); raise v.with_traceback(t.tb_next)
-                if _ is not None:
-                    raise AssertionError("%s returned '%s'" % (methodOrMethodPartialStr(method), _)) from None
+                    result = method(*args, **kwargs)
+                except (StopIteration, GeneratorExit):
+                    c, v, t = exc_info()
+                    handleNonGeneratorGeneratorExceptions(method, c, v, t.tb_next)
+                self.verifyMethodResult(method, result)
+                _ = yield result
+            except DeclineMessage:
+                continue
+            except:
+                c, v, t = exc_info(); raise v.with_traceback(t.tb_next)
+            if _ is not None:
+                raise AssertionError("%s returned '%s'" % (methodOrMethodPartialStr(method), _)) from None
 
     def any(self, *args, **kwargs):
         try:

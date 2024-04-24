@@ -1135,7 +1135,7 @@ RuntimeError: Boom!\n""" % fileDict)
                 _, _ = yield httprequest1_1(host='localhost', port='PORT', request='/')
                 self.fail()
             except TypeError as e:
-                self.assertEqual('an integer is required (got type str)', str(e))
+                self.assertEqual("'str' object cannot be interpreted as an integer", str(e))
 
             #"Invalid" port (no-one listens)
             try:

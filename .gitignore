@@ -2,3 +2,4 @@ build
 deps.d
 *.pyo
 *.so
+*.egg-info

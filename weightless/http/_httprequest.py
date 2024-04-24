@@ -26,7 +26,8 @@
 from sys import exc_info, getdefaultencoding
 from socket import socket, error as SocketError, SOL_SOCKET, SO_ERROR, SHUT_RDWR, SOL_TCP, TCP_KEEPINTVL, TCP_KEEPIDLE, TCP_KEEPCNT, SO_KEEPALIVE
 from errno import EINPROGRESS
-from ssl import wrap_socket, SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError
+from ssl import SSL_ERROR_WANT_READ, SSL_ERROR_WANT_WRITE, SSLError, SSLContext, PROTOCOL_TLS_CLIENT, CERT_NONE
+
 from functools import partial
 
 from weightless.io import Suspend, TimeoutException, TooBigResponseException
@@ -194,7 +195,10 @@ def _do(method, host, port, request, body=None, headers=None, proxyServer=None, 
     yield
 
 def _sslHandshake(sok, this, suspend, prio):
-    sok = wrap_socket(sok, do_handshake_on_connect=False)
+    ssl_context = SSLContext(PROTOCOL_TLS_CLIENT)
+    ssl_context.check_hostname=False
+    ssl_context.verify_mode = CERT_NONE
+    sok = ssl_context.wrap_socket(sok, do_handshake_on_connect=False)
     count = 0
     while count < 254:
         count += 1

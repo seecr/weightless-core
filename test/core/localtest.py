@@ -25,7 +25,7 @@
 
 from unittest import TestCase
 from sys import exc_info
-from weightless.core import local, consume, cextension
+from weightless.core import local, consume
 
 
 class LocalTest(TestCase):
@@ -61,7 +61,7 @@ class LocalTest(TestCase):
             while t:
                 names.append(t.tb_frame.f_code.co_name)
                 t = t.tb_next
-        self.assertEqual(['testNotFoundStacktraceCleanNormalFunctions', 'a', 'b'] + ([] if cextension else ['local']), names)
+        self.assertEqual(['testNotFoundStacktraceCleanNormalFunctions', 'a', 'b', 'local'], names)
 
     def testNotFoundStacktraceCleanGeneratorFunctions(self):
         # Py3: hiding of _compose not working anymore
@@ -84,9 +84,6 @@ class LocalTest(TestCase):
                 t = t.tb_next
 
         expectedNames = ['testNotFoundStacktraceCleanGeneratorFunctions', 'consume', '_compose', 'a', 'b', 'c', 'local']
-        if cextension:
-            expectedNames.remove("_compose")
-            expectedNames.remove("local")
         self.assertEqual(expectedNames, names)
 
     def testVariousTypes(self):

@@ -30,7 +30,7 @@ from sys import stdout, exc_info, getrecursionlimit, version_info
 from types import GeneratorType
 from weakref import ref
 import gc
-from weightless.core import autostart, cpython, cextension
+from weightless.core import autostart, cpython
 from weightless.core._local_py import local as pyLocal
 from weightless.core._compose_py import compose as pyCompose
 import weightless.core._compose_py as _compose_py_module
@@ -66,10 +66,7 @@ class _ComposeTest(TestCase):
             compose()
             self.fail()
         except TypeError as e:
-            if cextension:
-                self.assertTrue("compose() missing required argument 'initial' (pos 1)" in str(e), str(e))
-            else:
-                self.assertTrue("compose() missing 1 required positional argument: 'initial'" in str(e), str(e))
+            self.assertTrue("compose() missing 1 required positional argument: 'initial'" in str(e), str(e))
         self.assertRaises(TypeError, compose, 's')
         self.assertRaises(TypeError, compose, 0)
 
@@ -704,11 +701,9 @@ class _ComposeTest(TestCase):
             self.fail()
         except Exception:
             exType, exValue, exTraceback = exc_info()
-            if cextension:
-                self.assertEqual(['testExceptionsHaveGeneratorCallStackAsBackTrace', 'g', 'f'], traceback_co_names(exTraceback))
-            else:
-                # TS: FIXME: traceback cleaning broken in PY3: ('_compose' below)
-                self.assertEqual(['testExceptionsHaveGeneratorCallStackAsBackTrace', '_compose', 'g', 'f'], traceback_co_names(exTraceback))
+
+            # TS: FIXME: traceback cleaning broken in PY3: ('_compose' below)
+            self.assertEqual(['testExceptionsHaveGeneratorCallStackAsBackTrace', '_compose', 'g', 'f'], traceback_co_names(exTraceback))
 
     def testToStringForSimpleGenerator(self):
         line = __NEXTLINE__()
@@ -1051,11 +1046,6 @@ class _ComposeTest(TestCase):
         si.args = [2] # not a tuple. VM turns this into tuple
         self.assertEqual((2,), si.args)
 
-    def testComposeType(self):
-        from weightless.core import ComposeType
-        self.assertEqual(type, type(ComposeType))
-        self.assertEqual(ComposeType, type(compose((n for n in []))))
-
     def testRaiseStopIterationWithRemainingMessages(self):
         def f0():
             return
@@ -1161,19 +1151,6 @@ Traceback (most recent call last):
     next(composed)
   File "%(py_compose)s", line 143, in _compose
     raise exception[1].with_traceback(exception[2])
-  File "%(__file__)s", line %(genYieldLine)s, in gen
-    yield genF
-AssertionError: Generator already used.\n""" % {
-                '__file__': fileDict['__file__'],
-                'py_compose': fileDict['py_compose'],
-                'cLine': cLine,
-                'genYieldLine': genYieldLine,
-            }
-            if cextension:
-                stackText = """\
-Traceback (most recent call last):
-  File "%(__file__)s", line %(cLine)s, in testUnsuitableGeneratorTraceback
-    next(composed)
   File "%(__file__)s", line %(genYieldLine)s, in gen
     yield genF
 AssertionError: Generator already used.\n""" % {
