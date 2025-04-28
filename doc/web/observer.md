@@ -53,7 +53,7 @@
 
 
 <h4>Streaming Data</h4>
-<p>The generator returned by 'self.all' can contain other generators in a recursive way.  This tree of generators is flattened by <a href="compose">compose</a> in order to support program decomposition.  Each observer is able to stream data back to the observable (as in the previous code sample), but each observable can also stream data to the observers using send():</p>
+<p>The generator returned by 'self.all' can contain other generators in a recursive way.  This tree of generators is flattened by <a href="compose.md">compose</a> in order to support program decomposition.  Each observer is able to stream data back to the observable (as in the previous code sample), but each observable can also stream data to the observers using send():</p>
 <pre>
             pipeline = self.all.message0('arg0', 'arg1'):
             for data in mysource:
@@ -183,7 +183,7 @@ The observables in the tuples are connected by calling 'be'.  This will call add
 <pre>
             appl = be(dna)
 </pre>
-<p>The return value 'appl' refers to the root component of the graph. Applications are often started by calling appl.main() or something like that.  See also the <a href="example">example</a>.</p> 
+<p>The return value 'appl' refers to the root component of the graph. Applications are often started by calling appl.main() or something like that.  See also the <a href="example.md">example</a>.</p> 
 
 
 <h4>Component Initialisation</h4>

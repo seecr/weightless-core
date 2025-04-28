@@ -243,6 +243,6 @@ In both proposals, is is possible to synchronize the execution of the co-routine
 <p>to be continued... </p>
 <h2> Status </h2>
 
-<p>Compose is finalized and stable. It has a Python implementation and a C extension for better speed.  It is feasible to develop develop large programs with it. See the <a href="example">examples</a>.</p>
+<p>Compose is finalized and stable. It has a Python implementation and a C extension for better speed.  It is feasible to develop develop large programs with it. See the <a href="example.md">examples</a>.</p>
 
 <p> The idea of composing generators is formalized in Python Enhancement Proposal: <a href="http://www.python.org/dev/peps/pep-0380/">PEP-380</a>.  Compose is intended compatible with this PEP, although it extends it as explained above.</p>
