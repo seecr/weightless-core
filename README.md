@@ -4,27 +4,26 @@
 
 <p>Weightless supports implementing complete Python programs as co-routines, including protocol stacks, such as the HTTP protocol. Weightless consists of three major parts:</p>
 <ol>
-  <li><a href="/compose">compose</a>: program decomposition with coroutines (a la PEP380).</li>
-  <li><a href="/observer">observable</a>: component configuration with the observer pattern (DNA)</li>
-  <li><a href="/gio">gio</a>: connecting file descriptors to a coroutine</li>
+  <li><a href="/doc/web/compose.md">compose</a>: program decomposition with coroutines (a la PEP380).</li>
+  <li><a href="/doc/web/observer.md">observable</a>: component configuration with the observer pattern (DNA)</li>
+  <li><a href="/doc/web/gio.md">gio</a>: connecting file descriptors to a coroutine</li>
 </ol>
 
 <p>Weightless is quite well refactored and small (<1000 loc), fully unit-tested and fast.</p>
 
-<p>This <a href="/example">example</a> shows how to use Weightless to create a simple server.</p>
+<p>This <a href="/doc/web/example.md">example</a> shows how to use Weightless to create a simple server.</p>
 
-<p>There is a bit more <a href="/background">background information</a> motivating many design decisions.</p>
+<p>There is a bit more <a href="/doc/web/background">background information</a> motivating many design decisions.</p>
 
-<p>Weightless is in use by <a href="http://meres.co">Meresco</a>.  Meresco uses its own version for which free <a href="http://repository.seecr.nl">Debian and Redhat packages</a> are provided.</p>
+<p>Weightless is in use by <a href="https://github.com/seecr/meresco-components">Meresco</a>.  Meresco uses its own version for which free <a href="https://repository.seecr.nl">Debian and Redhat packages</a> are provided.</p>
 
 <h2> Sources, Download and Install </h2>
 
 <p>(Currently being split into weightless-core and weightless-http)</p>
 
-<p>* <a href="https://github.com/seecr/weightless-core/">Browse Sources</a>
-   * <a href="/weightlessrss">RSS commit log</a></p>
+<p>* <a href="https://github.com/seecr/weightless-core/">Browse Sources</a> </p>
 
-<p>Check out, run the tests, install and run the <a href="/example">example</a>:</p>
+<p>Check out, run the tests, install and run the <a href="/doc/web/example">example</a>:</p>
 
 <p>(Under construction while at EuroPython 2011)</p>
 
