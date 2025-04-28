@@ -1,10 +1,4 @@
 
-import page, banner
-
-def main(**kwargs):
-    yield page.header(title='Example', **kwargs)
-    yield banner.banner(**kwargs)
-    yield '''
 <h1>
   Example
 </h1>
@@ -61,5 +55,3 @@ def main(**kwargs):
 <p>
   If you like to see large real-world server configurations, take a look at the example in Meresco: <a href="https://github.com/seecr/meresco-examples/blob/master/meresco/examples/dna/server.py">server.py</a>.
 </p>
-'''
-    yield page.footer(**kwargs)

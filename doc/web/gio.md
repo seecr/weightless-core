@@ -1,10 +1,3 @@
-
-import page, banner
-
-def main(**kwargs):
-    yield page.header(title="Gio", **kwargs)
-    yield banner.banner(**kwargs)
-    yield '''
 <h1>
   Gio
 </h1>
@@ -33,5 +26,3 @@ def main(**kwargs):
 <p>
 Status:  Currently there is a limited HTTP implementation.  For the whole thing to work with pipelines, the is still work to be done.  The problem is that calling generator.send(data) properly requires so much handling that it is unfeasible to do.  In fact, whenever you can send() directly, you will have to do everything that compose()  or yield-from is doing.  Currently I am create a helper method for this. (Summer 2010).
 </p>
-'''
-    yield page.footer(**kwargs)

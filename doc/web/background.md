@@ -1,10 +1,3 @@
-
-import page, banner
-
-def main(**kwargs):
-    yield page.header(title="Background", **kwargs)
-    yield banner.banner(**kwargs)
-    yield '''
 <h1>
   Background Information
 </h1>
@@ -47,6 +40,3 @@ def main(**kwargs):
 <p>
   <a href="http://www.ferg.org/papers/jackson--jsp_in_perspective.pdf">JSP in perspective</a> (PDF) - A short and well readable 1975 paper by Jackson himself about structuring programs according to the data structures they process.  It's relevance lies in the way it avoids intermediate buffering (tapes at that time, memory nowadays) by control flow inversion.  This is exactly what Weightless does.
 </p>
-'''
-    yield page.footer(**kwargs)
-

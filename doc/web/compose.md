@@ -1,17 +1,8 @@
-
-import page, banner
-
-def main(**kwargs):
-    yield page.header(title="Compose", **kwargs)
-    yield banner.banner(**kwargs)
-    yield '''
 <h1>Program Decomposition using Co-routines</h1>
 
 <p>
   This chapter explains how <em>compose</em> supports program decomposition using generators. It also clarifies how <em>compose</em> extends <a href="http://www.python.org/dev/peps/pep-0380/">yield-from (PEP 380)</a>.
 </p>
-'''
-    yield '''
 <h2>Decomposition</h2>
 
 <p>Consider this simplified generator that reads from and writes to a socket using <em>yield</em>:</p>
@@ -37,8 +28,6 @@ def main(**kwargs):
 </pre>
 
 <p>PEP380 will probably not be implemented before Python 3.3, so in the mean time, we use <em>compose</em>. Also, PEP380 is not sufficient for decomposing programs into generators. Two more things are needed, see <em>Additional Functionality</em> below.  These are in <em>compose</em> as well.</p>
-'''
-    yield '''
 <h2>Compose</h2>
 
 <p>Compose is a simple decorator for a generator that does what PEP 380 suggests.  And a little bit more.</p>
@@ -216,12 +205,8 @@ def main(**kwargs):
 <p>This means that every co-routine must must obey it, and <em>compose</em> checks it.</p>
 
 <p><em>The None Protocol</em> turned out to be essential to make <em>compose</em> practical, natural, intuitive, easy to understand and consistent.  Compose was just a nice intellectual exercise and until &mdash; after a year of remorse &mdash; I added the None Protocol. </p>
-'''
-    yield '''
 <h2> Generator Local </h2>
 <p>Generetor Local is the equivalent of Thread Local variables in generator land. Weightless provides a function local() that gets locals from the stack (or backtrace, if you don't have a stack).</p>
-'''
-    yield '''
 <h2> Side Kick </h2>
 
 <p>This subject goes back to an old discussion about how to use <em>yield</em>. Most people I met (and also most of the competitors mention in 'Related Work') propose this for communicating with a socket:</p>
@@ -256,12 +241,8 @@ In both proposals, is is possible to synchronize the execution of the co-routine
 </pre>
 
 <p>to be continued... </p>
-'''
-    yield '''
 <h2> Status </h2>
 
-<p>Compose is finalized and stable. It has a Python implementation and a C extension for better speed.  It is feasible to develop develop large programs with it. See the <a href="/example">examples</a>.</p>
+<p>Compose is finalized and stable. It has a Python implementation and a C extension for better speed.  It is feasible to develop develop large programs with it. See the <a href="example">examples</a>.</p>
 
 <p> The idea of composing generators is formalized in Python Enhancement Proposal: <a href="http://www.python.org/dev/peps/pep-0380/">PEP-380</a>.  Compose is intended compatible with this PEP, although it extends it as explained above.</p>
-'''
-    yield page.footer()

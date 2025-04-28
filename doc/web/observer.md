@@ -1,16 +1,7 @@
-
-import page, banner
-
-def main(**kwargs):
-    yield page.header(title="Observer", **kwargs)
-    yield banner.banner(**kwargs)
-    yield '''
 <h1>Component Configuration with DNA</h1>
 
 <p>Configuration consists of DNA describing a graph of observables in a Pythonic way.</p>
 
-'''
-    yield '''
 <h2>Observable</h2>
 
 <p>Weightless uses the Observable Pattern to connect components.</p>
@@ -62,7 +53,7 @@ def main(**kwargs):
 
 
 <h4>Streaming Data</h4>
-<p>The generator returned by 'self.all' can contain other generators in a recursive way.  This tree of generators is flattened by <a href="/compose">compose</a> in order to support program decomposition.  Each observer is able to stream data back to the observable (as in the previous code sample), but each observable can also stream data to the observers using send():</p>
+<p>The generator returned by 'self.all' can contain other generators in a recursive way.  This tree of generators is flattened by <a href="compose">compose</a> in order to support program decomposition.  Each observer is able to stream data back to the observable (as in the previous code sample), but each observable can also stream data to the observers using send():</p>
 <pre>
             pipeline = self.all.message0('arg0', 'arg1'):
             for data in mysource:
@@ -116,9 +107,6 @@ def main(**kwargs):
 <h4>Labeled Messages</h4>
 <p>te be determined</p>
 
-
-'''
-    yield '''
 <h2>
   Connecting Observables: DNA and be()
 </h2>
@@ -195,7 +183,7 @@ The observables in the tuples are connected by calling 'be'.  This will call add
 <pre>
             appl = be(dna)
 </pre>
-<p>The return value 'appl' refers to the root component of the graph. Applications are often started by calling appl.main() or something like that.  See also the <a href="/example">example</a>.</p> 
+<p>The return value 'appl' refers to the root component of the graph. Applications are often started by calling appl.main() or something like that.  See also the <a href="example">example</a>.</p> 
 
 
 <h4>Component Initialisation</h4>
@@ -206,5 +194,3 @@ The observables in the tuples are connected by calling 'be'.  This will call add
             appl.once.init()
 </pre>
 <p>Unlike 'all', 'any' and 'do', 'once' dispatches the message to all observers and to their observers recursively. It ensures that each component receives the message once and only once.</p>
-'''
-    yield page.footer(**kwargs)
