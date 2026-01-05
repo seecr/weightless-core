@@ -58,15 +58,19 @@ BaseException
 
 """
 
+
 class Yield(object):
     """Sentinel for compose stepping"""
+
     def __new__(self):
         raise TypeError("cannot create 'Yield' instances")
+
 
 def compose(initial, stepping=False):
     if not is_generator(initial):
         raise TypeError("compose() expects generator")
     return _compose(initial, stepping)
+
 
 def _compose(initial, stepping):
     """
@@ -84,7 +88,7 @@ def _compose(initial, stepping):
     This will work as expected: it catches an exception thrown by otherGenerator.
     """
     generators = [initial]
-    __callstack__ = generators # make these visible to 'local()'
+    __callstack__ = generators  # make these visible to 'local()'
     messages = [None]
     exception = None
     while generators:
@@ -102,8 +106,12 @@ def _compose(initial, stepping):
             if is_generator(response):
                 generators.append(response)
                 frame = response.gi_frame
-                if cpython: assert frame, 'Generator is exhausted.'
-                if cpython: assert frame.f_lineno == frame.f_code.co_firstlineno, 'Generator already used.'
+                if cpython:
+                    assert frame, "Generator is exhausted."
+                if cpython:
+                    assert (
+                        frame.f_lineno == frame.f_code.co_firstlineno
+                    ), "Generator already used."
                 try:
                     if stepping:
                         _ = yield Yield
@@ -111,12 +119,17 @@ def _compose(initial, stepping):
                     exType, exValue, exTraceback = exc_info()
                     exception = (exType, exValue, exTraceback.tb_next)
                     continue
-                if stepping: assert _ is None, 'Cannot accept data when stepping. First send None.'
+                if stepping:
+                    assert (
+                        _ is None
+                    ), "Cannot accept data when stepping. First send None."
                 messages.insert(0, None)
             elif (response is not None) or not messages:
                 try:
                     message = yield response
-                    assert message is None or response is None, 'Cannot accept data. First send None.'
+                    assert (
+                        message is None or response is None
+                    ), "Cannot accept data. First send None."
                     messages.insert(0, message)
                 except BaseException:
                     exType, exValue, exTraceback = exc_info()
